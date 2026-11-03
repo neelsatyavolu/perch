@@ -60,9 +60,16 @@ The project has failed if any of these are true, even when everything else works
 - Signing and updates follow agterm: Developer ID from 1Password, notarized, Sparkle updates from GitHub Releases (`appcast.xml`), EdDSA key in 1Password.
 - Bundle id `co.xanom.perch`. URL scheme `perch://` for internal pages, with `chrome://` aliases kept so extensions and docs still work.
 
-### 5.2 Widevine (DRM) — a real risk
+### 5.2 Widevine (DRM)
 
-Netflix, Hulu, Disney+, Prime Video, Peacock and HBO Max need Google's Widevine CDM. Backrow's main use is exactly those sites. Plain Chromium builds do not include Widevine, and a browser has to be accepted into Google's Widevine programme to ship it (Brave, Vivaldi and Arc are). Action: the owner applies to Google in their own name at the start of the project (owner's decision). Google may turn down an individual; if so, revisit applying through a company. **1.0 ships without Widevine if approval has not arrived** (owner's decision): YouTube and Backrow's own-file streaming work, the DRM sites do not, and the UI says so plainly instead of failing silently. DRM support comes in a later update.
+Netflix, Hulu, Disney+, Prime Video, Peacock, Max and F1 TV need Google's Widevine CDM. Backrow's main use is exactly those sites.
+
+- **Owner's decision: assume protected playback works, and build for it.** Perch is built with `enable_widevine=true`. On first run, Chromium's component updater downloads Google's Widevine module, as it does for other Chromium builds. Widevine is on by default and listed in the allowed connections (5.1).
+- The unknown is VMP (Verified Media Path), a signature some services check before they allow full quality. Apexline gets one from castLabs EVS, but that only covers castLabs' Electron builds, not a Chromium fork. Without VMP a service may play normally, cap quality, or refuse.
+- So the owner still applies to Google's Widevine programme in their own name for a VMP certificate (owner's decision). Google may turn down an individual; if so, revisit applying through a company. Approval upgrades quality; it is not a launch blocker.
+- Step 2 of the build order includes a playback check: the owner logs in and tries each service above in a Perch build and records whether it plays and at what quality. Results go in `docs/drm-status.md`.
+- If a service refuses to play, Perch shows a plain message naming the service and the reason, and 1.0 ships anyway (owner's decision). It never fails silently.
+- No DRM workarounds of any kind: no key extraction, no licence tampering, no faked VMP.
 
 ### 5.3 Window layout
 
@@ -306,8 +313,8 @@ A `bench/` folder holds the runner, which drives Perch through the CLI with a ch
 
 One design, built in this order. Each step ends with something the owner can use.
 
-1. **Fork pipeline**: checkout, patch series, branding, signed and notarized build, Sparkle updates. Apply for Widevine now.
-2. **Shell**: theme, restyled tabs and profile menu, hide-chrome mode, split view, Brave + Tab-for-Google, privacy patches, true incognito, built-in memory saver and Backrow.
+1. **Fork pipeline**: checkout, patch series, branding, signed and notarized build, Sparkle updates, Widevine enabled. The owner applies for a VMP certificate now.
+2. **Shell**: theme, restyled tabs and profile menu, hide-chrome mode, split view, Brave + Tab-for-Google, privacy patches, true incognito, built-in memory saver and Backrow, DRM playback check (5.2).
 3. **Agent**: `perchd`, page snapshot and actions, sidebar chat, Codex/Grok/Claude sign-in, permission modes and audit log, credential fill, full-page chat and artifacts.
 4. **Outside agents**: CLI, MCP server, skill installers, agterm hook-up, built-in site skills.
 5. **Memory**: storage, extraction, dreaming, local search, Memory page.
@@ -320,7 +327,7 @@ One design, built in this order. Each step ends with something the owner can use
 - Chromium is BSD-licensed; Perch's own code is MIT. Patches borrowed from other forks keep their licences and credits.
 - Anthropic's terms rule out reusing Claude Code's tokens; see 6.3.
 - `shared-ai-auth` supports Codex and Grok only. It must be used as-is or extended in its own repo.
-- Widevine needs Google's approval; see 5.2.
+- Full-quality protected playback may need a VMP certificate from Google; see 5.2.
 - macOS only, Apple silicon only.
 - One developer plus agents. The Chromium rebase every four weeks is ongoing work, not a one-time cost.
 - Owner rules that apply: don't drive the GUI with osascript or screen capture while the owner is using the Mac (agterm lesson); verify with tests, logs and off-screen checks; never print or store secrets.

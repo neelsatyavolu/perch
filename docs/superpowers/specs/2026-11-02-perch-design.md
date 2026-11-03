@@ -10,6 +10,22 @@ Name: **Perch**, a place you sit and watch from. Domain: `perchbrowser.com` (fre
 
 Items marked **[builder call]** were decided by Claude during design, not by the owner. The owner can overturn any of them.
 
+**Contents**
+
+| | |
+|---|---|
+| 1–4 | Why, goals, non-goals, anti-goals |
+| 5 | The browser shell: engine, DRM, layout, search, memory saver, Backrow, profiles |
+| 6 | Look and feel |
+| 7 | The agent: processes, page control, models, permissions, skills, chat, artifacts |
+| 8 | Memory |
+| 9 | CLI, MCP and outside agents |
+| 10 | Import |
+| 11 | Account, sync and encryption |
+| 12 | Enterprise |
+| 13–14 | Speed targets, benchmarks |
+| 15–17 | Build order, constraints, left to the builder |
+
 ---
 
 ## 1. Why
@@ -19,14 +35,15 @@ The owner uses Aside daily. They want the same capability in a browser they cont
 ## 2. Goals
 
 1. **Real Chromium.** Chromium fork. Chrome Web Store extensions install and run unchanged.
-2. **A strong browser agent.** It finishes multi-step tasks on live, logged-in sites. It is measured on the same three benchmarks Aside publishes (section 12).
-3. **Bring your own model.** Codex and Grok subscriptions through `shared-ai-auth`. Claude through the user's installed Claude Code, or a Claude API key (section 6.3).
+2. **A strong browser agent.** It finishes multi-step tasks on live, logged-in sites. It is measured on the same three benchmarks Aside publishes (section 14).
+3. **Bring your own model.** Codex and Grok subscriptions through `shared-ai-auth`. Claude through the user's installed Claude Code, or a Claude API key (section 7.3).
 4. **Usable by other agents.** `perch` CLI, an MCP server, and one-command skill install for Claude Code, Codex and Grok. Grok Bot, which runs on xAI's cloud computer, can drive Perch on the owner's Mac through an encrypted relay.
 5. **Memory like Aside's.** Agents pull durable facts out of chats and browsing into local markdown memory. A nightly pass consolidates it. Search runs on a local embedding model.
-6. **Lightweight and fast.** A configurable memory saver built from Lulltab. No Google background services. Measurable targets in section 11.
+6. **Lightweight and fast.** A configurable memory saver built from Lulltab. No Google background services. Measurable targets in section 13.
 7. **Private and secure by default.** Local first. Everything Perch stores is encrypted at rest. Sync is opt-in and end-to-end encrypted. True incognito. Detailed permission modes for agents.
 8. **Easy to switch to.** Import from Aside, Chrome, Safari, Arc, Dia, Brave, Edge, Vivaldi, Opera, Firefox, Zen and Helium, including the tabs that were open.
-9. **The owner's look.** UI follows `~/DESIGN.md` ("Blackletter" v2: near-black canvas, Geist / Geist Serif / Geist Mono, one blue accent `#4C8DFF`, light mode inverts). Themes are selectable.
+9. **The owner's look, built with care.** UI follows `~/DESIGN.md` ("Blackletter" v2: near-black canvas, Geist / Geist Serif / Geist Mono, one blue accent `#4C8DFF`, light mode inverts) and the rules in section 6. Quiet, comfortable for all-day use, and nothing that reads as generated. Themes are selectable.
+10. **Ready for companies.** Managed with the same tools IT already uses for Chrome: configuration profiles, Chrome policies, plus Perch policies for the agent, memory, sync and remote control (section 12).
 
 ## 3. Non-goals (v1)
 
@@ -79,8 +96,8 @@ Taken from the owner's Aside screenshots.
 - **Profile menu**: the profile list with a check on the current one and `⋯` for options, "New profile", then Bookmarks ›, Downloads ›, Extensions ›, History ›, Developers ›, Settings (⌘,), New Tab (⌘T), Incognito Window (⇧⌘N).
 - **Hide chrome**: one shortcut and a setting hide the tab strip and bookmarks bar completely. The address bar appears on ⌘L and a tab switcher on ⌃Tab. Top-edge hover can reveal the bar, as a setting.
 - **Split view**: two tabs side by side in one window, with a draggable divider. Built on Chromium's split-view feature where it exists, extended to work from the tab context menu and a shortcut.
-- **Right sidebar**: the agent chat (section 6.6). Toggled with a toolbar button and a shortcut. Resizable. It remembers per-window state.
-- **Themes**: Ink (dark, default) and Paper (light) from DESIGN.md, plus Graphite, Contrast and Dusk to match agterm's theme set. Themes drive both the native chrome and the WebUI pages through one token file.
+- **Right sidebar**: the agent chat (section 7.6). Toggled with a toolbar button and a shortcut. Resizable. It remembers per-window state.
+- **Themes**: Ink (dark, default) and Paper (light) from DESIGN.md, plus Graphite, Contrast and Dusk to match agterm's theme set. Themes drive both the native chrome and the WebUI pages through one token file. Visual rules are in section 6.
 
 ### 5.4 UI technology
 
@@ -115,15 +132,86 @@ Backrow (`~/Documents/GitHub/backrow`, public, MIT) ships as a built-in componen
 - Profiles are Chromium profiles with Perch's menu. Each profile has its own agent memory, chats, skills, model logins and permission settings. Nothing is shared across profiles.
 - **True incognito**: everything in memory, no disk cache, no history, no memory extraction, no session restore, downloads only where the user saves them. The agent can be used in incognito but cannot read or write memory, and its chat is discarded when the window closes. Extensions are off in incognito unless allowed per extension (Chromium default).
 
-## 6. The agent
+## 6. Look and feel
 
-### 6.1 Processes
+Perch follows `~/DESIGN.md` and the unslop rules (unslop by Damir Sokolovsky, @heydamir, CC BY 4.0). People look at a browser for hours, and the pages they visit should carry the colour. So the chrome stays quiet, and the richness goes into one or two moments that belong to Perch alone.
+
+### 6.1 Direction
+
+- **Product**: a Mac browser where an agent works on your logged-in sites for you, and nothing leaves the Mac unencrypted.
+- **Character**: quiet, exact, watchful.
+- **World**: a reading desk at night. Ink, paper, the margin where notes go, a window looking out.
+- **Moments**: (1) the agent at work: in the sidebar, the live step line ("Opened gmail.com", "Typing reply") above a small live thumbnail of the agent's tab; (2) the artifacts pane, where the artifact itself carries colour. Nothing else in the chrome gets rich colour.
+- **Signature**: the perch dot, a 6 px accent dot. It sits on any tab the agent is using, in the sidebar header while a task runs, and on the profile button when a task is waiting for approval. It appears nowhere else.
+
+### 6.2 Colour
+
+- Surfaces, borders and text come from DESIGN.md's neutral ramp: canvas `#000000`, card `#0A0A0C`, elevated `#111114`, hairlines at 6% and 14% white.
+- The tab strip and toolbar are canvas. The active tab is one surface step up with a hairline edge, not a colour.
+- Three text roles: ink, body (86%) and mute.
+- The accent (`#4C8DFF`, `#2F6FE0` in light themes) is used only for: the perch dot, focus rings, the selected row in a list, text selection, the search-engine chip in the address bar, and links in chat.
+- Primary buttons are off-white with black text (DESIGN.md `button-primary`), one per view.
+- Semantic colours carry meaning only. An approval card for a payment or deletion shows the amount or the item plainly; the confirm button's label names the action, and only its text turns `danger`.
+- None of these: hue-to-hue gradients, glows, coloured shadows, glass blur panels, colour washes behind content. Depth comes from surface steps and hairlines. Menus and popovers may have one soft neutral shadow.
+- Themes change only the ramp and the accent shade. Layout, type and spacing stay the same.
+
+### 6.3 Type
+
+- Interface: Geist. 13 px for browser chrome (tabs, menus, settings rows), 14 px for chat text, 12 px for captions. Weights 400 and 500 only.
+- Geist Mono for meta: domains, counts, timestamps, RAM figures, keyboard shortcuts, model ids, the audit log. Tabular figures wherever numbers line up.
+- Geist Serif appears only in large titles on empty states and the welcome screen, never in the chrome.
+- Sentence case everywhere. No uppercase tracked section labels, no italic for emphasis, no negative tracking on small text.
+
+### 6.4 Spacing and shape
+
+- Everything sits on a 4 px grid.
+- Heights: tab strip 36 px, toolbar 40, sidebar header 44, list rows 32, menu rows 28.
+- Padding: sidebar 16, cards 20, settings page edges 32.
+- Radii from DESIGN.md: controls and tabs 8 (tabs on their top corners only), cards, popovers and the sidebar panel 12, elements inside a 12 px panel 8. Only status dots are round.
+- Density setting: Comfortable (default) and Compact (rows 28, tab strip 32). Perch's own pages follow browser zoom and macOS text size.
+
+### 6.5 Icons
+
+- One set: Lucide, 16 px, 1.5 stroke, coloured by their text role. Icons sit in a fixed 16 px column with an 8 px gap to the label.
+- No emoji in the interface. No sparkle icon for AI. The agent is shown with the Perch mark, a flat single-colour glyph.
+- Site favicons are the only full-colour icons in the chrome.
+
+### 6.6 Copy
+
+- Short, plain, sentence case. No exclamation marks. No trailing periods on labels, buttons or titles.
+- Composer placeholder: "Ask Perch a task, @ for context".
+- Buttons name the action: "Send message", "Pay $42.18", "Delete 3 emails". Never "OK" or "Confirm" on an approval.
+- Errors say what happened and what to do next, for example "Netflix won't play in this build. Google hasn't approved Perch's video signature yet".
+- No "AI-powered", "magic", "supercharge", "seamless". No PRO, New or Beta badges.
+- All strings follow `~/ANTI AI WRITING.md`.
+
+### 6.7 Motion
+
+- One easing curve, `cubic-bezier(0.2, 0, 0, 1)`. 120 ms for hover and press, 180 ms for menus and popovers, 240 ms for the sidebar opening.
+- Only colour, opacity and transform animate. Never width, height or position properties.
+- One looping animation in the whole browser: the perch dot fades slowly while a task is really running, and stops the moment it ends.
+- With "Reduce motion" on in macOS, state changes are instant.
+
+### 6.8 Comfortable and native
+
+- It behaves like a Mac app: traffic lights, a full menu bar with every command, shortcuts that match Safari and Chrome, full keyboard access, VoiceOver labels on every control, and the system's text size and Increase Contrast settings respected.
+- All text meets WCAG AA contrast in every theme, and keyboard focus is always visible.
+- Settings is one searchable page with grouped sections. Every Perch setting has a one-line explanation under it. Managed settings show who manages them (section 12).
+
+### 6.9 Design review
+
+- Every step in the build order that adds UI ends with an unslop pass: the signs list and the checklist, on off-screen renders. Perch's pages render headless, and the native chrome renders through an off-screen self-test like agterm's. Never capture the screen or drive the GUI while the owner is using the Mac.
+- A screen passes when the checklist is clean and the template check holds: with Perch's name removed, the screen would not fit another browser.
+
+## 7. The agent
+
+### 7.1 Processes
 
 - **`perchd`**: a local daemon started by the browser, written in TypeScript and compiled to one binary with Bun. **[builder call]** It runs the agent loop, model connections, memory, skills, the MCP server, the CLI endpoint and the relay client. It shuts down with the browser unless remote control is on.
 - `perchd` controls the browser through the Chrome DevTools Protocol over a private pipe (`--remote-debugging-pipe`), never a TCP port. Browser-only features (credential fill, approval prompts, tab ownership) go through a small set of custom CDP domains added by our patches. **[builder call]**
 - The CLI and the MCP server reach `perchd` through a Unix socket in the user's Application Support folder, mode 0600, with a per-client token.
 
-### 6.2 How the agent sees and acts on pages
+### 7.2 How the agent sees and acts on pages
 
 - **Page snapshot**: a compact text view built from the accessibility tree plus visible text. Interactive elements get short refs (`e12`). Key content comes first, and the output is kept small (Aside reports theirs as 70% smaller than agent-browser's). This is the main input.
 - **Actions**: navigate, click(ref), type(ref, text), select, scroll, hover, press key, upload file, wait for, go back, open/close/switch tabs, read PDF, download.
@@ -131,10 +219,10 @@ Backrow (`~/Documents/GitHub/backrow`, public, MIT) ships as a built-in componen
 - **REPL**: a Playwright-style JavaScript tool for bulk extraction and scripted steps, as in `aside repl`.
 - **Agent tabs**: the agent works in background tabs grouped under an "Agent" tab group, so it never steals focus from the tab the user is on. The user can watch any agent tab live.
 - **Logins**: when a site needs a login, the agent asks the browser to fill credentials from Perch's password manager. The browser fills the fields directly. The model sees only "filled" or "no saved login". The same applies to one-time codes and payment cards.
-- **What "never sees a secret" covers** **[builder call]**: values Perch fills from its own stores (passwords, cards, saved one-time codes, passkeys). After a fill, those fields are redacted in snapshots, masked in screenshots, and blocked from REPL reads (the REPL cannot read `value` of password, card or OTP-autocomplete fields). Codes the user asks the agent to fetch from their own email or Messages are not covered: reading the user's mail on request is a normal task, and the approval rules in 6.4 still apply.
+- **What "never sees a secret" covers** **[builder call]**: values Perch fills from its own stores (passwords, cards, saved one-time codes, passkeys). After a fill, those fields are redacted in snapshots, masked in screenshots, and blocked from REPL reads (the REPL cannot read `value` of password, card or OTP-autocomplete fields). Codes the user asks the agent to fetch from their own email or Messages are not covered: reading the user's mail on request is a normal task, and the approval rules in 7.4 still apply.
 - **Bot challenges**: Perch is a real browser with a real profile, so most sites treat it as a person. When a CAPTCHA appears, the agent pauses and asks the user.
 
-### 6.3 Models and sign-in
+### 7.3 Models and sign-in
 
 | Provider | How | Notes |
 |---|---|---|
@@ -147,7 +235,7 @@ The Claude choice is deliberate. Aside copies Claude Code's OAuth tokens into it
 
 Tokens are stored in the macOS Keychain, scoped to Perch's code signature. The model picker shows provider, model, effort (off → max) and a fast toggle, as in the screenshot.
 
-### 6.4 Permission modes
+### 7.4 Permission modes
 
 Per chat, with a profile default. Shown at the bottom left of the composer.
 
@@ -162,7 +250,7 @@ On top of the mode:
 - an audit log of every agent action: time, tab, site, action, which client, and whether it was approved; viewable and exportable in Settings
 - approval cards show exactly what will be sent (the message text, the order total) before the user approves
 
-### 6.5 Skills
+### 7.5 Skills
 
 - The skill format is the same `SKILL.md` format Claude Code uses (frontmatter name + description, markdown body, optional scripts), so skills move between Perch, Claude Code and Codex.
 - **Built-in site skills** (read on demand, like Aside's): Google Account, Gmail, Google Docs, Sheets, Slides, Drive, Calendar, Search; Outlook and Microsoft 365; Slack; Discord; Notion; GitHub; Linear; Jira; Figma; X; Reddit; LinkedIn; YouTube; Instagram; WhatsApp Web; Amazon; Airbnb; Google Maps; Canvas LMS; Messages (iMessage, read and send through the local Messages database and AppleScript, with Full Disk Access the user grants); plus file skills: PDF, DOCX, XLSX, PPTX.
@@ -170,7 +258,7 @@ On top of the mode:
 - **My skills**: import from a folder, a URL or a git repo. Shown in a Skills / MCPs settings page like Aside's.
 - **MCP client**: users can add MCP servers that the Perch agent can call.
 
-### 6.6 Chat UI
+### 7.6 Chat UI
 
 **Sidebar** (screenshot 1): header with chat title and a menu of recent chats, new-chat and close buttons. Empty state shows the Perch mark. The composer shows a chip for the current tab (favicon, title, domain); `@` adds other tabs, files, memory or skills as context; `+` attaches files; a microphone button dictates with macOS on-device speech recognition. Under the composer: permission mode, which tabs the agent may use (current tab / all tabs / new agent tabs), and the model + effort picker.
 
@@ -178,13 +266,13 @@ On top of the mode:
 
 **Message rendering**: a streaming markdown parser that handles partial input without flicker; headings, lists, tables, links, code with syntax highlighting, math, and inline citations to the tabs and pages the agent used. Tool steps ("Opened gmail.com", "Clicked Send") collapse into one expandable line per turn. Each reply has copy, branch and timestamp, as in the screenshot.
 
-### 6.7 Artifacts
+### 7.7 Artifacts
 
 - The agent can make artifacts: HTML pages, React components, SVG, Mermaid diagrams, markdown documents, and data files (CSV, JSON).
 - In the full-page chat they open in the right pane; in the sidebar they open in a new tab. Versions are kept per artifact.
 - They render in a sandboxed origin (`perch-artifact://<id>`) with no access to cookies, the profile or other tabs, and no network except an allowlist of CDNs. The user can save one to disk or open it as a tab.
 
-## 7. Memory
+## 8. Memory
 
 Modelled on how Aside stores memory on this Mac (`~/.aside/u/0/memory/`):
 
@@ -195,9 +283,9 @@ Modelled on how Aside stores memory on this Mac (`~/.aside/u/0/memory/`):
 - **Control**: a Memory page to browse, edit and delete anything, pause extraction, or wipe memory. Incognito never reads or writes memory.
 - **Which model extracts**: the profile's "fast" model on whatever provider is signed in. The user can turn extraction off entirely.
 
-## 8. CLI, MCP and outside agents
+## 9. CLI, MCP and outside agents
 
-### 8.1 `perch` CLI
+### 9.1 `perch` CLI
 
 Modelled on `aside`:
 
@@ -213,11 +301,11 @@ perch mcp                         stdio MCP server for agent clients
 perch skill install claude|codex|grok   install the Perch skill + MCP config
 ```
 
-### 8.2 MCP server
+### 9.2 MCP server
 
 Tools: `exec` (hand a whole task to Perch's agent), `repl`, `tabs`, `snapshot`, `act` (click/type/etc. by ref), `screenshot`, `memory_search`, `browser_profiles`. These are the same tools Aside exposes (`mcp__aside__exec`, `repl`, `memory_search`, `browser_profiles`) so existing prompts carry over. Every call goes through the permission system as that client.
 
-### 8.3 Grok Bot and remote control
+### 9.3 Grok Bot and remote control
 
 Grok Bot runs on xAI's cloud computer, not the owner's Mac. Aside handles this with "Remote Control": the bot installs the Aside CLI, logs in with an 8-character code the user approves in Settings, then runs `aside exec --host <device>` through Aside's relay. Perch does the same:
 
@@ -228,7 +316,7 @@ Grok Bot runs on xAI's cloud computer, not the owner's Mac. Aside handles this w
 - A remote MCP endpoint over the same relay, for assistants that take an MCP connector URL. The URL carries a revocable token.
 - Every remote device is listed with last use, and can be revoked.
 
-### 8.4 agterm and the owner's other apps
+### 9.4 agterm and the owner's other apps
 
 The owner was unsure what agterm could add. **[builder call]**:
 
@@ -237,7 +325,7 @@ The owner was unsure what agterm could add. **[builder call]**:
 - `perch skill install` covers Claude Code, Codex and Grok outside agterm.
 - Lulltab and Backrow are built in (sections 5.6, 5.7).
 
-## 9. Import
+## 10. Import
 
 A first-run wizard and a Settings page. For each browser found on the Mac, the user picks what to bring:
 
@@ -257,9 +345,9 @@ A first-run wizard and a Settings page. For each browser found on the Mac, the u
 
 The wizard says which steps need Full Disk Access or a Keychain prompt before asking for them.
 
-## 10. Account, sync and encryption
+## 11. Account, sync and encryption
 
-### 10.1 At rest on the Mac
+### 11.1 At rest on the Mac
 
 - Chromium's own stores (cookies, passwords, cards) use Chromium's encryption with a "Perch Safe Storage" Keychain key, as Chrome does.
 - Perch's own data (memory, chats, skills, artifacts, audit log, model tokens) is encrypted with AES-256-GCM using a per-profile key. That key is wrapped by a Secure Enclave key, so it cannot be copied off the Mac. **[builder call]**
@@ -267,13 +355,13 @@ The wizard says which steps need Full Disk Access or a Keychain prompt before as
 - Moving to a new Mac: a Secure Enclave key does not survive Migration Assistant or a Time Machine restore. At setup Perch creates a recovery key (the same one sync uses) and offers an encrypted export file. With sync on, a new Mac just pairs. Without sync, the export file plus the recovery key restores everything. Perch tells the user this at setup. **[builder call]**
 - Optional Touch ID lock for passwords, memory and chats, as a setting.
 
-### 10.2 Account
+### 11.2 Account
 
 - Optional. Perch works fully without one.
 - Sign-in with email and a passkey; email codes sent through Resend as a fallback, as the owner's other n3el/xanom apps do. **[builder call]**
 - The account exists only to hold encrypted sync data and the list of paired devices.
 
-### 10.3 Sync (opt-in, end-to-end encrypted)
+### 11.3 Sync (opt-in, end-to-end encrypted)
 
 - Browser data (bookmarks, history, passwords, open tabs, settings, extensions list) uses Chromium's built-in sync engine pointed at Perch's own server, with Chromium's client-side passphrase encryption always on. This is the model Brave Sync uses with its open-source server (`brave/go-sync`). Perch's server implements the same protocol on Cloudflare Workers + D1 + R2. **[builder call]**
 - Perch's own data (memory, skills, chats, artifacts) syncs as encrypted blobs through the same account.
@@ -281,15 +369,60 @@ The wizard says which steps need Full Disk Access or a Keychain prompt before as
 - The server stores ciphertext, sizes, timestamps and device ids. It cannot read anything.
 - Each data type can be switched on or off separately.
 
-### 10.4 Who the server is for
+### 11.4 Who the server is for
 
 Owner's decision: **everyone, free, with limits.** Anyone who downloads Perch can use the hosted sync and relay. Each account gets a storage cap and rate limits sized so the service stays within Cloudflare's free and low-cost tiers (exact numbers are the builder's call, set from measured usage). Accounts that hit the cap are told, not cut off silently. A one-command self-host deploy of the same Worker is documented for people who want their own server. The server needs abuse limits on sign-up, pairing and relay traffic from the start.
 
-### 10.5 Telemetry
+### 11.5 Telemetry
 
 None by default. An opt-in anonymous daily ping to `analytics.n3el.dev` (random install id, Perch and Chromium version, CPU type), the same contract as Lulltab. **[builder call]**
 
-## 11. Speed and weight targets
+## 12. Enterprise
+
+Perch is managed the way companies already manage Chrome, so an IT team can deploy it without learning a new system.
+
+### 12.1 Deployment
+
+- A signed and notarized `.pkg` for MDM tools (Jamf, Kandji, Intune, Mosyle) as well as the `.dmg` for people.
+- Policies arrive as macOS configuration profiles (managed preferences for `co.xanom.perch`), the same mechanism Chrome uses.
+- Update control by policy: turn automatic updates off, pick the stable or beta channel, delay updates by a number of days, or pin a minimum version.
+
+### 12.2 Policies
+
+- **Chrome policies**: the standard Chromium enterprise policies work unchanged, including extension allow and block lists, forced extensions, homepage and startup pages, download restrictions, proxy and certificate settings, URL blocking and incognito availability. Policies that only make sense for Google services (Google sync, Google sign-in) are ignored and listed as such.
+- **Perch policies**:
+
+| Policy | What it controls |
+|---|---|
+| `AgentEnabled` | Turns the agent on or off |
+| `AllowedModelProviders`, `AllowedModels` | Which providers and models users can pick |
+| `ModelEndpoints` | Company-run endpoints (OpenAI-compatible or Anthropic-compatible URL plus key reference) that replace personal sign-in |
+| `MaxPermissionMode` | The highest mode users can choose (for example, Guard) |
+| `AgentSiteRules` | Sites the agent may never act on, or must always ask on |
+| `MemoryEnabled`, `HistoryExtractionEnabled` | Memory on or off; whether browsing history may feed it |
+| `MCPServerEnabled`, `AllowedMCPClients` | Whether outside agents can connect, and which |
+| `RemoteControlEnabled` | Whether the relay (Grok Bot and other cloud assistants) can be used |
+| `SyncEnabled`, `SyncServerURL` | Sync on or off, or pointed at the company's own server |
+| `ImportEnabled` | Which browsers and data types users can import |
+| `BuiltInExtensions` | Turn Backrow or the memory saver off |
+| `TelemetryEnabled` | Forced off (it is already off by default) |
+| `AuditLogPath` | Writes the agent audit log as JSON lines to a path the company's security tools collect |
+
+- `perch://policy` lists every active policy and where it came from. Settings rows that a policy controls show "Managed by your organization" and are locked.
+
+### 12.3 Company sync server
+
+- The self-host deploy from 11.4 doubles as the company server. It adds sign-in through the company's identity provider (OpenID Connect), and admins can list and revoke devices.
+- Data stays end-to-end encrypted. The company server holds ciphertext only, the same as Perch's hosted one. **[builder call]**
+
+### 12.4 Security practice
+
+- `SECURITY.md` with a private reporting address and response times.
+- Chromium security fixes ship within 72 hours of Google's stable release. **[builder call]**
+- Each release publishes its Chromium version, the patch list, a software bill of materials, and checksums. Release builds are signed and notarized, and Sparkle updates are EdDSA-signed.
+- The macOS system trust store and company root certificates work without extra setup.
+
+## 13. Speed and weight targets
 
 Measured on the owner's Mac against Chrome of the same Chromium version, with the same extensions:
 
@@ -299,7 +432,7 @@ Measured on the owner's Mac against Chrome of the same Chromium version, with th
 - With the window idle and sync off, a packet capture shows no requests outside the allowed list in 5.1, and none at all with every item on that list switched off.
 - With 100 tabs open and the memory saver at default, total memory at least 50% lower than Chrome without a saver.
 
-## 12. Benchmarks
+## 14. Benchmarks
 
 Run the three suites Aside publishes (`github.com/at-inc/aside-benchmarks`):
 
@@ -309,9 +442,9 @@ Run the three suites Aside publishes (`github.com/at-inc/aside-benchmarks`):
 
 A `bench/` folder holds the runner, which drives Perch through the CLI with a chosen model and records full transcripts. Grading follows each suite's published method. Results are published in the repo in the same format as Aside's, including failures and "impossible" tasks. The target is to match Aside's harness with the same model (Aside reports 99.0% on Online-Mind2Web with GPT-5.5). Treat that as a target, not a promise. Live sites change, so each run records its date.
 
-## 13. Build order
+## 15. Build order
 
-One design, built in this order. Each step ends with something the owner can use.
+One design, built in this order. Each step ends with something the owner can use, and every step that adds UI ends with the design review in 6.9.
 
 1. **Fork pipeline**: checkout, patch series, branding, signed and notarized build, Sparkle updates, Widevine enabled. The owner applies for a VMP certificate now.
 2. **Shell**: theme, restyled tabs and profile menu, hide-chrome mode, split view, Brave + Tab-for-Google, privacy patches, true incognito, built-in memory saver and Backrow, DRM playback check (5.2).
@@ -320,19 +453,20 @@ One design, built in this order. Each step ends with something the owner can use
 5. **Memory**: storage, extraction, dreaming, local search, Memory page.
 6. **Import**: all browsers, open-tab restore, Aside extras.
 7. **Account, sync and relay**: server on Cloudflare, E2E sync, remote control, Grok Bot.
-8. **Benchmarks and speed**: the three suites, the targets in section 11, public results, then a 1.0 release and the site at `perchbrowser.com`.
+8. **Enterprise**: `.pkg`, Chrome policy support check, Perch policies, `perch://policy`, audit log export, company sync server with OpenID Connect, release SBOM.
+9. **Benchmarks and speed**: the three suites, the targets in section 13, public results, then a 1.0 release and the site at `perchbrowser.com`.
 
-## 14. Constraints
+## 16. Constraints
 
 - Chromium is BSD-licensed; Perch's own code is MIT. Patches borrowed from other forks keep their licences and credits.
-- Anthropic's terms rule out reusing Claude Code's tokens; see 6.3.
+- Anthropic's terms rule out reusing Claude Code's tokens; see 7.3.
 - `shared-ai-auth` supports Codex and Grok only. It must be used as-is or extended in its own repo.
 - Full-quality protected playback may need a VMP certificate from Google; see 5.2.
 - macOS only, Apple silicon only.
 - One developer plus agents. The Chromium rebase every four weeks is ongoing work, not a one-time cost.
 - Owner rules that apply: don't drive the GUI with osascript or screen capture while the owner is using the Mac (agterm lesson); verify with tests, logs and off-screen checks; never print or store secrets.
 
-## 15. Left to the builder
+## 17. Left to the builder
 
 - Exact patch boundaries and which Chromium features to reuse versus write.
 - The WebUI framework choice within "light and lazy".

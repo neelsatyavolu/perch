@@ -30,8 +30,8 @@ function loadSuite(suite: string): Task[] {
     const data = JSON.parse(readFileSync(join(ROOT, "data", "bu-bench-v1.json"), "utf8")) as { task_id: string; category: string; confirmed_task: string; answer?: string }[];
     return data.map((t) => ({ id: t.task_id, category: t.category, task: t.confirmed_task, reference: t.answer || undefined }));
   }
-  const data = JSON.parse(readFileSync(join(ROOT, "data", "Online_Mind2Web.json"), "utf8")) as { task_id: string; website: string; task_description: string; level: string }[];
-  return data.map((t) => ({ id: t.task_id, category: t.level, task: `${t.task_description}\nStart at: ${t.website}`, website: t.website }));
+  const data = JSON.parse(readFileSync(join(ROOT, "data", "Online_Mind2Web.json"), "utf8")) as { task_id: string; website: string; confirmed_task?: string; task_description?: string; level: string }[];
+  return data.map((t) => ({ id: t.task_id, category: t.level, task: `${t.confirmed_task ?? t.task_description}\nStart at: ${t.website}`, website: t.website }));
 }
 
 function pick(tasks: Task[]): Task[] {

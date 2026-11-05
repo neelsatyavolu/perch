@@ -1,0 +1,14 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Northwind Shop</title></head>
+<body style="font:14px system-ui;padding:16px">
+<h1>Travel adapter</h1>
+<p>$42.18 · ships tomorrow</p>
+<label>Quantity <select id="qty"><option>1</option><option>2</option><option>3</option></select></label>
+<button id="add">Add to cart</button>
+<button id="order">Place order</button>
+<p id="status" role="status"></p>
+<script>
+document.getElementById('add').onclick = () => { document.getElementById('status').textContent = 'Added ' + document.getElementById('qty').value; };
+document.getElementById('order').onclick = () => { document.getElementById('status').textContent = 'Order placed'; };
+</script>
+</body></html>

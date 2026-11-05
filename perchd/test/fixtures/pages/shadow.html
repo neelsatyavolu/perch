@@ -1,0 +1,16 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Widgets</title></head>
+<body style="font:14px system-ui">
+<h1>Widgets</h1>
+<fancy-panel></fancy-panel>
+<p id="out" role="status"></p>
+<script>
+customElements.define('fancy-panel', class extends HTMLElement {
+  connectedCallback() {
+    const root = this.attachShadow({ mode: 'open' });
+    root.innerHTML = '<button>Shadow button</button>';
+    root.querySelector('button').onclick = () => { document.getElementById('out').textContent = 'Shadow clicked'; };
+  }
+});
+</script>
+</body></html>

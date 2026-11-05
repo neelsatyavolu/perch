@@ -1,0 +1,28 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Mailroom</title>
+<style>body{font:14px system-ui;margin:0}header{display:flex;gap:8px;padding:8px}main{display:flex}nav{width:160px}#list a{display:block;padding:8px}#compose{display:none;padding:8px}#compose.open{display:block}</style></head>
+<body>
+<header><h1>Mailroom</h1><form id="search" role="search"><input type="search" name="q" aria-label="Search mail" placeholder="Search mail"></form><button id="compose-btn">Compose</button><button id="refresh">Refresh</button></header>
+<main>
+  <nav aria-label="Folders"><a href="#inbox">Inbox</a> <a href="#sent">Sent</a></nav>
+  <section id="list" aria-label="Threads">
+    <a href="#t1">Maya Chen · Design review Thursday?</a>
+    <a href="#t2">Linear · 3 issues assigned to you</a>
+    <a href="#t3">Jordan Patel · Re: Backrow party Saturday</a>
+  </section>
+</main>
+<section id="compose" aria-label="New message">
+  <label>To <input id="to" type="email" name="to"></label>
+  <label>Subject <input id="subject" name="subject"></label>
+  <label>Message <textarea id="body" name="body"></textarea></label>
+  <label>Attach <input id="attach" type="file"></label>
+  <button id="send">Send</button>
+</section>
+<p id="status" role="status"></p>
+<script>
+document.getElementById('compose-btn').onclick = () => document.getElementById('compose').classList.add('open');
+document.getElementById('send').onclick = () => { document.getElementById('status').textContent = 'Message sent to ' + document.getElementById('to').value; };
+document.getElementById('search').onsubmit = (e) => { e.preventDefault(); document.getElementById('status').textContent = 'Searched: ' + e.target.q.value; };
+document.getElementById('refresh').onclick = () => { document.getElementById('list').innerHTML = '<a href="#t9">Priya Raman · Notes from Monday</a>'; };
+</script>
+</body></html>

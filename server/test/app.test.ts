@@ -4,7 +4,8 @@ import { device, freshEmail, harness } from "./helpers";
 
 describe("app", () => {
   it("answers health checks through the real Worker entry", async () => {
-    const res = await exports.default.fetch("https://api.perchbrowser.com/health");
+    const worker = (exports as unknown as { default: Fetcher }).default;
+    const res = await worker.fetch("https://api.perchbrowser.com/health");
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
   });

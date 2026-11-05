@@ -46,7 +46,8 @@ function handleContent(message: ContentMessage | null, sender: chrome.runtime.Me
     case "preview":
       return fetchPreview(message.url, sender.url);
     case "open":
-      return chrome.tabs.create({ url: message.url, index: tab.index + 1, openerTabId: tab.id, active: true }).then(() => null);
+      // Without windowId Chrome uses the focused window, which need not be the page's, and rejects the opener.
+      return chrome.tabs.create({ url: message.url, windowId: tab.windowId, index: tab.index + 1, openerTabId: tab.id, active: true }).then(() => null);
   }
 }
 

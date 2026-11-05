@@ -2,7 +2,7 @@ import { join } from "node:path";
 
 const PAGES = join(import.meta.dir, "pages");
 
-export type Hit = { host: string; path: string; query: string };
+export type Hit = { host: string; path: string; query: string; cookie: string | null };
 
 /**
  * Serves test/fixtures/pages on a free port for every *.localhost name (Chrome resolves them all
@@ -16,7 +16,7 @@ export function startFixtures(): { port: number; url: (host: string, path: strin
     async fetch(req) {
       const url = new URL(req.url);
       const host = (req.headers.get("host") ?? "").split(":")[0] ?? "";
-      hits.push({ host, path: url.pathname, query: url.search });
+      hits.push({ host, path: url.pathname, query: url.search, cookie: req.headers.get("cookie") });
       if (url.pathname.includes("..")) return new Response("not found", { status: 404 });
       const file = Bun.file(join(PAGES, url.pathname.replace(/^\/+/, "")));
       if (await file.exists()) {

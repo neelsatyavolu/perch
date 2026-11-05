@@ -99,3 +99,30 @@ test("a failing model still leaves the rule pass done and says why", async () =>
   expect(report.error).toBe("offline");
   expect(texts(s, "USER.md")).toEqual(["Likes tea"]);
 });
+
+test("pages merged into each other in a cycle are left alone", async () => {
+  const s = await store();
+  await s.addFacts([{ category: "people", title: "Maya", text: "Sister" }, { category: "people", title: "Maya Chen", text: "Lives in Lisbon" }], "chat");
+  const model = fakeModel([ops({ merge_pages: [{ from: "people/maya.md", into: "people/maya-chen.md" }, { from: "people/maya-chen.md", into: "people/maya.md" }] })]);
+  const report = await dream({ store: s, model, now: clock });
+  expect(report).toMatchObject({ pagesMerged: 1, ignored: 1 });
+  expect(texts(s, "people/maya-chen.md")).toEqual(["Lives in Lisbon", "Sister"]);
+  expect(s.get("people/maya.md")).toBeNull();
+});
+
+test("a page changed while the model was thinking is not overwritten", async () => {
+  const s = await store();
+  await s.addFacts([{ category: "user", title: "You", text: "Likes tea" }, { category: "user", title: "You", text: "Enjoys tea" }], "chat");
+  const slow = {
+    id: "slow",
+    async *turn(): AsyncIterable<TurnEvent> {
+      clock = new Date("2026-11-05T03:05:00Z");
+      await s.addFacts([{ category: "user", title: "You", text: "Moved to Berlin" }], "chat");
+      yield* ops({ merge_facts: [{ path: "USER.md", indexes: [0, 1], text: "Likes tea" }] });
+    },
+  };
+  const report = await dream({ store: s, model: slow, now: new Date("2026-11-05T03:00:00Z") });
+  expect(texts(s, "USER.md")).toEqual(["Likes tea", "Enjoys tea", "Moved to Berlin"]);
+  expect(report.skipped).toEqual(["USER.md"]);
+  clock = new Date("2026-11-05T03:00:00Z");
+});

@@ -136,3 +136,16 @@ test("saving a standing rule always asks, even in Skip mode, so a web page canno
   expect(events.find((e) => e.type === "approval")).toMatchObject({ request: { site: "memory", summary: expect.stringContaining("MEMORY.md") } });
   expect(store.get("MEMORY.md")).toBeNull();
 });
+
+test("the plaintext audit log names memory actions but never their contents", async () => {
+  const store = await setupStore();
+  const { log } = await run(store, [
+    tool("memory_search", { query: "Maya secret plans" }),
+    tool("memory_save", { category: "people", title: "Maya Chen", text: "Planning a surprise party" }),
+    tool("memory_save", { category: "sites", title: "bank", text: "password: hunter22" }),
+    tool("done", { answer: "ok" }),
+  ]);
+  const text = JSON.stringify(log);
+  for (const word of ["secret plans", "surprise", "hunter22", "Maya"]) expect(text).not.toContain(word);
+  expect(log.slice(0, 3).map((l) => l.detail)).toEqual(["search (17 characters)", "save to people", "save to sites"]);
+});

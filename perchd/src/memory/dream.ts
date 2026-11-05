@@ -20,6 +20,8 @@ export type DreamReport = {
   retired: number;
   pagesMerged: number;
   ignored: number;
+  /** Pages left alone because they changed while dreaming ran. */
+  skipped: string[];
   logPath: string | null;
   error?: string;
 };
@@ -45,7 +47,8 @@ export const CONSOLIDATE_TOOL: ToolSpec = {
   },
 };
 
-type Draft = { page: Page; notes: string[] };
+/** A page being tidied: `base` is the page's `updated` when read, `into` is set when it merges away. */
+type Draft = { page: Page; base: string; notes: string[]; into?: string };
 
 /** Duplicates out, expired facts to History, History capped. Returns the new page and what changed. */
 function tidy(page: Page, today: string): { page: Page; duplicates: number; expired: number } {
@@ -71,7 +74,7 @@ function plural(n: number, word: string): string {
 export async function dream(opts: DreamOptions): Promise<DreamReport> {
   const { store } = opts;
   const date = opts.now.toISOString().slice(0, 10);
-  const report: DreamReport = { date, duplicates: 0, expired: 0, episodicRemoved: 0, merged: 0, retired: 0, pagesMerged: 0, ignored: 0, logPath: null };
+  const report: DreamReport = { date, duplicates: 0, expired: 0, episodicRemoved: 0, merged: 0, retired: 0, pagesMerged: 0, ignored: 0, skipped: [], logPath: null };
   const log: string[] = [];
 
   const retention = store.settings().episodicRetentionDays;
@@ -93,7 +96,7 @@ export async function dream(opts: DreamOptions): Promise<DreamReport> {
     ];
     report.duplicates += t.duplicates;
     report.expired += t.expired;
-    drafts.set(p.path, { page: t.page, notes });
+    drafts.set(p.path, { page: t.page, base: p.updated, notes });
   }
 
   if (opts.model) {
@@ -104,11 +107,17 @@ export async function dream(opts: DreamOptions): Promise<DreamReport> {
     }
   }
 
-  for (const [path, draft] of drafts) {
-    if (!draft.notes.length || !store.get(draft.page.id)) continue;
-    if (draft.notes.some((n) => n.startsWith("merged into"))) await store.deletePage(draft.page.id, "dreaming");
-    else await store.replacePage(draft.page, { action: "dream", detail: draft.notes.join("; "), source: "dreaming" });
-    log.push(...draft.notes.map((n) => `${path}: ${n}`));
+  // Pages that stay are written first; a page merged away is deleted only after its destination is saved.
+  const changed = [...drafts.entries()].filter(([, d]) => d.notes.length);
+  for (const [path, draft] of changed.filter(([, d]) => !d.into)) {
+    const saved = await store.replacePage(draft.page, { action: "dream", detail: draft.notes.join("; "), source: "dreaming" }, draft.base);
+    if (saved) log.push(...draft.notes.map((n) => `${path}: ${n}`));
+    else report.skipped.push(path);
+  }
+  for (const [path, draft] of changed.filter(([, d]) => d.into)) {
+    const deleted = !report.skipped.includes(draft.into!) && (await store.deletePage(draft.page.id, "dreaming", draft.base));
+    if (deleted) log.push(...draft.notes.map((n) => `${path}: ${n}`));
+    else report.skipped.push(path);
   }
 
   if (log.length) report.logPath = await writeLog(store, date, opts.now.toISOString(), log);
@@ -180,10 +189,13 @@ async function modelPass(model: Model, drafts: Map<string, Draft>, report: Dream
   for (const path of new Set([...merges.map((m) => m.path), ...retires.map((r) => r.path)])) {
     applyFactOps(drafts.get(path)!, merges.filter((m) => m.path === path), retires.filter((r) => r.path === path), now, report);
   }
+  const destinations = new Set<Draft>();
   for (const raw of arrayOf(answer.args.merge_pages)) {
     const from = drafts.get(str(raw.from));
     const into = drafts.get(str(raw.into));
-    if (!from || !into || from === into || from.page.category !== into.page.category || from.page.category === "user" || from.page.category === "rules") {
+    // A page merges away once, never into a page that is itself merging away, and never after receiving facts.
+    const chained = from && into && (from.into !== undefined || into.into !== undefined || destinations.has(from));
+    if (!from || !into || from === into || chained || from.page.category !== into.page.category || from.page.category === "user" || from.page.category === "rules") {
       report.ignored++;
       continue;
     }
@@ -193,6 +205,8 @@ async function modelPass(model: Model, drafts: Map<string, Draft>, report: Dream
     into.notes.push(`took ${plural(moved.length, "fact")} from ${from.page.path}`);
     from.page = { ...from.page, current: [], history: [] };
     from.notes.push(`merged into ${into.page.path}`);
+    from.into = into.page.path;
+    destinations.add(into);
     report.pagesMerged++;
   }
 }

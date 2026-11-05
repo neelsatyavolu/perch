@@ -233,9 +233,13 @@ export class MemoryStore {
     });
   }
 
-  /** Replaces a whole page (used by dreaming and the Memory page editor). */
-  replacePage(page: Page, change: Omit<Change, "time" | "path">): Promise<Page> {
+  /**
+   * Replaces a whole page (used by dreaming). With `expectedUpdated`, nothing is written and null
+   * comes back when the page changed since it was read, so a slow pass never overwrites newer facts.
+   */
+  replacePage(page: Page, change: Omit<Change, "time" | "path">, expectedUpdated?: string): Promise<Page | null> {
     return this.exclusive(async () => {
+      if (expectedUpdated !== undefined && this.pages.get(page.id)?.updated !== expectedUpdated) return null;
       if (!this.pages.has(page.id) && this.get(page.path)) throw new Error(`a page already exists at ${page.path}`);
       const next = { ...page, updated: this.stamp() };
       await this.write(next);
@@ -244,15 +248,17 @@ export class MemoryStore {
     });
   }
 
-  deletePage(id: string, source: FactSource = "user"): Promise<void> {
+  /** Deletes a page. With `expectedUpdated`, returns false and keeps the page if it changed since it was read. */
+  deletePage(id: string, source: FactSource = "user", expectedUpdated?: string): Promise<boolean> {
     return this.exclusive(async () => {
       const page = this.pages.get(id);
-      if (!page) return;
+      if (!page || (expectedUpdated !== undefined && page.updated !== expectedUpdated)) return false;
       await this.folder.remove(PAGES, id);
       this.pages.delete(id);
       this.index.remove(id);
       this.vectors.delete(id);
       await this.log([{ time: this.stamp(), action: "delete", path: page.path, detail: page.title, source }]);
+      return true;
     });
   }
 

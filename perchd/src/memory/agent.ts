@@ -120,12 +120,19 @@ export function chatMemory(store: MemoryStore, opts: { incognito?: boolean; extr
   };
 }
 
+/** What the plaintext audit log may say about a memory call: never the query or the fact itself. */
+function auditDetail(call: ToolCall): string {
+  if (call.name === "memory_search") return `search (${str(call.args.query).length} characters)`;
+  const category = str(call.args.category);
+  return `save to ${isCategory(category) ? category : "an unknown category"}`;
+}
+
 /** One memory tool call under the chat's permission mode: approval if needed, run, audit. */
 export async function* memoryCall(memory: MemoryAccess, policy: MemoryPolicy, call: ToolCall): AsyncGenerator<{ type: "approval"; request: ApprovalRequest } | { type: "step"; label: string }, MemoryToolResult> {
   const kind = memory.kind(call);
   // A standing rule changes how the agent behaves in every later chat, so it always asks.
   const decision = call.name === "memory_save" && call.args.category === "rules" ? "ask" : needsApproval(policy.mode, kind);
-  const entry = { time: new Date().toISOString(), tab: "", site: "memory", action: call.name, detail: memory.summary(call), client: policy.client ?? "sidebar" };
+  const entry = { time: new Date().toISOString(), tab: "", site: "memory", action: call.name, detail: auditDetail(call), client: policy.client ?? "sidebar" };
   let approved: boolean | null = null;
   if (decision === "ask") {
     const request: ApprovalRequest = { call, kind, site: "memory", summary: memory.summary(call) };

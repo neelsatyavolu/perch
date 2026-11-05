@@ -41,7 +41,7 @@ test("facts are filed into pages, duplicates are skipped, secrets are refused", 
     ],
     "chat",
   );
-  expect(result).toEqual({ added: 2, duplicates: 1, rejected: [{ text: "My GitHub password is hunter22", reason: "looks like a secret" }, { text: "not fileable", reason: "unknown category" }] });
+  expect(result).toEqual({ added: 2, duplicates: 1, rejected: [{ text: "My GitHub password is hunter22", reason: "looks like a secret" }, { text: "not fileable", reason: "unknown category" }], paths: ["people/maya-chen.md", "USER.md"] });
   expect(store.list().map((p) => [p.path, p.facts])).toEqual([
     ["USER.md", 1],
     ["people/maya-chen.md", 1],

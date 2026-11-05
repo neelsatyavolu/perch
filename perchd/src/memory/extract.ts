@@ -15,7 +15,7 @@ const MAX_FACTS = 30;
 const TRANSCRIPT_LIMIT = 24_000;
 const TOOL_RESULT_LIMIT = 300;
 const KNOWN_PAGES = 200;
-const NONE: AddResult = { added: 0, duplicates: 0, rejected: [] };
+const NONE: AddResult = { added: 0, duplicates: 0, rejected: [], paths: [] };
 
 /** Filing rules shared by extraction, the agent's memory_save and setup (the spec's TAXONOMY.md). */
 export const TAXONOMY = [

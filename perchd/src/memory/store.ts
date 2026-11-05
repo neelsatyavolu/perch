@@ -11,7 +11,7 @@ import { cleanText, FILEABLE, isCategory, looksSecret, pagePath, type Category }
 import { cosine, fuse, MemoryIndex, pageText, type Embedder, type SearchHit, type SearchOptions } from "./search";
 
 export type NewFact = { category: Category; title: string; text: string; expires?: string };
-export type AddResult = { added: number; duplicates: number; rejected: { text: string; reason: string }[] };
+export type AddResult = { added: number; duplicates: number; rejected: { text: string; reason: string }[]; paths: string[] };
 export type PageSummary = { id: string; path: string; title: string; category: Category; facts: number; updated: string };
 export type RetentionDays = 30 | 90 | null;
 export type MemorySettings = { extraction: boolean; paused: boolean; historyExtraction: boolean; episodicRetentionDays: RetentionDays };
@@ -174,7 +174,7 @@ export class MemoryStore {
   /** Files facts into their pages. Duplicates are skipped; secrets and bad input are refused. */
   addFacts(items: readonly NewFact[], source: FactSource): Promise<AddResult> {
     return this.exclusive(async () => {
-      const result: AddResult = { added: 0, duplicates: 0, rejected: [] };
+      const result: AddResult = { added: 0, duplicates: 0, rejected: [], paths: [] };
       const touched = new Map<string, Page>();
       const changes: Change[] = [];
       for (const item of items) {
@@ -200,6 +200,7 @@ export class MemoryStore {
         result.added++;
       }
       for (const page of touched.values()) await this.write(page);
+      result.paths.push(...touched.keys());
       await this.log(changes);
       return result;
     });

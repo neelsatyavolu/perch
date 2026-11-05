@@ -1,6 +1,7 @@
 /** The agent loop: model turn, tool calls with permission checks, results back, until done. */
 
 import type { Browser } from "../browser/browser";
+import { memoryCall, type MemoryAccess } from "../memory/agent";
 import type { Effort, Message, Model, ToolCall, TurnRequest } from "../models/types";
 import type { AuditLog } from "./audit";
 import type { Mode, SiteRule } from "./permissions";
@@ -29,6 +30,8 @@ export type TaskOptions = {
   effort?: Effort;
   siteRule?: (host: string) => SiteRule | undefined;
   signal?: AbortSignal;
+  /** The chat's memory (src/memory/agent.ts). Left out for incognito chats. */
+  memory?: MemoryAccess;
 };
 
 const DEFAULT_MAX_STEPS = 40;
@@ -45,7 +48,9 @@ export async function* runTask(opts: TaskOptions): AsyncIterable<StepEvent> {
   const ctx = await newToolContext(opts.browser);
   const messages: Message[] = [{ role: "user", text: opts.task }];
   const signal = opts.signal ?? new AbortController().signal;
-  const system = systemPrompt({ mode: opts.mode, now: new Date() });
+  const remembered = opts.memory ? await opts.memory.context(opts.task).catch(() => "") : "";
+  const system = [systemPrompt({ mode: opts.mode, now: new Date() }), remembered].filter(Boolean).join("\n\n");
+  const tools = opts.memory ? [...TOOL_SPECS, ...opts.memory.specs] : TOOL_SPECS;
   const maxSteps = opts.maxSteps ?? DEFAULT_MAX_STEPS;
   let worked = false;
   let checked = false;
@@ -54,7 +59,7 @@ export async function* runTask(opts: TaskOptions): AsyncIterable<StepEvent> {
       let text = "";
       const calls: ToolCall[] = [];
       try {
-        const req: TurnRequest = { system, messages: compact(messages), tools: TOOL_SPECS, effort: opts.effort };
+        const req: TurnRequest = { system, messages: compact(messages), tools, effort: opts.effort };
         for await (const event of opts.model.turn(req, signal)) {
           if (event.type === "text") {
             text += event.delta;
@@ -89,13 +94,14 @@ export async function* runTask(opts: TaskOptions): AsyncIterable<StepEvent> {
           yield { type: "final", text: outcome.final };
           return;
         }
-        worked = true;
+        if (!opts.memory?.handles(call.name)) worked = true;
         messages.push(outcome.message);
       }
     }
     yield { type: "error", message: `Stopped after ${maxSteps} steps without finishing. Ask again with more detail, or raise the step limit.` };
   } finally {
     await ctx.close();
+    opts.memory?.chatEnded(messages);
   }
 }
 
@@ -103,6 +109,7 @@ type Outcome = { final?: string; message: Extract<Message, { role: "tool" }> };
 
 async function* act(ctx: ToolContext, opts: TaskOptions, call: ToolCall): AsyncGenerator<StepEvent, Outcome> {
   const reply = (content: string, image?: string): Outcome => ({ message: { role: "tool", callId: call.id, name: call.name, content, image } });
+  if (opts.memory?.handles(call.name)) return reply((yield* memoryCall(opts.memory, opts, call)).content);
   const prepared = await prepareCall(ctx, opts, call);
   if (prepared.kind === "answer") return reply(prepared.result.content);
   let approved: boolean | null = null;

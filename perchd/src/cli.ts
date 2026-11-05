@@ -1,10 +1,11 @@
 /**
  * Development harness: run one task in a headless test browser and print the steps.
  *
- *   bun run src/cli.ts run [--model fake|codex|grok|anthropic:<model-id>] [--mode ask|guard|skip] [--show] "<task>"
+ *   bun run src/cli.ts run [--model fake|codex|grok|anthropic:<model-id>] [--mode ask|guard|skip] [--show] [--mcp] "<task>"
  *
  * Codex and Grok need the sign-in that Perch's settings add (plan 4). A Claude API key can be
- * given in ANTHROPIC_API_KEY. Approvals are asked on this terminal.
+ * given in ANTHROPIC_API_KEY. Approvals are asked on this terminal. Built-in skills are always
+ * offered; --mcp also connects the user's MCP servers and skills from Perch's settings (Keychain).
  */
 
 import { mkdtempSync, rmSync } from "node:fs";
@@ -15,6 +16,11 @@ import { AuditLog } from "./agent/audit";
 import { runTask } from "./agent/loop";
 import type { Mode } from "./agent/permissions";
 import { Browser } from "./browser/browser";
+import { loadAgentExtras, settingsDir, type AgentExtras } from "./mcp-client/agent-extras";
+import { describeLaunch } from "./mcp-client/launch";
+import { MacKeychain } from "./secure/keychain";
+import { SkillCatalog } from "./skills/catalog";
+import { skillExtraTools } from "./skills/tool";
 import { anthropicModel } from "./models/anthropic";
 import { fakeModel } from "./models/fake";
 import type { Model } from "./models/types";
@@ -38,13 +44,14 @@ function pickModel(spec: string): Model | string {
 export async function main(argv: string[]): Promise<number> {
   const args = [...argv];
   if (args.shift() !== "run") {
-    process.stderr.write('usage: perchd-dev run [--model fake|codex|grok|anthropic:<id>] [--mode ask|guard|skip] [--show] "<task>"\n');
+    process.stderr.write('usage: perchd-dev run [--model fake|codex|grok|anthropic:<id>] [--mode ask|guard|skip] [--show] [--mcp] "<task>"\n');
     return 64;
   }
   const model = pickModel(arg(args, "--model") ?? "fake");
   const mode = (arg(args, "--mode") ?? "guard") as Mode;
   const show = args.includes("--show");
-  const task = args.filter((a) => a !== "--show").join(" ").trim();
+  const withMcp = args.includes("--mcp");
+  const task = args.filter((a) => a !== "--show" && a !== "--mcp").join(" ").trim();
   if (typeof model === "string") {
     process.stderr.write(`${model}\n`);
     return 2;
@@ -56,9 +63,22 @@ export async function main(argv: string[]): Promise<number> {
   const profile = mkdtempSync(join(tmpdir(), "perchd-dev-"));
   const browser = await Browser.launch({ userDataDir: profile, headless: !show });
   const terminal = createInterface({ input: process.stdin, output: process.stderr });
-  const audit = new AuditLog(join(homedir(), "Library", "Application Support", "Perch", "dev-audit.jsonl"));
+  const audit = new AuditLog(join(settingsDir(homedir()), "dev-audit.jsonl"));
+  // Servers connect at once, so their questions are queued: one prompt on the terminal at a time.
+  let asking: Promise<unknown> = Promise.resolve();
+  const ask = (question: string): Promise<boolean> => {
+    const answer = asking.then(async () => (await terminal.question(`${question} [y/N] `)).trim().toLowerCase() === "y");
+    asking = answer.catch(() => undefined);
+    return answer;
+  };
+  let extras: AgentExtras | null = null;
   let code = 0;
   try {
+    extras = withMcp
+      ? await loadAgentExtras({ dir: settingsDir(homedir()), keychain: new MacKeychain(), approveLaunch: (r) => ask(describeLaunch(r)), openUrl: async (url) => void process.stderr.write(`Open this address to sign in: ${url}\n`) })
+      : null;
+    for (const s of extras?.status ?? []) if (s.state !== "connected") process.stderr.write(`MCP ${s.name}: ${s.state}${s.error ? `. ${s.error}` : ""}\n`);
+    const extraTools = extras?.extraTools ?? skillExtraTools(await SkillCatalog.load());
     for await (const event of runTask({
       model,
       browser,
@@ -66,7 +86,8 @@ export async function main(argv: string[]): Promise<number> {
       mode,
       audit,
       client: "dev-cli",
-      approve: async (req) => (await terminal.question(`Allow: ${req.summary}? [y/N] `)).trim().toLowerCase() === "y",
+      extraTools,
+      approve: (req) => ask(`Allow: ${req.summary}?`),
     })) {
       if (event.type === "step") process.stderr.write(`· ${event.label}\n`);
       if (event.type === "final") process.stdout.write(`${event.text}\n`);
@@ -76,6 +97,7 @@ export async function main(argv: string[]): Promise<number> {
       }
     }
   } finally {
+    await extras?.close();
     terminal.close();
     await browser.close();
     rmSync(profile, { recursive: true, force: true });

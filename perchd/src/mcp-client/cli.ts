@@ -19,6 +19,7 @@ import { findSkillImports, importSkills, previewSkills } from "../skills/import"
 import { SkillStore } from "../skills/store";
 import { preview, saveImports, type PreviewItem } from "./importers/preview";
 import { findImports } from "./importers/sources";
+import { settingsDir } from "./agent-extras";
 import { describeLaunch } from "./launch";
 import { deleteServer, McpManager } from "./manager";
 import { RegistryStore, updateServer } from "./registry";
@@ -50,7 +51,7 @@ function showServer(i: PreviewItem): string[] {
 }
 
 export async function run(argv: string[], deps: CliDeps): Promise<number> {
-  const dir = flag(argv, "--dir")[0] ?? join(deps.home, "Library", "Application Support", "Perch");
+  const dir = flag(argv, "--dir")[0] ?? settingsDir(deps.home);
   const store = new RegistryStore(join(dir, "mcp-servers.enc"), deps.keychain);
   const skills = new SkillStore(join(dir, "skills"), deps.keychain);
   const [command, name] = argv.filter((a, i) => !a.startsWith("--") && !argv[i - 1]?.startsWith("--"));

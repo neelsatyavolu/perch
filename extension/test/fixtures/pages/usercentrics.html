@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Usercentrics fixture</title></head>
+<body>
+  <h1>Shop</h1>
+  <div id="usercentrics-root"></div>
+  <script>
+    // Usercentrics renders its banner inside a shadow root; this one is closed, the harder case.
+    window.consent = null;
+    const shadow = document.getElementById("usercentrics-root").attachShadow({ mode: "closed" });
+    shadow.innerHTML = `
+      <div data-testid="uc-default-banner" style="position: fixed; bottom: 0; padding: 16px; background: #fff">
+        <p>This website uses cookies.</p>
+        <button data-testid="uc-accept-all-button">Accept All</button>
+        <button data-testid="uc-deny-all-button">Deny</button>
+      </div>`;
+    shadow.querySelector("[data-testid=uc-accept-all-button]").onclick = () => (window.consent = "accepted");
+    shadow.querySelector("[data-testid=uc-deny-all-button]").onclick = () => {
+      window.consent = "denied";
+      shadow.querySelector("[data-testid=uc-default-banner]").remove();
+    };
+  </script>
+</body>
+</html>

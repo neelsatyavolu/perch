@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Cookiebot fixture</title>
+<style>#CybotCookiebotDialog { position: fixed; bottom: 0; left: 0; right: 0; padding: 16px; background: #fff; border-top: 1px solid #ccc; }</style>
+</head>
+<body>
+  <h1>Shop</h1>
+  <script>
+    // Markup follows Cookiebot's dialog: Deny, Allow selection and Allow all, injected after load.
+    window.consent = null;
+    setTimeout(() => {
+      const dialog = document.createElement("div");
+      dialog.id = "CybotCookiebotDialog";
+      dialog.setAttribute("role", "dialog");
+      dialog.innerHTML = `
+        <div id="CybotCookiebotDialogBody"><h2 id="CybotCookiebotDialogBodyContentTitle">This website uses cookies</h2></div>
+        <div id="CybotCookiebotDialogBodyButtonsWrapper">
+          <button id="CybotCookiebotDialogBodyButtonDecline">Deny</button>
+          <button id="CybotCookiebotDialogBodyLevelButtonLevelOptinAllowallSelection">Allow selection</button>
+          <button id="CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll">Allow all</button>
+        </div>`;
+      document.body.append(dialog);
+      const close = (value) => { window.consent = value; dialog.remove(); };
+      document.getElementById("CybotCookiebotDialogBodyButtonDecline").onclick = () => close("denied");
+      document.getElementById("CybotCookiebotDialogBodyLevelButtonLevelOptinAllowallSelection").onclick = () => close("selection");
+      document.getElementById("CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll").onclick = () => close("accepted");
+    }, 300);
+  </script>
+</body>
+</html>

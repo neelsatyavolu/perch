@@ -1,0 +1,4 @@
+[Adblock Plus 2.0]
+! Title: Fixture EasyPrivacy
+! Version: fixture-1
+||tracker.localhost^$third-party

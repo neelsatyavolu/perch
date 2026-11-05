@@ -1,5 +1,6 @@
 /** The fixture MCP server over stdio: `bun test/fixtures/mcp-stdio-server.ts`. Prints a banner first, as some servers do. */
 
+import { chunks } from "../../src/mcp-client/sse";
 import { createFixture } from "./mcp-fixture";
 
 const fixture = createFixture({ env: process.env });
@@ -9,7 +10,7 @@ if (process.argv.includes("--crash")) process.exit(3);
 
 const decoder = new TextDecoder();
 let buffer = "";
-for await (const chunk of Bun.stdin.stream()) {
+for await (const chunk of chunks(Bun.stdin.stream())) {
   buffer += decoder.decode(chunk, { stream: true });
   let nl: number;
   while ((nl = buffer.indexOf("\n")) !== -1) {

@@ -9,6 +9,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { JsonRpcMessage, Transport } from "./jsonrpc";
+import { chunks } from "./sse";
 
 export type StdioOptions = { command: string; args: string[]; env: Record<string, string>; cwd?: string; baseEnv?: Record<string, string | undefined> };
 
@@ -75,7 +76,7 @@ export class StdioTransport implements Transport {
   private async readLines(stream: ReadableStream<Uint8Array>, onMessage: (msg: JsonRpcMessage) => void): Promise<void> {
     const decoder = new TextDecoder();
     let buffer = "";
-    for await (const chunk of stream) {
+    for await (const chunk of chunks(stream)) {
       buffer += decoder.decode(chunk, { stream: true });
       let nl: number;
       while ((nl = buffer.indexOf("\n")) !== -1) {
@@ -93,6 +94,6 @@ export class StdioTransport implements Transport {
 
   private async readStderr(stream: ReadableStream<Uint8Array>): Promise<void> {
     const decoder = new TextDecoder();
-    for await (const chunk of stream) this.stderrTail = (this.stderrTail + decoder.decode(chunk, { stream: true })).slice(-STDERR_KEEP);
+    for await (const chunk of chunks(stream)) this.stderrTail = (this.stderrTail + decoder.decode(chunk, { stream: true })).slice(-STDERR_KEEP);
   }
 }

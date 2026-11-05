@@ -4,6 +4,20 @@ import type { JsonRpcMessage, Transport } from "./jsonrpc";
 
 export type SseEvent = { event: string; data: string; id?: string };
 
+/** The chunks of a stream, released when the reader stops early. */
+export async function* chunks(stream: ReadableStream<Uint8Array>): AsyncGenerator<Uint8Array> {
+  const reader = stream.getReader();
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) return;
+      yield value;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 /** Parses an event stream per the HTML spec: events end at a blank line; data lines join with \n. */
 export async function* parseSse(stream: ReadableStream<Uint8Array>): AsyncGenerator<SseEvent> {
   const decoder = new TextDecoder();
@@ -11,7 +25,7 @@ export async function* parseSse(stream: ReadableStream<Uint8Array>): AsyncGenera
   let event = "";
   let data: string[] = [];
   let id: string | undefined;
-  for await (const chunk of stream) {
+  for await (const chunk of chunks(stream)) {
     buffer += decoder.decode(chunk, { stream: true });
     let nl: number;
     while ((nl = buffer.search(/\r\n|\r|\n/)) !== -1) {

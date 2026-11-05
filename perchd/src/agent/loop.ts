@@ -1,6 +1,7 @@
 /** The agent loop: model turn, tool calls with permission checks, results back, until done. */
 
 import type { Browser } from "../browser/browser";
+import { actExtra, type ExtraTools } from "../mcp-client/extra-tools";
 import type { Effort, Message, Model, ToolCall, TurnRequest } from "../models/types";
 import type { AuditLog } from "./audit";
 import type { Mode, SiteRule } from "./permissions";
@@ -29,6 +30,8 @@ export type TaskOptions = {
   effort?: Effort;
   siteRule?: (host: string) => SiteRule | undefined;
   signal?: AbortSignal;
+  /** MCP server tools and skills, run under the same permission mode and audit log. */
+  extraTools?: ExtraTools;
 };
 
 const DEFAULT_MAX_STEPS = 40;
@@ -45,7 +48,8 @@ export async function* runTask(opts: TaskOptions): AsyncIterable<StepEvent> {
   const ctx = await newToolContext(opts.browser);
   const messages: Message[] = [{ role: "user", text: opts.task }];
   const signal = opts.signal ?? new AbortController().signal;
-  const system = systemPrompt({ mode: opts.mode, now: new Date() });
+  const extraPrompt = opts.extraTools?.prompt() ?? "";
+  const system = [systemPrompt({ mode: opts.mode, now: new Date() }), extraPrompt].filter(Boolean).join("\n\n");
   const maxSteps = opts.maxSteps ?? DEFAULT_MAX_STEPS;
   let worked = false;
   let checked = false;
@@ -54,7 +58,7 @@ export async function* runTask(opts: TaskOptions): AsyncIterable<StepEvent> {
       let text = "";
       const calls: ToolCall[] = [];
       try {
-        const req: TurnRequest = { system, messages: compact(messages), tools: TOOL_SPECS, effort: opts.effort };
+        const req: TurnRequest = { system, messages: compact(messages), tools: [...TOOL_SPECS, ...(opts.extraTools?.specs() ?? [])], effort: opts.effort };
         for await (const event of opts.model.turn(req, signal)) {
           if (event.type === "text") {
             text += event.delta;
@@ -103,6 +107,10 @@ type Outcome = { final?: string; message: Extract<Message, { role: "tool" }> };
 
 async function* act(ctx: ToolContext, opts: TaskOptions, call: ToolCall): AsyncGenerator<StepEvent, Outcome> {
   const reply = (content: string, image?: string): Outcome => ({ message: { role: "tool", callId: call.id, name: call.name, content, image } });
+  if (opts.extraTools?.handles(call.name)) {
+    const result = yield* actExtra(opts, opts.extraTools, call, opts.signal ?? new AbortController().signal);
+    return reply(result.content, result.image);
+  }
   const prepared = await prepareCall(ctx, opts, call);
   if (prepared.kind === "answer") return reply(prepared.result.content);
   let approved: boolean | null = null;

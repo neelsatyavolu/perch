@@ -78,7 +78,7 @@ test("sealed JSON files are owner-only and unreadable without the key", async ()
   expect(statSync(path).mode & 0o777).toBe(0o600);
   expect(statSync(join(dir, "sub")).mode & 0o777).toBe(0o700);
   expect(readFileSync(path).toString("latin1")).not.toContain("github");
-  expect(await readSealedJson(path, key, "t")).toEqual({ name: "github", url: "https://example.test/mcp" });
+  expect(await readSealedJson<object>(path, key, "t")).toEqual({ name: "github", url: "https://example.test/mcp" });
   writeFileSync(path, "garbage");
   await expect(readSealedJson(path, key, "t")).rejects.toThrow("could not be decrypted");
 });

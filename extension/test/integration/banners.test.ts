@@ -53,16 +53,30 @@ describe("cookie banners", () => {
     await tab.close();
   });
 
-  test("does nothing on a site with protections off", async () => {
-    await h.sw(`chrome.storage.local.set({ settings: { sitesOff: ["site.localhost"] } })`);
-    await waitFor(async () => {
-      const [script] = await h.sw<{ excludeMatches?: string[] }[]>(`chrome.scripting.getRegisteredContentScripts({ ids: ["perch-banners"] })`);
-      return script?.excludeMatches?.length ? true : null;
-    }, "banner script exclusion");
-    const tab = await h.open(h.site.url("site.localhost", "/onetrust.html"));
-    await Bun.sleep(2_000);
-    expect(await tab.evaluate("window.consent")).toBeNull();
-    await tab.close();
-    await h.sw(`chrome.storage.local.set({ settings: {} })`);
+  describe("on a site with protections off", () => {
+    beforeAll(async () => {
+      await h.sw(`chrome.storage.local.set({ settings: { sitesOff: ["site.localhost"] } })`);
+      await waitFor(async () => {
+        const [script] = await h.sw<{ excludeMatches?: string[] }[]>(`chrome.scripting.getRegisteredContentScripts({ ids: ["perch-banners"] })`);
+        return script?.excludeMatches?.length ? true : null;
+      }, "banner script exclusion");
+    });
+    afterAll(async () => {
+      await h.sw(`chrome.storage.local.set({ settings: {} })`);
+    });
+
+    test("does nothing to the page's own banner", async () => {
+      const tab = await h.open(h.site.url("site.localhost", "/onetrust.html"));
+      await Bun.sleep(2_000);
+      expect(await tab.evaluate("window.consent")).toBeNull();
+      await tab.close();
+    });
+
+    test("does nothing to a banner in a cross-origin consent frame either", async () => {
+      const tab = await h.open(h.site.url("site.localhost", "/sourcepoint.html"));
+      await Bun.sleep(2_000);
+      expect(await tab.evaluate("window.consent")).toBeNull();
+      await tab.close();
+    });
   });
 });

@@ -43,6 +43,8 @@ function handleContent(message: ContentMessage | null, sender: chrome.runtime.Me
   switch (message.type) {
     case "banner":
       return reportBanner(tab.id, tab.url ?? sender.url, message.cmp);
+    case "banner-allowed":
+      return bannersAllowed(tab.url);
     case "preview":
       return fetchPreview(message.url, sender.url);
     case "open":
@@ -68,6 +70,17 @@ async function reportBanner(tabId: number, url: string, cmp: string): Promise<vo
   // A frame on an exempt site could still report; keep the record honest.
   if (isSiteOff(await loadSettings(), host)) return;
   await recordBanner(tabId, url, cmp);
+}
+
+/**
+ * Frames ask before handling a banner: the exemption list is matched against each frame's own URL,
+ * so a consent frame from another origin (Sourcepoint, TrustArc) inside an exempt site would
+ * otherwise still act. Without the tab's address, the answer is no.
+ */
+async function bannersAllowed(tabUrl: string | undefined): Promise<boolean> {
+  if (!tabUrl) return false;
+  const host = new URL(tabUrl).hostname;
+  return !isSiteOff(await loadSettings(), host);
 }
 
 function report(error: unknown): void {

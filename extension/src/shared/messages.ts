@@ -1,6 +1,7 @@
 /**
  * Every message the service worker accepts, validated in one place. Content scripts run next to
- * untrusted pages, so they may only report a banner result and ask for a link preview; anything
+ * untrusted pages, so they may only report a banner result, ask whether banners may be handled in
+ * their tab, and ask for a link preview; anything
  * that touches captures, tabs or settings must come from the extension's own pages.
  */
 
@@ -8,6 +9,7 @@ import { CMP_NAMES } from "../banners/rules";
 
 export type ContentMessage =
   | { type: "banner"; cmp: string }
+  | { type: "banner-allowed" }
   | { type: "preview"; url: string }
   | { type: "open"; url: string };
 
@@ -32,6 +34,8 @@ export function parseContentMessage(raw: unknown): ContentMessage | null {
   switch (m.type) {
     case "banner":
       return typeof m.cmp === "string" && CMP_NAMES.includes(m.cmp) ? { type: "banner", cmp: m.cmp } : null;
+    case "banner-allowed":
+      return { type: "banner-allowed" };
     case "preview":
     case "open": {
       const url = webUrl(m.url);

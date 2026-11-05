@@ -22,6 +22,8 @@ export class AgentSession {
   ctx: ToolContext | null = null;
   borrowed = new Set<string>();
   asleep = false;
+  /** Open connections working in this session. */
+  connections = 0;
   lastUsed = Date.now();
   endTimer: ReturnType<typeof setTimeout> | null = null;
   queue: Promise<unknown> = Promise.resolve();

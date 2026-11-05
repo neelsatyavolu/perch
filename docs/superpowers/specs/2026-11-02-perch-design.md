@@ -10,6 +10,13 @@ Name: **Perch**, a place you sit and watch from. Domain: `perchbrowser.com` (fre
 
 Items marked **[builder call]** were decided by Claude during design, not by the owner. The owner can overturn any of them.
 
+**Priorities** (owner, 2026-11-05). When goals pull against each other, this order decides:
+
+1. The fastest Chromium browser.
+2. The best computer use (browser agent) with most models, not only one provider's.
+3. Looks good, professional and ready for production.
+4. Fully working: every feature in this document ships working, not as a stub.
+
 **Contents**
 
 | | |
@@ -97,7 +104,7 @@ Taken from the owner's Aside screenshots.
 - **Hide chrome**: one shortcut and a setting hide the tab strip and bookmarks bar completely. The address bar appears on ⌘L and a tab switcher on ⌃Tab. Top-edge hover can reveal the bar, as a setting.
 - **Split view**: two tabs side by side in one window, with a draggable divider. Built on Chromium's split-view feature where it exists, extended to work from the tab context menu and a shortcut.
 - **Right sidebar**: the agent chat (section 7.6). Toggled with a toolbar button and a shortcut. Resizable. It remembers per-window state.
-- **Themes**: Ink (dark, default) and Paper (light) from DESIGN.md, plus Graphite, Contrast and Dusk to match agterm's theme set. Themes drive both the native chrome and the WebUI pages through one token file. Visual rules are in section 6.
+- **Themes**: five themes (Ink, the default; Graphite, a neutral grey; Dusk; Paper, light; Contrast) and five accents (Blue, the default; Teal; Amber; Rose; Mono). A theme changes every surface, text and accent colour in the chrome and in Perch's pages at once, through one token file. Values are in the repo's `DESIGN.md`; visual rules are in section 6.
 
 ### 5.4 UI technology
 
@@ -109,6 +116,7 @@ Taken from the owner's Aside screenshots.
 - Default search: Brave Search.
 - Pressing **Tab** in the address bar while typing a query switches that query to Google; a chip shows "Google", and Tab again or Backspace switches back. This replaces Chromium's tab-to-search keyword behaviour for those two engines. Other keyword engines keep working.
 - The address bar can also start an agent chat ("Ask"), like Aside's Search / Ask toggle, with ⌘Enter. **[builder call]**
+- **New tab page**: the Perch mark, a large "Search or ask" box, recent chats and routines, and three suggested tasks: Set up your memory, Find routines to automate, Import from another browser. Layout in `DESIGN.md`.
 
 ### 5.6 Memory saver (built from Lulltab)
 
@@ -282,6 +290,8 @@ Modelled on how Aside stores memory on this Mac (`~/.aside/u/0/memory/`):
 - **Search**: SQLite FTS5 plus vectors from a small local embedding model run with onnxruntime; no text leaves the Mac for indexing.
 - **Control**: a Memory page to browse, edit and delete anything, pause extraction, or wipe memory. Incognito never reads or writes memory.
 - **Which model extracts**: the profile's "fast" model on whatever provider is signed in. The user can turn extraction off entirely.
+- **Set up your memory**: a guided first task, like Aside's. Aside's version is a single prompt: research everything about the user (browsing history, built-in skills such as mail, memories saved in other AI services, web search), file it into memory, then score whether it is enough to write messages in the user's tone, buy on unfamiliar sites and review documents, and keep filling gaps until the score passes 9 of 10. Perch does the same job with the user in control: a sheet lists each source (browsing history, mail, calendar, Messages, ChatGPT/Claude/Grok memory exports, an Aside import, a web search on the user's name), each with its own switch and web search off by default. The agent then builds the profile and shows a review page grouped as About you, People, Places and accounts, Writing style and Sites, where every fact can be edited or removed before "Save to memory". Nothing is saved until then.
+- **Routines**: saved tasks that run on a schedule or a trigger (for example "every weekday at 8, summarise new mail from my teachers"). "Find routines to automate" looks for tasks the user did at least twice in the last 30 days and proposes routines; the user approves each one. Routines run under the profile's permission mode and appear in the audit log.
 
 ## 9. CLI, MCP and outside agents
 

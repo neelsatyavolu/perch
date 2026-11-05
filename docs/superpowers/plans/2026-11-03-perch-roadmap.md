@@ -9,15 +9,15 @@ The spec covers nine subsystems (spec section 15). Each gets its own implementat
 | # | Plan | Delivers | Needs | Status |
 |---|---|---|---|---|
 | 1 | Fork pipeline | `perch-build` tool, patch series, Perch branding and icon, Widevine on, signed and notarized DMG, Sparkle updates, first release | nothing | written: `2026-11-03-perch-01-fork-pipeline.md` |
-| 2 | Shell | Themes and token file, restyled tab strip, toolbar and profile menu, hide-chrome mode, split view, Brave search with Tab for Google, privacy patches and the allowed-connections settings, true incognito, built-in memory saver and Backrow, DRM playback check | 1 | next on the Chromium track |
+| 2 | Shell | Themes and token file, restyled tab strip, toolbar and profile menu, hide-chrome mode, split view, Brave search with Tab for Google, privacy patches and the allowed-connections settings, true incognito, built-in memory saver and Backrow, DRM playback check, and the Chrome-missing features in spec 5.9 (content blocker, command bar, reader view, auto picture in picture, link preview and the rest) | 1 | next on the Chromium track |
 | 3a | Agent core (`perchd`) | Bun binary, CDP over `--remote-debugging-pipe`, page snapshot with refs, actions, REPL, agent tabs, model adapters (shared-ai-auth Codex and Grok, Claude Code headless, Claude API key), permission modes, audit log | nothing (develops against Chrome for Testing) | written: `2026-11-05-perch-03a-agent-core.md` |
-| 3b | Agent in the browser | Custom CDP domains (credential fill, approvals, tab ownership), sidebar chat WebUI, full-page chat, artifacts pane and `perch-artifact://` origin | 2, 3a | |
-| 4 | Outside agents | `perch` CLI, MCP server, Unix socket with per-client tokens, `perch skill install`, agterm MCP injection, built-in site skills | 3a | |
+| 3b | Agent in the browser | Custom CDP domains (credential fill, approvals, tab ownership), sidebar chat WebUI with side chats bound to their tab, full-page chat, artifacts pane and `perch-artifact://` origin, Settings → Models (providers, task model roles) | 2, 3a | |
+| 4 | Outside agents and MCP | `perch` CLI, MCP server, Unix socket with per-client tokens, `perch skill install`, agterm MCP injection, built-in site skills, MCP client with import from Claude Code, Codex, Claude Desktop, Cursor and Grok, ChatGPT/Grok sign-in | 3a | the MCP server part is started early for benchmarks |
 | 5 | Memory | Encrypted markdown store, extraction, dreaming, FTS5 plus local embeddings, Memory page | 3a (store and search), 3b (page) | |
 | 6 | Import | Readers for every browser in spec section 10, open-tab restore asleep, Aside extras, wizard | 2 (restore), 5 (Aside memory) | |
 | 7 | Account, sync and relay | Cloudflare Worker, D1 and R2 sync server speaking Chromium's sync protocol, encrypted blob sync, relay with Durable Objects, pairing, remote MCP, Grok Bot prompt | 3a for the relay client; server side needs nothing | server can start now |
 | 8 | Enterprise | `.pkg`, Chrome policy check, Perch policies, `perch://policy`, audit log export, company sync with OpenID Connect, SBOM | 2, 4, 7 | |
-| 9 | Benchmarks, speed, 1.0 | `bench/` runner for the three suites, section 13 measurements, published results, 1.0 release, `perchbrowser.com` | everything | |
+| 9 | Benchmarks, speed, 1.0 (no public release before every feature works; owner 2026-11-05) | `bench/` runner for the three suites, section 13 measurements, published results, 1.0 release, `perchbrowser.com` | everything | |
 
 ## Tracks that run at the same time
 

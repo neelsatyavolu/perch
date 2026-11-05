@@ -99,7 +99,31 @@ button:focus-visible { outline: 2px solid var(--page-accent); outline-offset: 2p
 
 .body { flex: 1; display: flex; min-height: 0; background: var(--card); position: relative; }
 .view { flex: 1; display: none; min-height: 0; min-width: 0; }
-.win[data-view="ntp"] .v-ntp, .win[data-view="agent"] .v-agent, .win[data-view="memory"] .v-memory, .win[data-view="chat"] .v-chat { display: flex; }
+.win[data-view="ntp"] .v-ntp, .win[data-view="agent"] .v-agent, .win[data-view="memory"] .v-memory, .win[data-view="chat"] .v-chat, .win[data-view="settings"] .v-settings { display: flex; }
+/* ---------- Settings ---------- */
+.snav { width: 220px; flex: none; padding: 16px 8px; display: grid; align-content: start; gap: 2px; background: var(--canvas); border-right: 1px solid var(--hair); }
+.snav .row { cursor: pointer; }
+.spage { flex: 1; overflow-y: auto; padding: 32px; display: grid; gap: 28px; align-content: start; }
+.spage h2 { margin: 0; font-size: 22px; font-weight: 500; color: var(--ink); letter-spacing: -0.01em; }
+.sgroup { display: grid; gap: 8px; max-width: 720px; }
+.sgroup > .lbl { color: var(--mute); font-size: 12px; padding-left: 4px; }
+.card { border: 1px solid var(--hair-strong); border-radius: 12px; background: var(--canvas); overflow: hidden; }
+.srow { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; min-height: 56px; padding: 8px 12px 8px 16px; border-bottom: 1px solid var(--hair); }
+.srow:last-child { border-bottom: 0; }
+.srow.noicon { grid-template-columns: 1fr auto; }
+.srow .n { color: var(--ink); }
+.srow .d { color: var(--mute); font-size: 12px; }
+.ptile { width: 28px; height: 28px; border-radius: 8px; background: var(--raised); color: var(--ink); display: grid; place-items: center; font: 500 12px/1 var(--sans); }
+.status { display: inline-flex; align-items: center; gap: 6px; color: var(--mute); font-size: 12px; }
+.status .ok { width: 6px; height: 6px; border-radius: 50%; background: #3DD68C; }
+.picker { display: inline-flex; align-items: stretch; height: 32px; border: 1px solid var(--hair-strong); border-radius: 8px; overflow: hidden; }
+.picker button { background: var(--card); color: var(--ink); border: 0; font: 13px var(--sans); padding: 0 10px; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.picker button + button { border-left: 1px solid var(--hair-strong); color: var(--mute); }
+.picker .ptile { width: 18px; height: 18px; border-radius: 5px; font-size: 9px; }
+.connect { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 16px; color: var(--mute); cursor: pointer; }
+.connect:hover { color: var(--ink); }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip2 { font: 12px var(--mono); color: var(--mute); padding: 2px 6px; border-radius: 6px; background: var(--raised); }
 
 /* ---------- New tab ---------- */
 .v-ntp { overflow-y: auto; justify-content: center; }
@@ -255,6 +279,7 @@ button:focus-visible { outline: 2px solid var(--page-accent); outline-offset: 2p
       <button data-view="agent" aria-pressed="false">Agent at work</button>
       <button data-view="memory" aria-pressed="false">Set up memory</button>
       <button data-view="chat" aria-pressed="false">Full-page chat</button>
+      <button data-view="settings" aria-pressed="false">Settings</button>
     </div>
     <div class="group"><span>Theme</span><div class="swatches" id="themes" role="group" aria-label="Theme"></div><span class="cur" id="theme-name">Ink</span></div>
     <div class="group"><span>Accent</span><div class="swatches" id="accents" role="group" aria-label="Accent"></div><span class="cur" id="accent-name">Blue</span></div>
@@ -407,6 +432,56 @@ button:focus-visible { outline: 2px solid var(--page-accent); outline-offset: 2p
           </div>
         </div>
 
+
+        <!-- Settings -->
+        <div class="view v-settings">
+          <div class="snav" id="snav">
+            <span class="row">General</span><span class="row">Appearance</span>
+            <span class="row sel" data-sp="models">Models</span><span class="row" data-sp="mcp">Skills and MCP</span>
+            <span class="row">Memory</span><span class="row">Privacy and security</span><span class="row">Remote control</span>
+            <span class="row">Import</span><span class="row">Developers</span>
+          </div>
+          <div class="spage" id="sp-models">
+            <h2>Models</h2>
+            <div class="sgroup"><span class="lbl">Providers</span>
+              <div class="card">
+                <div class="srow"><span class="ptile">C</span><div><div class="n">Claude</div><div class="d">Subscription, through Claude Code on this Mac</div></div><span style="display:flex;gap:8px;align-items:center"><span class="status"><span class="ok"></span>Connected</span><button class="ib" aria-label="Claude options" data-i="more"></button></span></div>
+                <div class="srow"><span class="ptile">O</span><div><div class="n">ChatGPT</div><div class="d">Subscription</div></div><span style="display:flex;gap:8px;align-items:center"><span class="status"><span class="ok"></span>Connected</span><button class="ib" aria-label="ChatGPT options" data-i="more"></button></span></div>
+                <div class="srow"><span class="ptile">X</span><div><div class="n">Grok</div><div class="d">Subscription</div></div><span style="display:flex;gap:8px;align-items:center"><button class="btn">Sign in</button><button class="ib" aria-label="Grok options" data-i="more"></button></span></div>
+                <div class="connect"><svg class="i" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Connect an API key or a model on this Mac</div>
+              </div>
+            </div>
+            <div class="sgroup"><span class="lbl">Task models</span>
+              <div class="card"><div class="srow noicon"><div><div class="n">Default model</div><div class="d">The last model you use becomes the default for new chats</div></div><span class="picker"><button><span class="ptile">C</span>Opus 5.5<svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="m6 9 6 6 6-6"/></svg></button><button aria-label="Effort and speed" data-i="more"></button></span></div></div>
+              <div class="card">
+                <div class="srow noicon"><div><div class="n">Fast</div><div class="d">Side work, summaries, memory extraction and dreaming</div></div><span class="picker"><button><span class="ptile">O</span>GPT-6 Luna<svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="m6 9 6 6 6-6"/></svg></button><button aria-label="Effort and speed" data-i="more"></button></span></div>
+                <div class="srow noicon"><div><div class="n">Standard</div><div class="d">Subagents and memory reorganisation</div></div><span class="picker"><button><span class="ptile">O</span>GPT-6.1 Sol<svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="m6 9 6 6 6-6"/></svg></button><button aria-label="Effort and speed" data-i="more"></button></span></div>
+                <div class="srow noicon"><div><div class="n">Deep</div><div class="d">Hard reasoning, planning, judging and synthesis</div></div><span class="picker"><button><span class="ptile">C</span>Opus 5.5<svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="m6 9 6 6 6-6"/></svg></button><button aria-label="Effort and speed" data-i="more"></button></span></div>
+                <div class="srow noicon"><div><div class="n">Visual</div><div class="d">Screenshots and reading page images</div></div><span class="picker"><button><span class="ptile">O</span>GPT-6.1 Sol<svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="m6 9 6 6 6-6"/></svg></button><button aria-label="Effort and speed" data-i="more"></button></span></div>
+              </div>
+              <div class="card"><div class="srow noicon"><div><div class="n">Image generation</div><div class="d">Making and editing images in chats and artifacts</div></div><span class="picker"><button><span class="ptile">O</span>ChatGPT Images<svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="m6 9 6 6 6-6"/></svg></button></span></div></div>
+            </div>
+          </div>
+          <div class="spage" id="sp-mcp" hidden>
+            <h2>Skills and MCP</h2>
+            <div class="sgroup"><span class="lbl">MCP servers</span>
+              <div class="card">
+                <div class="srow"><span class="ptile">c</span><div><div class="n">consult</div><div class="d"><span class="mono">stdio</span> · from Claude Code · 9 tools</div></div><button class="sw2" role="switch" aria-label="consult" aria-checked="true"></button></div>
+                <div class="srow"><span class="ptile">7</span><div><div class="n">context7</div><div class="d"><span class="mono">http</span> · from Codex · 2 tools, read only</div></div><button class="sw2" role="switch" aria-label="context7" aria-checked="true"></button></div>
+                <div class="srow"><span class="ptile">f</span><div><div class="n">filesystem</div><div class="d"><span class="mono">stdio</span> · from Claude Desktop · 14 tools · asks before writing</div></div><button class="sw2" role="switch" aria-label="filesystem" aria-checked="false"></button></div>
+                <div class="connect"><svg class="i" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>Import from Claude Code, Codex, Claude Desktop, Cursor and Grok</div>
+                <div class="connect"><svg class="i" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Add a server</div>
+              </div>
+              <span class="d" style="color:var(--mute);font-size:12px;padding-left:4px">Secrets from imported servers are moved into the Keychain.</span>
+            </div>
+            <div class="sgroup"><span class="lbl">Skills</span>
+              <div class="card">
+                <div class="srow noicon"><div><div class="n">Built-in site skills</div><div class="d">Mail, calendar, docs, GitHub, Slack, Notion and 24 more</div></div><span class="chips"><span class="chip2">30</span></span></div>
+                <div class="srow noicon"><div><div class="n">My skills</div><div class="d">From folders, links and git repositories, in the SKILL.md format</div></div><button class="btn">Add skill</button></div>
+              </div>
+            </div>
+          </div>
+        </div>
         <!-- Full-page chat -->
         <div class="view v-chat">
           <div class="chats"><span class="lbl">Today</span><span class="row sel">Subscriptions from receipts</span><span class="row">Reply to Maya about Thursday</span><span class="lbl">This week</span><span class="row">Compare SFO to HND fares</span><span class="row">Summarise Priya's notes</span><span class="row">Find the Backrow party link</span><span class="row">Clean up GitHub notifications</span></div>
@@ -510,9 +585,10 @@ button:focus-visible { outline: 2px solid var(--page-accent); outline-offset: 2p
     agent2: '<span><span class="host">calendar.app</span>/week/2026-11-03</span>',
     agent3: '<span><span class="host">github.com</span>/neelsatyavolu/perch/pulls</span>',
     memory: '<span><span class="host">perch://memory</span>/setup</span>',
-    chat: '<span><span class="host">perch://chat</span>/subscriptions-from-receipts</span>'
+    chat: '<span><span class="host">perch://chat</span>/subscriptions-from-receipts</span>',
+    settings: '<span><span class="host">perch://settings</span>/models</span>'
   };
-  var TAB0 = { ntp: 'New tab', memory: 'Set up memory', chat: 'Subscriptions from receipts', agent: 'New tab' };
+  var TAB0 = { ntp: 'New tab', memory: 'Set up memory', chat: 'Subscriptions from receipts', agent: 'New tab', settings: 'Settings' };
 
   function press(el, on) { el.setAttribute('aria-pressed', on ? 'true' : 'false'); }
   function render() {
@@ -552,6 +628,14 @@ button:focus-visible { outline: 2px solid var(--page-accent); outline-offset: 2p
   document.getElementById('o-bare').addEventListener('click', function () { state.view = 'agent'; render(); });
   document.getElementById('side-x').addEventListener('click', function () { state.side = false; render(); });
 
+  document.querySelectorAll('#snav [data-sp]').forEach(function (r) {
+    r.addEventListener('click', function () {
+      document.querySelectorAll('#snav .row').forEach(function (x) { x.classList.toggle('sel', x === r); });
+      document.getElementById('sp-models').hidden = r.dataset.sp !== 'models';
+      document.getElementById('sp-mcp').hidden = r.dataset.sp !== 'mcp';
+    });
+  });
+  document.querySelectorAll('#sp-mcp .sw2').forEach(function (b) { b.addEventListener('click', function () { b.setAttribute('aria-checked', b.getAttribute('aria-checked') === 'true' ? 'false' : 'true'); }); });
   var nC = document.getElementById('n-chats'), nR = document.getElementById('n-routines');
   nC.addEventListener('click', function () { press(nC, true); press(nR, false); document.getElementById('ntp-chats').hidden = false; document.getElementById('ntp-routines').hidden = true; });
   nR.addEventListener('click', function () { press(nC, false); press(nR, true); document.getElementById('ntp-chats').hidden = true; document.getElementById('ntp-routines').hidden = false; });

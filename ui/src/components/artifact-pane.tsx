@@ -40,7 +40,7 @@ export function parseCsv(text: string): string[][] {
 
 function Body({ meta, content }: { meta: ArtifactMeta; content: string | null }) {
   if (meta.kind === "html" || meta.kind === "svg") {
-    return <iframe class="art-frame" title={meta.title} src={meta.url} sandbox="allow-scripts allow-popups" referrerpolicy="no-referrer" />;
+    return <iframe class="art-frame" title={meta.title} src={meta.url} sandbox="allow-scripts" referrerpolicy="no-referrer" />;
   }
   if (meta.kind === "image") return <img class="art-img" src={meta.url} alt={meta.title} />;
   if (content === null) return <p class="cap">Loading</p>;
@@ -90,14 +90,19 @@ export function ArtifactPane({ client, meta, width, onWidth, onClose }: PaneProp
     };
   }, [meta.id, version, meta.versions]);
 
-  const download = () => {
+  /** Saves through a blob: URL. An image's bytes come from the API: a link to the artifact origin would navigate the page. */
+  const download = async () => {
     if (!shown) return;
-    const blob = shown.content === null ? null : new Blob([shown.content], { type: "text/plain" });
-    const a = document.createElement("a");
-    a.href = blob ? URL.createObjectURL(blob) : shown.meta.url;
-    a.download = `${meta.title.replace(/[^\w .-]/g, "_")}.${meta.kind === "code" ? meta.language ?? "txt" : EXT[meta.kind]}`;
-    a.click();
-    if (blob) setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    try {
+      const blob = shown.content === null ? await client.artifactFile(meta.id, shown.meta.version) : new Blob([shown.content], { type: "text/plain" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${meta.title.replace(/[^\w .-]/g, "_")}.${meta.kind === "code" ? meta.language ?? "txt" : EXT[meta.kind]}`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    } catch (e) {
+      setError(`Perch could not save this artifact: ${e instanceof Error ? e.message : String(e)}`);
+    }
   };
 
   return (
@@ -140,7 +145,7 @@ export function ArtifactPane({ client, meta, width, onWidth, onClose }: PaneProp
         <a class="ib" href={shown?.meta.url ?? meta.url} target="_blank" rel="noopener noreferrer" aria-label="Open as a tab" title="Open as a tab">
           <Icon name="external" />
         </a>
-        <button type="button" class="ib" aria-label="Save to disk" title="Save to disk" onClick={download}>
+        <button type="button" class="ib" aria-label="Save to disk" title="Save to disk" onClick={() => void download()}>
           <Icon name="download" />
         </button>
         <button type="button" class="ib" aria-label="Close artifact" title="Close" onClick={onClose}>

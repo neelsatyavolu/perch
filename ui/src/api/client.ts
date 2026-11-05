@@ -16,7 +16,7 @@ type Deps = { fetch?: typeof fetch; WebSocket?: typeof WebSocket; retryMs?: numb
 
 export function createClient(api: string, token: string, deps: Deps = {}) {
   const doFetch = deps.fetch ?? fetch.bind(globalThis);
-  async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+  async function request(method: string, path: string, body?: unknown): Promise<Response> {
     const res = await doFetch(`${api}${path}`, {
       method,
       headers: { authorization: `Bearer ${token}`, ...(body === undefined ? {} : { "content-type": "application/json" }) },
@@ -29,6 +29,10 @@ export function createClient(api: string, token: string, deps: Deps = {}) {
         .catch(() => undefined);
       throw new ApiError(message ?? `Perch did not answer (${res.status}). Try again in a moment`, res.status);
     }
+    return res;
+  }
+  async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+    const res = await request(method, path, body);
     return (res.headers.get("content-type") ?? "").includes("json") ? ((await res.json()) as T) : ((await res.text()) as T);
   }
 
@@ -44,6 +48,8 @@ export function createClient(api: string, token: string, deps: Deps = {}) {
     branch: (id: string, messageId: string) => call<Chat>("POST", `/api/chats/${encodeURIComponent(id)}/branch`, { messageId }),
     exportChat: (id: string) => call<string>("GET", `/api/chats/${encodeURIComponent(id)}/export`),
     artifact: (id: string, version?: number) => call<{ meta: ArtifactMeta; content: string | null }>("GET", `/api/artifacts/${encodeURIComponent(id)}${version ? `?version=${version}` : ""}`),
+    /** A version's bytes, for saving to disk. */
+    artifactFile: (id: string, version?: number) => request("GET", `/api/artifacts/${encodeURIComponent(id)}/file${version ? `?version=${version}` : ""}`).then((r) => r.blob()),
     saveArtifact: (chatId: string, a: { title: string; kind: ArtifactKind; content: string; language?: string; mime?: string }) => call<ArtifactMeta>("POST", `/api/chats/${encodeURIComponent(chatId)}/artifacts`, a),
     decide: (approvalId: string, approved: boolean) => call<{ ok: true }>("POST", `/api/approvals/${encodeURIComponent(approvalId)}`, { approved }),
     windowState: (windowId: string) => call<WindowState>("GET", `/api/windows/${encodeURIComponent(windowId)}`),

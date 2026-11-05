@@ -1,7 +1,8 @@
 /**
  * The right sidebar chat (spec 5.3, 7.6). Each tab has its own side chat: when the browser
  * switches tabs, this page saves the unsent draft and scroll position, then shows the new tab's
- * side chat or the empty state. Switching back restores both. Tasks keep running meanwhile.
+ * side chat or the empty state. Switching back restores both. Tasks keep running meanwhile. A draft
+ * typed in a tab that has no side chat yet is kept here, per tab, until the tab gets one.
  */
 
 import { useEffect, useRef, useState } from "preact/hooks";
@@ -29,6 +30,8 @@ export function Sidebar({ client, windowId, fallbackTab = null, host }: Props) {
   const [recent, setRecent] = useState<ChatSummary[]>([]);
   const [pending, setPending] = useState<Partial<ChatSettings>>({});
   const tabRef = useRef<string | null>(null);
+  /** Unsent drafts of tabs that have no side chat yet. */
+  const unbound = useRef(new Map<string, string>());
   const scroll = useRef<{ chatId: string | null; top: number; saved: number; timer?: ReturnType<typeof setTimeout> }>({ chatId: null, top: 0, saved: 0 });
   const { view } = chat;
 
@@ -41,14 +44,23 @@ export function Sidebar({ client, windowId, fallbackTab = null, host }: Props) {
     }
   };
 
+  const keepUnboundDraft = () => {
+    const { chatId, draft } = chat.unsent();
+    const tabId = tabRef.current;
+    if (!tabId || chatId) return;
+    if (draft) unbound.current.set(tabId, draft);
+    else unbound.current.delete(tabId);
+  };
+
   const showTab = async (next: TabInfo | null) => {
+    keepUnboundDraft();
     tabRef.current = next?.id ?? null;
     await saveScroll();
     setTab(next);
     const payload = next ? await client.tabChat(next.id).catch(() => null) : null;
     if (tabRef.current !== (next?.id ?? null)) return;
     scroll.current = { chatId: payload?.chat?.id ?? null, top: payload?.chat?.scrollTop ?? 0, saved: payload?.chat?.scrollTop ?? 0 };
-    await chat.show(payload);
+    await chat.show(payload, next ? unbound.current.get(next.id) ?? "" : "");
   };
 
   useEffect(() => {
@@ -61,7 +73,10 @@ export function Sidebar({ client, windowId, fallbackTab = null, host }: Props) {
     const close = client.connect((event) => {
       setRecent((l) => applyToList(l, event));
       chat.onEvent(event);
-      if (event.type === "window.active" && event.state.windowId === windowId && event.state.tab?.id !== tabRef.current) void showTab(event.state.tab);
+      if (event.type !== "window.active" || event.state.windowId !== windowId) return;
+      // The same tab again means its title or address changed: keep the chat, refresh the context.
+      if (event.state.tab?.id !== tabRef.current) void showTab(event.state.tab);
+      else if (event.state.tab) setTab(event.state.tab);
     });
     return () => {
       close();
@@ -72,6 +87,7 @@ export function Sidebar({ client, windowId, fallbackTab = null, host }: Props) {
   const attach = async (chatId?: string) => {
     if (!tab) return chatId ?? (await client.createChat({ settings: pending })).id;
     const side = await client.openSideChat(tab.id, windowId, chatId, chatId ? undefined : pending);
+    unbound.current.delete(tab.id);
     setPending({});
     scroll.current = { chatId: side.id, top: side.scrollTop, saved: side.scrollTop };
     await chat.show(chatId ? await client.chat(side.id) : { chat: side, run: null, artifacts: [] });

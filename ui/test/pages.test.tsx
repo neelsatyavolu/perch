@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { render } from "preact";
 import { act } from "preact/test-utils";
+import type { ArtifactMeta } from "../src/api/types";
+import { ArtifactPane } from "../src/components/artifact-pane";
 import { FullChat } from "../src/pages/full-chat";
 import { Sidebar } from "../src/pages/sidebar";
 import { fakeClient } from "./fake-client";
@@ -151,4 +153,67 @@ test("deleting a chat asks first, in words", async () => {
   await act(async () => (el.querySelector(".confirm .danger-text") as HTMLElement).click());
   await settle();
   expect(client.calls.some((c) => c.name === "deleteChat")).toBe(true);
+});
+
+test("a draft typed in a tab with no side chat yet comes back when the user returns to that tab", async () => {
+  const client = fakeClient();
+  client.windows.set("w1", { windowId: "w1", tab: tabA, chatId: null });
+  const el = await mount(<Sidebar client={client} windowId="w1" />);
+  await typeInto(el.querySelector("textarea")!, "Ask about the invoice");
+  await act(async () => client.emit({ type: "window.active", state: { windowId: "w1", tab: tabB, chatId: null } }));
+  await settle();
+  expect(el.querySelector("textarea")!.value).toBe("");
+  await typeInto(el.querySelector("textarea")!, "Something for docs");
+  await act(async () => client.emit({ type: "window.active", state: { windowId: "w1", tab: tabA, chatId: null } }));
+  await settle();
+  expect(el.querySelector("textarea")!.value).toBe("Ask about the invoice");
+  await act(async () => client.emit({ type: "window.active", state: { windowId: "w1", tab: tabB, chatId: null } }));
+  await settle();
+  expect(el.querySelector("textarea")!.value).toBe("Something for docs");
+});
+
+test("a navigation in the active tab updates the tab the sidebar sends as context", async () => {
+  const client = fakeClient();
+  client.windows.set("w1", { windowId: "w1", tab: tabA, chatId: null });
+  const el = await mount(<Sidebar client={client} windowId="w1" />);
+  await typeInto(el.querySelector("textarea")!, "Keep this draft");
+  const moved = { ...tabA, title: "Re: Lunch", url: "https://mail.example/m/1" };
+  await act(async () => client.emit({ type: "window.active", state: { windowId: "w1", tab: moved, chatId: null } }));
+  await settle();
+  expect(el.querySelector(".chip-t")!.textContent).toBe("Re: Lunch");
+  expect(el.querySelector("textarea")!.value).toBe("Keep this draft");
+  expect(client.calls.filter((c) => c.name === "tabChat")).toHaveLength(1);
+  await act(async () => (el.querySelector('[aria-label="Send message"]') as HTMLElement).click());
+  await settle();
+  expect(client.calls.find((c) => c.name === "send")!.args[2]).toEqual(moved);
+});
+
+const imageMeta: ArtifactMeta = { id: "img1", chatId: "c1", title: "Chart", kind: "image", version: 1, versions: 1, updatedAt: "", url: "http://127.0.0.1:9/a/img1/1?k=x" };
+
+test("saving an image artifact downloads its bytes through the API, never navigating to the artifact origin", async () => {
+  const client = fakeClient();
+  client.artifact = (async () => ({ meta: imageMeta, content: null })) as typeof client.artifact;
+  const clicked: string[] = [];
+  const original = HTMLAnchorElement.prototype.click;
+  HTMLAnchorElement.prototype.click = function (this: HTMLAnchorElement) {
+    clicked.push(this.href);
+  };
+  try {
+    const el = await mount(<ArtifactPane client={client} meta={imageMeta} width={360} onWidth={() => {}} onClose={() => {}} />);
+    await act(async () => (el.querySelector('[aria-label="Save to disk"]') as HTMLElement).click());
+    await settle();
+    expect(client.calls.find((c) => c.name === "artifactFile")!.args).toEqual(["img1", 1]);
+    expect(clicked).toHaveLength(1);
+    expect(clicked[0]!.startsWith("blob:")).toBe(true);
+  } finally {
+    HTMLAnchorElement.prototype.click = original;
+  }
+});
+
+test("pages and drawings render in a frame that may run scripts but not open popups", async () => {
+  const client = fakeClient();
+  const page = { ...imageMeta, id: "p1", kind: "html" as const, title: "Page" };
+  client.artifact = (async () => ({ meta: page, content: "<p>hi</p>" })) as typeof client.artifact;
+  const el = await mount(<ArtifactPane client={client} meta={page} width={360} onWidth={() => {}} onClose={() => {}} />);
+  expect(el.querySelector("iframe")!.getAttribute("sandbox")).toBe("allow-scripts");
 });

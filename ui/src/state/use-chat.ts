@@ -25,18 +25,22 @@ export function useChat(client: Client) {
     await client.patchChat(c.chatId, { draft: text }).catch(() => undefined);
   }, [client]);
 
-  /** Shows a chat (or none). The previous chat's draft is saved first. */
+  /** Shows a chat, or none with `draftIfNone` in the composer. The previous chat's draft is saved first. */
   const show = useCallback(
-    async (payload: ChatPayload | null) => {
+    async (payload: ChatPayload | null, draftIfNone = "") => {
       await saveDraft();
       const next = payload?.chat ? { chat: payload.chat, run: payload.run, artifacts: payload.artifacts } : emptyView;
-      current.current = { chatId: next.chat?.id ?? null, draft: next.chat?.draft ?? "", saved: next.chat?.draft ?? "" };
-      setDraftState(next.chat?.draft ?? "");
+      const draft = next.chat ? next.chat.draft : draftIfNone;
+      current.current = { chatId: next.chat?.id ?? null, draft, saved: draft };
+      setDraftState(draft);
       setError(null);
       setView(next);
     },
     [saveDraft],
   );
+
+  /** The chat shown now and its unsent draft, read at call time. */
+  const unsent = useCallback(() => ({ chatId: current.current.chatId, draft: current.current.draft }), []);
 
   const onEvent = useCallback((event: AppEvent) => setView((v) => applyToView(v, event)), []);
 
@@ -83,5 +87,5 @@ export function useChat(client: Client) {
 
   useEffect(() => () => void saveDraft(), [saveDraft]);
 
-  return { view, setView, show, onEvent, draft, setDraft, saveDraft, send, stop, decide, setSettings, error, setError };
+  return { view, setView, show, unsent, onEvent, draft, setDraft, saveDraft, send, stop, decide, setSettings, error, setError };
 }

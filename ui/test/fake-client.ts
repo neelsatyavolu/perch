@@ -48,6 +48,7 @@ export function fakeClient(): FakeClient {
     branch: (id: string, messageId: string) => record("branch", [id, messageId], newChat({ title: "Branch" })),
     exportChat: (id: string) => record("exportChat", [id], "# chat"),
     artifact: (id: string) => record("artifact", [id], { meta: { id, chatId: "", title: "", kind: "markdown" as const, version: 1, versions: 1, updatedAt: "", url: "" }, content: "# doc" }),
+    artifactFile: (id: string, version?: number) => record("artifactFile", [id, version], new Blob([new Uint8Array([0x89, 0x50])], { type: "image/png" })),
     saveArtifact: () => Promise.reject(new Error("not used")),
     decide: (approvalId: string, approved: boolean) => record("decide", [approvalId, approved], { ok: true as const }),
     windowState: (windowId: string) => record("windowState", [windowId], windows.get(windowId) ?? { windowId, tab: null, chatId: null }),

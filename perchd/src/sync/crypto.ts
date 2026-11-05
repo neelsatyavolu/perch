@@ -15,7 +15,7 @@ export const newSyncKey = (): Bytes => randomBytes(32);
 export async function deriveSyncKeys(raw: Uint8Array, version: number): Promise<SyncKeys> {
   if (raw.length !== 32) throw new Error("A sync key is 32 bytes");
   const base = await crypto.subtle.importKey("raw", new Uint8Array(raw), "HKDF", false, ["deriveKey"]);
-  const derive = (info: string, algorithm: AesKeyGenParams | HmacImportParams, usages: KeyUsage[]) =>
+  const derive = (info: string, algorithm: { name: string; length: number; hash?: string }, usages: ("encrypt" | "decrypt" | "sign")[]) =>
     crypto.subtle.deriveKey({ name: "HKDF", hash: "SHA-256", salt: new Uint8Array(32), info: utf8(info) }, base, algorithm, false, usages);
   return {
     encrypt: await derive("perch-sync-v1 item-encryption", { name: "AES-GCM", length: 256 }, ["encrypt", "decrypt"]),

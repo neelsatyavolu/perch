@@ -29,7 +29,9 @@ export async function importDeviceKeys(serialized: string): Promise<DeviceKeys> 
 
 /** ECDH then HKDF to an AES-GCM key; `info` separates every use. */
 export async function agreeKey(privateKey: CryptoKey, peerPublicKey: string, salt: Uint8Array, info: string): Promise<CryptoKey> {
-  const bits = await crypto.subtle.deriveBits({ name: "ECDH", public: await importPublicKey(peerPublicKey) }, privateKey, 256);
+  // Cast: Workers' type names the field `$public`, the DOM's `public`; both runtimes take `public`.
+  const algorithm = { name: "ECDH", public: await importPublicKey(peerPublicKey) } as unknown as Parameters<typeof crypto.subtle.deriveBits>[0];
+  const bits = await crypto.subtle.deriveBits(algorithm, privateKey, 256);
   const base = await crypto.subtle.importKey("raw", bits, "HKDF", false, ["deriveKey"]);
   return crypto.subtle.deriveKey({ name: "HKDF", hash: "SHA-256", salt: new Uint8Array(salt), info: utf8(info) }, base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
 }

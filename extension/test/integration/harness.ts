@@ -28,8 +28,9 @@ export function buildOnce(): Promise<string> {
 
 export type Harness = Awaited<ReturnType<typeof launch>>;
 
-export async function launch(extraArgs: string[] = []) {
-  const ext = await buildOnce();
+/** Launches with the fixture-list build, or with `extDir` when a test built its own. */
+export async function launch(extraArgs: string[] = [], extDir?: string) {
+  const ext = extDir ?? (await buildOnce());
   const profile = mkdtempSync(join(tmpdir(), "perch-ext-profile-"));
   const site = startFixtures();
   const browser = await Browser.launch({

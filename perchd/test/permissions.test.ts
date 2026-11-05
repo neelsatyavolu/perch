@@ -1,0 +1,72 @@
+import { expect, test } from "bun:test";
+import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { AuditLog } from "../src/agent/audit";
+import { classify, needsApproval, type Kind, type Mode } from "../src/agent/permissions";
+
+const call = (name: string, args: Record<string, unknown> = {}) => ({ id: "c1", name, args });
+
+test.each([
+  [call("navigate", { url: "https://x.com" }), undefined, "read"],
+  [call("snapshot"), undefined, "read"],
+  [call("scroll", { dy: 400 }), undefined, "read"],
+  [call("click", { ref: "e1" }), { role: "button", name: "Next" }, "change"],
+  [call("click", { ref: "e1" }), { role: "button", name: "Send message" }, "risky"],
+  [call("click", { ref: "e1" }), { role: "button", name: "Post" }, "risky"],
+  [call("click", { ref: "e1" }), { role: "button", name: "Delete 3 emails" }, "risky"],
+  [call("click", { ref: "e1" }), { role: "button", name: "Pay $42.18" }, "payment"],
+  [call("click", { ref: "e1" }), { role: "button", name: "Place order" }, "payment"],
+  [call("click", { ref: "e1" }), { role: "button", name: "Continue (€19.99)" }, "payment"],
+  [call("click", { ref: "e1" }), { role: "button", name: "Change password" }, "payment"],
+  [call("type", { ref: "e2", text: "hi" }), { role: "textbox", name: "Message" }, "change"],
+  [call("select", { ref: "e3", value: "Canada" }), { role: "combobox", name: "Country" }, "change"],
+  [call("upload", { ref: "e4", paths: ["/tmp/a"] }), { role: "button", name: "Attach" }, "risky"],
+  [call("press", { key: "Enter" }), { role: "searchbox", name: "Search mail" }, "change"],
+  [call("press", { key: "Enter" }), { role: "textbox", name: "Message" }, "risky"],
+  [call("press", { key: "ArrowDown" }), { role: "textbox", name: "Message" }, "change"],
+  [call("click_at", { x: 10, y: 10 }), undefined, "risky"],
+  [call("repl", { code: "return document.title" }), undefined, "read"],
+  [call("repl", { code: "document.querySelector('#send').click()" }), undefined, "risky"],
+  [call("repl", { code: "fetch('/api/delete', { method: 'POST' })" }), undefined, "risky"],
+  [call("mystery_tool"), undefined, "risky"],
+] as const)("classify %o on %o is %s", (c, target, kind) => {
+  expect(classify(c, target)).toBe(kind as Kind);
+});
+
+const MODES: Mode[] = ["ask", "guard", "skip"];
+const KINDS: Kind[] = ["read", "change", "risky", "payment"];
+const EXPECTED: Record<Mode, Record<Kind, string>> = {
+  ask: { read: "run", change: "ask", risky: "ask", payment: "ask" },
+  guard: { read: "run", change: "run", risky: "ask", payment: "ask" },
+  skip: { read: "run", change: "run", risky: "run", payment: "ask" },
+};
+
+for (const mode of MODES) {
+  for (const kind of KINDS) {
+    test(`${mode} mode, ${kind}: ${EXPECTED[mode][kind]}`, () => {
+      expect(needsApproval(mode, kind)).toBe(EXPECTED[mode][kind]);
+    });
+  }
+}
+
+test.each([
+  ["never", "read", "run"], ["never", "change", "block"], ["never", "payment", "block"],
+  ["ask", "read", "run"], ["ask", "change", "ask"], ["ask", "risky", "ask"],
+  ["allow", "change", "run"], ["allow", "risky", "run"], ["allow", "payment", "ask"],
+] as const)("site rule %s with %s: %s (any mode)", (rule, kind, want) => {
+  for (const mode of MODES) expect(needsApproval(mode, kind, rule)).toBe(want);
+});
+
+test("the audit log appends JSON lines a fresh reader can parse, readable only by the owner", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "perch-audit-"));
+  const path = join(dir, "nested", "audit.jsonl");
+  const log = new AuditLog(path);
+  await log.append({ time: "2026-11-05T01:00:00Z", tab: "t1", site: "mailroom.app", action: "click", detail: 'button "Send"', client: "sidebar", approved: true, result: "ok" });
+  await log.append({ time: "2026-11-05T01:00:01Z", tab: "t1", site: "mailroom.app", action: "type", detail: "14 characters", client: "mcp:claude-code", approved: null, result: "ok" });
+  const lines = readFileSync(path, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+  expect(lines).toHaveLength(2);
+  expect(lines[1]).toMatchObject({ action: "type", client: "mcp:claude-code", approved: null });
+  expect(statSync(path).mode & 0o777).toBe(0o600);
+  rmSync(dir, { recursive: true, force: true });
+});

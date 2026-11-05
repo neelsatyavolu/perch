@@ -68,7 +68,7 @@ export function NewTab() {
           {!layout.hidden.includes("recent") && (
             <Recent chats={data.chats} routines={data.routines} tab={layout.recentTab} onTab={(recentTab) => update({ recentTab })} onHide={() => hide("recent")} />
           )}
-          {!layout.hidden.includes("suggested") && <Suggested items={data.suggestions} onHide={() => hide("suggested")} />}
+          {!layout.hidden.includes("suggested") && <Suggested items={data.suggestions} onHide={() => hide("suggested")} onDismissed={() => refresh()} />}
           {layout.hidden.length > 0 && (
             <p class="hidden-note">
               {layout.hidden.map((s) => (

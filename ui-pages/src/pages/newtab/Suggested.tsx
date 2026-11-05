@@ -1,13 +1,20 @@
 import type { LucideIcon } from "lucide-preact";
 import type { Suggestion, SuggestionIcon } from "../../api";
 import { useAction, useApi } from "../../ui/frame";
-import { ArrowDownToLine, Calendar, Icon, Mail, MessageSquare, Repeat, User } from "../../ui/icons";
+import { ArrowDownToLine, Calendar, Icon, Mail, MessageSquare, Repeat, User, X } from "../../ui/icons";
 
 const ICONS: Readonly<Record<SuggestionIcon, LucideIcon>> = {
   memory: User, routines: Repeat, import: ArrowDownToLine, mail: Mail, calendar: Calendar, task: MessageSquare,
 };
 
-export function Suggested({ items, onHide }: { readonly items: readonly Suggestion[]; readonly onHide: () => void }) {
+type Props = {
+  readonly items: readonly Suggestion[];
+  readonly onHide: () => void;
+  /** Called after one card was dismissed, so the page can fetch the next suggestion. */
+  readonly onDismissed: (id: string) => void;
+};
+
+export function Suggested({ items, onHide, onDismissed }: Props) {
   const api = useApi();
   const act = useAction();
   if (items.length === 0) return null;
@@ -21,11 +28,17 @@ export function Suggested({ items, onHide }: { readonly items: readonly Suggesti
       </div>
       <div class="cards">
         {items.map((s) => (
-          <button type="button" key={s.id} class="ccard sug" onClick={() => run(s)}>
-            <span class="tile"><Icon of={ICONS[s.icon]} size={14} /></span>
-            <span class="tt">{s.title}</span>
-            <span class="sn">{s.detail}</span>
-          </button>
+          <div key={s.id} class="sug-wrap">
+            <button type="button" class="ccard sug" onClick={() => run(s)}>
+              <span class="tile"><Icon of={ICONS[s.icon]} size={14} /></span>
+              <span class="tt">{s.title}</span>
+              <span class="sn">{s.detail}</span>
+            </button>
+            <button type="button" class="ib sug-x" aria-label={`Dismiss ${s.title}`}
+              onClick={async () => { if (await act(() => api.dismissSuggestion(s.id).then(() => true))) onDismissed(s.id); }}>
+              <Icon of={X} size={14} />
+            </button>
+          </div>
         ))}
       </div>
     </section>

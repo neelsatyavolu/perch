@@ -67,3 +67,7 @@
   .cards { grid-template-columns: 1fr; }
   .ntp { padding-top: 56px; }
 }
+.sug-wrap { position: relative; display: grid; }
+.sug-x { position: absolute; top: 6px; right: 6px; opacity: 0; transition: opacity 120ms var(--ease); }
+.sug-wrap:hover .sug-x, .sug-x:focus-visible { opacity: 1; }
+@media (hover: none) { .sug-x { opacity: 1; } }

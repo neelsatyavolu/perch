@@ -58,12 +58,20 @@ describe("New tab page", () => {
 
   test("suggested cards open their page; after memory setup a task card appears", async () => {
     const { findByRole, nav, api } = renderWithApi(<NewTab />);
-    fireEvent.click(await findByRole("button", { name: /Set up your memory/ }));
+    fireEvent.click(await findByRole("button", { name: /^Set up your memory/ }));
     await waitFor(() => expect(nav[0]).toEqual({ what: "page", detail: { page: "memory", section: undefined } }));
     await api.saveProfileDraft([]);
     window.dispatchEvent(new Event("focus"));
-    fireEvent.click(await findByRole("button", { name: /Summarise unread mail/ }));
+    fireEvent.click(await findByRole("button", { name: /^Summarise unread mail/ }));
     await waitFor(() => expect(nav[1]?.detail).toEqual({ text: "Summarise my unread mail, grouped by what needs a reply today", mode: "ask", engine: "brave" }));
+  });
+
+  test("one suggestion can be dismissed and the next one takes its place", async () => {
+    const { findByRole, getByRole, queryByRole, api } = renderWithApi(<NewTab />);
+    fireEvent.click(await findByRole("button", { name: "Dismiss Import from another browser" }));
+    await waitFor(() => expect(queryByRole("button", { name: /^Import from another browser/ })).toBeNull());
+    expect((await api.listSuggestions()).some((s) => s.id === "setup-import")).toBe(false);
+    expect(getByRole("region", { name: "Suggested" })).toBeTruthy();
   });
 
   test("sections can be hidden and shown again", async () => {

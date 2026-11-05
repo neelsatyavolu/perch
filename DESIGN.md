@@ -21,7 +21,7 @@ Perch follows `~/DESIGN.md` (Blackletter) and the unslop rules (unslop by Damir 
 | No shadows at all | Menus, popovers and the approval card may use one soft neutral shadow | Floating layers over arbitrary web pages need separation that a hairline alone can't give on a white site |
 | Serif hero on every page | Geist Serif only on the new tab page title, empty states and the welcome screen, at 40px or larger | The chrome is a tool, not an editorial |
 | Dark and light | Five themes and five accents (below) | People live in a browser; it should feel like theirs |
-| One accent use list | Accent marks: the perch dot, focus rings, the selected row, text selection, the search engine chip, links in chat, the active artifact | Same restraint, named for browser surfaces |
+| One accent use list | Accent marks: the perch dot, focus rings, text selection, the search engine chip, links in chat, the active artifact | Same restraint, named for browser surfaces |
 
 Everything else carries over: Geist / Geist Mono / Geist Serif, weights 400 and 500, the 4px grid, radii (controls and tabs 8, cards and panels 12, inner elements 8), three text roles plus `stone`, hairlines for depth, the single easing curve, no gradients, glows, glass or emoji.
 
@@ -59,7 +59,7 @@ A theme sets every colour token. The accent is chosen separately and works on ev
 | Rose | `#FF6B8A` | `#C93558` | |
 | Mono | `#E6E8EB` | `#2A2C30` | No hue; the perch dot and selection use ink |
 
-Accent tint is the accent at 22% over the elevated colour on dark themes and 10% on Paper; selected rows also get a 2px accent edge on the left, so selection reads at a glance. Every accent meets 4.5:1 as text on its theme's card and canvas colours. Small text on elevated surfaces uses ink, not the accent. Links in chat are underlined (2px offset) so the Mono accent still reads as a link. Purple and gradients are not offered (Blackletter's rule).
+Accent tint is the accent at 22% over the elevated colour on dark themes and 10% on Paper; it is used for text selection and the search engine chip. Selected rows, picked options and the current step are a surface step (elevated) with a hairline ring and ink text, never an accent fill or an accent edge on a rounded row (owner review, 2026-11-05). Every accent meets 4.5:1 as text on its theme's card and canvas colours. Small text on elevated surfaces uses ink, not the accent. Links in chat are underlined (2px offset) so the Mono accent still reads as a link. Purple and gradients are not offered (Blackletter's rule).
 
 State colours: ok `#3DD68C`, warn `#FFC53D`, danger `#FF453A` on dark themes (moved away from Rose), `#D92D3F` on Paper. State is always said in words too; a coloured dot never stands alone.
 
@@ -68,7 +68,7 @@ State colours: ok `#3DD68C`, warn `#FFC53D`, danger `#FF453A` on dark themes (mo
 - **Tab strip and sidebar**: canvas. **Toolbar, active tab and Perch's own pages**: card. The active tab joins the toolbar so the two read as one piece.
 - **Address bar**: elevated, 28px tall, 8px radius. Focus, here and on every control: a 2px solid accent outline with a 2px offset (a 45% ring failed the 3:1 rule for controls).
 - **Tabs**: flexible width, 72 to 220px, shrinking as tabs are added; a 16px close button shows on hover, focus and the active tab; a 1×16px hairline separates inactive tabs. A browser menu button (28×28) ends the toolbar. Agent tabs sit in a tab group labelled "Agent" (20px chip, 8px radius, accent tint).
-- **Switches**: the knob is ink-on-canvas dark (`btn-fg`) on dark themes and white on Paper, so it shows on every accent.
+- **Switches**: on uses the primary button's colours (`btn-bg` track, `btn-fg` knob; white knob on Paper), so a page of switches doesn't fill with the accent.
 - **Sleeping tabs** (memory saver): title in mute colour with a 12px moon icon. Never lowered opacity: a sleeping tab must stay readable (AA) and clickable.
 - **The perch dot**: 6px accent circle. On a tab the agent is using and in the sidebar header while a task runs, breathing (opacity 1 to 0.35, 2.4s). While a task waits for approval it is still: one static dot on the profile button, and nothing breathes. It appears nowhere else; cards and hints say the state in words.
 - **Approval card**: card surface, hairline-strong border, 12px radius. It shows exactly what will be sent; the confirm button names the action ("Send message", "Pay $42.18").

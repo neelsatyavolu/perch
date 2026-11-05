@@ -3,6 +3,13 @@ import { IMPORT_KINDS, IMPORT_NEEDS } from "../../lib/labels";
 
 export const ASIDE_KINDS: readonly ImportKind[] = ["aside-memory", "aside-skills", "aside-chats", "aside-preferences"];
 
+/** "Personal", or "2 profiles"; a lone profile named like its browser ("Safari") says "1 profile" instead. */
+export function profileLine(browser: string, profiles: readonly { readonly name: string }[]): string {
+  if (profiles.length !== 1) return `${profiles.length} profiles`;
+  const name = profiles[0]!.name;
+  return name.trim().toLowerCase() === browser.trim().toLowerCase() ? "1 profile" : name;
+}
+
 export function BrowserStep({ browsers, browser, profile, onBrowser, onProfile }: {
   readonly browsers: readonly DetectedBrowser[];
   readonly browser: DetectedBrowser | null;
@@ -20,7 +27,7 @@ export function BrowserStep({ browsers, browser, profile, onBrowser, onProfile }
             <span class="tile" aria-hidden="true">{b.name.charAt(0)}</span>
             <span class="pick-t">
               <span class="ink">{b.name}</span>
-              <span class="cap">{b.profiles.length === 1 ? b.profiles[0]!.name : `${b.profiles.length} profiles`}</span>
+              <span class="cap">{profileLine(b.name, b.profiles)}</span>
             </span>
           </label>
         ))}

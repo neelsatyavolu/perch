@@ -11,9 +11,13 @@ import "./routines.css";
 
 const OUTCOME: Readonly<Record<RoutineRun["outcome"], string>> = { ok: "finished", failed: "failed", waiting: "is waiting for your approval" };
 
-function runLine(r: Routine): string {
+export function runLine(r: Routine, now: Date = new Date()): string {
   const parts = [r.lastRun ? `Last run ${OUTCOME[r.lastRun.outcome]}, ${shortDateTime(r.lastRun.at)}` : "Hasn't run yet"];
-  if (r.enabled && r.nextRun) parts.push(`next ${relativeTime(r.nextRun).toLowerCase()}`);
+  if (r.enabled && r.nextRun) {
+    // "In 18 hr" becomes "in 18 hr"; a date like "Nov 8" keeps its capital.
+    const when = relativeTime(r.nextRun, now);
+    parts.push(`next ${when.startsWith("In ") ? `in ${when.slice(3)}` : when}`);
+  }
   return parts.join(" · ");
 }
 

@@ -39,7 +39,8 @@
 .rail-lbl { color: var(--mute); font-size: 12px; font-weight: 400; padding: 10px 10px 4px; }
 .rail-empty { color: var(--mute); padding: 4px 10px; font-size: 12px; }
 .mem-doc { border: 1px solid var(--hair-strong); border-radius: 12px; background: var(--canvas); padding: 16px; display: grid; gap: 12px; }
-.mem-pick { min-height: 200px; place-content: center; text-align: center; }
+/* The empty reader fills the column beside the list, so the page has no dead band under a short box. */
+.mem-pick { min-height: calc(100vh - 140px); place-content: center; text-align: center; }
 .doc-h { display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
 .doc-h h2 { font-size: 15px; }
 .doc-body { min-height: 420px; font-size: 13px; }

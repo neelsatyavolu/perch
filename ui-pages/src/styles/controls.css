@@ -22,7 +22,7 @@
 .ib.sm { width: 24px; height: 24px; }
 .ib.sm svg.i { width: 14px; height: 14px; }
 
-/* Switch: knob is btn-fg on dark themes and white on Paper, so it shows on every accent. */
+/* Switch: on uses the primary button's colours, so the accent stays for focus and the perch dot. */
 .switch {
   width: 32px; height: 20px; border-radius: 10px; background: var(--hair-strong); border: 0; padding: 0;
   position: relative; cursor: pointer; flex: none; transition: background 120ms var(--ease);
@@ -31,9 +31,9 @@
   content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
   background: var(--ink); transition: transform 120ms var(--ease);
 }
-.switch[aria-checked="true"] { background: var(--accent); }
+.switch[aria-checked="true"] { background: var(--btn-bg); }
 .switch[aria-checked="true"]::after { transform: translateX(12px); background: var(--btn-fg); }
-:root[data-theme="paper"] .switch[aria-checked="true"]::after { background: #FFFFFF; }
+:root[data-theme="paper"] .switch::after { background: #FFFFFF; box-shadow: 0 0 0 1px rgba(0,0,0,0.12); }
 .switch:disabled { opacity: 0.5; cursor: default; }
 
 /* Segmented control (radio group). */
@@ -87,7 +87,7 @@ textarea.field { height: auto; min-height: 88px; padding: 8px 10px; resize: vert
 .srow .d { color: var(--mute); font-size: 12px; }
 .srow .ctl { display: flex; align-items: center; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 .srow.sub { min-height: 44px; }
-.srow.hit { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+.srow.hit { background: var(--hover); }
 .tile {
   width: 28px; height: 28px; border-radius: 8px; background: var(--raised); color: var(--ink);
   display: grid; place-items: center; font-weight: 500; font-size: 12px; flex: none;
@@ -109,7 +109,8 @@ textarea.field { height: auto; min-height: 88px; padding: 8px 10px; resize: vert
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: none; border: 0; width: 100%; text-align: left; cursor: pointer;
 }
 .row:hover { background: var(--hover); }
-.row[aria-current="page"], .row[aria-selected="true"] { background: var(--accent-soft); color: var(--ink); box-shadow: inset 2px 0 0 var(--accent); }
+/* Selected: one surface step and a hairline, never an accent fill or edge (DESIGN.md). */
+.row[aria-current="page"], .row[aria-selected="true"] { background: var(--raised); color: var(--ink); box-shadow: inset 0 0 0 1px var(--hair); }
 .empty { padding: 20px 16px; color: var(--mute); font-size: 13px; }
 .note { color: var(--mute); font-size: 12px; }
 .err-note { color: var(--danger); font-size: 12px; }

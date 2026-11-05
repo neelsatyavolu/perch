@@ -11,7 +11,7 @@
 .rt-list:empty { display: none; }
 .rt { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: start; padding: 14px 12px 14px 16px; border-bottom: 1px solid var(--hair); }
 .rt:last-child { border-bottom: 0; }
-.rt.hit { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+.rt.hit { background: var(--hover); }
 .rt-main { display: grid; gap: 4px; min-width: 0; }
 .rt-main h3 { font-size: 14px; }
 .rt-prompt { color: var(--body); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -27,7 +27,7 @@
   width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--hair-strong); background: var(--card); color: var(--mute);
   font-weight: 500; cursor: pointer; transition: background 120ms var(--ease), color 120ms var(--ease);
 }
-.day[aria-pressed="true"] { background: var(--accent-soft); color: var(--ink); border-color: var(--accent); }
+.day[aria-pressed="true"] { background: var(--btn-bg); color: var(--btn-fg); border-color: var(--btn-bg); }
 .field.time { width: 120px; }
 
 @media (max-width: 640px) {

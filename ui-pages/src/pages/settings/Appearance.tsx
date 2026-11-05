@@ -28,7 +28,7 @@ export function Appearance() {
           <div id="accent" class="srow noicon stack">
             <div>
               <div class="n">Accent colour</div>
-              <div class="d">Used for focus rings, the selected row, links in chat and the perch dot</div>
+              <div class="d">Used for focus rings, links in chat and the perch dot</div>
             </div>
             <Swatches label="Accent" value={a.accent} options={accents} onChange={(accent) => update({ accent })} />
           </div>

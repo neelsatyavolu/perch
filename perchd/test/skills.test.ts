@@ -11,7 +11,7 @@ import type { Message, TurnEvent, TurnRequest } from "../src/models/types";
 import { MemoryKeychain } from "../src/secure/keychain";
 import { readSkillFolder } from "../src/skills/bundle";
 import { loadBuiltInSkills, SkillCatalog } from "../src/skills/catalog";
-import { findSkillImports, importSkills, previewSkills } from "../src/skills/import";
+import { findSkillImports, importSkills, previewSkills, skillsIn } from "../src/skills/import";
 import { parseSkillFile } from "../src/skills/skill-file";
 import { SkillStore } from "../src/skills/store";
 import { skillExtraTools } from "../src/skills/tool";
@@ -87,6 +87,23 @@ test("import preview from Claude Code and Codex, then encrypted storage and expo
   expect(readFileSync(join(out, "reference.md"), "utf8")).toBe("Use pdftk for merging.");
   await store.remove("release-notes");
   expect(await store.names()).toEqual(["pdf-tools"]);
+});
+
+test("a linked skill folder is followed; a link that leads nowhere is reported", async () => {
+  const root = mkdtempSync(join(tmpdir(), "perch-skills-links-"));
+  write(join(root, "shared", "linked-skill", "SKILL.md"), `---\nname: linked-skill\ndescription: Lives elsewhere.\n---\nBody.`);
+  symlinkSync(join(root, "shared", "linked-skill", "SKILL.md"), join(root, "shared", "linked-skill", "inner-link"));
+  mkdirSync(join(root, "skills"));
+  symlinkSync(join(root, "shared", "linked-skill"), join(root, "skills", "linked-skill"));
+  symlinkSync(join(root, "missing"), join(root, "skills", "broken"));
+  write(join(root, "notes.txt"), "x");
+  symlinkSync(join(root, "notes.txt"), join(root, "skills", "file-link"));
+  const r = await skillsIn(join(root, "skills"), "Claude Code");
+  expect(r.candidates.map((c) => c.bundle.name)).toEqual(["linked-skill"]);
+  // Links inside a skill are still skipped.
+  expect(Object.keys(r.candidates[0]!.bundle.files)).toEqual(["SKILL.md"]);
+  expect(r.problems).toEqual([{ path: join(root, "skills", "broken"), message: "the link leads to nothing; it was skipped" }]);
+  rmSync(root, { recursive: true, force: true });
 });
 
 const tool = (name: string, args: Record<string, unknown> = {}): TurnEvent[] => [{ type: "tool_call", call: { id: `c${Math.random()}`, name, args } }, { type: "done" }];

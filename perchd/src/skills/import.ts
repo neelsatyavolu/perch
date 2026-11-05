@@ -3,7 +3,7 @@
  * (~/.grok/skills), or from any folder, with a preview before anything is copied into Perch.
  */
 
-import { readdir } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { readSkillFolder, scriptFiles, type SkillBundle } from "./bundle";
 import type { SkillStore } from "./store";
@@ -11,25 +11,42 @@ import type { SkillStore } from "./store";
 export type SkillCandidate = { source: string; dir: string; bundle: SkillBundle };
 export type SkillPreview = { id: number; name: string; description: string; source: string; dir: string; files: number; scripts: string[]; installed: boolean; selected: boolean };
 
+type Problem = { path: string; message: string };
+
+/** Folders directly inside dir, following a link at this level (shared and plugin skills are often linked in). */
+async function folders(dir: string): Promise<{ names: string[]; problems: Problem[] }> {
+  const entries = (await readdir(dir, { withFileTypes: true }).catch(() => [])).filter((e) => !e.name.startsWith("."));
+  const checked = await Promise.all(
+    entries.map(async (e): Promise<string | Problem | null> => {
+      if (e.isDirectory()) return e.name;
+      if (!e.isSymbolicLink()) return null;
+      const target = await stat(join(dir, e.name)).catch(() => null);
+      if (!target) return { path: join(dir, e.name), message: "the link leads to nothing; it was skipped" };
+      return target.isDirectory() ? e.name : null;
+    }),
+  );
+  return {
+    names: checked.filter((c): c is string => typeof c === "string").sort((a, b) => a.localeCompare(b)),
+    problems: checked.filter((c): c is Problem => Boolean(c) && typeof c === "object"),
+  };
+}
+
 /** Every skill folder (one with SKILL.md) directly inside dir. */
-export async function skillsIn(dir: string, source: string): Promise<{ candidates: SkillCandidate[]; problems: { path: string; message: string }[] }> {
-  const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+export async function skillsIn(dir: string, source: string): Promise<{ candidates: SkillCandidate[]; problems: Problem[] }> {
+  const listed = await folders(dir);
   const results = await Promise.all(
-    entries
-      .filter((e) => e.isDirectory() && !e.name.startsWith("."))
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .map(async (e): Promise<{ candidate: SkillCandidate } | { problem: { path: string; message: string } }> => {
-        const path = join(dir, e.name);
-        try {
-          return { candidate: { source, dir: path, bundle: await readSkillFolder(path) } };
-        } catch (error) {
-          return { problem: { path, message: error instanceof Error ? error.message : String(error) } };
-        }
-      }),
+    listed.names.map(async (name): Promise<{ candidate: SkillCandidate } | { problem: Problem }> => {
+      const path = join(dir, name);
+      try {
+        return { candidate: { source, dir: path, bundle: await readSkillFolder(path) } };
+      } catch (error) {
+        return { problem: { path, message: error instanceof Error ? error.message : String(error) } };
+      }
+    }),
   );
   return {
     candidates: results.flatMap((r) => ("candidate" in r ? [r.candidate] : [])),
-    problems: results.flatMap((r) => ("problem" in r && !/no SKILL\.md/.test(r.problem.message) ? [r.problem] : [])),
+    problems: [...listed.problems, ...results.flatMap((r) => ("problem" in r && !/no SKILL\.md/.test(r.problem.message) ? [r.problem] : []))],
   };
 }
 

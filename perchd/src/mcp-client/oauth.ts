@@ -44,6 +44,19 @@ function checkEndpoint(raw: unknown, what: string): string {
   return url.toString();
 }
 
+const trimSlash = (u: string) => u.replace(/\/+$/, "");
+
+/** RFC 9728 3.3: the metadata's resource must be the server's address (same origin, a prefix of its path). */
+function covers(resource: string, server: URL): boolean {
+  try {
+    const r = new URL(resource);
+    const path = trimSlash(r.pathname);
+    return r.origin === server.origin && (path === "" || server.pathname === path || server.pathname.startsWith(`${path}/`) || trimSlash(server.pathname) === path);
+  } catch {
+    return false;
+  }
+}
+
 export function parseWwwAuthenticate(header: string | null): { resourceMetadata?: string; scope?: string } {
   if (!header) return {};
   const param = (name: string) => header.match(new RegExp(`${name}="([^"]*)"`, "i"))?.[1] ?? header.match(new RegExp(`${name}=([^\\s,]+)`, "i"))?.[1];
@@ -118,6 +131,7 @@ export class OAuthProvider implements AuthProvider {
     const prmUrls = [hint.resourceMetadata, `${server.origin}/.well-known/oauth-protected-resource${path}`, `${server.origin}/.well-known/oauth-protected-resource`].filter(Boolean) as string[];
     let prm: Record<string, unknown> | null = null;
     for (const url of prmUrls) if ((prm = await this.getJson(url))) break;
+    if (typeof prm?.resource === "string" && !covers(prm.resource, server)) throw new Error("The server's sign-in details are for a different address, so Perch will not use them.");
     const asUrl = new URL(Array.isArray(prm?.authorization_servers) && typeof prm.authorization_servers[0] === "string" ? prm.authorization_servers[0] : server.origin);
     const asPath = asUrl.pathname === "/" ? "" : asUrl.pathname.replace(/\/$/, "");
     const candidates = [
@@ -127,6 +141,8 @@ export class OAuthProvider implements AuthProvider {
     ];
     let raw: Record<string, unknown> | null = null;
     for (const url of candidates) if ((raw = await this.getJson(url))) break;
+    // RFC 8414 3.3: the issuer must be the address the metadata was looked up for.
+    if (raw && typeof raw.issuer === "string" && trimSlash(raw.issuer) !== trimSlash(`${asUrl.origin}${asPath}`)) throw new Error("The sign-in server's details are for a different server, so Perch will not use them.");
     // Servers from before metadata discovery use fixed paths on the server's own origin.
     const meta: AsMeta = raw
       ? {
@@ -142,12 +158,20 @@ export class OAuthProvider implements AuthProvider {
     return { meta, scope: hint.scope ?? scopes, resource };
   }
 
-  private async register(meta: AsMeta, redirectUri: string): Promise<Client> {
+  /** The client registered earlier with this sign-in server, if any. */
+  private async storedClient(meta: AsMeta): Promise<Client | null> {
     const stored = await this.opts.keychain.get(clientAccount(this.opts.server));
-    if (stored) {
+    if (!stored) return null;
+    try {
       const client = JSON.parse(stored) as Client;
-      if (client.redirect_uri === redirectUri && client.registration_for === meta.token_endpoint) return client;
+      return client.registration_for === meta.token_endpoint ? client : null;
+    } catch {
+      return null;
     }
+  }
+
+  private async register(meta: AsMeta, redirectUri: string, stored: Client | null): Promise<Client> {
+    if (stored?.redirect_uri === redirectUri) return stored;
     if (!meta.registration_endpoint) throw new Error("The server needs a registered app and does not allow automatic registration. Add a client id in the server's settings.");
     const res = await this.doFetch(meta.registration_endpoint, {
       method: "POST",
@@ -166,10 +190,12 @@ export class OAuthProvider implements AuthProvider {
     const { meta, scope, resource } = await this.discover(www);
     const verifier = b64url(randomBytes(32));
     const state = b64url(randomBytes(16));
-    const callback = waitForCallback(state, this.opts.timeoutMs ?? 300_000);
+    // Listen on the port registered last time, so the same client keeps working; another port means a new registration.
+    const stored = await this.storedClient(meta);
+    const callback = waitForCallback(state, this.opts.timeoutMs ?? 300_000, stored ? loopbackPort(stored.redirect_uri) : 0);
     try {
       const redirectUri = `http://${LOOPBACK}:${callback.port}/callback`;
-      const client = await this.register(meta, redirectUri);
+      const client = await this.register(meta, redirectUri, stored);
       const auth = new URL(meta.authorization_endpoint);
       const params: Record<string, string> = {
         response_type: "code",
@@ -218,28 +244,40 @@ export class OAuthProvider implements AuthProvider {
 
 const DONE_PAGE = `<!doctype html><meta charset="utf-8"><title>Perch</title><body style="font:14px -apple-system,sans-serif;background:#000;color:#eee;padding:48px">Perch is signed in. You can close this tab.</body>`;
 
+function loopbackPort(uri: string): number {
+  try {
+    const url = new URL(uri);
+    return url.hostname === LOOPBACK && url.port ? Number(url.port) : 0;
+  } catch {
+    return 0;
+  }
+}
+
 /** A one-shot loopback server for the redirect. It checks state, so another page cannot inject a code. */
-function waitForCallback(state: string, timeoutMs: number): { port: number; code: Promise<string>; stop: () => void } {
+function waitForCallback(state: string, timeoutMs: number, preferredPort = 0): { port: number; code: Promise<string>; stop: () => void } {
   let settle: { resolve: (c: string) => void; reject: (e: Error) => void } = { resolve: () => undefined, reject: () => undefined };
   const code = new Promise<string>((resolve, reject) => (settle = { resolve, reject }));
   code.catch(() => undefined);
-  const server = Bun.serve({
-    hostname: LOOPBACK,
-    port: 0,
-    fetch(req) {
-      const url = new URL(req.url);
-      if (url.pathname !== "/callback") return new Response("Not found", { status: 404 });
-      if (url.searchParams.get("state") !== state) return new Response("This sign-in link has expired. Start again from Perch.", { status: 400 });
-      const error = url.searchParams.get("error");
-      const got = url.searchParams.get("code");
-      if (error || !got) {
-        settle.reject(new Error(`Sign-in was not completed${error ? ` (${error.slice(0, 60)})` : ""}.`));
-        return new Response("Sign-in was not completed. You can close this tab.", { status: 400 });
-      }
-      settle.resolve(got);
-      return new Response(DONE_PAGE, { headers: { "Content-Type": "text/html; charset=utf-8" } });
-    },
-  });
+  const handler = (req: Request): Response => {
+    const url = new URL(req.url);
+    if (url.pathname !== "/callback") return new Response("Not found", { status: 404 });
+    if (url.searchParams.get("state") !== state) return new Response("This sign-in link has expired. Start again from Perch.", { status: 400 });
+    const error = url.searchParams.get("error");
+    const got = url.searchParams.get("code");
+    if (error || !got) {
+      settle.reject(new Error(`Sign-in was not completed${error ? ` (${error.slice(0, 60)})` : ""}.`));
+      return new Response("Sign-in was not completed. You can close this tab.", { status: 400 });
+    }
+    settle.resolve(got);
+    return new Response(DONE_PAGE, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+  };
+  const listen = (port: number) => Bun.serve({ hostname: LOOPBACK, port, fetch: handler });
+  let server: ReturnType<typeof listen>;
+  try {
+    server = listen(preferredPort);
+  } catch {
+    server = listen(0); // the old port is taken by another app
+  }
   const timer = setTimeout(() => settle.reject(new Error("Sign-in timed out. Try again.")), timeoutMs);
   return {
     port: server.port!,

@@ -121,3 +121,56 @@ test("a sign-in callback with the wrong state is refused", async () => {
   await expect(connectRemote("http", { url: `${base}/mcp`, headers: {}, auth })).rejects.toThrow("Sign-in timed out");
   expect(await kc.get(tokenAccount("notes"))).toBeNull();
 });
+
+test("signing in again reuses the registered client and its redirect address", async () => {
+  const kc = new MemoryKeychain();
+  const signIn = () => new OAuthProvider({ server: "notes", serverUrl: `${base}/mcp`, keychain: kc, openUrl }).unauthorized(null);
+  expect(await signIn()).toBe(true);
+  const registered = state.registered;
+  const firstRedirect = state.lastAuthorize!.get("redirect_uri");
+  await kc.delete(tokenAccount("notes"));
+  expect(await signIn()).toBe(true);
+  expect(state.registered).toBe(registered);
+  expect(state.lastAuthorize!.get("redirect_uri")).toBe(firstRedirect);
+  // When that port is taken, Perch picks another one and registers for it.
+  const port = Number(new URL(firstRedirect!).port);
+  const squatter = Bun.serve({ hostname: "127.0.0.1", port, fetch: () => new Response("other app") });
+  try {
+    await kc.delete(tokenAccount("notes"));
+    expect(await signIn()).toBe(true);
+    expect(state.registered).toBe(registered + 1);
+    expect(state.lastAuthorize!.get("redirect_uri")).not.toBe(firstRedirect);
+  } finally {
+    squatter.stop(true);
+  }
+});
+
+test("only one refresh runs when several requests find the token expired", async () => {
+  const kc = new MemoryKeychain();
+  let now = Date.now();
+  const auth = new OAuthProvider({ server: "notes", serverUrl: `${base}/mcp`, keychain: kc, openUrl, now: () => now });
+  await auth.unauthorized(null);
+  const before = state.refreshed;
+  now += 2 * 3600 * 1000;
+  const headers = await Promise.all([auth.header(), auth.header(), auth.header()]);
+  expect(state.refreshed).toBe(before + 1);
+  expect(new Set(headers).size).toBe(1);
+});
+
+/** The fixture's answers with one metadata document changed, as a lying server would send it. */
+function rewriting(path: string, change: (doc: Record<string, unknown>) => Record<string, unknown>): typeof fetch {
+  return (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const res = await fetch(input, init);
+    if (new URL(String(input)).pathname !== path) return res;
+    return Response.json(change(await res.json()));
+  }) as typeof fetch;
+}
+
+test("sign-in details that name another issuer or another resource are refused", async () => {
+  const kc = new MemoryKeychain();
+  const wrongIssuer = new OAuthProvider({ server: "notes", serverUrl: `${base}/mcp`, keychain: kc, openUrl, fetch: rewriting("/.well-known/oauth-authorization-server/as", (d) => ({ ...d, issuer: "https://attacker.test/as" })) });
+  await expect(wrongIssuer.unauthorized(null)).rejects.toThrow("The sign-in server's details are for a different server");
+  const wrongResource = new OAuthProvider({ server: "notes", serverUrl: `${base}/mcp`, keychain: kc, openUrl, fetch: rewriting("/.well-known/oauth-protected-resource/mcp", (d) => ({ ...d, resource: "https://attacker.test/mcp" })) });
+  await expect(wrongResource.unauthorized(null)).rejects.toThrow("The server's sign-in details are for a different address");
+  expect(kc.accounts()).toEqual([]);
+});

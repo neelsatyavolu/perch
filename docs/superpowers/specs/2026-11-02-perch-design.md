@@ -103,7 +103,8 @@ Taken from the owner's Aside screenshots.
 - **Profile menu**: the profile list with a check on the current one and `⋯` for options, "New profile", then Bookmarks ›, Downloads ›, Extensions ›, History ›, Developers ›, Settings (⌘,), New Tab (⌘T), Incognito Window (⇧⌘N).
 - **Hide chrome**: one shortcut and a setting hide the tab strip and bookmarks bar completely. The address bar appears on ⌘L and a tab switcher on ⌃Tab. Top-edge hover can reveal the bar, as a setting.
 - **Split view**: two tabs side by side in one window, with a draggable divider. Built on Chromium's split-view feature where it exists, extended to work from the tab context menu and a shortcut.
-- **Right sidebar**: the agent chat (section 7.6). Toggled with a toolbar button and a shortcut. Resizable. It remembers per-window state.
+- **Right sidebar**: the agent chat (section 7.6). Toggled with a toolbar button and a shortcut. Resizable; the width is remembered per window.
+- **Side chats belong to a tab** (owner, 2026-11-05). A side chat opened in a tab stays with that tab. Switching to another tab hides it; that tab shows its own side chat if it has one, or none. Switching back shows it again with its scroll position and unsent draft. A task keeps running while its tab is in the background, and the tab shows the perch dot. Moving a tab to another window takes its side chat along.
 - **Themes**: five themes (Ink, the default; Graphite, a neutral grey; Dusk; Paper, light; Contrast) and five accents (Blue, the default; Teal; Amber; Rose; Mono). A theme changes every surface, text and accent colour in the chrome and in Perch's pages at once, through one token file. Values are in the repo's `DESIGN.md`; visual rules are in section 6.
 
 ### 5.4 UI technology
@@ -268,7 +269,7 @@ On top of the mode:
 
 ### 7.6 Chat UI
 
-**Sidebar** (screenshot 1): header with chat title and a menu of recent chats, new-chat and close buttons. Empty state shows the Perch mark. The composer shows a chip for the current tab (favicon, title, domain); `@` adds other tabs, files, memory or skills as context; `+` attaches files; a microphone button dictates with macOS on-device speech recognition. Under the composer: permission mode, which tabs the agent may use (current tab / all tabs / new agent tabs), and the model + effort picker.
+**Sidebar** (screenshot 1; one per tab, see 5.3): header with chat title and a menu of recent chats, new-chat and close buttons. Empty state shows the Perch mark. The composer shows a chip for the current tab (favicon, title, domain); `@` adds other tabs, files, memory or skills as context; `+` attaches files; a microphone button dictates with macOS on-device speech recognition. Under the composer: permission mode, which tabs the agent may use (current tab / all tabs / new agent tabs), and the model + effort picker.
 
 **Full-page chat** (screenshot 7): opened from the chat menu or a `perch://chat` tab. Left: chat list (toggleable). Centre: the conversation. Right: the artifacts pane. Header: title (editable), `⋯`, Share (exports to a file; there is no hosted share), and pane toggles.
 

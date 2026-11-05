@@ -79,7 +79,9 @@ export async function startApp(opts: AppOptions): Promise<App> {
   const artifacts = await ArtifactStore.load(join(opts.dataDir, "artifacts"), opts.vault);
   const windows = new Windows(chats);
   let publish: (event: AppEvent) => void = () => {};
-  const artifactServer = startArtifactServer({ store: artifacts, frameAncestors: opts.allowedOrigins });
+  let ownOrigin: string | null = null;
+  // Perch's pages may frame artifacts; so may the development pages this server itself serves.
+  const artifactServer = startArtifactServer({ store: artifacts, frameAncestors: () => [...opts.allowedOrigins, ...(opts.uiDir && ownOrigin ? [ownOrigin] : [])] });
   const runs = new RunManager({
     chats,
     artifacts,
@@ -99,6 +101,7 @@ export async function startApp(opts: AppOptions): Promise<App> {
     ctx: { chats, artifacts, runs, windows, info, artifactServer, models: opts.models.map((m) => m.id), defaults },
   });
   publish = server.publish;
+  ownOrigin = server.origin;
   return {
     chats,
     artifacts,

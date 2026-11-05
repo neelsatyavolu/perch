@@ -8,8 +8,8 @@ import type { ApprovalCard as Card } from "../api/types";
 
 const KIND_WORDS: Record<Card["kind"], string> = {
   change: "Changes the page",
-  risky: "Sends or changes something on the site",
-  payment: "Payment or password: always asks",
+  risky: "Sends, posts or deletes",
+  payment: "Payment or password, always asks",
 };
 
 export function ApprovalCard({ card, onDecide }: { card: Card; onDecide: (approved: boolean) => Promise<void> | void }) {

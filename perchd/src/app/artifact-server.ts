@@ -42,10 +42,10 @@ const TEXT_TYPES: Record<string, string> = {
   json: "text/plain; charset=utf-8",
 };
 
-export function startArtifactServer(opts: { store: ArtifactStore; frameAncestors: string[]; port?: number }): ArtifactServer {
+export function startArtifactServer(opts: { store: ArtifactStore; frameAncestors: string[] | (() => string[]); port?: number }): ArtifactServer {
   const secret = crypto.getRandomValues(new Uint8Array(32));
   const sign = (id: string, version: number) => createHmac("sha256", secret).update(`${id}/${version}`).digest("base64url");
-  const csp = artifactCsp(opts.frameAncestors);
+  const ancestors = typeof opts.frameAncestors === "function" ? opts.frameAncestors : () => opts.frameAncestors as string[];
   const server = Bun.serve({
     hostname: "127.0.0.1",
     port: opts.port ?? 0,
@@ -66,7 +66,7 @@ export function startArtifactServer(opts: { store: ArtifactStore; frameAncestors
         return new Response("not found", { status: 404 });
       }
       const headers = {
-        "content-security-policy": csp,
+        "content-security-policy": artifactCsp(ancestors()),
         "x-content-type-options": "nosniff",
         "referrer-policy": "no-referrer",
         "cross-origin-resource-policy": "cross-origin",

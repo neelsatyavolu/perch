@@ -161,10 +161,7 @@ button.artifact-card:hover { background: var(--hover); }
 .fc-h .title { flex: 0 1 auto; min-width: 0; text-align: left; background: none; border: 0; padding: 4px 8px; border-radius: var(--r-control); color: var(--ink); font-weight: 500; font-size: 13px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fc-h .title:hover:not(:disabled) { background: var(--hover); }
-.fc-h .state { margin-right: auto; }
-.fc-h .dot + .state, .fc-h .title + .menu-wrap { margin-left: 0; }
-.fc-h > .menu-wrap { margin-left: auto; }
-.fc-h .state + .menu-wrap { margin-left: 0; }
+.fc-h .dot { margin: 0 4px; }
 .title-edit { flex: 1; height: 28px; border: 1px solid var(--hair-strong); border-radius: var(--r-control); background: var(--raised); color: var(--ink); padding: 0 8px; font-size: 13px; }
 .confirm { display: flex; align-items: center; gap: 8px; padding: 8px 20px; border-bottom: 1px solid var(--hair); font-size: 13px; color: var(--ink); background: var(--raised); }
 .confirm span { flex: 1; }

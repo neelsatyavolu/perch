@@ -119,6 +119,7 @@ export function FullChat({ client, initialChat = null, onNavigate }: Props) {
           )}
           <PerchDot status={status} />
           {status !== "idle" && <span class="state">{status === "running" ? "Working" : "Waiting for your approval"}</span>}
+          <span class="grow" />
           {view.chat && (
             <Menu label="More" choices={[{ value: "export", label: "Export as Markdown" }, { value: "delete", label: "Delete chat" }]} selected={[]} align="end" onPick={(c) => (c.value === "export" ? void exportChat() : setConfirmDelete(true))}>
               <Icon name="more" />

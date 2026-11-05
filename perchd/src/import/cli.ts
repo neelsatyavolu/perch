@@ -29,7 +29,7 @@ function describe(r: TypeResult): string {
     case "written":
       return `${r.type}: ${r.count} added${skipped}`;
     case "bundled":
-      return `${r.type}: ${r.count} ready, applied when Perch next starts${skipped}`;
+      return `${r.type}: ${r.count} saved for a later version of Perch to add${skipped}`;
     case "empty":
       return `${r.type}: nothing to import${skipped}`;
     default:

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, readFileSync, statSync, symlinkSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
+import { BUNDLED_MESSAGE } from "../../src/import/apply";
 import { readAsideChats, readAsideMemory, readAsideSkills } from "../../src/import/aside";
 import { BUNDLE_SERVICE, discardBundle, openBundle, pendingBundles, sealBundle } from "../../src/import/bundle";
 import { readChromeBookmarks } from "../../src/import/chrome/bookmarks";
@@ -141,11 +142,11 @@ test("importing from Chrome: bookmarks and history written, the rest sealed in o
     { type: "bookmarks", status: "written", count: 3 },
     { type: "history", status: "written", count: 2 },
     { type: "tabs", status: "empty", count: 0 },
-    { type: "searchEngines", status: "bundled", count: 2 },
-    { type: "passwords", status: "bundled", count: 1 },
-    { type: "addresses", status: "bundled", count: 1 },
-    { type: "cookies", status: "bundled", count: 1, skipped: 1 },
-    { type: "extensions", status: "bundled", count: 1 },
+    { type: "searchEngines", status: "bundled", count: 2, message: BUNDLED_MESSAGE },
+    { type: "passwords", status: "bundled", count: 1, message: BUNDLED_MESSAGE },
+    { type: "addresses", status: "bundled", count: 1, message: BUNDLED_MESSAGE },
+    { type: "cookies", status: "bundled", count: 1, skipped: 1, message: BUNDLED_MESSAGE },
+    { type: "extensions", status: "bundled", count: 1, message: BUNDLED_MESSAGE },
   ]);
   expect(keychain.asked).toEqual(["Chrome Safe Storage"]);
   expect(progress).toContain("passwords:reading");
@@ -175,7 +176,7 @@ test("a denied Keychain prompt fails passwords only, and Perch being open sends 
     keychain: memoryKeychain({}, ["Chrome Safe Storage"]),
   });
   expect(report.results).toEqual([
-    { type: "bookmarks", status: "bundled", count: 3 },
+    { type: "bookmarks", status: "bundled", count: 3, message: BUNDLED_MESSAGE },
     { type: "passwords", status: "failed", count: 0, message: expect.stringMatching(/did not allow/) },
   ]);
 });
@@ -196,7 +197,7 @@ test("files: a password CSV goes to the bundle, a bookmarks HTML file is written
   const csv = join(env.home, "Passwords.csv");
   write(csv, "url,username,password\nhttps://a.example.com,u,p\n,x,y\n");
   const r = await importFile({ path: csv, target: { userDataDir: perch }, keychain });
-  expect(r.results).toEqual([{ type: "passwords", status: "bundled", count: 1, skipped: 1 }]);
+  expect(r.results).toEqual([{ type: "passwords", status: "bundled", count: 1, skipped: 1, message: BUNDLED_MESSAGE }]);
   const html = join(env.home, "bookmarks.html");
   write(html, '<DL><p><DT><A HREF="https://x.example.com/">X</A></DL>');
   const b = await importFile({ path: html, target: { userDataDir: perch }, keychain });

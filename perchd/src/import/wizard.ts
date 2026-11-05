@@ -10,6 +10,7 @@
  */
 
 import { readFileSync, statSync } from "node:fs";
+import type { CdpConnection } from "../cdp/connection";
 import { join } from "node:path";
 import { applyImport, failure, type Progress, type Target, type TypeResult } from "./apply";
 import { browserByKey, BROWSERS } from "./catalog";
@@ -99,6 +100,8 @@ export type ImportInput = {
   readonly keychain: Keychain;
   readonly onProgress?: (p: Progress) => void;
   readonly now?: number;
+  /** The DevTools pipe to the running Perch, when perchd holds one. */
+  readonly running?: CdpConnection;
 };
 
 export type Report = { readonly source: SourceRef; readonly results: readonly TypeResult[]; readonly bundle?: { readonly id: string; readonly path: string } };
@@ -130,7 +133,7 @@ export async function importSource(input: ImportInput): Promise<Report> {
       input.onProgress?.({ type, state: "failed", index, total: types.length });
     }
   }
-  const applied = await applyImport({ target: input.target, keychain: input.keychain, source: { browser: browser.name, profile: profile.name }, parts, onProgress: input.onProgress, now: input.now });
+  const applied = await applyImport({ target: input.target, keychain: input.keychain, source: { browser: browser.name, profile: profile.name }, parts, onProgress: input.onProgress, now: input.now, running: input.running });
   const order = (r: TypeResult) => types.indexOf(r.type);
   const results = [...applied.results, ...failed].sort((a, b) => order(a) - order(b));
   results.forEach((r, index) => input.onProgress?.({ type: r.type, state: r.status === "failed" ? "failed" : "done", index, total: types.length }));
@@ -171,6 +174,6 @@ export async function importFile(input: FileInput): Promise<Report> {
   const parts = (Object.keys(data) as DataType[]).map((type) => ({ type, data: { [type]: data[type] } as ImportData, ...(type === "passwords" && skipped ? { skipped } : {}) }));
   // Names the "Imported from …" bookmarks folder.
   const from = ext === "zip" ? "Safari" : source.profile;
-  const applied = await applyImport({ target: input.target, keychain: input.keychain, source: { browser: from, profile: source.profile }, parts, onProgress: input.onProgress, now: input.now });
+  const applied = await applyImport({ target: input.target, keychain: input.keychain, source: { browser: from, profile: source.profile }, parts, onProgress: input.onProgress, now: input.now, running: input.running });
   return { source, results: applied.results, ...(applied.bundle ? { bundle: applied.bundle } : {}) };
 }

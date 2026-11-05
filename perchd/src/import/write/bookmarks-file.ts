@@ -9,10 +9,10 @@
  */
 
 import { createHash, randomUUID } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
 import { toChromium } from "../time";
 import { ImportError, type BookmarkNode, type Bookmarks } from "../types";
+import { writeAtomically } from "./atomic";
 
 type JsonNode = { id: string; name: string; type: "url" | "folder"; url?: string; children?: JsonNode[]; [k: string]: unknown };
 type Roots = { bookmark_bar: JsonNode; other: JsonNode; synced: JsonNode; [k: string]: unknown };
@@ -106,12 +106,4 @@ export function mergeBookmarksFile(path: string, imported: Bookmarks, folderTitl
   const next = { ...json, checksum: bookmarkChecksum(nextRoots), roots: nextRoots, version: 1 };
   writeAtomically(path, JSON.stringify(next, null, 3));
   return { added };
-}
-
-export function writeAtomically(path: string, text: string): void {
-  mkdirSync(dirname(path), { recursive: true });
-  const tmp = `${path}.perch-import-${process.pid}`;
-  writeFileSync(tmp, text, { mode: 0o600 });
-  chmodSync(tmp, 0o600);
-  renameSync(tmp, path);
 }

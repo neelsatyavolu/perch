@@ -9,7 +9,9 @@ import { VERSION } from "../daemon/daemon";
 import type { ApproveAsk, OnEnd } from "../daemon/protocol";
 import { parseArgs, UsageError } from "./args";
 import type { DaemonClient } from "./client";
-import { openDaemon, type CliIO } from "./io";
+import { defaultSession, openDaemon, type CliIO } from "./io";
+import { CLIENT_NAME } from "../daemon/keychain";
+import { SESSION_ID } from "../daemon/protocol";
 
 const PROTOCOL = "2025-06-18";
 const INSTRUCTIONS = "Perch is the user's own browser. You work in your own tab group. Read pages with snapshot and act by ref. Sends, posts, deletes, uploads and payments wait for the user's approval; do not retry a declined action. Run `perch guide` for more.";
@@ -150,12 +152,17 @@ export async function runMcp(argv: string[], io: CliIO, transport: Transport = {
   const onEnd = a.options.get("--on-end") ?? "close";
   if (onEnd !== "close" && onEnd !== "sleep") throw new UsageError("--on-end is close or sleep");
   const send = (msg: Rpc) => transport.write(`${JSON.stringify(msg)}\n`);
+  // An app that launched the agent (agterm, agmux) names its session in PERCH_CLIENT and
+  // PERCH_SESSION. They win over the flags of a `perch skill install` entry, so the agent's tabs
+  // belong to the tab or thread it runs in.
+  const envClient = io.env.PERCH_CLIENT && CLIENT_NAME.test(io.env.PERCH_CLIENT) ? io.env.PERCH_CLIENT : undefined;
+  const envSession = io.env.PERCH_SESSION && SESSION_ID.test(io.env.PERCH_SESSION) ? io.env.PERCH_SESSION : undefined;
   const proxy = new McpProxy(
     // Approvals go through the client; there is no terminal on an MCP connection.
     { ...io, ask: undefined },
     {
-      client: a.options.get("--client"),
-      session: a.options.get("--session") ?? io.env.PERCH_SESSION ?? `mcp-${process.pid}`,
+      client: envClient ?? a.options.get("--client"),
+      session: envSession ?? a.options.get("--session") ?? `mcp-${process.pid}`,
       agent: a.options.get("--agent"),
       title: a.options.get("--title") ?? basename(io.cwd),
       onEnd,

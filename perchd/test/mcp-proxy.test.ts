@@ -16,7 +16,7 @@ const paths = perchPaths({ PERCH_HOME: home.dir });
 let daemon: Daemon;
 
 beforeAll(async () => {
-  daemon = await startDaemon({ paths, keychain, launch: () => Browser.launch({ userDataDir: profile.dir }), graceMs: 50 });
+  daemon = await startDaemon({ paths, keychain, launch: () => Browser.launch({ userDataDir: profile.dir }), graceMs: 50, confirm: async () => false });
 });
 afterAll(async () => {
   await daemon.stop();
@@ -26,7 +26,7 @@ afterAll(async () => {
 });
 
 /** An MCP client on the other end of `perch mcp`, in this process. */
-function mcpClient(argv: string[], answer: (request: any) => object | null = () => null) {
+function mcpClient(argv: string[], answer: (request: any) => object | null = () => null, extraEnv: Record<string, string> = {}) {
   const queue: string[] = [];
   let wake: (() => void) | null = null;
   let ended = false;
@@ -43,7 +43,7 @@ function mcpClient(argv: string[], answer: (request: any) => object | null = () 
       await new Promise<void>((r) => (wake = r));
     }
   }
-  const done = runMcp(argv, { env: { PERCH_HOME: home.dir }, cwd: "/work/perch", keychain, stdout: () => {}, stderr: () => {}, autostart: false }, {
+  const done = runMcp(argv, { env: { PERCH_HOME: home.dir, ...extraEnv }, cwd: "/work/perch", keychain, stdout: () => {}, stderr: () => {}, autostart: false }, {
     lines: lines(),
     write: (line) => {
       const msg = JSON.parse(line);
@@ -112,5 +112,14 @@ test("a client that cannot show approvals has risky actions declined", async () 
   expect(daemon.manager.get("agterm", "T2")?.label).toBe("Codex · Docs");
   const unknown = await c.rpc("resources/list");
   expect(unknown.error.code).toBe(-32601);
+  await c.end();
+}, 60_000);
+
+test("an agent started by agterm or agmux works in that tab's session, even through a perch skill install entry", async () => {
+  const c = mcpClient(["--client", "claude-code"], () => null, { PERCH_CLIENT: "agterm", PERCH_SESSION: "TAB-5" });
+  await c.rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "claude-code", version: "3" } });
+  await c.rpc("tools/call", { name: "navigate", arguments: { url: site.url("/mail.html") } });
+  expect(daemon.manager.get("agterm", "TAB-5")?.label).toBe("Claude Code · perch");
+  expect(daemon.manager.get("claude-code", "TAB-5")).toBeUndefined();
   await c.end();
 }, 60_000);

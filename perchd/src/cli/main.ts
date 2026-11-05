@@ -14,7 +14,9 @@ export type { CliIO } from "./io";
 
 const USAGE = `usage: perch <command>
 
-Browser (in this terminal's own tab group; add --session <name> for another):
+  perch "<task>"                    hand a whole task to an agent (same as perch exec)
+
+Browser (in this terminal window's own tab group, or PERCH_SESSION's; --session <name> for another):
   perch open <url>                 open a page in a new tab
   perch tabs                       every tab and who owns it
   perch snapshot [--full]          read the current tab
@@ -72,9 +74,16 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
     io.stdout(USAGE);
     return name ? 0 : 64;
   }
-  // `perch <url>` opens it, as `aside <url>` does.
+  // `perch <url>` opens it and `perch "<task>"` runs it, as `aside <url>` and `aside "<task>"` do.
   const looksLikeUrl = /^(https?:\/\/|[\w-]+(\.[\w-]+)+(\/|$))/i.test(name);
-  const command: Command | undefined = Object.hasOwn(commands, name) ? commands[name] : looksLikeUrl ? (_rest, io2) => browserCommands.open!(argv, io2) : undefined;
+  const looksLikePrompt = /\s/.test(name.trim()) && !name.startsWith("-");
+  const command: Command | undefined = Object.hasOwn(commands, name)
+    ? commands[name]
+    : looksLikeUrl
+      ? (_rest, io2) => browserCommands.open!(argv, io2)
+      : looksLikePrompt
+        ? (_rest, io2) => commands.exec!(argv, io2)
+        : undefined;
   if (!command) {
     io.stderr(`perch: unknown command "${name}"\n${USAGE}`);
     return 64;

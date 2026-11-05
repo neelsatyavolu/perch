@@ -2,9 +2,9 @@
 
 import { existsSync, mkdirSync, openSync } from "node:fs";
 import { basename } from "node:path";
-import type { ApproveAsk } from "../daemon/protocol";
+import { SESSION_ID, type ApproveAsk } from "../daemon/protocol";
 import { ClientRegistry } from "../daemon/clients";
-import { MacKeychain, type Keychain } from "../daemon/keychain";
+import { CLIENT_NAME, MacKeychain, type Keychain } from "../daemon/keychain";
 import { perchPaths, type PerchPaths } from "../daemon/paths";
 import { connect, DaemonNotRunning, type DaemonClient } from "./client";
 import { selfCommand } from "./self";
@@ -34,6 +34,25 @@ export type SessionOptions = {
 
 const START_TIMEOUT_MS = 15_000;
 
+/** Terminal apps that give each window or pane its own id, in the order they are checked. */
+const TERMINAL_IDS = ["TERM_SESSION_ID", "ITERM_SESSION_ID", "TMUX_PANE", "WEZTERM_PANE", "KITTY_WINDOW_ID", "AGTERM_TAB_ID"];
+
+/**
+ * The session a command works in: PERCH_SESSION (agterm and agmux set it to the tab or thread),
+ * else one per terminal window or pane, else "default".
+ */
+export function defaultSession(env: Record<string, string | undefined>): string {
+  if (env.PERCH_SESSION && SESSION_ID.test(env.PERCH_SESSION)) return env.PERCH_SESSION;
+  const id = TERMINAL_IDS.map((k) => env[k]).find((v) => v && v.trim());
+  if (!id) return "default";
+  return `term-${id.replace(/[^A-Za-z0-9._:-]+/g, "-").replace(/^-+|-+$/g, "")}`.slice(0, 80);
+}
+
+/** The client a command connects as: PERCH_CLIENT when an app such as agterm set it, else "cli". */
+export function defaultClient(env: Record<string, string | undefined>): string {
+  return env.PERCH_CLIENT && CLIENT_NAME.test(env.PERCH_CLIENT) ? env.PERCH_CLIENT : "cli";
+}
+
 export function pathsFor(io: CliIO): PerchPaths {
   return perchPaths(io.env);
 }
@@ -62,7 +81,7 @@ export async function openDaemon(io: CliIO, opts: SessionOptions = {}): Promise<
   const paths = pathsFor(io);
   // Nothing to talk to: say so before touching the Keychain.
   if (io.autostart === false && !existsSync(paths.socket)) throw new DaemonNotRunning();
-  const client = opts.client ?? "cli";
+  const client = opts.client ?? defaultClient(io.env);
   const registry = new ClientRegistry(paths.clientsFile, io.keychain ?? new MacKeychain());
   const token = await registry.token(client);
   const ask = io.ask;
@@ -72,7 +91,7 @@ export async function openDaemon(io: CliIO, opts: SessionOptions = {}): Promise<
       hello: {
         client,
         token,
-        session: opts.session ?? io.env.PERCH_SESSION ?? "default",
+        session: opts.session ?? defaultSession(io.env),
         title: opts.title ?? basename(io.cwd),
         agent: opts.agent ?? client,
         persistent: opts.persistent ?? false,

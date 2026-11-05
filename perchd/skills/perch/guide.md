@@ -33,7 +33,7 @@ perch repl "document.title"
 perch status · perch sessions · perch session end [--sleep]
 ```
 
-Add `--session <name>` to keep separate work in separate tab groups.
+Each terminal window (or tmux pane) has its own session; inside agterm and agmux the tab or thread is the session (`PERCH_SESSION`). Add `--session <name>` to keep separate work in separate tab groups.
 
 ## Approval
 

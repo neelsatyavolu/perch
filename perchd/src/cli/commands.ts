@@ -122,7 +122,8 @@ export const sessionCommands: Record<string, (argv: string[], io: CliIO) => Prom
   async focus(argv, io) {
     const a = parseArgs(argv, { options: [...SESSION, "--client"] });
     const session = a.options.get("--session");
-    await withDaemon(io, undefined, (c) => c.request("focus", session ? { session } : {}), a.options.get("--client"));
+    // A mark in agterm or agmux can outlive perchd; clicking it must not start a browser.
+    await withDaemon({ ...io, autostart: false }, undefined, (c) => c.request("focus", session ? { session } : {}), a.options.get("--client"));
     return 0;
   },
   async clients(argv, io) {
@@ -135,7 +136,8 @@ export const sessionCommands: Record<string, (argv: string[], io: CliIO) => Prom
     };
     const picked = call[action];
     if (!picked || (action !== "list" && !name) || (action === "mode" && !mode)) throw new UsageError("usage: perch clients [list | revoke <name> | allow <name> | mode <name> ask|guard|skip]");
-    io.stdout(formatClients(await withDaemon(io, undefined, (c) => c.request<ClientRecord[]>(...picked))));
+    if (action === "allow" || action === "mode") io.stderr("If this lets the client do more, Perch asks you to confirm in a dialog.\n");
+    io.stdout(formatClients(await withDaemon(io, undefined, (c) => c.request<ClientRecord[]>(...picked), "cli")));
     return 0;
   },
 };

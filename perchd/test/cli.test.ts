@@ -2,6 +2,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { main, type CliIO } from "../src/cli/main";
+import { defaultClient, defaultSession } from "../src/cli/io";
 import { Browser } from "../src/browser/browser";
 import { startDaemon, type Daemon } from "../src/daemon/daemon";
 import { MemoryKeychain } from "../src/daemon/keychain";
@@ -16,7 +17,7 @@ const keychain = new MemoryKeychain();
 let daemon: Daemon;
 
 beforeAll(async () => {
-  daemon = await startDaemon({ paths: perchPaths({ PERCH_HOME: home.dir }), keychain, launch: () => Browser.launch({ userDataDir: profile.dir }) });
+  daemon = await startDaemon({ paths: perchPaths({ PERCH_HOME: home.dir }), keychain, launch: () => Browser.launch({ userDataDir: profile.dir }), confirm: async () => true });
 });
 afterAll(async () => {
   await daemon.stop();
@@ -97,3 +98,32 @@ test("errors, usage and admin commands", async () => {
   const away = await main(["status"], { env: { PERCH_HOME: join(home.dir, "elsewhere") }, cwd: "/", keychain, stdout: () => {}, stderr: () => {}, autostart: false });
   expect(away).toBe(3);
 }, 60_000);
+
+test("each terminal window gets its own session; agterm and agmux name theirs", () => {
+  expect(defaultSession({ TERM_SESSION_ID: "w0t1p0:4F2A-9" })).toBe("term-w0t1p0:4F2A-9");
+  expect(defaultSession({ TMUX_PANE: "%3" })).toBe("term-3");
+  expect(defaultSession({ PERCH_SESSION: "tab-7", TERM_SESSION_ID: "w0t1p0:x" })).toBe("tab-7");
+  expect(defaultSession({ PERCH_SESSION: "bad id", ITERM_SESSION_ID: "w1t0p0:AB" })).toBe("term-w1t0p0:AB");
+  expect(defaultSession({})).toBe("default");
+  expect(defaultClient({ PERCH_CLIENT: "agterm" })).toBe("agterm");
+  expect(defaultClient({ PERCH_CLIENT: "Not Valid" })).toBe("cli");
+  expect(defaultClient({})).toBe("cli");
+});
+
+test("a quoted task runs as perch exec, and focus never starts perchd", async () => {
+  let err = "";
+  const io: CliIO = { env: {}, cwd: "/", keychain, stdout: () => {}, stderr: (t) => void (err += t), autostart: true };
+  const original = process.stderr.write.bind(process.stderr);
+  let execErr = "";
+  process.stderr.write = ((chunk: string) => ((execErr += chunk), true)) as typeof process.stderr.write;
+  try {
+    expect(await main(["find the cheapest flight", "--model", "nope/x"], io)).toBe(64);
+  } finally {
+    process.stderr.write = original;
+  }
+  expect(execErr).toContain('provider "nope"');
+  expect(err).not.toContain("unknown command");
+
+  const away = await main(["focus", "--client", "agterm", "--session", "T1"], { ...io, env: { PERCH_HOME: join(home.dir, "gone") } });
+  expect(away).toBe(3);
+});

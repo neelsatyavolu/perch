@@ -9,3 +9,5 @@ scripts/maintainer.local
 perch-build.local.json
 perchd/node_modules/
 bench/data/
+bench/results/
+bench/*.log

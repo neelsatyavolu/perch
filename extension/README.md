@@ -16,7 +16,7 @@ No remote code, no telemetry. The only network requests it makes are the link pr
 | Tracking parameters | One DNR `removeParams` rule on page loads (`src/params`), plus "Copy link without tracking" in the link menu. |
 | Reader view | Mozilla Readability, sanitised, in a closed shadow root. Menu, panel, or ⌃⇧R. |
 | Video | Picture in picture when a playing video with sound is hidden; `[` and `]` change speed; speed menu on videos; ⌃⇧P. |
-| Link preview | Hold Shift over a link: title, description, image and the cleaned address, with "Open in new tab". |
+| Link preview | Hold Shift over a link: title, description, image and the cleaned address, with "Open in new tab". A public page cannot preview loopback, LAN or intranet addresses: the host check covers trailing dots and single-label names, and a session rule blocks the worker's own requests to private addresses on every redirect hop. The image is fetched by the worker and shown as a `data:` URL. |
 | Full-page screenshot | Scroll-and-stitch capture, then a markup page (pen, box, undo, copy, save). ⇧⌘2. |
 | Authenticator | TOTP codes (RFC 6238). Each account is encrypted whole with AES-256-GCM under a non-extractable key; stored in `storage.local`, never `storage.sync`. QR import from the visible page; fill only on the site the code was added from. Off in release builds until the key can live in the Keychain (see Limits). |
 | Site panel | Blocked counts, cookie-banner result, protections switch, permissions, cookie count and "Forget this site". |
@@ -44,6 +44,11 @@ have been downloaded. Integration tests need Chrome for Testing (see `perchd`).
 - Regex filters and options the compiler does not understand are skipped and counted.
 - Automatic picture in picture needs a recent user gesture in stock Chromium; the Perch build turns
   on Chromium's browser-initiated automatic picture in picture to cover the rest.
+- Link preview cannot see what a public name resolves to, so a public name pointing at a private
+  address gets through. The Perch build should apply Chromium's local network access checks to
+  the extension's fetches in the network service. Arc-style peek (a live page in a floating card
+  that expands into a tab) needs a WebContents in a bubble and is left to the Chromium build; the
+  extension shows a metadata card.
 - Screenshots scroll the page. The Perch build can use `Page.captureScreenshot` with
   `captureBeyondViewport` instead.
 - The authenticator's key can only live in IndexedDB today, in the same profile folder as the

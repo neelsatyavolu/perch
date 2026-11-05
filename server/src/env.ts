@@ -8,7 +8,6 @@ export type AppEnv = {
   RELAY: DurableObjectNamespace<RelayRoom>;
   LIMITER: DurableObjectNamespace<RateLimiter>;
   API_ORIGIN: string;
-  RELAY_ORIGIN: string;
   RP_ID: string;
   RP_NAME: string;
   PASSKEY_ORIGINS: string;

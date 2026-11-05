@@ -14,7 +14,6 @@
   ],
   "vars": {
     "API_ORIGIN": "https://api.perchbrowser.com",
-    "RELAY_ORIGIN": "wss://relay.perchbrowser.com",
     "RP_ID": "perchbrowser.com",
     "RP_NAME": "Perch",
     "PASSKEY_ORIGINS": "https://perchbrowser.com,https://api.perchbrowser.com",

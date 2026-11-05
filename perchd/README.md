@@ -33,6 +33,7 @@ Add `--show` to watch the browser and `--mode ask|guard|skip` to change the perm
 | `src/page/screenshot.ts`, `repl.ts` | Masked screenshots, coordinate clicks, guarded JavaScript |
 | `src/agent/` | Tools, permission modes, audit log, the task loop and system prompt |
 | `src/models/` | Responses API (Codex, Grok), Anthropic Messages API, a scripted fake |
+| `src/sync/` | End-to-end encrypted sync client for `server/`: item encryption, key wrapping and recovery, the sync engine and merge rules, pairing, the encrypted relay channel, Keychain storage |
 
 ## Rules this code keeps
 
@@ -40,3 +41,4 @@ Add `--show` to watch the browser and `--mode ask|guard|skip` to change the perm
 - Saved secrets never reach a model: secret fields read as `••••` in snapshots, are covered in screenshots and cannot be read from the REPL.
 - Sends, posts, deletes and uploads wait for approval in Guard mode; payments and password changes always wait.
 - Every action is written to the audit log.
+- Sync data and relay messages are encrypted on the Mac before they leave it; sync secrets live in the Keychain (`src/sync/keychain.ts`).

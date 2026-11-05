@@ -102,7 +102,10 @@ async function assertHittable(tab: Tab, target: Node, point: Point): Promise<voi
     returnByValue: true,
   });
   if (inside.result.value) return;
-  throw new Error(`covered by ${await describe(tab, { objectId: hit, session: target.session })}`);
+  const cover = await describe(tab, { objectId: hit, session: target.session });
+  // Dialogs and banners are the usual covers, and they can be closed.
+  const hint = /^(dialog|alertdialog|iframe|div|section|aside|element)( |$)/.test(cover) ? "; close it first (its Close, Reject or X button), or press Escape" : "";
+  throw new Error(`covered by ${cover}${hint}`);
 }
 
 /**

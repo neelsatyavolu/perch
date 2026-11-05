@@ -112,7 +112,7 @@ test("clicking a button hidden behind a dialog says what covers it", async () =>
   await click(tab, snap.refs, refOf(snap, 'button "Show notice"'));
   const result = await click(tab, snap.refs, refOf(snap, 'button "Sign in"'));
   expect(result.ok).toBe(false);
-  expect(!result.ok && result.error).toMatch(/^covered by /);
+  expect(!result.ok && result.error).toMatch(/^covered by .*; close it first/);
   expect(await status(tab)).toBe("");
   await tab.close();
 });

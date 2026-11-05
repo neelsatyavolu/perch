@@ -71,3 +71,21 @@ Shared files touched: `perchd/src/agent/loop.ts` (accept extra tools and a promp
 - **Skill import from a URL or git repo**: folder import covers the importers named here; network fetch of skills needs its own review of what runs.
 - **MCP resources, prompts, sampling and elicitation**: Perch's agent only needs tools now; the client answers `ping` and declines other server requests.
 - **Skill scripts**: bodies and file lists are shown to the agent; running a skill's scripts needs the file-access approvals in 7.4 and comes with the shell tool.
+
+## How to try it (until the settings page exists)
+
+From `perchd/`:
+
+```
+bun run src/mcp-client/cli.ts import                 # preview: what Perch found, which secrets go to the Keychain
+bun run src/mcp-client/cli.ts import --save all      # or --save github,linear
+bun run src/mcp-client/cli.ts list
+bun run src/mcp-client/cli.ts tools github           # asks before running a stdio server for the first time
+bun run src/mcp-client/cli.ts trust github | disable github | remove github
+bun run src/mcp-client/cli.ts skills import --save all
+bun run src/mcp-client/cli.ts skills                 # built-in and imported skills
+```
+
+Settings go to `~/Library/Application Support/Perch` (`--dir` to use another folder); secrets go to the login Keychain under the service "Perch". In code, pass `extraTools: combineExtraTools(mcpExtraTools(manager), skillExtraTools(catalog))` to `runTask`.
+
+Packaging note: the built-in skills are read from `perchd/skills/` next to the source (`BUILT_IN_SKILLS_DIR`). The compiled perchd binary needs that folder shipped in the app bundle and the path passed to `SkillCatalog.load({ builtInDir })`.

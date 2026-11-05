@@ -39,7 +39,7 @@ export class Vault {
 
   async seal(id: string, data: Uint8Array | string): Promise<Uint8Array> {
     const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
-    const plain = typeof data === "string" ? encoder.encode(data) : data;
+    const plain = typeof data === "string" ? encoder.encode(data) : Uint8Array.from(data);
     const sealed = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: encoder.encode(id) }, this.key, plain));
     const out = new Uint8Array(1 + IV_BYTES + sealed.length);
     out[0] = VERSION;
@@ -52,9 +52,9 @@ export class Vault {
     if (blob.length < 1 + IV_BYTES + 16 || blob[0] !== VERSION) throw new Error(`Record ${id} could not be decrypted: unknown format`);
     try {
       const plain = await crypto.subtle.decrypt(
-        { name: "AES-GCM", iv: blob.subarray(1, 1 + IV_BYTES), additionalData: encoder.encode(id) },
+        { name: "AES-GCM", iv: Uint8Array.from(blob.subarray(1, 1 + IV_BYTES)), additionalData: encoder.encode(id) },
         this.key,
-        blob.subarray(1 + IV_BYTES),
+        Uint8Array.from(blob.subarray(1 + IV_BYTES)),
       );
       return new Uint8Array(plain);
     } catch {

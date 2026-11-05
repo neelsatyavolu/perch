@@ -5,7 +5,7 @@ import { Vault } from "../src/app/vault";
 test("a sealed record opens with the same id and key", async () => {
   const vault = await Vault.open(memoryKeychain(), "Default");
   const blob = await vault.sealJson("chat-1", { hello: "world" });
-  expect(await vault.openJson("chat-1", blob)).toEqual({ hello: "world" });
+  expect(await vault.openJson<{ hello: string }>("chat-1", blob)).toEqual({ hello: "world" });
 });
 
 test("the ciphertext holds no plaintext and differs every time", async () => {

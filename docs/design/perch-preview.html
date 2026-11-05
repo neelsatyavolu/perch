@@ -23,10 +23,10 @@
 
 /* Window tokens: defaults are Ink + Blue; the theme and accent pickers overwrite them on .win. */
 .win {
-  --canvas: #000000; --card: #0A0A0C; --raised: #111114; --hover: rgba(255,255,255,0.05);
+  --canvas: #000000; --card: #0E0E10; --raised: #1A1A1E; --hover: rgba(255,255,255,0.08);
   --ink: #FCFDFF; --body: rgba(252,253,255,0.86); --mute: #A1A4A5;
   --hair: rgba(255,255,255,0.06); --hair-strong: rgba(255,255,255,0.14);
-  --accent: #4C8DFF; --accent-soft: rgba(76,141,255,0.14); --danger: #FF4D5E;
+  --accent: #4C8DFF; --accent-soft: color-mix(in srgb, #4C8DFF 22%, #1A1A1E); --danger: #FF453A;
   --btn-bg: #FCFDFF; --btn-fg: #000000; --pop: 0 8px 24px rgba(0,0,0,0.45);
 }
 
@@ -61,6 +61,7 @@ button:focus-visible { outline: 2px solid var(--page-accent); outline-offset: 2p
 /* ---------- Window ---------- */
 .win { min-width: 1080px; height: 720px; display: flex; flex-direction: column; overflow: hidden; background: var(--canvas); color: var(--body);
   border-radius: 12px; border: 1px solid var(--hair-strong); font-size: 13px; line-height: 1.4; transition: background 180ms var(--ease); }
+.win [hidden] { display: none !important; }
 .win svg.i { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 .ib { width: 28px; height: 28px; display: inline-grid; place-items: center; border-radius: 8px; color: var(--mute); border: 0; background: none; cursor: pointer; transition: background 120ms var(--ease), color 120ms var(--ease); }
 .ib:hover, .ib[aria-pressed="true"] { background: var(--hover); color: var(--ink); }
@@ -73,10 +74,17 @@ button:focus-visible { outline: 2px solid var(--page-accent); outline-offset: 2p
 
 .strip { height: 36px; display: flex; align-items: flex-end; gap: 2px; padding: 0 8px 0 12px; flex: none; }
 .lights { display: flex; gap: 8px; align-self: center; margin-right: 12px; }
-.lights span { width: 12px; height: 12px; border-radius: 50%; background: var(--hair-strong); }
-.tab { height: 30px; width: 188px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 10px; border-radius: 8px 8px 0 0; color: var(--mute); min-width: 0; }
+.lights span { width: 12px; height: 12px; border-radius: 50%; }
+.lights span:nth-child(1) { background: #FF5F57; } .lights span:nth-child(2) { background: #FEBC2E; } .lights span:nth-child(3) { background: #28C840; }
+.tab { height: 30px; flex: 1 1 0; min-width: 72px; max-width: 220px; display: flex; align-items: center; gap: 8px; padding: 0 4px 0 10px; border-radius: 8px 8px 0 0; color: var(--mute); position: relative; }
+.tab:not(.active)::after { content: ""; position: absolute; right: 0; top: 7px; width: 1px; height: 16px; background: var(--hair-strong); }
+.tab .x { width: 20px; height: 20px; opacity: 0; flex: none; }
+.tab .x svg.i { width: 12px; height: 12px; }
+.tab:hover .x, .tab.active .x, .tab .x:focus-visible { opacity: 1; }
+.tgroup { align-self: center; height: 20px; padding: 0 8px; border-radius: 8px; background: var(--accent-soft); color: var(--ink); font-size: 11px; display: inline-flex; align-items: center; margin: 0 2px 0 4px; flex: none; }
 .tab.active { background: var(--card); color: var(--ink); box-shadow: inset 0 1px 0 var(--hair-strong), inset 1px 0 0 var(--hair), inset -1px 0 0 var(--hair); }
-.tab.asleep { opacity: 0.45; }
+.tab.asleep { color: var(--mute); }
+.tab .moon { width: 12px; height: 12px; flex: none; }
 .tab { cursor: default; }
 .tab:not(.active):hover { background: var(--hover); }
 .tab-hint { position: absolute; right: 12px; bottom: 12px; z-index: 2; height: 28px; padding: 0 10px; border-radius: 8px; display: none; align-items: center; gap: 8px; font-size: 12px; background: var(--raised); color: var(--body); border: 1px solid var(--hair-strong); box-shadow: var(--pop); }
@@ -126,21 +134,33 @@ button:focus-visible { outline: 2px solid var(--page-accent); outline-offset: 2p
 .chip2 { font: 12px var(--mono); color: var(--mute); padding: 2px 6px; border-radius: 6px; background: var(--raised); }
 
 /* ---------- New tab ---------- */
-.v-ntp { overflow-y: auto; justify-content: center; }
-.ntp { width: 760px; padding: 72px 0 40px; display: grid; gap: 40px; align-content: start; }
+.v-ntp { min-width: 0; }
+.rail { width: 200px; flex: none; border-right: 1px solid var(--hair); padding: 12px 8px; display: grid; align-content: start; gap: 2px; background: var(--canvas); }
+.rail .act { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border-radius: 8px; color: var(--body); }
+.rail .act:hover { background: var(--hover); }
+.ntp-main { flex: 1; overflow-y: auto; display: flex; justify-content: center; }
+.ntp { width: 640px; padding: 48px 0 32px; display: grid; gap: 32px; align-content: start; }
+.hints2 { color: var(--mute); font-size: 12px; display: flex; gap: 6px; align-items: center; justify-content: center; margin-top: -20px; }
+.mode { margin-left: auto; display: inline-flex; padding: 2px; border-radius: 8px; background: var(--card); border: 1px solid var(--hair); }
+.mode button { height: 26px; padding: 0 10px; border: 0; border-radius: 6px; background: none; color: var(--mute); font: 500 12px var(--sans); cursor: pointer; }
+.mode button[aria-pressed="true"] { background: var(--raised); color: var(--ink); }
 .ntp .mark { justify-self: center; }
-.box { justify-self: center; width: 640px; height: 48px; display: flex; align-items: center; gap: 12px; padding: 0 12px 0 16px; border-radius: 12px; background: var(--raised); border: 1px solid var(--hair-strong); color: var(--mute); font-size: 15px; }
+.box { justify-self: center; width: 640px; height: 48px; display: flex; align-items: center; gap: 12px; padding: 0 8px 0 16px; border-radius: 12px; background: var(--raised); border: 1px solid var(--hair-strong); color: var(--mute); font-size: 15px; }
 .box .hints { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 12px; }
 .sec-h { display: flex; align-items: center; gap: 4px; }
 .sec-h .seg2 button { font: 500 13px/1 var(--sans); background: none; border: 0; color: var(--mute); height: 28px; padding: 0 10px; border-radius: 8px; cursor: pointer; }
 .sec-h .seg2 button[aria-pressed="true"] { background: var(--raised); color: var(--ink); }
 .sec-h a { margin-left: auto; color: var(--mute); text-decoration: none; font-size: 12px; }
 .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-.ccard { background: var(--canvas); border: 1px solid var(--hair-strong); border-radius: 12px; padding: 14px; display: grid; gap: 6px; align-content: start; min-height: 132px; cursor: pointer; transition: border-color 120ms var(--ease); text-align: left; font: inherit; color: inherit; }
-.ccard:hover { border-color: var(--mute); }
+.ccard { background: var(--raised); border: 1px solid transparent; border-radius: 12px; padding: 16px; display: grid; gap: 6px; align-content: start; min-height: 112px; cursor: pointer; transition: background 120ms var(--ease); text-align: left; font: inherit; color: inherit; }
+.ccard:hover { background: color-mix(in srgb, var(--ink) 8%, var(--raised)); }
+.ccard.sug { background: none; min-height: 80px; padding: 12px; }
+.ccard.sug:hover { background: var(--hover); }
+.ccard.sug .tile { width: 24px; height: 24px; border-radius: 6px; }
+.ccard.sug .tile svg.i { width: 14px; height: 14px; }
 .ccard .when { color: var(--mute); font-size: 12px; display: flex; align-items: center; gap: 6px; }
 .ccard .tt { color: var(--ink); font-weight: 500; font-size: 14px; }
-.ccard .sn { color: var(--body); font-size: 13px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ccard .sn { color: var(--body); font-size: 13px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .tile { width: 32px; height: 32px; border-radius: 8px; background: var(--raised); color: var(--ink); display: grid; place-items: center; margin-bottom: 6px; }
 .sug-h { color: var(--ink); font-weight: 500; font-size: 14px; }
 
@@ -183,7 +203,10 @@ button:focus-visible { outline: 2px solid var(--page-accent); outline-offset: 2p
 .me { justify-self: end; max-width: 88%; background: var(--raised); color: var(--ink); padding: 10px 12px; border-radius: 12px; }
 .reply { color: var(--body); display: grid; gap: 10px; }
 .reply p { margin: 0; }
-.reply a { color: var(--accent); text-decoration: none; }
+.reply a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.meta-row { display: flex; align-items: center; gap: 2px; color: var(--mute); font-size: 12px; }
+.meta-row .ib { width: 24px; height: 24px; }
+.meta-row .ib svg.i { width: 14px; height: 14px; }
 .steps { display: flex; align-items: center; gap: 8px; color: var(--mute); font: 13px var(--sans); cursor: pointer; background: none; border: 0; padding: 0; text-align: left; }
 .steps:hover { color: var(--ink); }
 .steps svg.i { width: 14px; height: 14px; transition: transform 120ms var(--ease); }
@@ -194,10 +217,10 @@ button:focus-visible { outline: 2px solid var(--page-accent); outline-offset: 2p
 .thumb { height: 64px; border-radius: 8px; background: #fff; border: 1px solid var(--hair-strong); padding: 6px; display: grid; gap: 4px; align-content: start; }
 .thumb i { display: block; height: 4px; border-radius: 2px; background: #E3E6EA; }
 .thumb i.w { width: 60%; } .thumb i.t { background: #C9D7F5; width: 85%; } .thumb i.c { width: 30%; background: #9FB7EC; height: 3px; }
-.approve { border: 1px solid var(--hair-strong); border-radius: 12px; background: var(--card); box-shadow: var(--pop); }
+.approve { border: 1px solid var(--hair-strong); border-radius: 12px; background: var(--raised); }
 .approve .ah { padding: 12px 14px 0; color: var(--ink); font-weight: 500; font-size: 13px; }
 .approve .meta { padding: 2px 14px 0; color: var(--mute); font-size: 12px; }
-.approve blockquote { margin: 10px 14px; padding: 10px 12px; border-radius: 8px; background: var(--raised); color: var(--body); font-size: 13px; line-height: 1.5; }
+.approve blockquote { margin: 10px 14px; padding: 10px 12px; border-radius: 8px; background: var(--card); color: var(--body); font-size: 13px; line-height: 1.5; }
 .approve .act { display: flex; gap: 8px; padding: 0 14px 14px; }
 .btn { height: 32px; padding: 0 14px; border-radius: 8px; font: 500 13px/1 var(--sans); cursor: pointer; border: 1px solid var(--hair-strong); background: var(--raised); color: var(--ink); transition: opacity 120ms var(--ease); }
 .btn.primary { background: var(--btn-bg); color: var(--btn-fg); border-color: transparent; }
@@ -211,7 +234,8 @@ button:focus-visible { outline: 2px solid var(--page-accent); outline-offset: 2p
 .field { color: var(--mute); font-size: 14px; padding: 2px 4px; min-height: 22px; }
 .crow { display: flex; align-items: center; gap: 2px; }
 .under { display: flex; align-items: center; gap: 4px; padding: 0 12px 12px; color: var(--mute); font-size: 12px; }
-.pill { height: 24px; display: inline-flex; align-items: center; gap: 4px; padding: 0 8px; border-radius: 6px; }
+.pill { height: 24px; display: inline-flex; align-items: center; gap: 4px; padding: 0 8px; border-radius: 6px; background: var(--raised); color: var(--body); cursor: pointer; }
+.pill:hover { color: var(--ink); }
 .pill svg.i { width: 13px; height: 13px; }
 
 /* ---------- Memory setup ---------- */
@@ -230,7 +254,7 @@ button:focus-visible { outline: 2px solid var(--page-accent); outline-offset: 2p
 .sw2 { width: 32px; height: 20px; border-radius: 10px; background: var(--hair-strong); border: 0; position: relative; cursor: pointer; transition: background 120ms var(--ease); padding: 0; }
 .sw2::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--ink); transition: transform 120ms var(--ease); }
 .sw2[aria-checked="true"] { background: var(--accent); }
-.sw2[aria-checked="true"]::after { transform: translateX(12px); background: #FFFFFF; }
+.sw2[aria-checked="true"]::after { transform: translateX(12px); background: var(--btn-fg); }
 .panel-f { padding: 12px 16px 16px; display: grid; gap: 8px; }
 .panel-f .note { color: var(--mute); font-size: 12px; }
 .fact-g { padding: 12px 16px 4px; color: var(--mute); font-size: 12px; }
@@ -245,18 +269,18 @@ button:focus-visible { outline: 2px solid var(--page-accent); outline-offset: 2p
 .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width 240ms var(--ease); }
 
 /* ---------- Full-page chat ---------- */
-.chats { width: 232px; flex: none; border-right: 1px solid var(--hair); padding: 12px 8px; display: grid; align-content: start; gap: 2px; background: var(--canvas); }
+.chats { width: 200px; flex: none; border-right: 1px solid var(--hair); padding: 12px 8px; display: grid; align-content: start; gap: 2px; background: var(--canvas); }
 .chats .lbl { color: var(--mute); font-size: 12px; padding: 8px 10px 4px; }
 .row { height: 32px; display: flex; align-items: center; padding: 0 10px; border-radius: 8px; color: var(--body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row:hover { background: var(--hover); }
-.row.sel { background: var(--accent-soft); color: var(--ink); }
-.center { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--canvas); }
+.row.sel { background: var(--accent-soft); color: var(--ink); box-shadow: inset 2px 0 0 var(--accent); }
+.center { flex: 1; min-width: 480px; display: flex; flex-direction: column; background: var(--canvas); }
 .fc-h, .art-h { height: 44px; display: flex; align-items: center; gap: 4px; padding: 0 8px 0 20px; border-bottom: 1px solid var(--hair); }
 .center .thread { max-width: 640px; width: 100%; margin: 0 auto; padding: 24px 20px; }
 .artifact-card { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--accent); border-radius: 12px; background: var(--card); color: var(--ink); font-size: 13px; }
 .artifact-card .k { color: var(--mute); font-size: 12px; }
 .center .composer { max-width: 640px; width: calc(100% - 40px); margin: 0 auto 20px; }
-.art { width: 440px; flex: none; border-left: 1px solid var(--hair); display: flex; flex-direction: column; background: var(--card); }
+.art { width: 360px; flex: none; border-left: 1px solid var(--hair); display: flex; flex-direction: column; background: var(--card); }
 .art-b { padding: 20px; overflow-y: auto; display: grid; gap: 16px; align-content: start; }
 .art-b .big { font-size: 28px; color: var(--ink); font-weight: 500; letter-spacing: -0.01em; }
 .art-b .cap { color: var(--mute); font-size: 12px; }
@@ -294,11 +318,11 @@ button:focus-visible { outline: 2px solid var(--page-accent); outline-offset: 2p
     <div class="win" id="win" data-view="ntp">
       <div class="strip">
         <div class="lights"><span></span><span></span><span></span></div>
-        <div class="tab" data-tab="0"><span class="fav perch"><svg viewBox="0 0 1024 1024" width="12" height="12"><rect x="200" y="560" width="624" height="120" rx="20" style="fill:var(--ink)"/><circle cx="660" cy="440" r="120" style="fill:var(--accent)"/></svg></span><span class="t" id="tab0">New tab</span></div>
-        <div class="tab" data-tab="1"><span class="fav" style="background:#D9480F">M</span><span class="t">Inbox (3) · Mailroom</span></div>
-        <div class="tab" data-tab="2"><span class="fav" style="background:#1A73E8">C</span><span class="t">Week of Nov 3 · Calendar</span><span class="dot live agent-dot"></span></div>
-        <div class="tab" data-tab="3"><span class="fav" style="background:#24292F">P</span><span class="t">Pull requests · perch</span></div>
-        <div class="tab asleep" title="Asleep: memory saver"><span class="fav" style="background:#0E7C66">F</span><span class="t">SFO to HND, Dec 18</span></div>
+        <div class="tab" data-tab="0"><span class="fav perch"><svg viewBox="0 0 1024 1024" width="12" height="12"><rect x="200" y="560" width="624" height="120" rx="20" style="fill:var(--ink)"/><circle cx="660" cy="440" r="120" style="fill:var(--accent)"/></svg></span><span class="t" id="tab0">New tab</span><button class="ib x" aria-label="Close tab" data-i="x"></button></div>
+        <div class="tab" data-tab="1"><span class="fav" style="background:#D9480F">M</span><span class="t">Inbox (3) · Mailroom</span><button class="ib x" aria-label="Close tab" data-i="x"></button></div>
+        <span class="tgroup">Agent</span><div class="tab" data-tab="2"><span class="fav" style="background:#1A73E8">C</span><span class="t">Week of Nov 3 · Calendar</span><span class="dot agent-dot" title="The agent is using this tab"></span><button class="ib x" aria-label="Close tab" data-i="x"></button></div>
+        <div class="tab" data-tab="3"><span class="fav" style="background:#24292F">P</span><span class="t">Pull requests · perch</span><button class="ib x" aria-label="Close tab" data-i="x"></button></div>
+        <div class="tab asleep" title="Asleep: memory saver"><span class="fav" style="background:#0E7C66">F</span><span class="t">SFO to HND, Dec 18</span><svg class="i moon" viewBox="0 0 24 24" aria-label="Asleep"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></div>
         <button class="ib" aria-label="New tab" data-i="plus" style="align-self:center;margin-left:4px"></button>
         <div class="grow"></div>
         <div class="profile" title="A task is waiting for your approval"><span class="avatar">N</span><span class="dot agent-dot"></span><svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="m6 9 6 6 6-6"/></svg></div>
@@ -310,18 +334,27 @@ button:focus-visible { outline: 2px solid var(--page-accent); outline-offset: 2p
         <div class="omni" id="omni"></div>
         <button class="ib" aria-label="Split view" id="tb-split" data-i="split"></button>
         <button class="ib" aria-label="Agent sidebar" id="tb-side" data-i="panel"></button>
+        <button class="ib" aria-label="Perch menu" data-i="more"></button>
       </div>
 
       <div class="body">
         <!-- New tab -->
         <div class="view v-ntp">
+          <div class="rail">
+            <span class="act"><svg class="i" viewBox="0 0 24 24"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg>New chat</span>
+            <span class="act"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>Search chats</span>
+            <span class="lbl" style="color:var(--mute);font-size:12px;padding:12px 10px 4px">Recent</span>
+            <span class="row">Reply to Maya about Thursday</span><span class="row">Subscriptions from receipts</span><span class="row">Compare SFO to HND fares</span><span class="row">Summarise Priya's notes</span><span class="row">Find the Backrow party link</span>
+          </div>
+          <div class="ntp-main">
           <div class="ntp">
             <svg class="mark" width="48" height="48" viewBox="0 0 1024 1024" aria-hidden="true"><rect width="1024" height="1024" rx="228" style="fill:var(--raised)"/><rect x="272" y="560" width="480" height="88" rx="12" style="fill:var(--ink)"/><circle cx="632" cy="472" r="88" style="fill:var(--accent)"/></svg>
-            <div class="box"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>Search or ask<span class="hints"><span class="key">Tab</span>Google<span class="key">⌘↵</span>Ask</span></div>
+            <div class="box"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>Search or ask<span class="mode"><button aria-pressed="true" id="m-search">Search</button><button aria-pressed="false" id="m-ask">Ask</button></span></div>
+            <div class="hints2"><span class="key">Tab</span> Google · <span class="key">⌘↵</span> Ask</div>
             <div style="display:grid;gap:12px">
               <div class="sec-h"><span class="seg2"><button id="n-chats" aria-pressed="true">Chats</button><button id="n-routines" aria-pressed="false">Routines</button></span><a href="#" onclick="return false">All chats</a></div>
               <div class="cards" id="ntp-chats">
-                <button class="ccard" data-go="agent"><span class="when"><span class="dot live agent-dot"></span><span class="mono">2 min ago</span> · waiting for you</span><span class="tt">Reply to Maya about Thursday</span><span class="sn">Thursday 3:00 to 4:00 is free, so I added it to your calendar. The reply is ready to send when you approve.</span></button>
+                <button class="ccard" data-go="agent"><span class="when"><span class="mono">2 min ago</span> · waiting for your approval</span><span class="tt">Reply to Maya about Thursday</span><span class="sn">Thursday 3:00 to 4:00 is free, so I added it to your calendar. The reply is ready to send when you approve.</span></button>
                 <button class="ccard" data-go="chat"><span class="when mono">Yesterday</span><span class="tt">Subscriptions from receipts</span><span class="sn">9 active subscriptions, $112.43 a month. Two look unused: Cloud Notes and a second Music account.</span></button>
                 <button class="ccard"><span class="when mono">Nov 2</span><span class="tt">Compare SFO to HND fares</span><span class="sn">Cheapest nonstop is $684 on Northwind for Dec 18 to Jan 2. Prices dropped $41 since Tuesday.</span></button>
               </div>
@@ -334,17 +367,18 @@ button:focus-visible { outline: 2px solid var(--page-accent); outline-offset: 2p
             <div style="display:grid;gap:12px">
               <div class="sug-h">Suggested</div>
               <div class="cards">
-                <button class="ccard" data-go="memory"><span class="tile"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span><span class="tt">Set up your memory</span><span class="sn">Perch learns about you from the sources you choose, so you explain less.</span></button>
-                <button class="ccard"><span class="tile"><svg class="i" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></span><span class="tt">Find routines to automate</span><span class="sn">Perch looks for tasks you repeat and offers to run them on a schedule.</span></button>
-                <button class="ccard"><span class="tile"><svg class="i" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></span><span class="tt">Import from another browser</span><span class="sn">Open tabs, bookmarks, passwords, and Aside's memory and skills.</span></button>
+                <button class="ccard sug" data-go="memory"><span class="tile"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span><span class="tt">Set up your memory</span><span class="sn">Perch learns about you from the sources you choose, so you explain less.</span></button>
+                <button class="ccard sug"><span class="tile"><svg class="i" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></span><span class="tt">Find routines to automate</span><span class="sn">Perch looks for tasks you repeat and offers to run them on a schedule.</span></button>
+                <button class="ccard sug"><span class="tile"><svg class="i" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></span><span class="tt">Import from another browser</span><span class="sn">Open tabs, bookmarks, passwords, and Aside's memory and skills.</span></button>
               </div>
             </div>
+          </div>
           </div>
         </div>
 
         <!-- Agent at work -->
         <div class="view v-agent">
-          <div class="tab-hint" id="tab-hint"><span class="dot live"></span>Maya task waiting in Inbox · its side chat comes back when you return</div>
+          <div class="tab-hint" id="tab-hint">The Maya task is waiting in Inbox · its side chat comes back when you return</div>
           <div class="peek">Bars hidden <span class="key">⌘L</span> address bar <span class="key">⌃Tab</span> tabs</div>
           <div class="pages">
             <div class="pane"><div class="site">
@@ -384,7 +418,7 @@ button:focus-visible { outline: 2px solid var(--page-accent); outline-offset: 2p
             </div></div>
           </div>
           <aside class="side" id="side" aria-label="Agent">
-            <div class="side-h"><span class="dot live agent-dot"></span><span class="title">Reply to Maya about Thursday</span><button class="ib" aria-label="Recent chats" data-i="more"></button><button class="ib" aria-label="New chat" data-i="pen"></button><button class="ib" aria-label="Close sidebar" data-i="x" id="side-x"></button></div>
+            <div class="side-h"><span class="title">Reply to Maya about Thursday</span><button class="ib" aria-label="Recent chats" data-i="more"></button><button class="ib" aria-label="New chat" data-i="pen"></button><button class="ib" aria-label="Close sidebar" data-i="x" id="side-x"></button></div>
             <div class="thread">
               <div class="me">Tell Maya Thursday at 3 works and put it on my calendar</div>
               <div class="reply">
@@ -392,7 +426,7 @@ button:focus-visible { outline: 2px solid var(--page-accent); outline-offset: 2p
                 <ul class="steplist" id="steplist" hidden><li>Opened mailroom.app</li><li>Read “Design review Thursday?”</li><li>Opened Calendar in an agent tab</li><li>Found 3:00 to 4:00 free on Thursday</li><li>Added “Design review with Maya Chen”</li></ul>
                 <p>Thursday 3:00 to 4:00 is free, so I added it to your calendar. Here's the reply. I'll send it when you approve.</p>
               </div>
-              <div class="work" id="work"><div><div class="now"><span class="dot live agent-dot"></span>Waiting for approval</div><div class="sub">Reply drafted in mailroom.app</div></div><div class="thumb" aria-hidden="true"><i class="w"></i><i class="t"></i><i></i><i class="c"></i><i></i><i class="w"></i></div></div>
+              <div id="work" hidden></div>
               <div class="approve" id="approve">
                 <div class="ah">Send this reply to Maya Chen</div>
                 <div class="meta">maya@chenstudio.co · Re: Design review Thursday?</div>
@@ -405,7 +439,7 @@ button:focus-visible { outline: 2px solid var(--page-accent); outline-offset: 2p
               <div class="field">Ask Perch a task, @ for context</div>
               <div class="crow"><button class="ib" aria-label="Attach files" data-i="plus"></button><div class="grow"></div><button class="ib" aria-label="Dictate" data-i="mic"></button></div>
             </div>
-            <div class="under"><span class="pill"><svg class="i" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>Guard</span><span class="pill">Current tab</span><span class="grow"></span><span class="pill mono">gpt-5.5 · high</span></div>
+            <div class="under"><span class="pill"><svg class="i" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>Guard</span><span class="pill">Current tab<svg class="i" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="m6 9 6 6 6-6"/></svg></span><span class="grow"></span><span class="pill mono">gpt-6-astra · high<svg class="i" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="m6 9 6 6 6-6"/></svg></span></div>
           </aside>
         </div>
 
@@ -494,6 +528,7 @@ button:focus-visible { outline: 2px solid var(--page-accent); outline-offset: 2p
                 <p>You have 9 active subscriptions, <span style="color:var(--ink)">$112.43 a month</span> now, up $18.99 since you added the 2 TB storage plan in August. Two look unused: Cloud Notes has no logins since June, and you pay for Music twice through two accounts.</p>
                 <div class="artifact-card"><svg class="i" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/></svg><div><div>Subscriptions, last 12 months</div><div class="k">Chart and table · version 2</div></div></div>
                 <p>Want me to draft cancellation emails for the two unused ones?</p>
+                <div class="meta-row"><button class="ib" aria-label="Copy" data-i="copy"></button><button class="ib" aria-label="Branch from here" data-i="branch"></button><span class="mono">9:12</span></div>
               </div>
             </div>
             <div class="composer"><div class="field">Ask Perch a task, @ for context</div><div class="crow"><button class="ib" aria-label="Attach files" data-i="plus"></button><div class="grow"></div><span class="pill mono" style="color:var(--mute);font-size:12px">claude code · opus</span><button class="ib" aria-label="Dictate" data-i="mic"></button></div></div>
@@ -532,21 +567,23 @@ button:focus-visible { outline: 2px solid var(--page-accent); outline-offset: 2p
     more: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
     pen: '<path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/>',
     mic: '<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/>',
-    edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>'
+    edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+    copy: '<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+    branch: '<path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>'
   };
   function icon(name) { return '<svg class="i" viewBox="0 0 24 24" aria-hidden="true">' + ICONS[name] + '</svg>'; }
   document.querySelectorAll('[data-i]').forEach(function (el) { el.insertAdjacentHTML('beforeend', icon(el.getAttribute('data-i'))); });
 
   // Themes and accents from DESIGN.md.
   var THEMES = {
-    Ink:      { dark: true,  canvas: '#000000', card: '#0A0A0C', raised: '#111114', ink: '#FCFDFF', body: 'rgba(252,253,255,0.86)', mute: '#A1A4A5', hair: 'rgba(255,255,255,0.06)', hair2: 'rgba(255,255,255,0.14)', hover: 'rgba(255,255,255,0.05)', btnBg: '#FCFDFF', btnFg: '#000000' },
+    Ink:      { dark: true,  canvas: '#000000', card: '#0E0E10', raised: '#1A1A1E', ink: '#FCFDFF', body: 'rgba(252,253,255,0.86)', mute: '#A1A4A5', hair: 'rgba(255,255,255,0.07)', hair2: 'rgba(255,255,255,0.14)', hover: 'rgba(255,255,255,0.08)', btnBg: '#FCFDFF', btnFg: '#000000' },
     Graphite: { dark: true,  canvas: '#1C1D20', card: '#232428', raised: '#2B2C31', ink: '#F2F3F5', body: 'rgba(242,243,245,0.86)', mute: '#9A9DA3', hair: 'rgba(255,255,255,0.07)', hair2: 'rgba(255,255,255,0.14)', hover: 'rgba(255,255,255,0.06)', btnBg: '#F2F3F5', btnFg: '#1C1D20' },
     Dusk:     { dark: true,  canvas: '#0E1116', card: '#141922', raised: '#1B2130', ink: '#EEF2F8', body: 'rgba(238,242,248,0.86)', mute: '#8E98A8', hair: 'rgba(255,255,255,0.07)', hair2: 'rgba(255,255,255,0.14)', hover: 'rgba(255,255,255,0.05)', btnBg: '#EEF2F8', btnFg: '#0E1116' },
     Paper:    { dark: false, canvas: '#F4F5F7', card: '#FFFFFF', raised: '#ECEEF1', ink: '#0A0A0C', body: 'rgba(10,10,12,0.82)', mute: '#5F6366', hair: 'rgba(0,0,0,0.06)', hair2: 'rgba(0,0,0,0.12)', hover: 'rgba(0,0,0,0.04)', btnBg: '#0A0A0C', btnFg: '#FFFFFF' },
     Contrast: { dark: true,  canvas: '#000000', card: '#000000', raised: '#141414', ink: '#FFFFFF', body: '#FFFFFF', mute: '#C8C8C8', hair: 'rgba(255,255,255,0.28)', hair2: 'rgba(255,255,255,0.5)', hover: 'rgba(255,255,255,0.1)', btnBg: '#FFFFFF', btnFg: '#000000' }
   };
   var ACCENTS = {
-    Blue: ['#4C8DFF', '#2F6FE0'], Teal: ['#2EC4B6', '#0B7C73'], Amber: ['#F5A524', '#A86200'], Rose: ['#FF6B8A', '#C93558'], Mono: ['#E6E8EB', '#2A2C30']
+    Blue: ['#4C8DFF', '#2B68D6'], Teal: ['#2EC4B6', '#0B7C73'], Amber: ['#F5A524', '#9C5A00'], Rose: ['#FF6B8A', '#C93558'], Mono: ['#E6E8EB', '#2A2C30']
   };
   function rgba(hex, a) { var n = parseInt(hex.slice(1), 16); return 'rgba(' + (n >> 16) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')'; }
 
@@ -559,8 +596,8 @@ button:focus-visible { outline: 2px solid var(--page-accent); outline-offset: 2p
     s.setProperty('--ink', t.ink); s.setProperty('--body', t.body); s.setProperty('--mute', t.mute);
     s.setProperty('--hair', t.hair); s.setProperty('--hair-strong', t.hair2); s.setProperty('--hover', t.hover);
     s.setProperty('--btn-bg', t.btnBg); s.setProperty('--btn-fg', t.btnFg);
-    s.setProperty('--accent', a); s.setProperty('--accent-soft', rgba(a, t.dark ? 0.14 : 0.10));
-    s.setProperty('--danger', t.dark ? '#FF4D5E' : '#D92D3F');
+    s.setProperty('--accent', a); s.setProperty('--accent-soft', t.dark ? 'color-mix(in srgb, ' + a + ' 22%, ' + t.raised + ')' : rgba(a, 0.10));
+    s.setProperty('--danger', t.dark ? '#FF453A' : '#D92D3F');
     s.setProperty('--pop', t.dark ? '0 8px 24px rgba(0,0,0,0.45)' : '0 8px 24px rgba(10,10,12,0.10)');
     document.getElementById('theme-name').textContent = state.theme;
     document.getElementById('accent-name').textContent = state.accent;
@@ -636,6 +673,9 @@ button:focus-visible { outline: 2px solid var(--page-accent); outline-offset: 2p
     });
   });
   document.querySelectorAll('#sp-mcp .sw2').forEach(function (b) { b.addEventListener('click', function () { b.setAttribute('aria-checked', b.getAttribute('aria-checked') === 'true' ? 'false' : 'true'); }); });
+  var mS = document.getElementById('m-search'), mA = document.getElementById('m-ask');
+  mS.addEventListener('click', function () { press(mS, true); press(mA, false); });
+  mA.addEventListener('click', function () { press(mS, false); press(mA, true); });
   var nC = document.getElementById('n-chats'), nR = document.getElementById('n-routines');
   nC.addEventListener('click', function () { press(nC, true); press(nR, false); document.getElementById('ntp-chats').hidden = false; document.getElementById('ntp-routines').hidden = true; });
   nR.addEventListener('click', function () { press(nC, false); press(nR, true); document.getElementById('ntp-chats').hidden = true; document.getElementById('ntp-routines').hidden = false; });
@@ -648,7 +688,7 @@ button:focus-visible { outline: 2px solid var(--page-accent); outline-offset: 2p
   });
 
   var approveHTML = document.getElementById('approve').outerHTML, workHTML = document.getElementById('work').outerHTML;
-  function setRunning(on) { document.querySelectorAll('.agent-dot').forEach(function (d) { d.hidden = !on; d.classList.toggle('live', on); }); }
+  function setRunning(on) { document.querySelectorAll('.agent-dot').forEach(function (d) { d.hidden = !on; }); }
   function bindApproval() {
     document.getElementById('send').addEventListener('click', function () {
       document.getElementById('work').outerHTML = '<div class="done" id="work">' + '<svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px;color:var(--ink)"><path d="M20 6 9 17l-5-5"/></svg>Sent reply to Maya Chen · <span class="mono">9:44</span></div>';
@@ -725,7 +765,7 @@ button:focus-visible { outline: 2px solid var(--page-accent); outline-offset: 2p
   });
   months.forEach(function (m, i) {
     var h = (H - T - B) * (totals[i] / max), x = L + i * bw + bw * 0.22, y = H - B - h;
-    svg += '<rect x="' + x + '" y="' + y + '" width="' + (bw * 0.56) + '" height="' + h + '" rx="3" style="fill:' + (i === months.length - 1 ? 'var(--accent)' : 'var(--hair-strong)') + '"/>';
+    svg += '<rect x="' + x + '" y="' + y + '" width="' + (bw * 0.56) + '" height="' + h + '" rx="3" style="fill:' + (i === months.length - 1 ? 'var(--accent)' : 'var(--mute)') + '"/>';
     svg += '<text x="' + (x + bw * 0.28) + '" y="' + (H - 6) + '" text-anchor="middle" style="font:10px var(--mono);fill:var(--mute)">' + m + '</text>';
   });
   document.getElementById('chart').innerHTML = svg + '</svg>';

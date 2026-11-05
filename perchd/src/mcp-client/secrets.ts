@@ -1,7 +1,8 @@
 /**
  * Moving a server's secrets into the Keychain when it is saved, and putting them back together
  * when it launches. Every env and header value is treated as a secret, as are command arguments
- * that follow or carry a secret-looking flag (--token x, --api-key=x).
+ * that follow or carry a secret-looking flag (--token x, --api-key=x), credential headers passed as
+ * arguments (--header "Authorization: ..."), and secret-looking NAME=value pairs (docker -e).
  */
 
 import { createHash } from "node:crypto";
@@ -14,11 +15,27 @@ export type ResolvedConfig =
 
 const SECRET_FLAG = /^--?([a-z0-9]+[-_])*(token|api[-_]?key|apikey|key|secret|password|passwd|pat|auth|authorization|bearer|credentials?|client[-_]secret|access[-_]token)$/i;
 const SECRET_FLAG_WITH_VALUE = /^(--?([a-z0-9]+[-_])*(token|api[-_]?key|apikey|key|secret|password|passwd|pat|auth|authorization|bearer|credentials?|client[-_]secret|access[-_]token))=./i;
+const HEADER_FLAG = /^(--header|-H)$/;
+const HEADER_FLAG_WITH_VALUE = /^--header=./;
+const ENV_FLAG = /^(--env|-e)$/;
+const ENV_FLAG_WITH_VALUE = /^--env=./;
+/** A header that carries a credential. */
+const SECRET_HEADER = /^\s*(authorization|proxy-authorization|cookie|[a-z0-9-]*(token|api-?key|secret|auth)[a-z0-9-]*)\s*:/i;
+/** An environment variable name that suggests a credential. */
+const SECRET_ENV_NAME = /(token|key|secret|password|passwd|pat|auth|credential|cookie|session)/i;
 /** A value that only names a variable, like ${GITHUB_TOKEN} or $GITHUB_TOKEN. */
 const PURE_VAR = /^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$|^\$([A-Za-z_][A-Za-z0-9_]*)$/;
 
 export function account(server: string, kind: "env" | "header" | "arg", key: string | number): string {
   return `mcp/${server}/${kind}/${key}`;
+}
+
+/** NAME=value with a credential-like name and a value that is not just a variable. */
+function secretPair(pair: string): boolean {
+  const eq = pair.indexOf("=");
+  if (eq <= 0) return false;
+  const value = pair.slice(eq + 1);
+  return SECRET_ENV_NAME.test(pair.slice(0, eq)) && value !== "" && !PURE_VAR.test(value);
 }
 
 /** Indexes of arguments that hold a secret. */
@@ -28,7 +45,10 @@ export function secretArgIndexes(args: readonly Value[]): number[] {
     if (typeof a !== "string") return;
     if (SECRET_FLAG_WITH_VALUE.test(a)) out.push(i);
     const prev = args[i - 1];
-    if (typeof prev === "string" && SECRET_FLAG.test(prev) && !a.startsWith("-")) out.push(i);
+    const after = (flag: RegExp) => typeof prev === "string" && flag.test(prev);
+    if (after(SECRET_FLAG) && !a.startsWith("-")) out.push(i);
+    else if (HEADER_FLAG_WITH_VALUE.test(a) ? SECRET_HEADER.test(a.slice(a.indexOf("=") + 1)) : after(HEADER_FLAG) && SECRET_HEADER.test(a)) out.push(i);
+    else if (ENV_FLAG_WITH_VALUE.test(a) ? secretPair(a.slice(a.indexOf("=") + 1)) : after(ENV_FLAG) && secretPair(a)) out.push(i);
   });
   return out;
 }

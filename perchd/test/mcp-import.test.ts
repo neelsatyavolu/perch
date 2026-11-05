@@ -11,7 +11,7 @@ import { MemoryKeychain } from "../src/secure/keychain";
 /** A temporary HOME with one config file per app. Every secret here is made up. */
 const home = mkdtempSync(join(tmpdir(), "perch-import-home-"));
 const project = join(home, "code", "site");
-const S = { gh: "ghp_FAKE111", linear: "lin_FAKE222", desktop: "FAKE333", cursor: "cur_FAKE444", codex: "FAKE555", grok: "grk_FAKE666", vscode: "FAKE777", proj: "FAKE888" };
+const S = { gh: "ghp_FAKE111", linear: "lin_FAKE222", desktop: "FAKE333", cursor: "cur_FAKE444", codex: "FAKE555", grok: "grk_FAKE666", vscode: "FAKE777", proj: "FAKE888", remote: "rem_FAKE999", docker: "ghp_FAKE000" };
 const write = (path: string, text: string) => {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, text);
@@ -27,7 +27,7 @@ beforeAll(() => {
     projects: { [project]: { mcpServers: { "site-db": { command: "uvx", args: ["db-mcp", "--api-key", S.proj] } } } },
   }));
   write(join(project, ".mcp.json"), JSON.stringify({ mcpServers: { sentry: { type: "sse", url: "https://mcp.sentry.dev/sse" }, github: { command: "npx", args: ["-y", "@modelcontextprotocol/server-github"], env: { GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}" } } } }));
-  write(join(home, "Library", "Application Support", "Claude", "claude_desktop_config.json"), JSON.stringify({ mcpServers: { filesystem: { command: "npx", args: ["-y", "@modelcontextprotocol/server-filesystem", "/Users/me/Documents"] }, weather: { command: "node", args: ["w.js"], env: { WEATHER_KEY: S.desktop } } } }));
+  write(join(home, "Library", "Application Support", "Claude", "claude_desktop_config.json"), JSON.stringify({ mcpServers: { filesystem: { command: "npx", args: ["-y", "@modelcontextprotocol/server-filesystem", "/Users/me/Documents"] }, weather: { command: "node", args: ["w.js"], env: { WEATHER_KEY: S.desktop } }, remote: { command: "npx", args: ["mcp-remote", "https://mcp.example.test/mcp", "--header", `Authorization: Bearer ${S.remote}`] }, docker: { command: "docker", args: ["run", "-i", "--rm", "-e", `GITHUB_PERSONAL_ACCESS_TOKEN=${S.docker}`, "ghcr.io/github/github-mcp-server"] } } }));
   write(join(home, ".cursor", "mcp.json"), `{
     // Cursor allows comments
     "mcpServers": { "notion": { "url": "https://mcp.notion.com/mcp?api_key=${S.cursor}" }, },
@@ -120,6 +120,8 @@ test("the preview names secrets but never shows their values", () => {
   expect(item("github", "Claude Code (user)")).toMatchObject({ name: "github", target: "npx -y @modelcontextprotocol/server-github", secrets: ["env GITHUB_PERSONAL_ACCESS_TOKEN"], selected: true });
   expect(item("site-db")).toMatchObject({ target: "uvx db-mcp --api-key ••••", secrets: ["argument 3"] });
   expect(item("notion")).toMatchObject({ target: "https://mcp.notion.com/mcp?api_key=••••" });
+  expect(item("remote")).toMatchObject({ target: "npx mcp-remote https://mcp.example.test/mcp --header ••••", secrets: ["argument 4"] });
+  expect(item("docker")).toMatchObject({ target: "docker run -i --rm -e •••• ghcr.io/github/github-mcp-server", secrets: ["argument 5"] });
   expect(item("notion").warnings[0]).toContain("The URL carries a credential (api_key)");
   expect(item("1password")).toMatchObject({ secrets: [], fromEnv: ["OP_SERVICE_ACCOUNT_TOKEN"] });
   expect(item("figma")).toMatchObject({ secrets: ["header Authorization"] });
@@ -145,7 +147,7 @@ test("saving moves every secret into the Keychain; the registry file holds none"
   expect(result.saved).toEqual(expect.arrayContaining(["github", "linear", "site-db", "sentry", "filesystem", "weather", "notion", "1password", "figma", "xanom", "playwright"]));
   const reg = await store.load();
   const plain = JSON.stringify(reg) + readFileSync(store.path).toString("latin1");
-  for (const secret of [S.gh, S.linear, S.desktop, S.codex, S.grok, S.vscode, S.proj]) expect(plain).not.toContain(secret);
+  for (const secret of [S.gh, S.linear, S.desktop, S.codex, S.grok, S.vscode, S.proj, S.remote, S.docker]) expect(plain).not.toContain(secret);
   expect(await kc.get("mcp/github/env/GITHUB_PERSONAL_ACCESS_TOKEN")).toBe(S.gh);
   expect(await kc.get("mcp/site-db/arg/2")).toBe(S.proj);
   expect(await kc.get("mcp/xanom/header/Authorization")).toBe(`Bearer ${S.grok}`);

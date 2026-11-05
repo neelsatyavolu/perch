@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { addServer, removeServer, RegistryStore, updateServer, type Registry } from "../src/mcp-client/registry";
-import { expandVars, launchFingerprint, resolveConfig, secretAccounts, storeSecrets } from "../src/mcp-client/secrets";
+import { expandVars, launchFingerprint, resolveConfig, secretAccounts, secretArgIndexes, storeSecrets } from "../src/mcp-client/secrets";
 import { parseEntry, sanitizeName, type ServerEntry } from "../src/mcp-client/types";
 import { MemoryKeychain } from "../src/secure/keychain";
 
@@ -69,6 +69,21 @@ test("header values and --flag=value arguments go to the Keychain too", async ()
   const stdio = await storeSecrets("x", { transport: "stdio", command: "x", args: [`--api-key=${FAKE_TOKEN}`, "--verbose"], env: {} }, kc);
   expect(stdio.transport === "stdio" && stdio.args).toEqual([{ secret: "mcp/x/arg/0" }, "--verbose"]);
   expect(secretAccounts(http)).toEqual(["mcp/linear/header/Authorization"]);
+});
+
+test("credentials passed as --header or -e NAME=value arguments are secret too", () => {
+  const args = [
+    "mcp-remote", "https://mcp.example.test", "--header", `Authorization: Bearer ${FAKE_TOKEN}`, // 3
+    "-H", `X-Api-Key:${FAKE_TOKEN}`, // 5
+    `--header=Authorization: Bearer ${FAKE_TOKEN}`, // 6
+    "--header", "Accept: text/event-stream", // not a credential
+    "run", "-i", "--rm", "-e", `GITHUB_PERSONAL_ACCESS_TOKEN=${FAKE_TOKEN}`, // 13
+    "-e", "GITHUB_TOOLSETS=repos", // not a credential
+    "-e", "GITHUB_TOKEN", // passes the variable through, holds no value
+    `--env=OPENAI_API_KEY=${FAKE_TOKEN}`, // 18
+    "ghcr.io/github/github-mcp-server",
+  ];
+  expect(secretArgIndexes(args)).toEqual([3, 5, 6, 13, 18]);
 });
 
 test("configs resolve at launch from the Keychain and the environment", async () => {

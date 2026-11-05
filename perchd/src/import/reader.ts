@@ -18,6 +18,7 @@ import { readChromeWebData } from "./chrome/web-data";
 import type { Profile } from "./detect";
 import { countFirefoxCookies, countFirefoxHistory, readFirefoxBookmarks, readFirefoxCookies, readFirefoxHistory, readFirefoxSession } from "./firefox/firefox";
 import type { Keychain } from "./keychain";
+import { countSafariCookies, readSafariCookies } from "./safari/binarycookies";
 import { countSafariHistory, readSafariBookmarks, readSafariHistory } from "./safari/safari";
 import { countBookmarks, ImportError, type Bookmarks, type Counts, type DataType, type ImportData, type SessionWindow } from "./types";
 
@@ -100,9 +101,9 @@ function chromiumReader(browser: BrowserInfo, profile: Profile): SourceReader {
 function safariReader(profile: Profile): SourceReader {
   const p = profile.path;
   return {
-    types: ["bookmarks", "history"],
+    types: ["bookmarks", "history", "cookies"],
     needsKeychain: [],
-    needsFullDiskAccess: ["bookmarks", "history"],
+    needsFullDiskAccess: ["bookmarks", "history", "cookies"],
     unsupported: {
       passwords: "In Safari, choose File > Export Browsing Data to File, include passwords, then import that ZIP file.",
       tabs: "Safari's open tabs are not imported yet.",
@@ -110,11 +111,13 @@ function safariReader(profile: Profile): SourceReader {
     async count(type) {
       if (type === "bookmarks") return bookmarkCount(readSafariBookmarks(p));
       if (type === "history") return countSafariHistory(p);
+      if (type === "cookies") return countSafariCookies(p);
       return 0;
     },
     async read(type) {
       if (type === "bookmarks") return { data: { bookmarks: readSafariBookmarks(p) } };
       if (type === "history") return { data: { history: await readSafariHistory(p) } };
+      if (type === "cookies") return { data: { cookies: await readSafariCookies(p) } };
       return { data: {} };
     },
   };

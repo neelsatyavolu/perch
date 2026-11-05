@@ -91,7 +91,7 @@ test("listSources finds each browser and profile and says what needs a prompt", 
   expect(chrome.keychainHelp).toBe('macOS will ask whether Perch may use "Chrome Safe Storage". Choose Allow. Perch needs it only during this import, so Always Allow is not needed.');
   expect(sources[2]!.keychainHelp).toBeUndefined();
   expect(sources[1]!.profiles).toEqual([{ id: "Profile 2", name: "Work" }]);
-  expect(sources[2]!.needs.fullDiskAccess).toEqual(["bookmarks", "history"]);
+  expect(sources[2]!.needs.fullDiskAccess).toEqual(["bookmarks", "history", "cookies"]);
   expect(sources[3]!.unsupported.passwords).toMatch(/about:logins/);
 });
 

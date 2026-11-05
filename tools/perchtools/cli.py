@@ -7,6 +7,7 @@ import json
 import os
 import sys
 import urllib.request
+from pathlib import Path
 from typing import Any
 
 from .checkout import checkout
@@ -15,7 +16,10 @@ from .gnargs import build as build_chromium
 from .package import creds_from_env, package
 from .patching import Generator, PatchFailed, apply_series, continue_series, export_series
 from .paths import REPO, Paths, load_paths
+from .release import REPO_SLUG, appcast, preflight, publish, published_build_from_appcast, release_notes
 from .rename import rename_product_strings
+from .series import read_series
+from .sparkle import fetch_sparkle, load_pin
 from .run import run
 from .version import bump, latest_stable_mac, read_version, write_version
 
@@ -98,6 +102,48 @@ def _cmd_package(args: argparse.Namespace) -> int:
     return 0
 
 
+def sparkle_bin(repo: Path) -> Path:
+    return fetch_sparkle(load_pin(repo / "build" / "sparkle.json"), repo / "dist" / "cache") / "bin"
+
+
+def _tag_exists(tag: str) -> bool:
+    return run(["gh", "release", "view", tag, "--repo", REPO_SLUG], check=False, capture=True).returncode == 0
+
+
+def _published_build() -> int | None:
+    result = run(["gh", "release", "download", "--repo", REPO_SLUG, "--pattern", "appcast.xml", "--output", "-"], check=False, capture=True)
+    return published_build_from_appcast(result.stdout) if result.returncode == 0 else None
+
+
+def _cmd_release(args: argparse.Namespace) -> int:
+    paths = current_paths()
+    info = read_version(REPO / "version.json")
+    reasons = preflight(REPO, paths.src, info, _tag_exists, _published_build)
+    for reason in reasons:
+        print(f"{'warning' if args.dry_run else 'error'}: {reason}", file=sys.stderr)
+    if reasons and not args.dry_run:
+        return 1
+    dmg = REPO / "dist" / f"Perch-{info.perch}.dmg"
+    if not dmg.exists():
+        print(f"error: {dmg} is missing; run perch-build package first", file=sys.stderr)
+        return 1
+    key_ref = os.environ.get("PERCH_SPARKLE_KEY_REF", "")
+    if not key_ref:
+        print("error: PERCH_SPARKLE_KEY_REF is not set; run through scripts/with-apple-creds.sh", file=sys.stderr)
+        return 1
+    out = REPO / "dist" / "release"
+    out.mkdir(parents=True, exist_ok=True)
+    feed = appcast(dmg, out, key_ref, info, sparkle_bin(REPO), run)
+    notes = release_notes(info, read_series(REPO / "patches" / "series"))
+    if args.dry_run:
+        (out / "notes.md").write_text(notes)
+        print(f"Dry run: wrote {feed} and {out / 'notes.md'}; published nothing.")
+        return 0
+    publish(info, dmg, feed, notes, run)
+    print(f"Published Perch {info.perch}.")
+    return 0
+
+
 def _cmd_version(args: argparse.Namespace) -> int:
     path = REPO / "version.json"
     info = read_version(path)
@@ -130,6 +176,9 @@ def build_parser() -> argparse.ArgumentParser:
     pkg = sub.add_parser("package", help="sign, package and notarize the release build")
     pkg.add_argument("--mode", choices=["release", "adhoc"], default="release")
     pkg.set_defaults(func=_cmd_package)
+    rel = sub.add_parser("release", help="check, write the appcast and publish to GitHub")
+    rel.add_argument("--dry-run", action="store_true", help="write everything to dist/release and publish nothing")
+    rel.set_defaults(func=_cmd_release)
     sub.add_parser("export", help="write the perch branch's commits back to patches/").set_defaults(func=_cmd_export)
     return parser
 

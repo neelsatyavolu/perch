@@ -7,7 +7,8 @@
   "license": "MIT",
   "scripts": {
     "test": "bun test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:cli": "bun build --compile --minify src/cli/main.ts --outfile dist/perch"
   },
   "devDependencies": {
     "@types/bun": "1.3.10",

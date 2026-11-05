@@ -33,9 +33,26 @@ export function createRpcApi(bridge: Bridge): PerchApi {
   return {
     ...methods,
     watchJob(id, listener) {
-      return bridge.subscribe(`job:${id}`, (data) => {
-        if (isJobProgress(data) && data.jobId === id) listener(data);
+      // Subscribe first, then ask for the current state: events are not replayed, so a job that
+      // moved on (or finished) before the subscription existed is still seen. A snapshot that
+      // arrives after a live event is older than it, so it is dropped.
+      let live = true;
+      let heard = false;
+      const stop = bridge.subscribe(`job:${id}`, (data) => {
+        if (!live || !isJobProgress(data) || data.jobId !== id) return;
+        heard = true;
+        listener(data);
       });
+      bridge.call("getJob", [id]).then(
+        (data) => {
+          if (live && !heard && isJobProgress(data) && data.jobId === id) listener(data);
+        },
+        () => undefined,
+      );
+      return () => {
+        live = false;
+        stop();
+      };
     },
   } as PerchApi;
 }

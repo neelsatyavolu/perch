@@ -37,6 +37,41 @@ describe("RPC adapter", () => {
     expect(handlers.has("job:j1")).toBe(false);
   });
 
+  test("watchJob sees a job that finished before it subscribed (no replay from the bridge)", async () => {
+    const finished: JobProgress = { jobId: "j2", state: "done", step: "Done", done: 3, total: 3, summary: ["412 bookmarks"] };
+    const api = createRpcApi({
+      call: async (method, args) => (method === "getJob" && args[0] === "j2" ? finished : null),
+      subscribe: () => () => undefined,
+    });
+    const seen = await new Promise<JobProgress>((resolve) => api.watchJob("j2", resolve));
+    expect(seen).toEqual(finished);
+  });
+
+  test("watchJob drops the snapshot when a live event got there first, and after unsubscribe", async () => {
+    const handlers = new Map<string, (d: unknown) => void>();
+    let answer: (v: unknown) => void = () => undefined;
+    const api = createRpcApi({
+      call: () => new Promise((resolve) => (answer = resolve)),
+      subscribe: (event, l) => (handlers.set(event, l), () => handlers.delete(event)),
+    });
+    const seen: JobProgress[] = [];
+    api.watchJob("j3", (p) => seen.push(p));
+    const live: JobProgress = { jobId: "j3", state: "running", step: "Reading", done: 2, total: 3 };
+    handlers.get("job:j3")!(live);
+    answer({ jobId: "j3", state: "running", step: "Starting", done: 0, total: 3 });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(seen).toEqual([live]);
+
+    const after: JobProgress[] = [];
+    const stop = api.watchJob("j4", (p) => after.push(p));
+    stop();
+    answer({ jobId: "j4", state: "done", step: "Done", done: 1, total: 1 });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(after).toEqual([]);
+  });
+
   test("isBridge checks the injected object's shape", () => {
     expect(isBridge({ call: () => 0, subscribe: () => 0 })).toBe(true);
     expect(isBridge({ call: 1 })).toBe(false);

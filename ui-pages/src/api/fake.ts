@@ -5,15 +5,17 @@
  */
 
 import type {
-  AboutInfo, Appearance, ChatSummary, DetectedBrowser, DraftFact, JobId, JobProgress, McpImportCandidate, McpServer, MemoryDoc,
-  MemorySettings, NtpLayout, Onboarding, PerchApi, Permissions, PrivacySettings, Provider, Routine, RoutineInput, RoutineProposal,
-  SetupSource, SiteData, Skill, TaskModel,
+  AboutInfo, Appearance, ChatSummary, DetectedBrowser, DraftFact, FileChoice, FileKind, JobId, JobProgress, McpImportCandidate, McpServer,
+  MemoryDoc, MemorySettings, NtpLayout, Onboarding, PerchApi, PermissionMode, Permissions, PrivacySettings, Provider, Routine, RoutineInput,
+  RoutineProposal, SiteData, Skill, SystemAccess, TaskModel,
 } from "../api";
 import { DEFAULT_APPEARANCE } from "../theme/apply";
 import { ACCENT_NAMES, THEME_NAMES } from "../theme/tokens";
 import { IMPORT_KINDS, countOf } from "../lib/labels";
+import { redactTarget } from "../lib/redact";
 import {
-  type Check, checkApiKey, checkCommand, checkEndpointUrl, checkMcpUrl, checkSecretName, checkSitePattern, checkSkillLocation, checkTime, checkTitle,
+  type Check, checkApiKey, checkCommand, checkDohUrl, checkEndpointUrl, checkMcpUrl, checkSecretName, checkSitePattern, checkSkillLocation,
+  checkTime, checkTitle, checkTrigger,
 } from "../lib/validate";
 import * as seed from "./seed";
 
@@ -38,6 +40,8 @@ type State = {
   browsers: readonly DetectedBrowser[];
   onboarding: Onboarding;
   about: AboutInfo;
+  files: readonly (FileChoice & { readonly kind: FileKind })[];
+  buildJob: JobId | null;
 };
 
 export type FakeOptions = {
@@ -47,6 +51,12 @@ export type FakeOptions = {
   readonly onboarding?: Onboarding;
   /** Records navigation calls (submitQuery, openPage, …) so tests and the dev build can show them. */
   readonly onNavigate?: (what: string, detail: unknown) => void;
+  readonly permissions?: Partial<Permissions>;
+  readonly access?: SystemAccess;
+  /** Makes every job fail at its last step with this message. */
+  readonly failJobs?: string;
+  /** What the open panel returns; by default the person picks a file. */
+  readonly pickFile?: (kind: FileKind) => string | null;
 };
 
 const must = <T>(check: Check<T>): T => {
@@ -56,6 +66,8 @@ const must = <T>(check: Check<T>): T => {
 
 let counter = 0;
 const newId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${(counter++).toString(36)}`;
+const MODE_ORDER: readonly PermissionMode[] = ["ask", "guard", "skip"];
+const DEFAULT_FILE_NAMES: Readonly<Record<FileKind, string>> = { "memory-export": "export.zip", "passwords-csv": "Passwords.csv" };
 
 export function createFakeApi(options: FakeOptions = {}): PerchApi {
   const stepMs = options.stepMs ?? 400;
@@ -70,7 +82,7 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     taskModels: seed.TASK_MODELS,
     servers: seed.MCP_SERVERS,
     skills: seed.SKILLS,
-    permissions: seed.PERMISSIONS,
+    permissions: { ...seed.PERMISSIONS, ...options.permissions },
     privacy: seed.PRIVACY,
     siteData: seed.SITE_DATA,
     memorySettings: seed.MEMORY_SETTINGS,
@@ -81,6 +93,8 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     browsers: seed.BROWSERS,
     onboarding: options.onboarding ?? { finished: false, done: [] },
     about: seed.ABOUT,
+    files: [],
+    buildJob: null,
   };
   const set = (patch: Partial<State>) => {
     state = { ...state, ...patch };
@@ -95,18 +109,40 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     if (!state.setupDone.includes(id)) set({ setupDone: [...state.setupDone, id] });
   };
 
-  function runJob(steps: readonly string[], onDone: () => readonly string[]): JobId {
+  function runJob(steps: readonly string[], onDone: () => readonly string[], onEnd: () => void = () => undefined): JobId {
     const jobId = newId("job");
     const total = steps.length;
+    const end = () => {
+      onEnd();
+      if (options.failJobs) emit({ jobId, state: "failed", step: steps[total - 1] ?? "", done: total - 1, total, error: options.failJobs });
+      else emit({ jobId, state: "done", step: "Done", done: total, total, summary: onDone() });
+    };
     emit({ jobId, state: "running", step: steps[0] ?? "", done: 0, total });
     steps.forEach((step, i) => {
       setTimeout(() => {
         emit({ jobId, state: "running", step, done: i + 1, total });
-        if (i === total - 1) setTimeout(() => emit({ jobId, state: "done", step: "Done", done: total, total, summary: onDone() }), stepMs);
+        if (i === total - 1) setTimeout(end, stepMs);
       }, stepMs * (i + 1));
     });
     return jobId;
   }
+  const checkMode = (mode: PermissionMode) => {
+    const max = state.permissions.maxMode;
+    if (!MODE_ORDER.includes(mode)) throw new Error("Unknown permission mode");
+    if (max && MODE_ORDER.indexOf(mode) > MODE_ORDER.indexOf(max)) throw new Error("Your organization doesn't allow that mode");
+  };
+  const file = (id: string | undefined, kind: FileKind) => state.files.find((f) => f.id === id && f.kind === kind);
+  /** Import candidates as perchd returns them: targets redacted, found tokens listed as Keychain names. */
+  const candidates = () => {
+    const names = new Set(state.servers.map((s) => `${s.source}:${s.name}`));
+    return seed.MCP_CANDIDATES.map((c): McpImportCandidate => {
+      const r = redactTarget(c.target);
+      return {
+        ...c, target: r.target, secretNames: [...c.secretNames, ...r.secrets.map((x) => x.name)],
+        alreadyAdded: c.alreadyAdded || names.has(`${c.source}:${c.name}`),
+      };
+    });
+  };
 
   const provider = (id: Provider["id"]) => {
     const p = state.providers.find((x) => x.id === id);
@@ -136,7 +172,8 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
       if (s.days.length === 0) throw new Error("Pick at least one day");
     }
     if (s.kind === "interval" && !(Number.isInteger(s.hours) && s.hours >= 1 && s.hours <= 168)) throw new Error("Pick between 1 and 168 hours");
-    return { ...input, title, prompt: input.prompt.trim() };
+    const schedule = s.kind === "trigger" ? must(checkTrigger(s.event, s.match)) : s;
+    return { ...input, title, prompt: input.prompt.trim(), schedule };
   };
 
   return {
@@ -186,6 +223,13 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     async openPage(page, section) {
       navigate("page", { page, section });
     },
+    async chooseFile(kind) {
+      const name = options.pickFile ? options.pickFile(kind) : DEFAULT_FILE_NAMES[kind];
+      if (name === null) return null;
+      const choice = { id: newId("file"), name };
+      set({ files: [...state.files, { ...choice, kind }] });
+      return choice;
+    },
 
     async listProviders() {
       return state.providers;
@@ -227,11 +271,10 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
       return state.servers;
     },
     async scanMcpImports() {
-      const names = new Set(state.servers.map((s) => `${s.source}:${s.name}`));
-      return seed.MCP_CANDIDATES.map((c): McpImportCandidate => ({ ...c, alreadyAdded: c.alreadyAdded || names.has(`${c.source}:${c.name}`) }));
+      return candidates();
     },
     async importMcpServers(keys) {
-      const added = seed.MCP_CANDIDATES.filter((c) => keys.includes(c.key)).map((c): McpServer => ({
+      const added = candidates().filter((c) => keys.includes(c.key) && !c.alreadyAdded).map((c): McpServer => ({
         id: newId("mcp"), name: c.name, transport: c.transport, target: c.target, source: c.source,
         tools: 0, readOnlyTools: 0, trusted: false, enabled: true, secretNames: c.secretNames,
       }));
@@ -240,11 +283,12 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     },
     async addMcpServer(input) {
       const name = must(checkTitle(input.name, 60));
-      const target = input.transport === "stdio" ? must(checkCommand(input.target)) : must(checkMcpUrl(input.target));
-      const secretNames = input.secrets.map((s) => {
+      const typed = input.transport === "stdio" ? must(checkCommand(input.target)) : must(checkMcpUrl(input.target));
+      const { target, secrets: found } = redactTarget(typed);
+      const secretNames = [...input.secrets.map((s) => {
         if (!s.value) throw new Error(`Enter a value for ${s.name}`);
         return must(checkSecretName(s.name));
-      });
+      }), ...found.map((s) => s.name)];
       const created: McpServer = { id: newId("mcp"), name, transport: input.transport, target, source: "manual", tools: 0, readOnlyTools: 0, trusted: false, enabled: true, secretNames };
       set({ servers: [...state.servers, created] });
       return created;
@@ -283,13 +327,17 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
       return state.permissions;
     },
     async setPermissionMode(mode) {
+      checkMode(mode);
       set({ permissions: { ...state.permissions, mode } });
       return state.permissions;
     },
     async addSiteRule(input) {
       const pattern = must(checkSitePattern(input.pattern));
-      const others = state.permissions.siteRules.filter((r) => r.pattern !== pattern);
-      set({ permissions: { ...state.permissions, siteRules: [...others, { id: newId("rule"), pattern, rule: input.rule }] } });
+      const rules = state.permissions.siteRules;
+      const siteRules = rules.some((r) => r.pattern === pattern)
+        ? rules.map((r) => (r.pattern === pattern ? { ...r, rule: input.rule } : r))
+        : [...rules, { id: newId("rule"), pattern, rule: input.rule }];
+      set({ permissions: { ...state.permissions, siteRules } });
       return state.permissions;
     },
     async removeSiteRule(id) {
@@ -297,6 +345,7 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
       return state.permissions;
     },
     async setClientMode(id, mode) {
+      checkMode(mode);
       set({ permissions: { ...state.permissions, clientRules: state.permissions.clientRules.map((c) => (c.id === id ? { ...c, mode } : c)) } });
       return state.permissions;
     },
@@ -304,9 +353,19 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     async getPrivacy() {
       return state.privacy;
     },
+    async listAuditLog(query) {
+      const older = query.before ? seed.AUDIT_LOG.filter((e) => e.at < query.before!) : seed.AUDIT_LOG;
+      return older.slice(0, Math.max(0, Math.min(query.limit, 500)));
+    },
+    async exportAuditLog() {
+      return { name: "perch-audit-log.jsonl", entries: seed.AUDIT_LOG.length };
+    },
+
     async setPrivacy(patch) {
-      if (patch.dohCustomUrl) must(checkEndpointUrl(patch.dohCustomUrl));
-      set({ privacy: { ...state.privacy, ...patch } });
+      if (patch.dohCustomUrl) must(checkDohUrl(patch.dohCustomUrl));
+      const next = { ...state.privacy, ...patch };
+      if (next.dohProvider === "custom" && !checkDohUrl(next.dohCustomUrl).ok) throw new Error("Enter the resolver's https:// address first");
+      set({ privacy: next });
       return state.privacy;
     },
     async setBackgroundConnection(id, enabled) {
@@ -355,17 +414,30 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     async wipeMemory() {
       set({ docs: [], draft: [] });
     },
+    async listDreamLogs(limit) {
+      return seed.DREAM_LOGS.slice(0, limit);
+    },
     async listSetupSources() {
       return seed.SETUP_SOURCES;
     },
-    async startProfileBuild(sourceIds) {
+    async startProfileBuild(sourceIds, files = {}) {
+      if (state.buildJob) throw new Error("A build is already running");
       if (sourceIds.length === 0) throw new Error("Turn on at least one source");
-      const names = seed.SETUP_SOURCES.filter((s) => sourceIds.includes(s.id) && s.available);
-      const steps = [...names.map((s) => `Reading ${s.name.charAt(0).toLowerCase()}${s.name.slice(1)}`), "Checking what is missing", "Draft ready"];
-      return runJob(steps, () => {
+      const picked = seed.SETUP_SOURCES.filter((s) => sourceIds.includes(s.id));
+      const blocked = picked.find((s) => !s.available);
+      if (blocked) throw new Error(`${blocked.name} isn't available yet`);
+      const missing = picked.find((s) => s.needs === "export-file" && !file(files[s.id], "memory-export"));
+      if (missing) throw new Error(`Choose the export file for ${missing.name}, or turn it off`);
+      const steps = [...picked.map((s) => `Reading ${s.name.charAt(0).toLowerCase()}${s.name.slice(1)}`), "Checking what is missing", "Draft ready"];
+      const jobId = runJob(steps, () => {
         set({ draft: seed.DRAFT_FACTS });
         return [`${seed.DRAFT_FACTS.length} facts to review`];
-      });
+      }, () => set({ buildJob: null }));
+      set({ buildJob: jobId });
+      return jobId;
+    },
+    async getProfileBuild() {
+      return state.buildJob;
     },
     async getProfileDraft() {
       return state.draft;
@@ -430,7 +502,7 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
       return state.browsers;
     },
     async getSystemAccess() {
-      return { fullDiskAccess: false };
+      return options.access ?? { fullDiskAccess: false };
     },
     async openFullDiskAccess() {
       navigate("system-settings", "full-disk-access");
@@ -440,6 +512,9 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
       const browser = state.browsers.find((b) => b.id === request.browser);
       if (!browser || !browser.profiles.some((p) => p.id === request.profile)) throw new Error("That browser profile wasn't found");
       const picked = browser.options.filter((o) => request.kinds.includes(o.kind) && o.available);
+      if (picked.some((o) => o.needs === "csv-export") && !file(request.passwordsCsv, "passwords-csv")) {
+        throw new Error("Choose the passwords file you exported, or untick Passwords");
+      }
       const steps = picked.map((o) => `Importing ${IMPORT_KINDS[o.kind].label.toLowerCase()}`);
       return runJob(steps, () => {
         markDone("setup-import");
@@ -451,6 +526,9 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
       });
     },
 
+    async getJob(id) {
+      return jobs.get(id) ?? null;
+    },
     watchJob(id, listener) {
       const set_ = listeners.get(id) ?? new Set();
       listeners.set(id, set_);

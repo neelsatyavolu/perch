@@ -1,8 +1,21 @@
 /** Plain words for the values in api.ts, shared by the pages and the fake backend. */
 
 import type {
-  Effort, FactGroup, ImportKind, ImportNeed, McpImportSource, PermissionMode, Schedule, SiteRuleKind, TaskRole, Weekday,
+  AuditOutcome, Effort, FactGroup, ImportKind, ImportNeed, McpImportSource, PermissionMode, Schedule, SiteRuleKind, TaskRole, TriggerEvent, Weekday,
 } from "../api";
+
+/** Routine triggers. `match` describes the field that narrows the event, when it has one. */
+export const TRIGGERS: Readonly<Record<TriggerEvent, { label: string; match?: { label: string; placeholder: string; required: boolean } }>> = {
+  "mail-received": { label: "New mail arrives", match: { label: "From or subject contains", placeholder: "invoice, or school.org", required: false } },
+  "site-opened": { label: "You open a site", match: { label: "Site", placeholder: "github.com", required: true } },
+  "download-finished": { label: "A download finishes" },
+  "browser-started": { label: "Perch starts" },
+};
+export const TRIGGER_EVENTS = Object.keys(TRIGGERS) as TriggerEvent[];
+
+export const AUDIT_OUTCOMES: Readonly<Record<AuditOutcome, string>> = {
+  approved: "Approved", ran: "Ran", declined: "Declined", blocked: "Blocked by a site rule",
+};
 
 export const IMPORT_KINDS: Readonly<Record<ImportKind, { label: string; noun: string }>> = {
   tabs: { label: "Open tabs and windows", noun: "tabs" },
@@ -77,7 +90,11 @@ const WEEKEND_SET = ["sat", "sun"].join();
 
 export function describeSchedule(s: Schedule): string {
   if (s.kind === "interval") return s.hours === 1 ? "Every hour" : `Every ${s.hours} hours`;
-  if (s.kind === "trigger") return `When ${s.event}`;
+  if (s.kind === "trigger") {
+    if (s.event === "mail-received") return s.match ? `When mail arrives matching “${s.match}”` : "When new mail arrives";
+    if (s.event === "site-opened") return `When you open ${s.match ?? "a site"}`;
+    return `When ${TRIGGERS[s.event].label.charAt(0).toLowerCase()}${TRIGGERS[s.event].label.slice(1)}`;
+  }
   const days = WEEKDAYS.filter((d) => s.days.includes(d.id)).map((d) => d.id);
   const key = days.join();
   const when =

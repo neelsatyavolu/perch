@@ -1,7 +1,7 @@
 /** Sample data for the fake backend. Every name, address and figure here is made up. */
 
 import type {
-  AboutInfo, ChatSummary, DetectedBrowser, DraftFact, McpImportCandidate, McpServer, MemoryDoc, MemorySettings, Model,
+  AboutInfo, AuditEntry, ChatSummary, DetectedBrowser, DraftFact, DreamLog, McpImportCandidate, McpServer, MemoryDoc, MemorySettings, Model,
   Permissions, PrivacySettings, Provider, Routine, RoutineProposal, SetupSource, SiteData, Skill, Suggestion, TaskModel,
 } from "../api";
 
@@ -67,7 +67,7 @@ export const MCP_SERVERS: readonly McpServer[] = [
 export const MCP_CANDIDATES: readonly McpImportCandidate[] = [
   { key: "claude-code:consult", name: "consult", source: "claude-code", configPath: "~/.claude.json", transport: "stdio", target: "consult-mcp --stdio", secretNames: [], alreadyAdded: true },
   { key: "claude-code:github", name: "github", source: "claude-code", configPath: "~/.claude.json", transport: "http", target: "https://api.githubcopilot.com/mcp/", secretNames: ["Authorization"], alreadyAdded: false },
-  { key: "codex:linear", name: "linear", source: "codex", configPath: "~/.codex/config.toml", transport: "sse", target: "https://mcp.linear.app/sse", secretNames: [], alreadyAdded: false },
+  { key: "codex:linear", name: "linear", source: "codex", configPath: "~/.codex/config.toml", transport: "sse", target: "https://mcp.linear.app/sse?api_key=lin_api_0000000000example", secretNames: [], alreadyAdded: false },
   { key: "cursor:postgres", name: "postgres", source: "cursor", configPath: "~/.cursor/mcp.json", transport: "stdio", target: "npx -y @modelcontextprotocol/server-postgres", secretNames: ["DATABASE_URL"], alreadyAdded: false },
   { key: "grok:search", name: "web-search", source: "grok", configPath: "~/.grok/settings.json", transport: "stdio", target: "web-search-mcp", secretNames: ["SEARCH_API_KEY"], alreadyAdded: false },
 ];
@@ -137,7 +137,7 @@ export const SETUP_SOURCES: readonly SetupSource[] = [
   { id: "mail", name: "Mail", detail: "Signed in, read only", on: true, available: true },
   { id: "calendar", name: "Calendar", detail: "Signed in, read only", on: true, available: true },
   { id: "messages", name: "Messages", detail: "Needs Full Disk Access", on: false, available: false, needs: "full-disk-access" },
-  { id: "chatgpt-memory", name: "ChatGPT memory", detail: "From your data export", on: true, available: true, needs: "export-file" },
+  { id: "chatgpt-memory", name: "ChatGPT memory", detail: "From your data export", on: false, available: true, needs: "export-file" },
   { id: "claude-memory", name: "Claude memory", detail: "From your data export", on: false, available: true, needs: "export-file" },
   { id: "grok-memory", name: "Grok memory", detail: "From your data export", on: false, available: true, needs: "export-file" },
   { id: "aside", name: "Aside memory", detail: "Import from ~/.aside", on: true, available: true },
@@ -155,10 +155,24 @@ export const DRAFT_FACTS: readonly DraftFact[] = [
   { id: "f8", group: "sites", text: "GitHub account neelsatyavolu", source: "Browsing history" },
 ];
 
+export const DREAM_LOGS: readonly DreamLog[] = [
+  { id: "d2", at: "2026-11-05T03:00:00.000Z", merged: 2, updated: 5, archived: 1, lines: ["Merged two pages about Maya Chen", "Merged “Backrow” into projects/backrow.md", "Moved the old Northwind seat preference to History", "Updated 5 facts in USER.md and people/"] },
+  { id: "d1", at: "2026-11-04T03:00:00.000Z", merged: 0, updated: 2, archived: 0, lines: ["Updated 2 facts in sites/github.md"] },
+];
+
+export const AUDIT_LOG: readonly AuditEntry[] = [
+  { id: "a5", at: "2026-11-05T09:31:00.000Z", client: "Perch", tab: "Inbox (3) - Mail", site: "mail.google.com", action: "Clicked Send on a reply to Maya Chen", outcome: "approved" },
+  { id: "a4", at: "2026-11-05T09:30:00.000Z", client: "Perch", tab: "Inbox (3) - Mail", site: "mail.google.com", action: "Typed a reply", outcome: "ran" },
+  { id: "a3", at: "2026-11-05T09:01:00.000Z", client: "Claude Code (MCP)", tab: "Pull requests · perch", site: "github.com", action: "Read the page", outcome: "ran" },
+  { id: "a2", at: "2026-11-05T08:12:00.000Z", client: "perch CLI", tab: "Chase - Accounts", site: "secure.chase.com", action: "Open the page", outcome: "blocked" },
+  { id: "a1", at: "2026-11-04T21:40:00.000Z", client: "Perch", tab: "Checkout - Northwind", site: "northwind.example", action: "Place order, $412.80", outcome: "declined" },
+];
+
 export const ROUTINES: readonly Routine[] = [
   { id: "rt1", title: "Morning mail summary", prompt: "Summarise new mail from teachers and the InFocus team, grouped by what needs a reply.", schedule: { kind: "daily", time: "08:00", days: ["mon", "tue", "wed", "thu", "fri"] }, enabled: true, lastRun: { at: "2026-11-05T16:00:00.000Z", outcome: "ok" }, nextRun: "2026-11-06T16:00:00.000Z" },
   { id: "rt2", title: "Week ahead", prompt: "Calendar for the next 7 days, deadlines from Schoology and anything that clashes.", schedule: { kind: "daily", time: "18:00", days: ["sun"] }, enabled: true, nextRun: "2026-11-09T02:00:00.000Z" },
   { id: "rt3", title: "Watch SFO to HND", prompt: "Check nonstop fares SFO to HND for Dec 18 to Jan 2 and tell me if one drops below $650.", schedule: { kind: "interval", hours: 12 }, enabled: false, lastRun: { at: "2026-11-02T15:30:00.000Z", outcome: "failed" } },
+  { id: "rt4", title: "File invoices", prompt: "Save the invoice PDF to Documents/Invoices and add a row to the expense sheet.", schedule: { kind: "trigger", event: "mail-received", match: "invoice" }, enabled: true },
 ];
 
 export const PROPOSALS: readonly RoutineProposal[] = [

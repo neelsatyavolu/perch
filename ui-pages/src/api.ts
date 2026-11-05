@@ -7,11 +7,15 @@
  * Transport: the browser injects `window.perch = { call(method, args), subscribe(event, listener) }`
  * into Perch's own pages only. `src/api/rpc.ts` turns that into a `PerchApi`, so perchd answers
  * one JSON message per method below, named exactly as here, with the arguments as an array.
- * Job progress arrives as events named `job:<jobId>` carrying a `JobProgress`.
+ * Job progress arrives as events named `job:<jobId>` carrying a `JobProgress`. Events are not
+ * replayed, so the adapter calls `getJob` right after subscribing (see `watchJob`).
  *
  * Security rules the implementation keeps (spec 11.1):
- * - Secret values (API keys, MCP server env and header values) go in, never come back out.
- *   Read methods return only secret *names*. perchd stores the values in the Keychain.
+ * - Secret values (API keys, MCP server env and header values, and tokens found inside MCP
+ *   command lines and URLs) go in, never come back out. Read methods return only secret *names*.
+ *   perchd stores the values in the Keychain.
+ * - Pages never name a file path. Files come from perchd's own open panel (`chooseFile`) and
+ *   pages get an opaque id, so a page can't make perchd read an arbitrary file.
  * - Every list is per profile; incognito windows never load the Memory page.
  *
  * `src/api/fake.ts` is an in-memory implementation with sample data, used in development and tests.
@@ -37,6 +41,10 @@ export type JobProgress = {
   readonly error?: string;
 };
 export type Unsubscribe = () => void;
+/** What a file picked in `chooseFile` is for; perchd filters its open panel to match. */
+export type FileKind = "memory-export" | "passwords-csv";
+/** A file the person picked in perchd's open panel. `id` is opaque; the path stays in perchd. */
+export type FileChoice = { readonly id: string; readonly name: string };
 
 /* ---------- Appearance (spec 5.3, 6, DESIGN.md) ---------- */
 
@@ -120,7 +128,13 @@ export type McpServer = {
   readonly id: string;
   readonly name: string;
   readonly transport: McpTransport;
-  /** The command line for stdio, the URL otherwise. */
+  /**
+   * The command line for stdio, the URL otherwise, always redacted. perchd finds tokens in
+   * arguments (`--api-key x`, `--token=x`, `API_KEY=x`, values with known token prefixes such as
+   * `sk-` or `ghp_`) and in URLs (a password in the URL, secret-named query parameters, path
+   * segments with token prefixes), moves each value to the Keychain, puts `${NAME}` in its place
+   * and adds NAME to `secretNames`. It substitutes the values back only when it starts the server.
+   */
   readonly target: string;
   readonly source: McpImportSource | "manual";
   readonly tools: number;
@@ -137,6 +151,7 @@ export type McpImportCandidate = {
   readonly source: McpImportSource;
   readonly configPath: string;
   readonly transport: McpTransport;
+  /** Redacted the same way as `McpServer.target`, before it is returned for the preview. */
   readonly target: string;
   readonly secretNames: readonly string[];
   readonly alreadyAdded: boolean;
@@ -144,6 +159,7 @@ export type McpImportCandidate = {
 export type NewMcpServer = {
   readonly name: string;
   readonly transport: McpTransport;
+  /** May contain tokens as typed; perchd redacts it as described on `McpServer.target`. */
   readonly target: string;
   readonly secrets: readonly { readonly name: string; readonly value: string }[];
 };
@@ -167,9 +183,26 @@ export type Permissions = {
   readonly mode: PermissionMode;
   readonly siteRules: readonly SiteRule[];
   readonly clientRules: readonly ClientRule[];
-  /** Set when a company policy caps the mode (spec 12.2, MaxPermissionMode). */
+  /**
+   * Set when a company policy caps the mode (spec 12.2, MaxPermissionMode). Order: ask < guard < skip.
+   * perchd rejects any mode above it, for new chats and for every outside client.
+   */
   readonly maxMode: PermissionMode | null;
 };
+/** One agent action (spec 7.4). `outcome`: approved by the person, ran without needing approval, declined, or stopped by a site rule. */
+export type AuditOutcome = "approved" | "ran" | "declined" | "blocked";
+export type AuditEntry = {
+  readonly id: string;
+  readonly at: Iso;
+  /** "Perch" for the sidebar and chats, otherwise the outside client, e.g. "perch CLI" or "Claude Code (MCP)". */
+  readonly client: string;
+  readonly tab: string;
+  readonly site: string;
+  /** Plain words, e.g. "Clicked Send" or "Filled the sign-in form". */
+  readonly action: string;
+  readonly outcome: AuditOutcome;
+};
+export type AuditQuery = { readonly limit: number; readonly before?: Iso };
 
 /* ---------- Privacy and security (spec 5.1, 5.9) ---------- */
 
@@ -181,6 +214,7 @@ export type PrivacySettings = {
   readonly trackingParams: boolean;
   readonly httpsOnly: boolean;
   readonly dnsOverHttps: boolean;
+  /** "custom" is only valid with an https `dohCustomUrl`; perchd rejects the patch otherwise. */
   readonly dohProvider: DohProvider;
   readonly dohCustomUrl: string;
   readonly fingerprinting: boolean;
@@ -203,6 +237,12 @@ export type MemorySettings = {
   readonly dreaming: boolean;
   readonly lastDream?: Iso;
 };
+/**
+ * What a source needs before it can be read. "full-disk-access": the page offers
+ * `openFullDiskAccess` and lists sources again when the person comes back. "export-file": the page
+ * asks for the file with `chooseFile("memory-export")` when the source is switched on and passes
+ * its id to `startProfileBuild`. "sign-in": the source's account is set up in Settings.
+ */
 export type SetupSourceNeed = "full-disk-access" | "sign-in" | "export-file";
 export type SetupSource = {
   readonly id: string;
@@ -214,14 +254,28 @@ export type SetupSource = {
 };
 export type FactGroup = "about" | "people" | "places" | "writing" | "sites";
 export type DraftFact = { readonly id: string; readonly group: FactGroup; readonly text: string; readonly source: string };
+/** What one overnight tidy did (spec 8, dreaming): counts plus plain lines such as "Merged two pages about Maya Chen". */
+export type DreamLog = {
+  readonly id: string;
+  readonly at: Iso;
+  readonly merged: number;
+  readonly updated: number;
+  readonly archived: number;
+  readonly lines: readonly string[];
+};
 
 /* ---------- Routines (spec 8) ---------- */
 
 export type Weekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+/**
+ * Events a routine can run on. `match` narrows it: for "mail-received" a sender or word in the
+ * subject (optional); for "site-opened" a site pattern in the site-rule format (required).
+ */
+export type TriggerEvent = "mail-received" | "site-opened" | "download-finished" | "browser-started";
 export type Schedule =
   | { readonly kind: "daily"; readonly time: string; readonly days: readonly Weekday[] }
   | { readonly kind: "interval"; readonly hours: number }
-  | { readonly kind: "trigger"; readonly event: string };
+  | { readonly kind: "trigger"; readonly event: TriggerEvent; readonly match?: string };
 export type RoutineRun = { readonly at: Iso; readonly outcome: "ok" | "failed" | "waiting" };
 export type Routine = {
   readonly id: string;
@@ -249,7 +303,13 @@ export type DetectedBrowser = {
   readonly profiles: readonly { readonly id: string; readonly name: string }[];
   readonly options: readonly ImportOption[];
 };
-export type ImportRequest = { readonly browser: BrowserId; readonly profile: string; readonly kinds: readonly ImportKind[] };
+export type ImportRequest = {
+  readonly browser: BrowserId;
+  readonly profile: string;
+  readonly kinds: readonly ImportKind[];
+  /** A `chooseFile("passwords-csv")` id. Required when passwords are picked and their option needs "csv-export". */
+  readonly passwordsCsv?: string;
+};
 export type SystemAccess = { readonly fullDiskAccess: boolean };
 
 /* ---------- Welcome and About ---------- */
@@ -288,7 +348,14 @@ export interface PerchApi {
   submitQuery(query: Query): Promise<void>;
   openChat(id: string): Promise<void>;
   newChat(): Promise<void>;
+  /**
+   * Opens one of these pages in the current tab. `section` becomes the page URL's #fragment, which
+   * the pages read: perch://settings#<section id>, perch://memory#setup, perch://routines#<routine id>,
+   * perch://import#<browser id>.
+   */
   openPage(page: PageId, section?: string): Promise<void>;
+  /** Shows perchd's macOS open panel for this kind of file. Resolves null when the person cancels. */
+  chooseFile(kind: FileKind): Promise<FileChoice | null>;
 
   // Models
   listProviders(): Promise<readonly Provider[]>;
@@ -315,10 +382,20 @@ export interface PerchApi {
 
   // Permissions
   getPermissions(): Promise<Permissions>;
+  /** Rejects a mode above `maxMode`. */
   setPermissionMode(mode: PermissionMode): Promise<Permissions>;
+  /**
+   * One rule per pattern: adding a rule for a pattern that already has one replaces it (and keeps
+   * its place). The Permissions page changes a rule's kind this way.
+   */
   addSiteRule(input: { readonly pattern: string; readonly rule: SiteRuleKind }): Promise<Permissions>;
   removeSiteRule(id: string): Promise<Permissions>;
+  /** Rejects a mode above `maxMode`. */
   setClientMode(id: string, mode: PermissionMode): Promise<Permissions>;
+  /** Newest first. */
+  listAuditLog(query: AuditQuery): Promise<readonly AuditEntry[]>;
+  /** Writes the whole log as JSON lines to a file the person picks in perchd's save panel; null when cancelled. */
+  exportAuditLog(): Promise<{ readonly name: string; readonly entries: number } | null>;
 
   // Privacy and security
   getPrivacy(): Promise<PrivacySettings>;
@@ -337,9 +414,20 @@ export interface PerchApi {
   writeMemoryPage(path: string, body: string): Promise<MemoryDoc>;
   deleteMemoryPage(path: string): Promise<void>;
   wipeMemory(): Promise<void>;
+  /** Newest first. */
+  listDreamLogs(limit: number): Promise<readonly DreamLog[]>;
   listSetupSources(): Promise<readonly SetupSource[]>;
-  startProfileBuild(sourceIds: readonly string[]): Promise<JobId>;
-  /** The draft from the last build. Nothing in it is saved until saveProfileDraft. */
+  /**
+   * `files` maps a source id to a `chooseFile("memory-export")` id; every switched-on source whose
+   * `needs` is "export-file" must have one. Rejects while another build is running.
+   */
+  startProfileBuild(sourceIds: readonly string[], files?: Readonly<Record<string, string>>): Promise<JobId>;
+  /** The build that is still running, so a page opened again can follow it; null when none is. */
+  getProfileBuild(): Promise<JobId | null>;
+  /**
+   * The draft from the last finished build, kept until it is saved or discarded, so the review
+   * survives a reload or a closed tab. Nothing in it is saved until saveProfileDraft.
+   */
   getProfileDraft(): Promise<readonly DraftFact[]>;
   saveProfileDraft(facts: readonly DraftFact[]): Promise<{ readonly saved: number }>;
   discardProfileDraft(): Promise<void>;
@@ -363,6 +451,13 @@ export interface PerchApi {
   startImport(request: ImportRequest): Promise<JobId>;
 
   // Jobs (profile build, import)
+  /** The job's latest progress; null when perchd doesn't know the id (for example after a restart). */
+  getJob(id: JobId): Promise<JobProgress | null>;
+  /**
+   * Calls `listener` with the job's current state as soon as it is known, then on every change,
+   * so a job that finished before the page subscribed is still seen. The RPC adapter does this by
+   * subscribing to `job:<id>` first and then calling `getJob`.
+   */
   watchJob(id: JobId, listener: (progress: JobProgress) => void): Unsubscribe;
 
   // Welcome and About
@@ -379,14 +474,15 @@ export interface PerchApi {
 export const API_METHODS = [
   "getAppearance", "setAppearance",
   "getNtpLayout", "setNtpLayout", "listChats", "searchChats", "listSuggestions", "dismissSuggestion", "submitQuery", "openChat", "newChat", "openPage",
+  "chooseFile",
   "listProviders", "signIn", "signOut", "connectProvider", "listModels", "getTaskModels", "setTaskModel",
   "listMcpServers", "scanMcpImports", "importMcpServers", "addMcpServer", "updateMcpServer", "removeMcpServer",
   "listSkills", "addSkill", "setSkillEnabled", "removeSkill",
-  "getPermissions", "setPermissionMode", "addSiteRule", "removeSiteRule", "setClientMode",
+  "getPermissions", "setPermissionMode", "addSiteRule", "removeSiteRule", "setClientMode", "listAuditLog", "exportAuditLog",
   "getPrivacy", "setPrivacy", "setBackgroundConnection", "removeBlockerException", "listSiteData", "forgetSite",
   "getMemorySettings", "setMemorySettings", "listMemoryPages", "readMemoryPage", "writeMemoryPage", "deleteMemoryPage", "wipeMemory",
-  "listSetupSources", "startProfileBuild", "getProfileDraft", "saveProfileDraft", "discardProfileDraft",
+  "listDreamLogs", "listSetupSources", "startProfileBuild", "getProfileBuild", "getProfileDraft", "saveProfileDraft", "discardProfileDraft",
   "listRoutines", "saveRoutine", "setRoutineEnabled", "deleteRoutine", "runRoutine", "findRoutineProposals", "acceptProposal", "dismissProposal",
-  "detectBrowsers", "getSystemAccess", "openFullDiskAccess", "startImport",
+  "detectBrowsers", "getSystemAccess", "openFullDiskAccess", "startImport", "getJob",
   "getOnboarding", "completeOnboardingStep", "finishOnboarding", "getAbout", "checkForUpdates", "installUpdate", "setAutoUpdate",
 ] as const satisfies readonly Exclude<keyof PerchApi, "watchJob">[];

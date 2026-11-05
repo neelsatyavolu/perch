@@ -24,6 +24,20 @@ test("time budget counts minutes and says when time is up", () => {
   expect(p.timeUp()).toBe(true);
 });
 
+test("time spent waiting for the user does not count against the time budget", async () => {
+  let now = 0;
+  const p = new Progress({ maxMs: 10 * 60_000 }, () => now);
+  now = 2 * 60_000;
+  const answer = await p.whilePaused(async () => { now += 30 * 60_000; return true; });
+  expect(answer).toBe(true);
+  expect(p.timeUp()).toBe(false);
+  expect(p.used()).toBeCloseTo(0.2);
+  // A wait that throws still restarts the clock.
+  await expect(p.whilePaused(async () => { now += 60_000; throw new Error("closed"); })).rejects.toThrow("closed");
+  now += 8 * 60_000;
+  expect(p.timeUp()).toBe(true);
+});
+
 test("the same call with the same result a third time gets a note; a changing result does not", () => {
   const p = new Progress({});
   expect(p.after(call("click", { ref: "e4" }), "covered by dialog")).toEqual([]);

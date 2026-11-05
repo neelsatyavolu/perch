@@ -235,6 +235,38 @@ test("calls left in a turn when time runs out are not run, but each still gets a
   expect(results[1]).toMatchObject({ content: "Not run: the time for this task is up." });
 });
 
+test("time the user spends deciding on an approval does not use up the task's time", async () => {
+  const slowApprove = async () => { await Bun.sleep(4_500); return false; };
+  const model = fakeModel(sendScript((req) => say(lastTool(req).content.includes("declined") ? "Okay, I did not send it." : "Other")));
+  const audit = new AuditLog(join(dir, `audit-${++n}.jsonl`));
+  const events: StepEvent[] = [];
+  for await (const event of runTask({ model, browser: env.browser, task: "Email Maya", mode: "guard", approve: slowApprove, audit, maxMs: 4_000 })) events.push(event);
+  expect(events.at(-1)).toEqual({ type: "final", text: "Okay, I did not send it." });
+  expect(model.requests.every((r) => r.toolChoice !== "none")).toBe(true);
+  expect(model.requests.flatMap((r) => r.messages).some((m) => m.role === "tool" && /Budget:|time for this task is up/.test(m.content))).toBe(false);
+}, 15_000);
+
+test("a done that arrives once time is up is the answer, not thrown away", async () => {
+  const late: TurnEvent[] = [
+    { type: "tool_call", call: { id: "slow", name: "wait_for", args: { seconds: 0.4 } } },
+    { type: "tool_call", call: { id: "fin", name: "done", args: { answer: "The answer is 42." } } },
+    { type: "done" },
+  ];
+  const { events, model } = await run([() => tool("tabs"), () => late], { maxMs: 300 });
+  expect(events.at(-1)).toEqual({ type: "final", text: "The answer is 42." });
+  expect(model.requests).toHaveLength(2);
+});
+
+test("if the final turn after the time limit fails, the checked draft answer is kept", async () => {
+  const { events } = await run([
+    () => tool("tabs"),
+    () => tool("done", { answer: "Draft: 3 flights under $300." }),
+    () => tool("wait_for", { seconds: 0.4 }),
+    // No fourth step: the fake model throws on the final turn, as an overloaded API would.
+  ], { maxMs: 300 });
+  expect(events.at(-1)).toEqual({ type: "final", text: "Draft: 3 flights under $300." });
+});
+
 test("budget and repeated-call notes reach the model in tool results", async () => {
   let seen = "";
   const { model } = await run([

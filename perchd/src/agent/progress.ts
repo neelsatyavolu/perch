@@ -26,6 +26,9 @@ export class Progress {
   private readonly started: number;
   private readonly recent: string[] = [];
   private level = 0;
+  /** Time spent waiting for the user, which is not the agent's time. */
+  private pausedMs = 0;
+  private pausedAt: number | null = null;
 
   constructor(private readonly budget: Budget, private readonly now: () => number = Date.now) {
     this.started = now();
@@ -41,15 +44,32 @@ export class Progress {
     return notes;
   }
 
+  /** Runs work (an approval prompt) with the clock stopped. */
+  async whilePaused<T>(work: () => Promise<T>): Promise<T> {
+    if (this.pausedAt !== null) return work();
+    this.pausedAt = this.now();
+    try {
+      return await work();
+    } finally {
+      this.pausedMs += this.now() - this.pausedAt;
+      this.pausedAt = null;
+    }
+  }
+
+  private elapsed(): number {
+    const paused = this.pausedMs + (this.pausedAt === null ? 0 : this.now() - this.pausedAt);
+    return this.now() - this.started - paused;
+  }
+
   /** The share of the budget used, by whichever of steps and time is further along. */
   used(): number {
     const bySteps = this.budget.maxSteps ? this.steps / this.budget.maxSteps : 0;
-    const byTime = this.budget.maxMs ? (this.now() - this.started) / this.budget.maxMs : 0;
+    const byTime = this.budget.maxMs ? this.elapsed() / this.budget.maxMs : 0;
     return Math.max(bySteps, byTime);
   }
 
   timeUp(): boolean {
-    return this.budget.maxMs !== undefined && this.now() - this.started >= this.budget.maxMs;
+    return this.budget.maxMs !== undefined && this.elapsed() >= this.budget.maxMs;
   }
 
   private budgetNote(): string | null {
@@ -66,10 +86,10 @@ export class Progress {
   /** What is left of whichever budget is running out first. */
   private left(): string {
     const bySteps = this.budget.maxSteps ? this.steps / this.budget.maxSteps : 0;
-    const byTime = this.budget.maxMs ? (this.now() - this.started) / this.budget.maxMs : 0;
+    const byTime = this.budget.maxMs ? this.elapsed() / this.budget.maxMs : 0;
     if (this.budget.maxSteps && bySteps >= byTime) return `${Math.max(0, this.budget.maxSteps - this.steps)} of ${this.budget.maxSteps} steps`;
     const maxMs = this.budget.maxMs ?? 0;
-    const minutes = Math.max(0, Math.round((maxMs - (this.now() - this.started)) / 60_000));
+    const minutes = Math.max(0, Math.round((maxMs - this.elapsed()) / 60_000));
     return `about ${minutes} of ${Math.round(maxMs / 60_000)} minutes`;
   }
 

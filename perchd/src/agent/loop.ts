@@ -56,6 +56,8 @@ export async function* runTask(opts: TaskOptions): AsyncIterable<StepEvent> {
   const progress = new Progress({ maxSteps, maxMs: opts.maxMs ?? DEFAULT_MAX_MS });
   let worked = false;
   let checked = false;
+  /** The answer of a done that was sent back for checking: kept in case no better one comes. */
+  let draft: string | undefined;
   try {
     for (let step = 0; step < maxSteps && !progress.timeUp(); step++) {
       let text = "";
@@ -82,18 +84,20 @@ export async function* runTask(opts: TaskOptions): AsyncIterable<StepEvent> {
           yield { type: "error", message: "Cancelled." };
           return;
         }
-        if (progress.timeUp()) {
+        // A done still counts once time is up: it is the answer the final turn would ask for.
+        if (progress.timeUp() && call.name !== "done") {
           // Every call needs a result; the final turn follows.
           messages.push({ role: "tool", callId: call.id, name: call.name, content: TIME_UP });
           continue;
         }
-        const outcome = yield* act(ctx, opts, call);
+        const outcome = yield* act(ctx, opts, call, progress);
         if (signal.aborted) {
           yield { type: "error", message: "Cancelled." };
           return;
         }
-        if (outcome.final !== undefined && worked && !checked && step < maxSteps - 1) {
+        if (outcome.final !== undefined && worked && !checked && step < maxSteps - 1 && !progress.timeUp()) {
           checked = true;
+          draft = outcome.final;
           messages.push({ ...outcome.message, content: CHECK_BEFORE_DONE });
           continue;
         }
@@ -112,8 +116,8 @@ export async function* runTask(opts: TaskOptions): AsyncIterable<StepEvent> {
     }
     const why = progress.timeUp() ? "time" : "steps";
     const answer = yield* finalTurn({ model: opts.model, system, messages: compact(messages), tools: TOOL_SPECS, why, effort: opts.effort, signal });
-    if (answer) {
-      yield { type: "final", text: answer };
+    if (answer || draft) {
+      yield { type: "final", text: answer || draft! };
       return;
     }
     const limit = why === "time" ? "the time limit" : `${maxSteps} steps`;
@@ -125,14 +129,15 @@ export async function* runTask(opts: TaskOptions): AsyncIterable<StepEvent> {
 
 type Outcome = { final?: string; message: Extract<Message, { role: "tool" }> };
 
-async function* act(ctx: ToolContext, opts: TaskOptions, call: ToolCall): AsyncGenerator<StepEvent, Outcome> {
+async function* act(ctx: ToolContext, opts: TaskOptions, call: ToolCall, progress: Progress): AsyncGenerator<StepEvent, Outcome> {
   const reply = (content: string, image?: string): Outcome => ({ message: { role: "tool", callId: call.id, name: call.name, content, image } });
   const prepared = await prepareCall(ctx, opts, call);
   if (prepared.kind === "answer") return reply(prepared.result.content);
   let approved: boolean | null = null;
   if (prepared.decision === "ask") {
     yield { type: "approval", request: prepared.request };
-    approved = await opts.approve(prepared.request);
+    // The user's thinking time is not the agent's: the time budget waits with them.
+    approved = await progress.whilePaused(() => opts.approve(prepared.request));
   }
   const result = await finishCall(ctx, opts, prepared, approved);
   if (result.done) return { final: result.content, message: reply(result.content).message };

@@ -34,6 +34,7 @@ export const SEARCH_INDEX: readonly SearchEntry[] = [
   { section: "permissions", anchor: "permission-mode", title: "Permission mode", words: "ask guard skip confirmation approval" },
   { section: "permissions", anchor: "site-rules", title: "Site rules", words: "always allow always ask never touch bank" },
   { section: "permissions", anchor: "client-rules", title: "Outside agents", words: "mcp cli clients claude code codex" },
+  { section: "permissions", anchor: "audit-log", title: "Activity log", words: "audit log actions history approved export" },
   { section: "privacy", anchor: "content-blocker", title: "Block ads and trackers", words: "content blocker adblock easylist easyprivacy" },
   { section: "privacy", anchor: "cookie-banners", title: "Reject cookie banners", words: "consent gdpr" },
   { section: "privacy", anchor: "tracking-params", title: "Remove tracking parameters", words: "utm fbclid gclid links" },

@@ -84,7 +84,7 @@ export function RoutinesSection() {
           ))}
           <button type="button" class="more-row" onClick={() => act(() => api.openPage("routines"))}>Open Routines to add, edit or find routines</button>
         </div>
-        <p class="note">Routines run with your default permission mode and appear in the audit log.</p>
+        <p class="note">Routines run with your default permission mode and appear in the activity log under Permissions.</p>
       </Group>
     </div>
   );

@@ -7,6 +7,7 @@ import { useAction, useApi, useLoad } from "../../ui/frame";
 import { Icon, Trash2 } from "../../ui/icons";
 import { Group, Row } from "../../ui/Row";
 import { focusSibling, nextIndex } from "../../ui/roving";
+import { AuditLog } from "./AuditLog";
 
 const ORDER: readonly PermissionMode[] = ["ask", "guard", "skip"];
 const RULE_KINDS = Object.keys(SITE_RULES) as SiteRuleKind[];
@@ -125,6 +126,8 @@ export function Permissions() {
           {p.maxMode && ` Your organization allows up to ${MODES[p.maxMode].label}.`}
         </p>
       </Group>
+
+      <AuditLog />
     </div>
   );
 }

@@ -110,6 +110,22 @@ describe("Permissions", () => {
   });
 });
 
+describe("Activity log", () => {
+  test("lists each agent action with client, site, tab and result, and exports", async () => {
+    const r = at("#permissions");
+    const log = await r.findByRole("region", { name: "Activity log" });
+    const table = await within(log).findByRole("table", { name: "Agent actions, newest first" });
+    const rows = within(table).getAllByRole("row").slice(1);
+    expect(rows.length).toBe(5);
+    expect(rows[0]!.textContent).toContain("Clicked Send on a reply to Maya Chen");
+    expect(rows[0]!.textContent).toContain("Approved");
+    expect(within(table).getByText("Blocked by a site rule")).toBeTruthy();
+    expect(within(table).getByText("Chase - Accounts")).toBeTruthy();
+    fireEvent.click(within(log).getByRole("button", { name: "Export" }));
+    expect(await r.findByText("Saved 5 actions to perch-audit-log.jsonl")).toBeTruthy();
+  });
+});
+
 describe("Permissions under a company cap", () => {
   test("neither the default mode nor an outside client can go above the cap", async () => {
     window.location.hash = "#permissions";

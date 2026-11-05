@@ -29,9 +29,12 @@ Add `--show` to watch the browser and `--mode ask|guard|skip` to change the perm
 | `src/cdp/` | Launch Chromium with `--remote-debugging-pipe`, frame and route CDP messages |
 | `src/browser/` | Browser and tabs; agent tabs open in their own unfocused window so input reaches them |
 | `src/page/snapshot.ts` | Accessibility-tree snapshot with refs, fetched lazily near the viewport |
-| `src/page/actions.ts` | Click, type, select, press, scroll, hover, upload, wait, back |
+| `src/page/actions.ts` | Click, type, select, press, scroll, hover, drag, upload, wait, back |
+| `src/page/pointing.ts`, `node.ts` | Where a click lands: scrolled into view, hit-tested, hidden radios and checkboxes through their labels |
+| `src/page/typing.ts`, `slider.ts`, `drag.ts`, `scrolling.ts`, `navigation.ts` | Key-by-key typing with suggestion notes, sliders, drag and drop, lazy lists, slow pages |
 | `src/page/screenshot.ts`, `repl.ts` | Masked screenshots, coordinate clicks, guarded JavaScript |
 | `src/agent/` | Tools, permission modes, audit log, the task loop and system prompt |
+| `src/agent/progress.ts`, `finish.ts` | Step and time budget notes, repeated-call notes, the final best-effort answer |
 | `src/models/` | Responses API (Codex, Grok), Anthropic Messages API, a scripted fake |
 
 ## Rules this code keeps

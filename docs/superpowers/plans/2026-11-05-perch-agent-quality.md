@@ -30,17 +30,22 @@ Counted across all four runs (about 3,000 tool calls), the general weaknesses ar
 | No drag | sliders, sortable lists, maps | a `drag` tool (mouse and HTML5 drag and drop) |
 | Range sliders | no way to set a value | `type` sets range inputs and ARIA sliders |
 
+## Found while fixing
+
+- The click hit-test used DOM.getNodeForLocation, which takes document coordinates, not viewport ones. On any scrolled page it tested the wrong point, which explains most "hidden or clipped" and many "covered by" errors on real sites. Clicks now hit-test with elementFromPoint in the target's own document.
+- Custom suggestion lists, chips and menus are often plain elements with cursor: pointer and a click handler, so they had no ref. The snapshot now gives the outermost such element (with text and nothing interactive inside) a `clickable` ref.
+
 ## Aside parity checklist (agent quality)
 
 - [x] Snapshot with refs, iframes, shadow DOM (plan 3a)
-- [ ] Autocomplete and comboboxes that need key events
-- [ ] Sliders (native and ARIA)
-- [ ] Drag and drop
-- [ ] Lazy lists and infinite scroll
-- [ ] Hidden native controls behind styled labels
-- [ ] Partial page loads
-- [ ] Time and step budget, final answer guarantee, stuck-loop recovery
-- [ ] Model adapters: effort for Claude, prompt caching, final answer turn with no tools
+- [x] Autocomplete and comboboxes that need key events
+- [x] Sliders (native and ARIA)
+- [x] Drag and drop
+- [x] Lazy lists and infinite scroll
+- [x] Hidden native controls behind styled labels
+- [x] Partial page loads
+- [x] Time and step budget, final answer guarantee, stuck-loop recovery
+- [x] Model adapters: effort for Claude, prompt caching, final answer turn with no tools
 
 ## File layout
 

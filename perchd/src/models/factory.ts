@@ -39,12 +39,13 @@ const requireKey = (deps: AdapterDeps, label: string) => async (): Promise<strin
   return key;
 };
 
-export function buildChatModel(provider: ProviderId, model: string, deps: AdapterDeps): Model {
+/** `fast` asks for the provider's fast mode; only the Claude API takes it so far. */
+export function buildChatModel(provider: ProviderId, model: string, deps: AdapterDeps, extra: { fast?: boolean } = {}): Model {
   const def = PROVIDERS[provider];
   const base = deps.baseUrl.replace(/\/+$/, "");
   switch (provider) {
     case "anthropic":
-      return anthropicModel({ model, apiKey: requireKey(deps, def.label), url: `${base}/messages` }, deps.fetch);
+      return anthropicModel({ model, apiKey: requireKey(deps, def.label), url: `${base}/messages`, ...(extra.fast ? { fast: true } : {}) }, deps.fetch);
     case "codex":
     case "grok":
       return responsesModel({ provider, model, getToken: deps.oauthTokens, url: `${base}/responses` }, deps.fetch);

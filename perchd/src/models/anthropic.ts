@@ -5,6 +5,8 @@ import { ModelError, parseArgs, type Message, type Model, type TurnEvent, type T
 
 export const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const MAX_TOKENS = 8192;
+/** Fast mode (research preview; Claude Opus 5.5, Opus 5 and Opus 4.8 on the Claude API, at a higher price). */
+const FAST_BETA = "fast-mode-2026-02-01";
 
 type Block = Record<string, unknown>;
 
@@ -32,15 +34,17 @@ export function toAnthropicMessages(messages: Message[]): { role: "user" | "assi
   return out;
 }
 
-export function anthropicModel(opts: { model: string; apiKey: () => Promise<string>; url?: string }, fetchImpl: typeof fetch = fetch): Model {
-  // Once the API rejects the effort setting for this model, stop sending it.
+export function anthropicModel(opts: { model: string; apiKey: () => Promise<string>; url?: string; fast?: boolean }, fetchImpl: typeof fetch = fetch): Model {
+  // Once the API rejects the effort or fast setting for this model, stop sending it.
   let effortRejected = false;
+  let fastRejected = false;
   return {
     id: `anthropic:${opts.model}`,
     async *turn(req: TurnRequest, signal: AbortSignal): AsyncIterable<TurnEvent> {
       const key = await opts.apiKey();
       // The Claude API takes low through max; "none" (a Responses API value) has no Claude equivalent.
       let effort = effortRejected || req.effort === "none" ? undefined : req.effort;
+      let fast = Boolean(opts.fast) && !fastRejected;
       const request = () => ({
         model: opts.model,
         max_tokens: MAX_TOKENS,
@@ -50,6 +54,7 @@ export function anthropicModel(opts: { model: string; apiKey: () => Promise<stri
         // One action at a time, as with the Responses adapter: each result is checked before the next.
         ...(req.tools.length ? { tool_choice: { type: "auto", disable_parallel_tool_use: true } } : {}),
         ...(effort ? { output_config: { effort } } : {}),
+        ...(fast ? { speed: "fast" } : {}),
         stream: true,
       });
       const stream = await openStream(
@@ -57,7 +62,13 @@ export function anthropicModel(opts: { model: string; apiKey: () => Promise<stri
           url: opts.url ?? ANTHROPIC_URL,
           init: {
             method: "POST",
-            headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json", accept: "text/event-stream" },
+            headers: {
+              "x-api-key": key,
+              "anthropic-version": "2023-06-01",
+              "content-type": "application/json",
+              accept: "text/event-stream",
+              ...(fast ? { "anthropic-beta": FAST_BETA } : {}),
+            },
             body: JSON.stringify(request()),
           },
         }),
@@ -66,6 +77,11 @@ export function anthropicModel(opts: { model: string; apiKey: () => Promise<stri
           signal,
           describe: (status, text) => upstreamMessage(status, text, "Check the Claude API key in Perch's settings."),
           adjust: (text) => {
+            if (fast && /speed|fast/i.test(text)) {
+              fast = false;
+              fastRejected = true;
+              return true;
+            }
             if (!effort || !/effort|output_config/i.test(text)) return false;
             effort = undefined;
             effortRejected = true;

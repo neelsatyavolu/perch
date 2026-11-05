@@ -316,10 +316,11 @@ export function createModelRegistry(opts: RegistryOptions) {
     return setRole("default", { provider: ref.provider, model: ref.model });
   }
 
-  async function handleFor(resolved: ResolvedRole | { provider: ProviderId; model: string; info: ModelInfo; effort?: RoleChoice["effort"] }): Promise<ModelHandle> {
+  async function handleFor(resolved: ResolvedRole | { provider: ProviderId; model: string; info: ModelInfo; effort?: RoleChoice["effort"]; fast?: boolean }): Promise<ModelHandle> {
     if (resolved.provider === "claude-code") return { kind: "runner", runner: "claude-code", model: resolved.model, info: resolved.info, provider: "claude-code" };
     const effort = adapterEffort(resolved.provider, resolved.effort);
-    return { kind: "model", model: buildChatModel(resolved.provider, resolved.model, deps(resolved.provider)), info: resolved.info, provider: resolved.provider, ...(effort ? { effort } : {}) };
+    const model = buildChatModel(resolved.provider, resolved.model, deps(resolved.provider), { fast: resolved.fast === true });
+    return { kind: "model", model, info: resolved.info, provider: resolved.provider, ...(effort ? { effort } : {}) };
   }
 
   /** The adapter for a role, or for a specific model from the picker. */

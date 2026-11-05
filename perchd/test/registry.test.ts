@@ -186,6 +186,18 @@ test("changing an endpoint's address keeps its key; only an explicit null remove
   expect(await keychain.get("api-key:lmstudio")).toBe(LMS_KEY);
 });
 
+test("a role's fast setting reaches the Claude API", async () => {
+  const { registry } = await setup();
+  await registry.setKey("anthropic", ANTHROPIC_KEY);
+  await registry.setRole("deep", { provider: "anthropic", model: "claude-opus-5-5", effort: "high", fast: true });
+  const handle = await registry.modelFor("deep");
+  if (handle.kind !== "model") throw new Error("expected a model");
+  expect(await text(handle.model)).toBe("hi from claude");
+  const sent = server!.seen.filter((s) => s.path === "/anthropic/v1/messages").at(-1)!;
+  expect(sent.body).toMatchObject({ speed: "fast" });
+  expect(sent.headers["anthropic-beta"]).toBe("fast-mode-2026-02-01");
+});
+
 test("a key for an endpoint with no address yet asks for the address first", async () => {
   const { registry } = await setup();
   await expect(registry.setKey("custom", LMS_KEY)).rejects.toThrow("base URL first");

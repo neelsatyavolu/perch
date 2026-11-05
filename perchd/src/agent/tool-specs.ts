@@ -1,0 +1,54 @@
+/** The browser tools, identical for every model, and a small validator for their arguments. */
+
+import type { ToolSpec } from "../models/types";
+
+type Prop = { type: "string" | "number" | "boolean" | "array"; description?: string; items?: { type: "string" } };
+
+function spec(name: string, description: string, properties: Record<string, Prop>, required: string[] = []): ToolSpec {
+  return { name, description, parameters: { type: "object", properties, required, additionalProperties: false } };
+}
+
+const ref: Prop = { type: "string", description: "Element ref from the snapshot, like e12" };
+
+export const TOOL_SPECS: ToolSpec[] = [
+  spec("navigate", "Open a URL in the current agent tab. Returns the page snapshot.", { url: { type: "string" } }, ["url"]),
+  spec("snapshot", "Read the page as text. Interactive elements have refs like e12. Set full to include content far from the viewport.", { full: { type: "boolean" } }),
+  spec("click", "Click an element by ref.", { ref }, ["ref"]),
+  spec("type", "Replace the text in a field by ref. Set submit to press Enter after.", { ref, text: { type: "string" }, submit: { type: "boolean" } }, ["ref", "text"]),
+  spec("select", "Choose a dropdown option by its label or value.", { ref, value: { type: "string" } }, ["ref", "value"]),
+  spec("press", "Press a key in the focused element, such as Enter, Escape, Tab or Meta+A.", { key: { type: "string" } }, ["key"]),
+  spec("scroll", "Scroll by pixels (positive is down), or bring a ref into view.", { dy: { type: "number" }, ref }),
+  spec("hover", "Move the mouse over an element by ref, for menus and tooltips.", { ref }, ["ref"]),
+  spec("upload", "Attach local files to a file input by ref.", { ref, paths: { type: "array", items: { type: "string" } } }, ["ref", "paths"]),
+  spec("wait_for", "Wait until text appears on the page.", { text: { type: "string" }, timeout_s: { type: "number" } }, ["text"]),
+  spec("back", "Go back one page in the current tab.", {}),
+  spec("screenshot", "See the visible page as an image. Use when the snapshot cannot describe it, as on canvas, maps and charts.", {}),
+  spec("click_at", "Click at x, y in the last screenshot's pixels.", { x: { type: "number" }, y: { type: "number" } }, ["x", "y"]),
+  spec("repl", "Run JavaScript in the page and return the result as JSON. Use return in multi-line code. Secret fields cannot be read.", { code: { type: "string" } }, ["code"]),
+  spec("tabs", "List open tabs with their ids. The current agent tab is marked with *.", {}),
+  spec("open_tab", "Open a URL in a new agent tab and make it current.", { url: { type: "string" } }, ["url"]),
+  spec("switch_tab", "Make another tab current, by id from tabs.", { id: { type: "string" } }, ["id"]),
+  spec("done", "Finish the task with a short answer for the user.", { answer: { type: "string" } }, ["answer"]),
+];
+
+const BY_NAME = new Map(TOOL_SPECS.map((s) => [s.name, s]));
+
+/** Returns a plain error for the model, or null when the arguments fit the tool's schema. */
+export function validate(name: string, args: Record<string, unknown>): string | null {
+  const tool = BY_NAME.get(name);
+  if (!tool) return `unknown tool "${name}"`;
+  if ("__unparsed" in args) return `the arguments for "${name}" were not valid JSON`;
+  const schema = tool.parameters as { properties: Record<string, Prop>; required: string[] };
+  for (const key of schema.required) if (args[key] === undefined || args[key] === null) return `missing argument "${key}"`;
+  for (const [key, value] of Object.entries(args)) {
+    const prop = schema.properties[key];
+    if (!prop) return `unexpected argument "${key}"`;
+    if (value === undefined || value === null) continue;
+    const ok =
+      prop.type === "array"
+        ? Array.isArray(value) && value.every((v) => typeof v === "string")
+        : typeof value === prop.type && !(prop.type === "number" && !Number.isFinite(value));
+    if (!ok) return `argument "${key}" must be ${prop.type === "array" ? "a list of strings" : `a ${prop.type}`}`;
+  }
+  return null;
+}

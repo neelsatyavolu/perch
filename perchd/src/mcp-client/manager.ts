@@ -119,7 +119,7 @@ export class McpManager {
     const args = entry.config.args.map((a, i) => (typeof a === "string" && !hidden.has(i) ? a : typeof a === "object" && "env" in a ? `$${a.env}` : "••••"));
     const ok = await this.opts.approveLaunch({ server: entry.name, command: entry.config.command, args, ...(entry.config.cwd ? { cwd: entry.config.cwd } : {}) });
     if (!ok) return null;
-    await this.opts.store.save(updateServer(await this.opts.store.load(), entry.name, { approvedLaunch: fingerprint }));
+    await this.opts.store.update((reg) => updateServer(reg, entry.name, { approvedLaunch: fingerprint }));
     return { ...entry, approvedLaunch: fingerprint };
   }
 
@@ -157,9 +157,11 @@ export class McpManager {
 
 /** Removes a server and every Keychain item that belongs to it (its secrets and OAuth tokens). */
 export async function deleteServer(store: RegistryStore, keychain: SecretStore, name: string): Promise<void> {
-  const reg = await store.load();
-  const entry = findServer(reg, name);
-  if (!entry) throw new Error(`no server named "${name}"`);
-  await store.save(removeServer(reg, name));
-  await Promise.all([...secretAccounts(entry.config), tokenAccount(name), clientAccount(name)].map((a) => keychain.delete(a)));
+  let entry: ServerEntry | undefined;
+  await store.update((reg) => {
+    entry = findServer(reg, name);
+    if (!entry) throw new Error(`no server named "${name}"`);
+    return removeServer(reg, name);
+  });
+  await Promise.all([...secretAccounts(entry!.config), tokenAccount(name), clientAccount(name)].map((a) => keychain.delete(a)));
 }

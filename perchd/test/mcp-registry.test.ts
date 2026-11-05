@@ -62,6 +62,26 @@ test("the registry is stored encrypted and holds no secret values", async () => 
   expect(await kc.get("mcp/github/env/GITHUB_TOKEN")).toBe(FAKE_TOKEN);
 });
 
+test("registry updates run one at a time, so changes made at once are all kept", async () => {
+  const kc = new MemoryKeychain();
+  const path = join(dir, "concurrent.enc");
+  // Two stores on one file stand in for the daemon and the CLI.
+  const a = new RegistryStore(path, kc);
+  const b = new RegistryStore(path, kc);
+  await a.save(addServer(addServer({ version: 1, servers: [] }, entry("one")), entry("two")));
+  await Promise.all([
+    a.update((reg) => updateServer(reg, "one", { approvedLaunch: "f1" })),
+    b.update((reg) => updateServer(reg, "two", { approvedLaunch: "f2" })),
+    a.update((reg) => addServer(reg, entry("three"))),
+    b.update(async (reg) => (await Bun.sleep(5), updateServer(reg, "one", { trusted: true }))),
+  ]);
+  const reg = await a.load();
+  expect(reg.servers.map((s) => [s.name, s.approvedLaunch ?? null, s.trusted])).toEqual([["one", "f1", true], ["two", "f2", false], ["three", null, false]]);
+  // A failed update changes nothing and does not block the next one.
+  await expect(a.update(() => { throw new Error("boom"); })).rejects.toThrow("boom");
+  expect((await b.update((r) => removeServer(r, "three"))).servers).toHaveLength(2);
+});
+
 test("header values and --flag=value arguments go to the Keychain too", async () => {
   const kc = new MemoryKeychain();
   const http = await storeSecrets("linear", { transport: "http", url: "https://mcp.example.test/mcp", headers: { Authorization: `Bearer ${FAKE_TOKEN}` } }, kc);

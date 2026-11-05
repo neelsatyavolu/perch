@@ -4,6 +4,7 @@
  */
 
 import type { SecretStore } from "../secure/keychain";
+import { withFileLock } from "../secure/file-lock";
 import { dataKey, readSealedJson, writeSealedJson } from "../secure/sealed";
 import { parseEntry, type ServerEntry } from "./types";
 
@@ -57,5 +58,17 @@ export class RegistryStore {
 
   async save(reg: Registry): Promise<void> {
     await writeSealedJson(this.path, await dataKey(this.keychain), LABEL, reg);
+  }
+
+  /**
+   * Loads, changes and saves the registry with no other update in between (in this process or
+   * another), so two changes made at once are both kept. Returns the saved registry.
+   */
+  update(change: (reg: Registry) => Registry | Promise<Registry>): Promise<Registry> {
+    return withFileLock(this.path, async () => {
+      const next = await change(await this.load());
+      await this.save(next);
+      return next;
+    });
   }
 }

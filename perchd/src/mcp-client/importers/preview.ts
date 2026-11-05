@@ -114,25 +114,27 @@ export type SaveResult = { saved: string[]; failed: { name: string; error: strin
 
 /** Saves the picked servers: secrets to the Keychain, the rest to the encrypted registry. */
 export async function saveImports(store: RegistryStore, keychain: SecretStore, candidates: readonly Candidate[], ids: readonly number[]): Promise<SaveResult> {
-  let reg = await store.load();
-  const items = preview(reg, candidates);
   const saved: string[] = [];
   const failed: { name: string; error: string }[] = [];
-  for (const id of new Set(ids)) {
-    const c = candidates[id];
-    const item = items[id];
-    if (!c || !item) continue;
-    if (item.alreadyAdded || item.duplicateOf) continue;
-    try {
-      const name = freeName(reg, item.name);
-      parseConfig(c.config); // refuse a bad entry before any secret is written
-      const config = await storeSecrets(name, c.config, keychain);
-      reg = addServer(reg, { name, config, enabled: true, trusted: false, source: c.source, addedAt: new Date().toISOString() });
-      saved.push(name);
-    } catch (error) {
-      failed.push({ name: item.name, error: error instanceof Error ? error.message : String(error) });
+  await store.update(async (current) => {
+    let reg = current;
+    const items = preview(reg, candidates);
+    for (const id of new Set(ids)) {
+      const c = candidates[id];
+      const item = items[id];
+      if (!c || !item) continue;
+      if (item.alreadyAdded || item.duplicateOf) continue;
+      try {
+        const name = freeName(reg, item.name);
+        parseConfig(c.config); // refuse a bad entry before any secret is written
+        const config = await storeSecrets(name, c.config, keychain);
+        reg = addServer(reg, { name, config, enabled: true, trusted: false, source: c.source, addedAt: new Date().toISOString() });
+        saved.push(name);
+      } catch (error) {
+        failed.push({ name: item.name, error: error instanceof Error ? error.message : String(error) });
+      }
     }
-  }
-  await store.save(reg);
+    return reg;
+  });
   return { saved, failed };
 }

@@ -89,7 +89,7 @@ export async function run(argv: string[], deps: CliDeps): Promise<number> {
       if (command === "remove") await deleteServer(store, deps.keychain, name);
       else {
         const patch = { trust: { trusted: true }, untrust: { trusted: false }, enable: { enabled: true }, disable: { enabled: false } }[command];
-        await store.save(updateServer(await store.load(), name, patch));
+        await store.update((reg) => updateServer(reg, name, patch));
       }
       deps.out(`${name}: done.`);
       return 0;

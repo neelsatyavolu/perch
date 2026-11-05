@@ -11,9 +11,32 @@ type Props = {
   readonly wide?: boolean;
 };
 
+const FOCUSABLE = "button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex='-1'])";
+
 /**
- * A modal on the native <dialog>: the browser traps focus, makes the page behind it inert and
- * sends `cancel` on Escape. Focus goes back to whatever opened it.
+ * Keeps Tab inside the dialog. A modal <dialog> makes the page behind it inert, but Tab can still
+ * leave the page for the browser's own toolbar; this wraps from the last control to the first.
+ */
+function trapTab(e: KeyboardEvent) {
+  if (e.key !== "Tab") return;
+  const dlg = e.currentTarget as HTMLElement;
+  const items = [...dlg.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => !el.closest("[hidden], [inert]"));
+  if (items.length === 0) return;
+  const first = items[0]!;
+  const last = items.at(-1)!;
+  const active = document.activeElement;
+  if (!e.shiftKey && active === last) {
+    e.preventDefault();
+    first.focus();
+  } else if (e.shiftKey && active === first) {
+    e.preventDefault();
+    last.focus();
+  }
+}
+
+/**
+ * A modal on the native <dialog>: the page behind it is inert, Tab wraps inside it, and Escape
+ * sends `cancel`. Focus goes back to whatever opened it.
  */
 export function Dialog({ open, title, onClose, children, footer, wide }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -46,7 +69,7 @@ export function Dialog({ open, title, onClose, children, footer, wide }: Props) 
   }, [onClose]);
 
   return (
-    <dialog ref={ref} class="dlg" aria-labelledby={titleId} style={wide ? { width: "min(720px, calc(100vw - 32px))" } : undefined}>
+    <dialog ref={ref} class="dlg" aria-labelledby={titleId} onKeyDown={trapTab} style={wide ? { width: "min(720px, calc(100vw - 32px))" } : undefined}>
       {open && (
         <>
           <div class="dlg-h">

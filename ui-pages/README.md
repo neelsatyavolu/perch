@@ -42,7 +42,7 @@ Secret values (API keys, MCP env and header values) go in through the API and ne
 
 ## Accessibility
 
-Every control works from the keyboard: arrow keys move through segmented controls, tabs and lists, Escape closes dialogs and focus stays inside them while open. Focus rings use the accent, as `DESIGN.md` describes. Reduce Motion turns off transitions. Icon buttons have names for VoiceOver, and job steps and confirmations are announced as status messages.
+Every control works from the keyboard: arrow keys move through segmented controls, tabs and lists, Escape closes dialogs, Tab and Shift+Tab wrap inside them while open, and closing one returns focus to the control that opened it (component tests, plus a headless Chrome check in the smoke test). Focus rings use the accent, as `DESIGN.md` describes. Reduce Motion turns off transitions. Icon buttons have names for VoiceOver, and job steps and confirmations are announced as status messages.
 
 ## Not here yet
 

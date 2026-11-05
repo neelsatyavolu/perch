@@ -119,3 +119,38 @@ describe("every page in every theme", () => {
     }
   }
 });
+
+async function pressTab(shift = false): Promise<void> {
+  const key = { key: "Tab", code: "Tab", windowsVirtualKeyCode: 9, modifiers: shift ? 8 : 0 };
+  await browser.send("Input.dispatchKeyEvent", { type: "keyDown", ...key }, session);
+  await browser.send("Input.dispatchKeyEvent", { type: "keyUp", ...key }, session);
+}
+
+describe("focus in a real browser", () => {
+  test("the address box shows DESIGN.md's 2px accent ring with a 2px offset", async () => {
+    await load(`http://127.0.0.1:${server.port}/newtab.html?theme=ink`);
+    const ring = await evaluate<{ style: string; width: string; offset: string; color: string; accent: string }>(`(() => {
+      document.querySelector(".box input").focus();
+      const s = getComputedStyle(document.querySelector(".box"));
+      return { style: s.outlineStyle, width: s.outlineWidth, offset: s.outlineOffset, color: s.outlineColor, accent: getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() };
+    })()`);
+    expect(ring).toMatchObject({ style: "solid", width: "2px", offset: "2px" });
+    expect(ring.color).toBe(hexToRgb(ring.accent));
+  }, 20_000);
+
+  test("Tab and Shift+Tab stay inside an open dialog; closing returns focus to its button", async () => {
+    await load(`http://127.0.0.1:${server.port}/settings.html?theme=ink#skills`);
+    const hasAdd = `[...document.querySelectorAll("button")].some((x) => x.textContent.trim() === "Add a server")`;
+    for (let i = 0; i < 100 && !(await evaluate<boolean>(hasAdd)); i++) await Bun.sleep(30);
+    await evaluate(`(() => { const b = [...document.querySelectorAll("button")].find((x) => x.textContent.trim() === "Add a server"); b.focus(); b.click(); })()`);
+    await Bun.sleep(100);
+    const inside = "!!document.activeElement && !!document.activeElement.closest('dialog[open]')";
+    for (let i = 0; i < 14; i++) {
+      await pressTab(i >= 10);
+      expect(await evaluate<boolean>(inside)).toBe(true);
+    }
+    await evaluate(`document.querySelector("dialog[open] button[aria-label=Close]").click()`);
+    await Bun.sleep(50);
+    expect(await evaluate<string>("document.activeElement.textContent.trim()")).toBe("Add a server");
+  }, 20_000);
+});

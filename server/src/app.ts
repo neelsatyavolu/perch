@@ -30,8 +30,11 @@ export function createApp(deps: Deps): Hono<HonoEnv> {
     const started = Date.now();
     c.set("deps", deps);
     await next();
-    for (const [name, value] of Object.entries(SECURITY_HEADERS)) c.res.headers.set(name, value);
-    if (!c.res.headers.has("Content-Security-Policy")) c.res.headers.set("Content-Security-Policy", JSON_CSP);
+    // A WebSocket upgrade response comes back from the relay object with fixed headers.
+    if (c.res.status !== 101) {
+      for (const [name, value] of Object.entries(SECURITY_HEADERS)) c.res.headers.set(name, value);
+      if (!c.res.headers.has("Content-Security-Policy")) c.res.headers.set("Content-Security-Policy", JSON_CSP);
+    }
     logEvent("request", { method: c.req.method, route: c.req.routePath, status: c.res.status, ms: Date.now() - started });
   });
 

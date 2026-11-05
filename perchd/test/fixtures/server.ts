@@ -11,6 +11,9 @@ export function startFixtures(): { url: (path: string) => string; stop: () => vo
       const { pathname } = new URL(req.url);
       if (pathname === "/redirect") return Response.redirect("/mail.html", 302);
       if (pathname === "/slow-page") return Bun.sleep(800).then(() => new Response(Bun.file(join(PAGES, "shop.html")), { headers: { "content-type": "text/html; charset=utf-8" } }));
+      // Parsed at once, but its load event never fires: an image that never arrives.
+      if (pathname === "/never-loads") return new Response('<title>Listings</title><h1>Listings</h1><p>Apartment on Elm Street</p><img src="/hang">', { headers: { "content-type": "text/html" } });
+      if (pathname === "/hang") return new Promise<Response>(() => undefined);
       if (pathname === "/slow") return new Promise((resolve) => setTimeout(() => resolve(new Response("<title>Slow</title>", { headers: { "content-type": "text/html" } })), 2000));
       const file = Bun.file(join(PAGES, pathname.replace(/^\/+/, "") || "mail.html"));
       if (!(await file.exists()) || pathname.includes("..")) return new Response("not found", { status: 404 });

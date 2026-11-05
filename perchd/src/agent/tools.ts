@@ -7,6 +7,7 @@ import type { Browser } from "../browser/browser";
 import { Tab } from "../browser/tab";
 import type { ToolCall } from "../models/types";
 import { back, click, describeRef, hover, press, scroll, select, type, upload, waitFor, type ActionResult } from "../page/actions";
+import { openPage } from "../page/navigation";
 import { refsFor } from "../page/refs";
 import { repl } from "../page/repl";
 import { clickAt, screenshot } from "../page/screenshot";
@@ -192,15 +193,16 @@ async function dispatch(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
   if (call.name === "open_tab") {
     ctx.tab = await ctx.browser.newTab();
     ctx.owned.push(ctx.tab);
-    await ctx.tab.navigate(normalizeUrl(a.url));
-    return { content: `opened ${a.url} in a new tab\n\n${await page(ctx, ctx.tab)}` };
+    const note = await openPage(ctx.tab, normalizeUrl(a.url));
+    return { content: `opened ${a.url} in a new tab${note ? `\n${note}` : ""}\n\n${await page(ctx, ctx.tab)}` };
   }
   const tab = await currentTab(ctx);
   const refs = refsFor(tab);
   switch (call.name) {
-    case "navigate":
-      await tab.navigate(normalizeUrl(a.url));
-      return { content: await page(ctx, tab) };
+    case "navigate": {
+      const note = await openPage(tab, normalizeUrl(a.url));
+      return { content: `${note ? `${note}\n\n` : ""}${await page(ctx, tab)}` };
+    }
     case "snapshot":
       return { content: await page(ctx, tab, Boolean(a.full)) };
     case "click":

@@ -1,5 +1,5 @@
 /**
- * The import bundle: imported data the browser applies at its next start (open tabs, search
+ * The import bundle: imported data for the browser to apply (open tabs, search
  * engines, addresses, extensions, passwords, cookies, Aside memory/skills/chats, and bookmarks
  * and history when Perch was open). It holds secrets, so it is sealed with AES-256-GCM under a
  * fresh random key kept in the Keychain ("Perch Import", account = bundle id), never on disk.

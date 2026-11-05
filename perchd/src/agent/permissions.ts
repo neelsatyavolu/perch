@@ -3,7 +3,7 @@
  * decide whether it runs, waits for the user, or is blocked.
  *
  *   read     looking around: navigate, snapshot, scroll, read-only REPL
- *   change   ordinary edits: typing, choosing, clicking "Next"
+ *   change   ordinary edits: typing, choosing, dragging, clicking "Next"
  *   risky    sends, posts, deletes, shares, uploads, Enter in a text field, an element not in the last snapshot
  *   payment  money and passwords, and anything that moves a checkout or password form forward:
  *            always asks, even in Skip confirmation
@@ -45,6 +45,9 @@ export function classify(call: ToolCall, target?: Target, page: PageContext = {}
   if (call.name === "write_file") return "change";
   if (call.name === "click_at" || call.name === "type_text") return guarded ? "payment" : "risky";
   if (call.name === "select" || (call.name === "type" && !call.args.submit)) return "change";
+  // Dragging moves things on the page (a slider, a card, a pin); dropping onto a delete or send
+  // target counts as risky, and on a checkout or password page as payment.
+  if (call.name === "drag") return guarded ? "payment" : RISKY.test(name) ? "risky" : "change";
   if (call.name === "press" && !isEnter(call)) return "change";
   if (call.name === "press" || call.name === "type") {
     // Enter, or typing with submit: it sends whatever form the field is in.

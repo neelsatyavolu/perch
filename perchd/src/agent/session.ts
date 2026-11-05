@@ -87,7 +87,7 @@ export async function currentHost(ctx: ToolContext): Promise<string> {
 }
 
 function verb(call: ToolCall): string {
-  return ({ click: "Click", type: "Type into", select: "Choose in", press: `Press ${call.args.key} in`, upload: "Upload to", click_at: "Click", repl: "Run a script" } as Record<string, string>)[call.name] ?? call.name;
+  return ({ click: "Click", type: "Type into", select: "Choose in", press: `Press ${call.args.key} in`, upload: "Upload to", drag: "Drag", click_at: "Click", repl: "Run a script" } as Record<string, string>)[call.name] ?? call.name;
 }
 
 function summarizeArgs(call: ToolCall): string {
@@ -112,6 +112,7 @@ export function label(call: ToolCall, target: Target | undefined, site: string):
     case "press": return `Pressed ${call.args.key}`;
     case "scroll": return "Scrolled";
     case "hover": return `Pointed at ${what}`;
+    case "drag": return `Dragged ${what}`;
     case "upload": return `Attached ${(call.args.paths as string[]).length} file(s)`;
     case "back": return "Went back";
     case "snapshot": return `Read ${site}`;

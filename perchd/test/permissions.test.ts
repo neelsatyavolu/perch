@@ -22,6 +22,8 @@ test.each([
   [call("type", { ref: "e2", text: "hi" }), { role: "textbox", name: "Message" }, "change"],
   [call("select", { ref: "e3", value: "Canada" }), { role: "combobox", name: "Country" }, "change"],
   [call("upload", { ref: "e4", paths: ["/tmp/a"] }), { role: "button", name: "Attach" }, "risky"],
+  [call("drag", { ref: "e5", dx: 40 }), { role: "slider", name: "Max price" }, "change"],
+  [call("drag", { ref: "e5", to: "e6" }), { role: "button", name: "Delete card" }, "risky"],
   [call("press", { key: "Enter" }), { role: "searchbox", name: "Search mail" }, "change"],
   [call("press", { key: "Enter" }), { role: "textbox", name: "Message" }, "risky"],
   [call("press", { key: "ArrowDown" }), { role: "textbox", name: "Message" }, "change"],

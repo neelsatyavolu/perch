@@ -6,6 +6,8 @@ import { parseKey } from "./keys";
 import { call, callForObject, describe, DESCRIBE, type Described, liveNode, type Node } from "./node";
 import { aim, clickAtPoint, mouse, type Point, scrollToCentre, toggleHiddenControl } from "./pointing";
 import { wheelScroll } from "./scrolling";
+import { setSlider } from "./slider";
+import { drag as dragTo, type DragTarget } from "./drag";
 import type { RefTable } from "./refs";
 import { ANNOUNCES_SUGGESTIONS, suggestionNote, typeKeys, VISIBLE_SUGGESTIONS } from "./typing";
 
@@ -52,6 +54,11 @@ async function checkedState(tab: Tab, node: Node): Promise<string> {
   return checked === undefined ? "" : checked ? " (now checked)" : " (now not checked)";
 }
 
+/** Drags an element onto another element, or by an offset in pixels. */
+export function drag(tab: Tab, refs: RefTable, ref: string, to: DragTarget): Promise<ActionResult> {
+  return attempt(async () => ok(await dragTo(tab, refs, ref, to)));
+}
+
 export function hover(tab: Tab, refs: RefTable, ref: string): Promise<ActionResult> {
   return attempt(async () => {
     const node = await liveNode(tab, refs, ref);
@@ -64,6 +71,8 @@ export function hover(tab: Tab, refs: RefTable, ref: string): Promise<ActionResu
 export function type(tab: Tab, refs: RefTable, ref: string, text: string, opts: { submit?: boolean } = {}): Promise<ActionResult> {
   return attempt(async () => {
     const node = await liveNode(tab, refs, ref);
+    const slider = await setSlider(tab, node, text);
+    if (slider) return slider;
     const special = await setSpecialInput(tab, node, text);
     if (special) return special;
     if (node.owner !== undefined) await tab.send("DOM.scrollIntoViewIfNeeded", { backendNodeId: node.owner }).catch(() => undefined);

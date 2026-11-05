@@ -6,7 +6,7 @@ import { basename, join } from "node:path";
 import type { Browser } from "../browser/browser";
 import { Tab } from "../browser/tab";
 import type { ToolCall } from "../models/types";
-import { back, click, describeRef, hover, press, scroll, select, type, upload, waitFor, type ActionResult } from "../page/actions";
+import { back, click, describeRef, drag, hover, press, scroll, select, type, upload, waitFor, type ActionResult } from "../page/actions";
 import { openPage } from "../page/navigation";
 import { refsFor } from "../page/refs";
 import { repl } from "../page/repl";
@@ -75,6 +75,11 @@ export function checkCall(call: ToolCall): string | null {
   if (problem) return problem;
   const ref = call.args.ref;
   if (typeof ref === "string" && !REF.test(ref)) return `ref "${ref}" is not a valid ref; refs look like e12`;
+  if (call.name === "drag") {
+    const { to, dx, dy } = call.args;
+    if (typeof to === "string" && !REF.test(to)) return `ref "${to}" is not a valid ref; refs look like e12`;
+    if (to === undefined && dx === undefined && dy === undefined) return "give to (a ref to drop on) or dx and dy (pixels to move)";
+  }
   if (call.name === "navigate" || call.name === "open_tab") {
     const url = normalizeUrl(String(call.args.url));
     if (url !== "about:blank" && !WEB_URL.test(url)) return "Perch's agent only opens http and https pages";
@@ -90,7 +95,7 @@ async function page(ctx: ToolContext, tab: Tab, full = false): Promise<string> {
 }
 
 /** Actions after which an unchanged page is worth pointing out: the click or choice did nothing visible. */
-const EXPECT_CHANGE = new Set(["click", "select", "press", "click_at"]);
+const EXPECT_CHANGE = new Set(["click", "select", "press", "click_at", "drag"]);
 const RECHECK_MS = 700;
 export const UNCHANGED =
   "The page looks the same as before this action. If you expected a change (a filter, a menu, a new page), it did not take effect: check, or try another way.";
@@ -237,6 +242,8 @@ async function dispatch(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
       return withPage(ctx, tab, await scroll(tab, { refs, ref: a.ref, dy: a.dy }));
     case "hover":
       return withPage(ctx, tab, await hover(tab, refs, a.ref));
+    case "drag":
+      return withPage(ctx, tab, await drag(tab, refs, a.ref, a.to !== undefined ? { ref: a.to } : { dx: Number(a.dx ?? 0), dy: Number(a.dy ?? 0) }), "drag");
     case "upload":
       return withPage(ctx, tab, await upload(tab, refs, a.ref, a.paths));
     case "back":

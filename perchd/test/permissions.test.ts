@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AuditLog } from "../src/agent/audit";
-import { classify, needsApproval, type Kind, type Mode } from "../src/agent/permissions";
+import { classify, needsApproval, type Decision, type Kind, type Mode } from "../src/agent/permissions";
 
 const call = (name: string, args: Record<string, unknown> = {}) => ({ id: "c1", name, args });
 
@@ -36,7 +36,7 @@ test.each([
 
 const MODES: Mode[] = ["ask", "guard", "skip"];
 const KINDS: Kind[] = ["read", "change", "risky", "payment"];
-const EXPECTED: Record<Mode, Record<Kind, string>> = {
+const EXPECTED: Record<Mode, Record<Kind, Decision>> = {
   ask: { read: "run", change: "ask", risky: "ask", payment: "ask" },
   guard: { read: "run", change: "run", risky: "ask", payment: "ask" },
   skip: { read: "run", change: "run", risky: "run", payment: "ask" },

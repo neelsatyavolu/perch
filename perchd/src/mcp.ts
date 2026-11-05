@@ -1,7 +1,7 @@
 /**
  * Perch's MCP server over stdio: the browser tools for outside agents (Claude Code, Codex, Grok).
  *
- *   bun run src/mcp.ts [--profile <dir>] [--audit <file>] [--mode ask|guard|skip] [--show]
+ *   bun run src/mcp.ts [--profile <dir>] [--audit <file>] [--mode ask|guard|skip] [--show] [--time-budget-s <n>]
  *
  * Every call goes through the same rules as a sidebar chat (src/agent/session.ts). There is no
  * approval UI here yet, so anything that needs approval is declined and the client is told so.
@@ -12,6 +12,7 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { AuditLog } from "./agent/audit";
 import type { Mode } from "./agent/permissions";
+import { Progress, type Budget } from "./agent/progress";
 import { callTool, type CallPolicy } from "./agent/session";
 import { newToolContext, TOOL_SPECS, type ToolContext } from "./agent/tools";
 import { Browser } from "./browser/browser";
@@ -21,11 +22,13 @@ const SERVER = { name: "perch", version: "0.1.0" };
 
 type Request = { jsonrpc: "2.0"; id?: number | string; method: string; params?: any };
 
-export type ServerOptions = { profileDir: string; policy: CallPolicy; headless: boolean; userAgent?: string; executable?: string; extraArgs?: string[] };
+export type ServerOptions = { profileDir: string; policy: CallPolicy; headless: boolean; userAgent?: string; executable?: string; extraArgs?: string[]; budget?: Budget };
 
 export function createServer(opts: ServerOptions) {
   let ctx: Promise<ToolContext> | null = null;
   let queue: Promise<unknown> = Promise.resolve();
+  // Budget and repeated-call notes, as in Perch's own loop: the client's time limit is passed in.
+  const progress = new Progress(opts.budget ?? {});
   const context = () =>
     (ctx ??= Browser.launch({
       userDataDir: opts.profileDir,
@@ -51,7 +54,8 @@ export function createServer(opts: ServerOptions) {
         const run = queue.then(async () => callTool(await context(), opts.policy, { id: String(req.id), name, args }));
         queue = run.catch(() => undefined);
         const result = await run;
-        const content: object[] = [{ type: "text", text: result.content }];
+        const notes = progress.after({ id: String(req.id), name, args }, result.content);
+        const content: object[] = [{ type: "text", text: notes.length ? `${notes.join("\n")}\n\n${result.content}` : result.content }];
         if (result.image) content.push({ type: "image", data: result.image, mimeType: "image/jpeg" });
         return { content, isError: Boolean(result.isError) };
       }
@@ -85,6 +89,12 @@ function arg(argv: string[], name: string): string | undefined {
   return i >= 0 ? argv[i + 1] : undefined;
 }
 
+/** The client's time limit in seconds, from --time-budget-s; ignored unless a positive number. */
+function budgetFrom(value: string | undefined): Budget | undefined {
+  const seconds = Number(value);
+  return value !== undefined && Number.isFinite(seconds) && seconds > 0 ? { maxMs: seconds * 1000 } : undefined;
+}
+
 async function main(argv: string[]): Promise<void> {
   const audit = new AuditLog(arg(argv, "--audit") ?? join(homedir(), "Library", "Application Support", "Perch", "mcp-audit.jsonl"));
   const server = createServer({
@@ -94,6 +104,7 @@ async function main(argv: string[]): Promise<void> {
     executable: arg(argv, "--executable"),
     // A throwaway profile needs no Keychain item; this keeps macOS from asking for one.
     extraArgs: argv.includes("--mock-keychain") ? ["--use-mock-keychain", "--password-store=basic"] : [],
+    budget: budgetFrom(arg(argv, "--time-budget-s")),
     policy: {
       mode: (arg(argv, "--mode") ?? "guard") as Mode,
       audit,

@@ -27,13 +27,13 @@ const refIn = (req: TurnRequest, label: string) => {
 
 async function run(
   script: Parameters<typeof fakeModel>[0],
-  opts: { approve?: boolean | ((req: ApprovalRequest) => boolean); maxSteps?: number; mode?: Mode; signal?: AbortSignal } = {},
+  opts: { approve?: boolean | ((req: ApprovalRequest) => boolean); maxSteps?: number; maxMs?: number; mode?: Mode; signal?: AbortSignal } = {},
 ) {
   const model = fakeModel(script);
   const audit = new AuditLog(join(dir, `audit-${++n}.jsonl`));
   const events: StepEvent[] = [];
   const approve = async (req: ApprovalRequest) => (typeof opts.approve === "function" ? opts.approve(req) : opts.approve ?? false);
-  for await (const event of runTask({ model, browser: env.browser, task: "Email Maya", mode: opts.mode ?? "guard", approve, audit, maxSteps: opts.maxSteps, signal: opts.signal })) {
+  for await (const event of runTask({ model, browser: env.browser, task: "Email Maya", mode: opts.mode ?? "guard", approve, audit, maxSteps: opts.maxSteps, maxMs: opts.maxMs, signal: opts.signal })) {
     events.push(event);
   }
   return { events, model, audit };
@@ -79,7 +79,7 @@ test("a bad tool call is reported back and the loop goes on", async () => {
 
 test("the loop stops at maxSteps with a clear message", async () => {
   const { events } = await run(() => tool("snapshot"), { maxSteps: 3 });
-  expect(events.at(-1)).toEqual({ type: "error", message: "Stopped after 3 steps without finishing. Ask again with more detail, or raise the step limit." });
+  expect(events.at(-1)).toEqual({ type: "error", message: "Stopped after 3 steps without finishing. Ask again with more detail, or raise the limit." });
 });
 
 test("older snapshots are collapsed in what the model sees", async () => {
@@ -204,3 +204,32 @@ test("outside agents are told to reply, since they have no done tool", async () 
   expect(outside).toContain("reply with");
   for (const phrase of ["no network access", "result count", "Load more", "numbers behind the chart", "running low"]) expect(native).toContain(phrase);
 });
+
+test("out of steps, the model gets one turn without tools and its answer is the result", async () => {
+  const { events, model } = await run((req, turn) => (req.toolChoice === "none" ? say("Partial: found 2 of 3 prices.") : tool("snapshot")), { maxSteps: 3 });
+  expect(events.at(-1)).toEqual({ type: "final", text: "Partial: found 2 of 3 prices." });
+  const last = model.requests.at(-1)!;
+  expect(last.toolChoice).toBe("none");
+  expect(last.messages.at(-1)).toMatchObject({ role: "user", text: expect.stringContaining("run out of steps") });
+});
+
+test("when time runs out the loop stops calling tools and asks for the best answer", async () => {
+  const { events, model } = await run((req) => (req.toolChoice === "none" ? say("Here is what I found so far.") : tool("wait_for", { seconds: 0.4 })), { maxMs: 300 });
+  expect(events.at(-1)).toEqual({ type: "final", text: "Here is what I found so far." });
+  expect(model.requests.at(-1)!.messages.at(-1)).toMatchObject({ role: "user", text: expect.stringContaining("run out of time") });
+  expect(model.requests).toHaveLength(2);
+});
+
+test("budget and repeated-call notes reach the model in tool results", async () => {
+  let seen = "";
+  const { model } = await run([
+    () => tool("navigate", { url: env.site.url("/lazy.html") }),
+    (req) => tool("click", { ref: refIn(req, 'button "Apply"') }),
+    (req) => tool("click", lastCallArgs(req)),
+    (req) => tool("click", lastCallArgs(req)),
+    (req) => { seen = lastTool(req).content; return say("stopped"); },
+  ], { maxSteps: 5 });
+  expect(seen).toContain("same call with the same result");
+  expect(seen).toContain("Budget: 1 of 5 steps left");
+}, 15_000);
+const lastCallArgs = (req: TurnRequest) => (([...req.messages].reverse().find((m) => m.role === "assistant") as { toolCalls: { args: Record<string, unknown> }[] }).toolCalls[0]!.args);

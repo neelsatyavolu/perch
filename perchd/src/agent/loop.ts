@@ -4,6 +4,8 @@ import type { Browser } from "../browser/browser";
 import type { Effort, Message, Model, ToolCall, TurnRequest } from "../models/types";
 import type { AuditLog } from "./audit";
 import type { Mode, SiteRule } from "./permissions";
+import { finalTurn } from "./finish";
+import { Progress } from "./progress";
 import { systemPrompt } from "./prompt";
 import { finishCall, label, prepareCall, type ApprovalRequest } from "./session";
 import { newToolContext, TOOL_SPECS, type ToolContext } from "./tools";
@@ -25,6 +27,8 @@ export type TaskOptions = {
   approve: (request: ApprovalRequest) => Promise<boolean>;
   audit: AuditLog;
   maxSteps?: number;
+  /** Wall-clock budget; when it runs out the model gives its best answer. */
+  maxMs?: number;
   client?: string;
   effort?: Effort;
   siteRule?: (host: string) => SiteRule | undefined;
@@ -32,6 +36,7 @@ export type TaskOptions = {
 };
 
 const DEFAULT_MAX_STEPS = 40;
+const DEFAULT_MAX_MS = 15 * 60_000;
 
 /** Sent once, in place of the first done after the agent has used the browser. */
 export const CHECK_BEFORE_DONE = [
@@ -47,10 +52,11 @@ export async function* runTask(opts: TaskOptions): AsyncIterable<StepEvent> {
   const signal = opts.signal ?? new AbortController().signal;
   const system = systemPrompt({ mode: opts.mode, now: new Date() });
   const maxSteps = opts.maxSteps ?? DEFAULT_MAX_STEPS;
+  const progress = new Progress({ maxSteps, maxMs: opts.maxMs ?? DEFAULT_MAX_MS });
   let worked = false;
   let checked = false;
   try {
-    for (let step = 0; step < maxSteps; step++) {
+    for (let step = 0; step < maxSteps && !progress.timeUp(); step++) {
       let text = "";
       const calls: ToolCall[] = [];
       try {
@@ -90,10 +96,22 @@ export async function* runTask(opts: TaskOptions): AsyncIterable<StepEvent> {
           return;
         }
         worked = true;
-        messages.push(outcome.message);
+        const notes = progress.after(call, outcome.message.content);
+        messages.push(notes.length ? { ...outcome.message, content: `${notes.join("\n")}\n\n${outcome.message.content}` } : outcome.message);
       }
     }
-    yield { type: "error", message: `Stopped after ${maxSteps} steps without finishing. Ask again with more detail, or raise the step limit.` };
+    if (signal.aborted) {
+      yield { type: "error", message: "Cancelled." };
+      return;
+    }
+    const why = progress.timeUp() ? "time" : "steps";
+    const answer = yield* finalTurn({ model: opts.model, system, messages: compact(messages), tools: TOOL_SPECS, why, effort: opts.effort, signal });
+    if (answer) {
+      yield { type: "final", text: answer };
+      return;
+    }
+    const limit = why === "time" ? "the time limit" : `${maxSteps} steps`;
+    yield { type: "error", message: `Stopped after ${limit} without finishing. Ask again with more detail, or raise the limit.` };
   } finally {
     await ctx.close();
   }

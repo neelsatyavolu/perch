@@ -9,7 +9,8 @@ export type Message =
   | { role: "assistant"; text: string; toolCalls: ToolCall[] }
   | { role: "tool"; callId: string; name: string; content: string; image?: string };
 
-export type TurnRequest = { system: string; messages: Message[]; tools: ToolSpec[]; effort?: Effort };
+/** toolChoice "none" asks for an answer in text only, as in the final turn of a task. */
+export type TurnRequest = { system: string; messages: Message[]; tools: ToolSpec[]; effort?: Effort; toolChoice?: "auto" | "none" };
 
 export type TurnEvent =
   | { type: "text"; delta: string }

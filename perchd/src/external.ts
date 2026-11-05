@@ -74,22 +74,27 @@ export function claudeBinary(): string {
 
 const MCP_ENTRY = join(import.meta.dir, "mcp.ts");
 
-export async function runClaudeCode(opts: {
+export type RunOptions = {
   task: string;
-  model: string;
+  model?: string;
   timeoutMs: number;
   auditPath: string;
+  /** Permission mode for the MCP server; delegated whole tasks use "skip" (payments still ask). */
+  mode?: "ask" | "guard" | "skip";
   userAgent?: string;
   onEvent?: (event: AsideEvent) => void;
-}): Promise<ExternalResult> {
+};
+
+export async function runClaudeCode(opts: RunOptions): Promise<ExternalResult> {
   // A scratch folder outside the home folder, so no project instructions are picked up.
   const work = mkdtempSync(join(tmpdir(), "perch-exec-"));
   const mcpConfig = join(work, "mcp.json");
-  const mcpArgs = ["run", MCP_ENTRY, "--mode", "guard", "--client", "claude-code", "--audit", opts.auditPath, "--profile", join(work, "profile")];
+  const mode = opts.mode ?? "guard";
+  const mcpArgs = ["run", MCP_ENTRY, "--mode", mode, "--client", "claude-code", "--audit", opts.auditPath, "--profile", join(work, "profile")];
   if (opts.userAgent) mcpArgs.push("--user-agent", opts.userAgent);
   writeFileSync(mcpConfig, JSON.stringify({ mcpServers: { perch: { command: process.execPath, args: mcpArgs } } }));
-  const prompt = `${systemPrompt({ mode: "guard", now: new Date() })}\n\nYour tools are Perch's browser tools (mcp__perch__*). Do the task in the browser. When you finish, reply with the answer or the result in your final message, including the specific facts the task asks for.`;
-  const child = Bun.spawn([claudeBinary(), ...claudeArgs({ model: opts.model, mcpConfig, systemPrompt: prompt, task: opts.task })], {
+  const prompt = `${systemPrompt({ mode, now: new Date() })}\n\nYour tools are Perch's browser tools (mcp__perch__*). Do the task in the browser. When you finish, reply with the answer or the result in your final message, including the specific facts the task asks for.`;
+  const child = Bun.spawn([claudeBinary(), ...claudeArgs({ model: opts.model ?? "claude-sonnet-5-5", mcpConfig, systemPrompt: prompt, task: opts.task })], {
     cwd: work,
     stdout: "pipe",
     stderr: "pipe",
@@ -182,11 +187,12 @@ export function otherCodexServers(config = join(homedir(), ".codex", "config.tom
 }
 
 /** Runs a task with Codex CLI headless (the user's own ChatGPT sign-in) and Perch's MCP tools. */
-export async function runCodex(opts: { task: string; model?: string; timeoutMs: number; auditPath: string; userAgent?: string; onEvent?: (event: AsideEvent) => void }): Promise<ExternalResult> {
+export async function runCodex(opts: RunOptions): Promise<ExternalResult> {
   const work = mkdtempSync(join(tmpdir(), "perch-exec-"));
-  const mcpArgs = ["run", MCP_ENTRY, "--mode", "guard", "--client", "codex", "--audit", opts.auditPath, "--profile", join(work, "profile")];
+  const mode = opts.mode ?? "guard";
+  const mcpArgs = ["run", MCP_ENTRY, "--mode", mode, "--client", "codex", "--audit", opts.auditPath, "--profile", join(work, "profile")];
   if (opts.userAgent) mcpArgs.push("--user-agent", opts.userAgent);
-  const prompt = `${systemPrompt({ mode: "guard", now: new Date() })}\n\nYour tools for this task are Perch's browser tools from the "perch" MCP server. Do not run shell commands or read files. Do the task in the browser, then reply with the answer, including the specific facts the task asks for.\n\nTask:\n${opts.task}`;
+  const prompt = `${systemPrompt({ mode, now: new Date() })}\n\nYour tools for this task are Perch's browser tools from the "perch" MCP server. Do not run shell commands or read files. Do the task in the browser, then reply with the answer, including the specific facts the task asks for.\n\nTask:\n${opts.task}`;
   const args = [
     "exec", "--json", "--skip-git-repo-check", "-s", "read-only",
     "-c", 'approval_policy="never"',

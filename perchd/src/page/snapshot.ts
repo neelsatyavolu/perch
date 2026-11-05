@@ -24,10 +24,13 @@ const TEXT_LIMIT = 160;
 const INTERACTIVE = new Set([
   "button", "link", "textbox", "searchbox", "combobox", "checkbox", "radio", "switch", "menuitem",
   "menuitemcheckbox", "menuitemradio", "tab", "option", "slider", "spinbutton", "treeitem",
+  "Date", "DateTime", "InputTime",
 ]);
+/** Chromium's internal roles for date and time inputs, shown as one field each. */
+const ROLE_NAMES: Record<string, string> = { Date: "date", DateTime: "datetime", InputTime: "time" };
 /** Interactive roles that can contain more interactive elements (nested tree items). */
 const NESTING = new Set(["treeitem"]);
-const VALUED = new Set(["textbox", "searchbox", "combobox", "spinbutton", "slider"]);
+const VALUED = new Set(["textbox", "searchbox", "combobox", "spinbutton", "slider", "Date", "DateTime", "InputTime"]);
 const CONTAINERS = new Set([
   "navigation", "main", "search", "dialog", "alertdialog", "region", "form", "status", "alert",
   "complementary", "contentinfo", "banner", "table", "list", "menu", "menubar", "tablist", "toolbar", "tree", "grid", "listbox",
@@ -224,7 +227,7 @@ function renderNode(ctx: Ctx, tree: Tree, node: AXNode, depth: number): string[]
     return [`${pad}- iframe${name ? ` "${name}"` : ""}`, ...body];
   }
   if (INTERACTIVE.has(role) && node.backendDOMNodeId !== undefined) {
-    const line = `${pad}- ${role} "${name}" [ref=${ctx.refs.refFor(node.backendDOMNodeId, tree.frameId)}]${extras(ctx, node, role)}`;
+    const line = `${pad}- ${ROLE_NAMES[role] ?? role} "${name}" [ref=${ctx.refs.refFor(node.backendDOMNodeId, tree.frameId)}]${extras(ctx, node, role)}`;
     return NESTING.has(role) ? [line, ...interactiveInside(ctx, tree, node, depth + 1)] : [line];
   }
   if (role === "heading") return [`${pad}- heading "${name}" [level=${prop(node, "level") ?? 2}]`, ...interactiveInside(ctx, tree, node, depth + 1)];

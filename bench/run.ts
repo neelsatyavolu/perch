@@ -54,7 +54,8 @@ async function runOne(task: Task, out: string, model: string, judgeModel: string
   mkdirSync(dir, { recursive: true });
   const started = Date.now();
   const runner = arg("--agent", "claude-code") === "codex" ? runCodex : runClaudeCode;
-  const run = await runner({ task: task.task, model, timeoutMs: 15 * 60_000, auditPath: join(dir, "audit.jsonl"), userAgent: UA });
+  const mode = (arg("--mode", "skip") ?? "skip") as "ask" | "guard" | "skip";
+  const run = await runner({ task: task.task, model, timeoutMs: 15 * 60_000, auditPath: join(dir, "audit.jsonl"), userAgent: UA, mode });
   const seconds = Math.round((Date.now() - started) / 1000);
   writeFileSync(join(dir, "events.jsonl"), run.events.map((e) => JSON.stringify(e)).join("\n"));
   writeFileSync(join(dir, "answer.txt"), run.answer);

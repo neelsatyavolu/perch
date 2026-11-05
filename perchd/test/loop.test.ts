@@ -177,3 +177,8 @@ test("cancelling stops the rest of the turn's tool calls", async () => {
   expect(events.at(-1)).toEqual({ type: "error", message: "Cancelled." });
   expect(auditLines(audit).some((e) => e.action === "navigate" && e.url?.endsWith("/shop.html"))).toBe(false);
 });
+test("the system prompt tells every model to browse, handle dialogs and finish the task", async () => {
+  const { systemPrompt } = await import("../src/agent/prompt");
+  const prompt = systemPrompt({ mode: "skip", now: new Date("2026-11-05T09:00:00Z") });
+  for (const phrase of ["never from memory", "cookie", "search.brave.com", "YYYY-MM-DD", "every part of the task"]) expect(prompt).toContain(phrase);
+});

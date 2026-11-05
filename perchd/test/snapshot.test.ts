@@ -85,3 +85,11 @@ test("after scrolling, the snapshot follows the viewport and counts rows above",
   expect(snap.text).toMatch(/link "View order \d{4}" \[ref=e\d+\]/);
   await tab.close();
 });
+
+test("fixed banners inside containers placed far down the page are still listed", async () => {
+  const tab = await env.browser.newTab(env.site.url("/banner.html"));
+  const snap = await snapshot(tab);
+  expect(snap.text).toMatch(/dialog "Privacy"/);
+  expect(snap.text).toMatch(/button "Reject All" \[ref=e\d+\]/);
+  await tab.close();
+});

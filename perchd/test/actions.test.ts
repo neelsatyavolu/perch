@@ -141,3 +141,15 @@ test("action notes never include a secret field's value", async () => {
   expect(JSON.stringify([clicked, hovered])).not.toContain("hunter2");
   await tab.close();
 });
+test("type sets date and time fields from ISO values and fires change", async () => {
+  const tab = await env.browser.newTab(env.site.url("/dates.html"));
+  const snap = await snapshot(tab);
+  expect(snap.text).not.toContain("spinbutton");
+  const dob = refOf(snap, 'date "Date of birth"');
+  expect(await type(tab, snap.refs, dob, "1999-04-17")).toMatchObject({ ok: true });
+  expect(await tab.evaluate<string>("document.getElementById('dob').value")).toBe("1999-04-17");
+  expect(await tab.evaluate<string>("document.getElementById('out').textContent")).toBe("dob 1999-04-17");
+  const bad = await type(tab, snap.refs, dob, "April 17");
+  expect(bad).toEqual({ ok: false, error: 'this is a date field; give the value as YYYY-MM-DD, for example 2026-11-05' });
+  await tab.close();
+});

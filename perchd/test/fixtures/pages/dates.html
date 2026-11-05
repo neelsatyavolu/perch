@@ -1,0 +1,6 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Dates</title></head><body style="font:14px system-ui">
+<label>Date of birth <input id="dob" type="date"></label>
+<label>Time <input id="t" type="time"></label>
+<p id="out" role="status"></p>
+<script>document.getElementById('dob').addEventListener('change', (e) => { document.getElementById('out').textContent = 'dob ' + e.target.value; });</script>
+</body></html>

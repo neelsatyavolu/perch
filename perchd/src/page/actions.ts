@@ -128,6 +128,8 @@ export function hover(tab: Tab, refs: RefTable, ref: string): Promise<ActionResu
 export function type(tab: Tab, refs: RefTable, ref: string, text: string, opts: { submit?: boolean } = {}): Promise<ActionResult> {
   return attempt(async () => {
     const node = await liveNode(tab, refs, ref);
+    const special = await setSpecialInput(tab, node.objectId, text);
+    if (special) return special;
     await tab.send("DOM.scrollIntoViewIfNeeded", { backendNodeId: node.backendNodeId }).catch(() => undefined);
     await tab.send("DOM.focus", { backendNodeId: node.backendNodeId });
     await call(tab, node.objectId, "function () { if (typeof this.select === 'function') this.select(); else if (this.isContentEditable) document.execCommand('selectAll'); }");
@@ -136,6 +138,40 @@ export function type(tab: Tab, refs: RefTable, ref: string, text: string, opts: 
     if (opts.submit) await press(tab, "Enter");
     return ok(`typed ${text.length} characters${opts.submit ? " and pressed Enter" : ""}`);
   });
+}
+
+const FORMATS: Record<string, [string, string]> = {
+  date: ["YYYY-MM-DD", "2026-11-05"],
+  time: ["HH:MM", "14:30"],
+  "datetime-local": ["YYYY-MM-DDTHH:MM", "2026-11-05T14:30"],
+  month: ["YYYY-MM", "2026-11"],
+  week: ["YYYY-Www", "2026-W45"],
+  color: ["#RRGGBB", "#4c8dff"],
+};
+
+/**
+ * Date, time, month, week and colour inputs ignore typed text in Chromium, so their value is set
+ * the way the browser's picker sets it: through the value setter, then input and change events.
+ */
+async function setSpecialInput(tab: Tab, objectId: string, text: string): Promise<ActionResult | null> {
+  const kind = await call<string>(tab, objectId, "function () { return this.tagName === 'INPUT' ? (this.getAttribute('type') || '').toLowerCase() : ''; }");
+  const format = FORMATS[kind];
+  if (!format) return null;
+  const applied = await call<string>(
+    tab,
+    objectId,
+    `function (v) {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+      setter.call(this, v);
+      if (this.value !== v && !(this.type === 'color' && this.value === v.toLowerCase())) return this.value;
+      this.dispatchEvent(new Event('input', { bubbles: true }));
+      this.dispatchEvent(new Event('change', { bubbles: true }));
+      return this.value;
+    }`,
+    [text],
+  );
+  if (applied.toLowerCase() !== text.toLowerCase()) return fail(`this is a ${kind === "datetime-local" ? "date and time" : kind} field; give the value as ${format[0]}, for example ${format[1]}`);
+  return ok(`set the ${kind} to ${applied}`);
 }
 
 export function select(tab: Tab, refs: RefTable, ref: string, choice: string): Promise<ActionResult> {

@@ -1,0 +1,44 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Filters</title>
+<style>
+  html { scroll-behavior: smooth; }
+  body { font: 14px system-ui; margin: 0; }
+  header { position: fixed; top: 0; left: 0; right: 0; height: 100px; background: #222; color: #fff; z-index: 10; }
+  main { padding-top: 120px; }
+  .pill { display: inline-block; padding: 6px 12px; border: 1px solid #888; border-radius: 16px; cursor: pointer; }
+  .hidden-radio { position: absolute; opacity: 0; width: 0; height: 0; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  #box { height: 100px; overflow: auto; border: 1px solid #ccc; width: 300px; }
+  #box .spacer { height: 600px; }
+</style></head>
+<body>
+<header>Site header</header>
+<main>
+  <fieldset><legend>Distance</legend>
+    <input class="hidden-radio" type="radio" name="d" id="d1" value="1" checked><label class="pill" for="d1">1 mile</label>
+    <input class="hidden-radio" type="radio" name="d" id="d10" value="10"><label class="pill" for="d10">10 miles</label>
+  </fieldset>
+  <label class="pill"><input class="sr-only" type="checkbox" id="pool"> Private pool</label>
+  <closed-panel></closed-panel>
+  <div id="box"><div class="spacer"></div><button id="inner">Inside the box</button></div>
+  <div style="height: 1000px"></div>
+  <button id="under">Under the header</button>
+  <div style="height: 3000px"></div>
+  <button id="far">Far below</button>
+  <p id="out" role="status"></p>
+</main>
+<script>
+const out = document.getElementById('out');
+const say = (t) => { out.textContent = t; };
+document.querySelectorAll('input[name=d]').forEach((r) => r.addEventListener('change', () => say('Distance: ' + r.value)));
+document.getElementById('pool').addEventListener('change', (e) => say('Pool: ' + e.target.checked));
+customElements.define('closed-panel', class extends HTMLElement {
+  connectedCallback() {
+    const root = this.attachShadow({ mode: 'closed' });
+    root.innerHTML = '<button>Closed shadow button</button>';
+    root.querySelector('button').onclick = () => say('Clicked closed');
+  }
+});
+for (const id of ['inner', 'under', 'far']) document.getElementById(id).addEventListener('click', () => say('Clicked ' + id));
+</script>
+</body></html>

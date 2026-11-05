@@ -110,6 +110,17 @@ describe("Permissions", () => {
   });
 });
 
+describe("Permissions under a company cap", () => {
+  test("neither the default mode nor an outside client can go above the cap", async () => {
+    window.location.hash = "#permissions";
+    const r = renderWithApi(<Settings />, { permissions: { maxMode: "guard" } });
+    expect(((await r.findByRole("radio", { name: /Skip/ })) as HTMLButtonElement).disabled).toBe(true);
+    const client = r.getByRole("combobox", { name: "Mode for perch CLI" }) as HTMLSelectElement;
+    expect([...client.options].map((o) => o.value)).toEqual(["ask", "guard"]);
+    expect(r.getByText(/Your organization allows up to Guard/)).toBeTruthy();
+  });
+});
+
 describe("Privacy and security", () => {
   test("switches save; encrypted DNS offers resolvers; forgetting a site asks first", async () => {
     const r = at("#privacy");

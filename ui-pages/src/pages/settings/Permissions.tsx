@@ -10,9 +10,11 @@ import { focusSibling, nextIndex } from "../../ui/roving";
 
 const ORDER: readonly PermissionMode[] = ["ask", "guard", "skip"];
 const RULE_KINDS = Object.keys(SITE_RULES) as SiteRuleKind[];
+/** Modes at or below the company cap (spec 12.2). */
+const withinCap = (max: PermissionMode | null) => (m: PermissionMode) => max === null || ORDER.indexOf(m) <= ORDER.indexOf(max);
 
 function ModePicker({ value, max, onChange }: { readonly value: PermissionMode; readonly max: PermissionMode | null; readonly onChange: (m: PermissionMode) => void }) {
-  const allowed = (m: PermissionMode) => max === null || ORDER.indexOf(m) <= ORDER.indexOf(max);
+  const allowed = withinCap(max);
   const options = ORDER.filter(allowed);
   return (
     <div class="card mode-list" role="radiogroup" aria-label="Default permission mode">
@@ -113,12 +115,15 @@ export function Permissions() {
                 const mode = (e.currentTarget as HTMLSelectElement).value as PermissionMode;
                 apply(() => api.setClientMode(c.id, mode));
               }}>
-                {ORDER.map((m) => <option key={m} value={m}>{MODES[m].label}</option>)}
+                {ORDER.filter(withinCap(p.maxMode)).map((m) => <option key={m} value={m}>{MODES[m].label}</option>)}
               </select>
             </Row>
           ))}
         </div>
-        <p class="note">The perch command, each MCP client and remote control get their own mode. Guard is the default.</p>
+        <p class="note">
+          The perch command, each MCP client and remote control get their own mode. Guard is the default.
+          {p.maxMode && ` Your organization allows up to ${MODES[p.maxMode].label}.`}
+        </p>
       </Group>
     </div>
   );

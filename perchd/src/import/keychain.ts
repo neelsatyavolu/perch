@@ -2,57 +2,63 @@
  * The macOS Keychain, behind a small interface so tests use an in-memory fake.
  *
  * Reading another browser's "<Browser> Safe Storage" item makes macOS show its own prompt
- * ("perchd wants to use your confidential information stored in ..."); the user can allow or
- * deny it. Values are passed to `security` on stdin, never on the command line, so they do not
- * show up in `ps`.
+ * naming Perch ("perchd wants to use your confidential information stored in ..."); the user
+ * can allow or deny it. The calls go straight to Security.framework from perchd (see
+ * mac-security.ts), never through /usr/bin/security, so no Keychain item ever comes to trust
+ * that shared tool.
  */
 
+import { ERR_DUPLICATE, ERR_NOT_FOUND, securityFramework, type SecurityApi } from "./mac-security";
 import { ImportError } from "./types";
 
 export interface Keychain {
   /** The item's secret, or null when no such item exists. Throws ImportError("keychain-denied") when the user says no. */
   find(service: string, account?: string): Promise<string | null>;
+  /** Creates or replaces an item whose access list trusts perchd and Perch.app only. */
   set(service: string, account: string, value: string): Promise<void>;
   remove(service: string, account: string): Promise<void>;
 }
 
-const SECURITY = "/usr/bin/security";
-/** errSecItemNotFound as `security` reports it. */
-const NOT_FOUND = 44;
-
-type Run = (args: string[], stdin?: string) => Promise<{ code: number; stdout: string }>;
-
-const spawnSecurity: Run = async (args, stdin) => {
-  const proc = Bun.spawn([SECURITY, ...args], { stdin: stdin === undefined ? "ignore" : "pipe", stdout: "pipe", stderr: "ignore" });
-  if (stdin !== undefined && proc.stdin) {
-    proc.stdin.write(stdin);
-    await proc.stdin.end();
-  }
-  const stdout = await new Response(proc.stdout).text();
-  return { code: await proc.exited, stdout };
+export type MacKeychainOptions = {
+  /** Absolute paths of other apps to trust on items Perch creates, such as Perch.app. perchd itself is always trusted. */
+  readonly trustedApps?: readonly string[];
+  /** A keychain file to use instead of the user's default keychains (tests). */
+  readonly keychainPath?: string;
+  /** The framework binding; replaced in tests. */
+  readonly security?: SecurityApi;
 };
 
-function quote(s: string): string {
-  if (!/^[\w .:@/+=-]*$/.test(s)) throw new ImportError("Keychain names and values may only use plain characters.", "invalid");
-  return `"${s}"`;
+function plain(s: string, what: string): string {
+  if (typeof s !== "string" || s.length === 0 || s.length > 256 || /[\0\n\r]/.test(s)) throw new ImportError(`Keychain ${what} must be a short, plain name.`, "invalid");
+  return s;
 }
 
-export function macKeychain(run: Run = spawnSecurity): Keychain {
+export function macKeychain(options: MacKeychainOptions = {}): Keychain {
+  const trustedApps = (options.trustedApps ?? []).map((p) => {
+    if (!p.startsWith("/")) throw new ImportError("Trusted apps must be absolute paths.", "invalid");
+    return p;
+  });
+  const sec = options.security ?? securityFramework(options.keychainPath);
   return {
     async find(service, account) {
-      const args = ["find-generic-password", "-w", "-s", service, ...(account ? ["-a", account] : [])];
-      const { code, stdout } = await run(args);
-      if (code === 0) return stdout.replace(/\n$/, "");
-      if (code === NOT_FOUND) return null;
+      const { status, value } = sec.find(plain(service, "service"), account === undefined ? undefined : plain(account, "account"));
+      if (status === 0) return value ?? "";
+      if (status === ERR_NOT_FOUND) return null;
       throw new ImportError(`macOS did not allow reading "${service}" from the Keychain. Choose Allow when macOS asks, or skip this data.`, "keychain-denied");
     },
     async set(service, account, value) {
-      const { code } = await run(["-i"], `add-generic-password -U -s ${quote(service)} -a ${quote(account)} -w ${quote(value)}\n`);
-      if (code !== 0) throw new ImportError(`Could not save "${service}" to the Keychain.`, "keychain-denied");
+      plain(service, "service");
+      plain(account, "account");
+      let status = sec.add(service, account, value, trustedApps);
+      if (status === ERR_DUPLICATE) {
+        sec.remove(service, account);
+        status = sec.add(service, account, value, trustedApps);
+      }
+      if (status !== 0) throw new ImportError(`Could not save "${service}" to the Keychain.`, "keychain-denied");
     },
     async remove(service, account) {
-      const { code } = await run(["delete-generic-password", "-s", service, "-a", account]);
-      if (code !== 0 && code !== NOT_FOUND) throw new ImportError(`Could not remove "${service}" from the Keychain.`, "keychain-denied");
+      const status = sec.remove(plain(service, "service"), plain(account, "account"));
+      if (status !== 0 && status !== ERR_NOT_FOUND) throw new ImportError(`Could not remove "${service}" from the Keychain.`, "keychain-denied");
     },
   };
 }

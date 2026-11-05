@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { browserByKey } from "../../src/import/catalog";
 import { chromiumProfiles, detectSources, parseIni } from "../../src/import/detect";
 import { macKeychain } from "../../src/import/keychain";
+import type { SecurityApi } from "../../src/import/mac-security";
 import { withSqliteCopy } from "../../src/import/sqlite-copy";
 import { fromChromium, fromMac, toChromium, toMac } from "../../src/import/time";
 import { sqlite, tempHome, write } from "./fixtures";
@@ -20,23 +21,24 @@ test("timestamps convert both ways", () => {
   expect(fromChromium(0)).toBeUndefined();
 });
 
-test("the Keychain is asked through `security`, secrets go on stdin, never in arguments", async () => {
-  const calls: { args: string[]; stdin?: string }[] = [];
-  const codes = [0, 44, 51, 0, 0];
-  const keychain = macKeychain(async (args, stdin) => {
-    calls.push({ args, stdin });
-    return { code: codes[calls.length - 1]!, stdout: "pw-from-keychain\n" };
-  });
+test("Keychain statuses become plain errors, and names are checked before they reach the framework", async () => {
+  const calls: unknown[][] = [];
+  const statuses = [0, -25300, -128, -25299, 0, 0, 0];
+  const security: SecurityApi = {
+    find: (...args) => (calls.push(["find", ...args]), statuses[calls.length - 1] === 0 ? { status: 0, value: "pw-from-keychain" } : { status: statuses[calls.length - 1]! }),
+    add: (...args) => (calls.push(["add", ...args]), statuses[calls.length - 1]!),
+    remove: (...args) => (calls.push(["remove", ...args]), statuses[calls.length - 1]!),
+  };
+  const keychain = macKeychain({ security, trustedApps: ["/Applications/Perch.app"] });
   expect(await keychain.find("Chrome Safe Storage", "Chrome")).toBe("pw-from-keychain");
   expect(await keychain.find("Nope Safe Storage")).toBeNull();
   await expect(keychain.find("Denied Safe Storage")).rejects.toMatchObject({ reason: "keychain-denied" });
+  // A duplicate is removed and created again, so the access list is always Perch's.
   await keychain.set("Perch Import", "id-1", "c2VjcmV0K2tleT0=");
-  await keychain.remove("Perch Import", "id-1");
-  expect(calls[0]!.args).toEqual(["find-generic-password", "-w", "-s", "Chrome Safe Storage", "-a", "Chrome"]);
-  expect(calls[3]!.args).toEqual(["-i"]);
-  expect(calls[3]!.stdin).toContain("c2VjcmV0K2tleT0=");
-  expect(calls.flatMap((c) => c.args).join(" ")).not.toContain("c2VjcmV0K2tleT0=");
-  await expect(keychain.set("Perch Import", 'x" ; rm', "v")).rejects.toMatchObject({ reason: "invalid" });
+  expect(calls.slice(3).map((c) => c[0])).toEqual(["add", "remove", "add"]);
+  expect(calls[3]).toEqual(["add", "Perch Import", "id-1", "c2VjcmV0K2tleT0=", ["/Applications/Perch.app"]]);
+  await expect(keychain.set("Perch Import", "x\nrm", "v")).rejects.toMatchObject({ reason: "invalid" });
+  expect(() => macKeychain({ security, trustedApps: ["Perch.app"] })).toThrow();
 });
 
 test("SQLite files are read from a private copy that is removed afterwards", async () => {

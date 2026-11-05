@@ -34,10 +34,16 @@ export type SourceSummary = {
   /** Said before importing: which types will make macOS ask for Keychain access or need Full Disk Access. */
   readonly needs: { readonly keychain: readonly DataType[]; readonly fullDiskAccess: readonly DataType[] };
   readonly unsupported: Partial<Record<DataType, string>>;
+  /** Shown before a Keychain prompt: which item macOS will ask about, and to choose Allow. */
+  readonly keychainHelp?: string;
 };
 
 export const FULL_DISK_ACCESS_HELP =
   "Safari's files are protected by macOS. Open System Settings > Privacy & Security > Full Disk Access, turn on Perch, then come back. Or, in Safari, choose File > Export Browsing Data to File and import that ZIP, which needs no extra access.";
+
+export function keychainHelp(service: string): string {
+  return `macOS will ask whether Perch may use "${service}". Choose Allow. Perch needs it only during this import, so Always Allow is not needed.`;
+}
 
 type ImportLog = Record<string, number>;
 const logPath = (userDataDir: string) => join(userDataDir, "Perch Import", "imports.json");
@@ -65,6 +71,7 @@ export function listSources(home: string, userDataDir?: string): SourceSummary[]
       types: reader.types,
       needs: { keychain: reader.needsKeychain, fullDiskAccess: reader.needsFullDiskAccess },
       unsupported: reader.unsupported,
+      ...(reader.needsKeychain.length && s.browser.safeStorage?.[0] ? { keychainHelp: keychainHelp(s.browser.safeStorage[0].service) } : {}),
     };
   });
 }

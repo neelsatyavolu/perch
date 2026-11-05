@@ -20,7 +20,23 @@ ANTHROPIC_API_KEY=… bun run src/cli.ts run --model anthropic:claude-sonnet-5-5
 bun run src/cli.ts run --model fake "anything"     # wiring check, no model
 ```
 
-Add `--show` to watch the browser and `--mode ask|guard|skip` to change the permission mode (Guard by default). Codex and Grok need the sign-in that Perch's settings add later.
+Add `--show` to watch the browser and `--mode ask|guard|skip` to change the permission mode (Guard by default).
+
+## Connect models
+
+Until the Settings → Models page exists, the same API runs from the terminal. Keys and sign-in tokens go to the login Keychain; choices go to an encrypted file in `~/Library/Application Support/Perch` (`PERCH_HOME` changes the folder).
+
+```sh
+bun run src/cli.ts models sign-in codex          # ChatGPT; also: grok
+bun run src/cli.ts models key openai             # asks for the key without echoing it; also anthropic, xai, gemini, openrouter
+bun run src/cli.ts models endpoint ollama http://127.0.0.1:11434/v1
+bun run src/cli.ts models claude-code            # uses the installed Claude Code CLI as the runner
+bun run src/cli.ts models providers              # what is connected
+bun run src/cli.ts models roles                  # Default, Fast, Standard, Deep, Visual, Image
+bun run src/cli.ts models role deep openai:gpt-6-astra high
+bun run src/cli.ts models image "A lighthouse at dawn" ~/Desktop
+bun run src/cli.ts run --model role:deep "…"      # or --model codex, --model ollama:qwen3:8b
+```
 
 ## Layout
 
@@ -32,7 +48,8 @@ Add `--show` to watch the browser and `--mode ask|guard|skip` to change the perm
 | `src/page/actions.ts` | Click, type, select, press, scroll, hover, upload, wait, back |
 | `src/page/screenshot.ts`, `repl.ts` | Masked screenshots, coordinate clicks, guarded JavaScript |
 | `src/agent/` | Tools, permission modes, audit log, the task loop and system prompt |
-| `src/models/` | Responses API (Codex, Grok), Anthropic Messages API, a scripted fake |
+| `src/models/` | Adapters (Responses, Anthropic, Chat Completions), providers and sign-in, model capabilities, task roles, image generation, and `registry.ts`, the API Settings → Models calls |
+| `src/config/` | Keychain access and the encrypted settings store |
 
 ## Rules this code keeps
 

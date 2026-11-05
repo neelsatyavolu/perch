@@ -40,3 +40,13 @@ export const ALL_RESOURCE_TYPES: readonly ResourceType[] = [
   "webbundle",
   "other",
 ];
+
+/**
+ * Block rules count up from 1 and exceptions from ALLOW_ID_BASE, so the site panel can count
+ * blocked requests from getMatchedRules without loading the rulesets.
+ */
+export const ALLOW_ID_BASE = 1_000_000;
+
+export function isBlockRuleId(id: number): boolean {
+  return id < ALLOW_ID_BASE;
+}

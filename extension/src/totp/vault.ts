@@ -39,12 +39,17 @@ export class Vault {
     return entry;
   }
 
-  async rename(id: string, names: { issuer: string; account: string }): Promise<void> {
+  async rename(id: string, names: { issuer: string; account: string; site?: string | null }): Promise<void> {
     const entries = await this.list();
     const target = entries.find((e) => e.id === id);
     if (!target) throw new Error("That code is no longer saved.");
     const key = await this.key();
-    const updated = { ...target, issuer: names.issuer.trim().slice(0, 200), account: names.account.trim().slice(0, 200) };
+    const updated: VaultEntry = {
+      ...target,
+      issuer: names.issuer.trim().slice(0, 200),
+      account: names.account.trim().slice(0, 200),
+      site: names.site === undefined ? target.site : names.site,
+    };
     const stored = await this.records.read();
     const replacement = await encrypt(key, updated);
     await this.records.write(stored.map((s) => (s.id === id ? replacement : s)));

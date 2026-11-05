@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { Vault, type KeyStore, type RecordStore, type StoredEntry } from "../../src/totp/vault";
 
-function memory(): { keys: KeyStore; records: RecordStore; stored: () => StoredEntry[] } {
+function memory(): { keys: KeyStore; records: RecordStore; stored: () => readonly StoredEntry[] } {
   let key: CryptoKey | null = null;
-  let entries: StoredEntry[] = [];
+  let entries: readonly StoredEntry[] = [];
   return {
     keys: { get: async () => key, put: async (k) => void (key = k) },
     records: { read: async () => entries, write: async (e) => void (entries = e) },

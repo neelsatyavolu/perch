@@ -38,8 +38,12 @@
       "description": "Take a full-page screenshot"
     },
     "reader": {
-      "suggested_key": { "default": "Alt+Shift+R", "mac": "Alt+Command+R" },
+      "suggested_key": { "default": "Alt+Shift+R", "mac": "MacCtrl+Shift+R" },
       "description": "Open or close reader view"
+    },
+    "pip": {
+      "suggested_key": { "default": "Alt+Shift+P", "mac": "MacCtrl+Shift+P" },
+      "description": "Picture in picture for the playing video"
     }
   },
   "content_security_policy": {

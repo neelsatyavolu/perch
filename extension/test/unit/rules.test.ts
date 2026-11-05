@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { parseFilter } from "../../src/rules/parse";
-import { compileLists, toRule, validateRule } from "../../src/rules/compile";
+import { ALLOW_ID_BASE, compileLists, isBlockRuleId, toRule, validateRule } from "../../src/rules/compile";
 import { PRIORITY } from "../../src/rules/limits";
 
 function rule(line: string) {
@@ -160,7 +160,11 @@ describe("compileLists", () => {
     expect(merged.condition.urlFilter).toBeUndefined();
     const thirdParty = el.rules.find((r) => r.condition.requestDomains?.includes("tp.example"))!;
     expect(thirdParty.condition).toEqual({ requestDomains: ["tp.example", "tp2.example"], domainType: "thirdParty" });
-    expect(el.rules.map((r) => r.id)).toEqual(el.rules.map((_, i) => i + 1));
+    const blockIds = el.rules.filter((r) => r.action.type === "block").map((r) => r.id);
+    expect(blockIds).toEqual(blockIds.map((_, i) => i + 1));
+    const allow = el.rules.find((r) => r.action.type === "allow")!;
+    expect(allow.id).toBe(ALLOW_ID_BASE + 1);
+    expect(isBlockRuleId(allow.id)).toBe(false);
     expect(out.stats.easylist!.skipped.cosmetic).toBe(1);
     expect(out.stats.easylist!.filters).toBe(9);
     expect(out.rulesets.find((r) => r.id === "easyprivacy")!.rules).toHaveLength(2);

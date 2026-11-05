@@ -1,7 +1,9 @@
 /** Turns parsed filters into declarativeNetRequest rules, merges host filters and keeps to the rule budget. */
 
 import { parseFilter, type Filter } from "./parse";
-import { ALL_RESOURCE_TYPES, PRIORITY, STATIC_RULE_BUDGET, type ResourceType } from "./limits";
+import { ALL_RESOURCE_TYPES, ALLOW_ID_BASE, PRIORITY, STATIC_RULE_BUDGET, type ResourceType } from "./limits";
+
+export { ALLOW_ID_BASE, isBlockRuleId } from "./limits";
 
 export type Condition = {
   urlFilter?: string;
@@ -94,7 +96,7 @@ export function compileLists(lists: readonly { id: string; text: string }[], bud
     const dropped = bodies.length - kept.length;
     if (dropped) stat.skipped.budget = dropped;
     left -= kept.length;
-    const rules = kept.map((body, i) => ({ id: i + 1, ...body }));
+    const rules = numberRules(kept);
     for (const rule of rules) {
       const problem = validateRule(rule);
       if (problem) throw new Error(`${list.id} rule ${rule.id}: ${problem}`);
@@ -103,6 +105,13 @@ export function compileLists(lists: readonly { id: string; text: string }[], bud
     stats[list.id] = { ...stat, rules: rules.length };
   }
   return { rulesets, stats };
+}
+
+/** Block rules count up from 1 and exceptions from ALLOW_ID_BASE. */
+function numberRules(bodies: readonly RuleBody[]): Rule[] {
+  let block = 0;
+  let allow = ALLOW_ID_BASE;
+  return bodies.map((body) => ({ id: body.action.type === "block" ? ++block : ++allow, ...body }));
 }
 
 function compileList(text: string): { bodies: RuleBody[]; stat: ListStats } {

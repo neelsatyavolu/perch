@@ -77,7 +77,8 @@ describe("sync client against the server", () => {
 
     // What the server holds is opaque.
     const row = await appEnv.DB.prepare("SELECT id, data FROM items WHERE account_id = ?").bind((await mac.api.account()).id).first<{ id: string; data: string }>();
-    expect(row!.id).not.toContain("b1");
+    // A keyed 24-byte HMAC, not the real id. (A substring check on it failed about 1 run in 130.)
+    expect(row!.id).toMatch(/^[A-Za-z0-9_-]{32}$/);
     expect(atob(row!.data.replace(/-/g, "+").replace(/_/g, "/"))).not.toContain("perchbrowser");
   });
 
@@ -95,6 +96,8 @@ describe("sync client against the server", () => {
 
     const macRelay = new RelayClient({ token: mac.token, me: mac.device, trusted: [bot.approved.trusted], connect: socketVia(h) });
     const botRelay = new RelayClient({ token: bot.paired.sessionToken, me: bot.device, trusted: bot.paired.trusted, connect: socketVia(h) });
+    // Listen before connecting, so the presence frame sent on connect cannot arrive unheard.
+    const online = new Promise<void>((resolve) => botRelay.on("presence", (ids) => ids.includes(mac.device.id) && resolve()));
     await macRelay.connect();
     await botRelay.connect();
     const calls: string[] = [];
@@ -103,7 +106,6 @@ describe("sync client against the server", () => {
       return { jsonrpc: "2.0", id: body.id, result: { content: [{ type: "text", text: "3 tabs open" }] } };
     });
     const reply = new Promise((resolve) => botRelay.on("message", (_from, message) => resolve(message)));
-    const online = new Promise<void>((resolve) => botRelay.on("presence", (ids) => ids.includes(mac.device.id) && resolve()));
     await online;
     await botRelay.send(mac.device.id, { kind: "mcp", body: { jsonrpc: "2.0", id: 7, method: "tools/call", params: { name: "tabs" } } });
     expect(await reply).toEqual({ kind: "mcp", body: { jsonrpc: "2.0", id: 7, result: { content: [{ type: "text", text: "3 tabs open" }] } } });

@@ -8,6 +8,8 @@ describe("devices", () => {
     const h = harness();
     const email = freshEmail();
     const a = await signIn(h, email, await device("Studio"));
+    // The list is ordered by created_at; on the test's still clock the two would tie.
+    h.clock.now += 1;
     const b = await signIn(h, email, await device("Laptop"));
     const { data } = await h.call("GET", "/v1/devices", { token: b.sessionToken });
     expect(data.devices.map((d: any) => [d.name, d.current])).toEqual([["Studio", false], ["Laptop", true]]);

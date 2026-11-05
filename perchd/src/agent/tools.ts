@@ -89,11 +89,31 @@ async function page(ctx: ToolContext, tab: Tab, full = false): Promise<string> {
   return `Page: ${title} (${url})\n${snap.text}`;
 }
 
-async function withPage(ctx: ToolContext, tab: Tab, result: ActionResult): Promise<ToolResult> {
-  if (!result.ok) return { content: [result.error, ...tab.takeDialogNotes()].join("\n"), isError: true };
+/** Actions after which an unchanged page is worth pointing out: the click or choice did nothing visible. */
+const EXPECT_CHANGE = new Set(["click", "select", "press", "click_at"]);
+const RECHECK_MS = 700;
+export const UNCHANGED =
+  "The page looks the same as before this action. If you expected a change (a filter, a menu, a new page), it did not take effect: check, or try another way.";
+
+async function withPage(ctx: ToolContext, tab: Tab, result: ActionResult, action = ""): Promise<ToolResult> {
+  if (!result.ok) {
+    const notes = [result.error, ...tab.takeDialogNotes()].join("\n");
+    // A gone ref means the page changed under the model: show it the page now, saving a step.
+    if (/^ref e\d+ is gone/.test(result.error)) return { content: `${notes}. The page now:\n\n${await page(ctx, tab)}`, isError: true };
+    return { content: notes, isError: true };
+  }
   await tab.settle();
+  const before = ctx.lastSnapshot.get(tab);
+  let view = await page(ctx, tab);
+  let same = EXPECT_CHANGE.has(action) && before !== undefined && ctx.lastSnapshot.get(tab) === before;
+  if (same) {
+    // Results often arrive a moment after the click; look once more before saying nothing happened.
+    await Bun.sleep(RECHECK_MS);
+    view = await page(ctx, tab);
+    same = ctx.lastSnapshot.get(tab) === before;
+  }
   const notes = tab.takeDialogNotes();
-  return { content: `${[result.note, ...notes].join("\n")}\n\n${await page(ctx, tab)}` };
+  return { content: `${[result.note, ...(same ? [UNCHANGED] : []), ...notes].join("\n")}\n\n${view}` };
 }
 
 /** Role and name of the element a ref-based call targets, from the last snapshot of the tab. */
@@ -206,13 +226,13 @@ async function dispatch(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
     case "snapshot":
       return { content: await page(ctx, tab, Boolean(a.full)) };
     case "click":
-      return withPage(ctx, tab, await click(tab, refs, a.ref));
+      return withPage(ctx, tab, await click(tab, refs, a.ref), "click");
     case "type":
       return withPage(ctx, tab, await type(tab, refs, a.ref, a.text, { submit: Boolean(a.submit) }));
     case "select":
-      return withPage(ctx, tab, await select(tab, refs, a.ref, a.value));
+      return withPage(ctx, tab, await select(tab, refs, a.ref, a.value), "select");
     case "press":
-      return withPage(ctx, tab, await press(tab, a.key));
+      return withPage(ctx, tab, await press(tab, a.key), "press");
     case "scroll":
       return withPage(ctx, tab, await scroll(tab, { refs, ref: a.ref, dy: a.dy }));
     case "hover":
@@ -239,7 +259,7 @@ async function dispatch(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
     }
     case "click_at": {
       const r = await clickAt(tab, a.x / ctx.shotScale, a.y / ctx.shotScale);
-      return withPage(ctx, tab, r.ok ? { ok: true, note: `clicked at ${a.x}, ${a.y} in the screenshot` } : r);
+      return withPage(ctx, tab, r.ok ? { ok: true, note: `clicked at ${a.x}, ${a.y} in the screenshot` } : r, "click_at");
     }
     case "repl": {
       const r = await repl(tab, a.code);

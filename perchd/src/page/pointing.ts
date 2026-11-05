@@ -61,7 +61,7 @@ async function inViewport(tab: Tab, point: Point): Promise<boolean> {
   return point.x >= 0 && point.y >= 0 && point.x < w && point.y < h;
 }
 
-async function scrollToCentre(tab: Tab, node: Node): Promise<void> {
+export async function scrollToCentre(tab: Tab, node: Node): Promise<void> {
   if (node.owner !== undefined) {
     const { object } = await tab.send<{ object: { objectId?: string } }>("DOM.resolveNode", { backendNodeId: node.owner }).catch(() => ({ object: {} as { objectId?: string } }));
     if (object.objectId) await call(tab, { objectId: object.objectId }, SCROLL_TO_CENTRE).catch(() => undefined);

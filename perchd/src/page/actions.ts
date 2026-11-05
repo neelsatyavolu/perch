@@ -4,7 +4,8 @@ import { existsSync } from "node:fs";
 import type { Tab } from "../browser/tab";
 import { parseKey } from "./keys";
 import { call, callForObject, describe, DESCRIBE, type Described, liveNode, type Node } from "./node";
-import { aim, clickAtPoint, mouse, type Point, toggleHiddenControl } from "./pointing";
+import { aim, clickAtPoint, mouse, type Point, scrollToCentre, toggleHiddenControl } from "./pointing";
+import { wheelScroll } from "./scrolling";
 import type { RefTable } from "./refs";
 import { ANNOUNCES_SUGGESTIONS, suggestionNote, typeKeys, VISIBLE_SUGGESTIONS } from "./typing";
 
@@ -152,17 +153,10 @@ export function press(tab: Tab, combo: string): Promise<ActionResult> {
 export function scroll(tab: Tab, opts: { refs?: RefTable; ref?: string; dy?: number }): Promise<ActionResult> {
   return attempt(async () => {
     if (opts.ref && opts.refs) {
-      const node = await liveNode(tab, opts.refs, opts.ref);
-      if (node.owner !== undefined) await tab.send("DOM.scrollIntoViewIfNeeded", { backendNodeId: node.owner }).catch(() => undefined);
-      await tab.sendIn(node.session, "DOM.scrollIntoViewIfNeeded", { backendNodeId: node.backendNodeId });
+      await scrollToCentre(tab, await liveNode(tab, opts.refs, opts.ref));
       return ok(`scrolled ${opts.ref} into view`);
     }
-    const [w, h] = await tab.evaluate<[number, number]>("[innerWidth, innerHeight]");
-    const dy = opts.dy ?? h * 0.8;
-    const before = await tab.evaluate<number>("scrollY");
-    await mouse(tab, "mouseWheel", { x: w / 2, y: h / 2 }, { deltaX: 0, deltaY: dy });
-    for (let i = 0; i < 20 && (await tab.evaluate<number>("scrollY")) === before; i++) await Bun.sleep(25);
-    return ok(`scrolled to ${Math.round(await tab.evaluate<number>("scrollY"))}px`);
+    return ok(await wheelScroll(tab, opts.dy));
   });
 }
 

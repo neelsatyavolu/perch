@@ -19,7 +19,7 @@ export type ServerEntry = {
   trusted: boolean;
   /** Where it was imported from, such as "Claude Code (user)". */
   source?: string;
-  /** Fingerprint of the command the user approved; a stdio server asks again when it changes. */
+  /** Fingerprint of what the user approved (command and env, or URL and headers); Perch asks again when it changes. */
   approvedLaunch?: string;
   addedAt: string;
 };

@@ -5,7 +5,6 @@
  * arguments (--header "Authorization: ..."), and secret-looking NAME=value pairs (docker -e).
  */
 
-import { createHash } from "node:crypto";
 import type { SecretStore } from "../secure/keychain";
 import type { ServerConfig, Value } from "./types";
 
@@ -87,9 +86,18 @@ export function secretAccounts(config: ServerConfig): string[] {
   return values.flatMap((v) => (typeof v === "object" && "secret" in v ? [v.secret] : []));
 }
 
+const VAR_REF = /\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}/g;
+
+/** Every variable a value reads at launch: ${VAR} anywhere in it, or a value that is just $VAR. */
+export function varsIn(text: string): string[] {
+  const pure = text.match(PURE_VAR);
+  if (pure) return [(pure[1] ?? pure[2])!];
+  return [...new Set([...text.matchAll(VAR_REF)].map((m) => m[1]!))];
+}
+
 /** Expands ${VAR} and ${VAR:-default}, the forms Claude Code supports. */
 export function expandVars(text: string, env: Record<string, string | undefined>): string {
-  return text.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}/g, (_, name: string, fallback?: string) => env[name] ?? fallback ?? "");
+  return text.replace(VAR_REF, (_, name: string, fallback?: string) => env[name] ?? fallback ?? "");
 }
 
 async function resolveValue(v: Value, kc: SecretStore, env: Record<string, string | undefined>, label: string): Promise<string> {
@@ -106,10 +114,4 @@ export async function resolveConfig(config: ServerConfig, kc: SecretStore, env: 
   if (config.transport !== "stdio") return { transport: config.transport, url: expandVars(config.url, env), headers: await map(config.headers) };
   const args = await Promise.all(config.args.map((a, i) => resolveValue(a, kc, env, `argument ${i + 1} of "${server}"`)));
   return { transport: "stdio", command: expandVars(config.command, env), args, env: await map(config.env), ...(config.cwd ? { cwd: expandVars(config.cwd, env) } : {}) };
-}
-
-/** What the user approves before a stdio server first runs: the command and its arguments. */
-export function launchFingerprint(config: ServerConfig): string {
-  const what = config.transport === "stdio" ? [config.command, ...config.args.map((a) => JSON.stringify(a)), config.cwd ?? ""] : [config.url];
-  return createHash("sha256").update(JSON.stringify(what)).digest("hex").slice(0, 32);
 }

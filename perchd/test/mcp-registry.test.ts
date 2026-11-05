@@ -3,7 +3,8 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { addServer, removeServer, RegistryStore, updateServer, type Registry } from "../src/mcp-client/registry";
-import { expandVars, launchFingerprint, resolveConfig, secretAccounts, secretArgIndexes, storeSecrets } from "../src/mcp-client/secrets";
+import { launchFingerprint } from "../src/mcp-client/launch";
+import { expandVars, resolveConfig, secretAccounts, secretArgIndexes, storeSecrets, varsIn } from "../src/mcp-client/secrets";
 import { parseEntry, sanitizeName, type ServerEntry } from "../src/mcp-client/types";
 import { MemoryKeychain } from "../src/secure/keychain";
 
@@ -116,8 +117,21 @@ test("configs resolve at launch from the Keychain and the environment", async ()
   expect(expandVars("a ${X} b ${Y:-y} $Z", { X: "1" })).toBe("a 1 b y $Z");
 });
 
-test("the launch fingerprint changes when the command or arguments change", () => {
-  const a = launchFingerprint({ transport: "stdio", command: "node", args: ["a.js"], env: {} });
-  expect(a).toBe(launchFingerprint({ transport: "stdio", command: "node", args: ["a.js"], env: { X: "1" } }));
-  expect(a).not.toBe(launchFingerprint({ transport: "stdio", command: "node", args: ["b.js"], env: {} }));
+test("the launch fingerprint changes when the command, arguments, env or URL change", () => {
+  const a = launchFingerprint({ transport: "stdio", command: "node", args: ["a.js"], env: { B: "2", A: { secret: "mcp/x/env/A" } } });
+  expect(a).toBe(launchFingerprint({ transport: "stdio", command: "node", args: ["a.js"], env: { A: { secret: "mcp/x/env/A" }, B: "2" } }));
+  expect(a).not.toBe(launchFingerprint({ transport: "stdio", command: "node", args: ["b.js"], env: { B: "2", A: { secret: "mcp/x/env/A" } } }));
+  // Adding NODE_OPTIONS or changing a plain env value changes what runs, so it asks again.
+  expect(a).not.toBe(launchFingerprint({ transport: "stdio", command: "node", args: ["a.js"], env: { B: "2", A: { secret: "mcp/x/env/A" }, NODE_OPTIONS: "--require /tmp/x.js" } }));
+  expect(a).not.toBe(launchFingerprint({ transport: "stdio", command: "node", args: ["a.js"], env: { B: "3", A: { secret: "mcp/x/env/A" } } }));
+  const r = launchFingerprint({ transport: "http", url: "https://a.test/mcp", headers: {} });
+  expect(r).not.toBe(launchFingerprint({ transport: "http", url: "https://b.test/mcp", headers: {} }));
+  expect(r).not.toBe(launchFingerprint({ transport: "http", url: "https://a.test/mcp", headers: { "X-Key": "${OPENAI_API_KEY}" } }));
+});
+
+test("every variable a value reads is found, not only values that are just a variable", () => {
+  expect(varsIn("Bearer ${OPENAI_API_KEY}")).toEqual(["OPENAI_API_KEY"]);
+  expect(varsIn("${A}/x/${B:-d}/${A}")).toEqual(["A", "B"]);
+  expect(varsIn("$HOME")).toEqual(["HOME"]);
+  expect(varsIn("plain $5 text")).toEqual([]);
 });

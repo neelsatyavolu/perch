@@ -41,7 +41,7 @@ function describeValue(v: Value): { secret: boolean; env?: string } {
   return m && v.startsWith("$") ? { secret: false, env: m[1]! } : { secret: true };
 }
 
-function maskUrl(raw: string): { url: string; warnings: string[] } {
+export function maskUrl(raw: string): { url: string; warnings: string[] } {
   try {
     const url = new URL(raw);
     const hidden = [...url.searchParams.keys()].filter((k) => SECRET_QUERY.test(k));

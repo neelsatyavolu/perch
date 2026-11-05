@@ -19,6 +19,7 @@ import { findSkillImports, importSkills, previewSkills } from "../skills/import"
 import { SkillStore } from "../skills/store";
 import { preview, saveImports, type PreviewItem } from "./importers/preview";
 import { findImports } from "./importers/sources";
+import { describeLaunch } from "./launch";
 import { deleteServer, McpManager } from "./manager";
 import { RegistryStore, updateServer } from "./registry";
 
@@ -100,7 +101,7 @@ export async function run(argv: string[], deps: CliDeps): Promise<number> {
         store,
         keychain: deps.keychain,
         env: deps.env,
-        approveLaunch: (r) => deps.ask(`Run ${r.command} ${r.args.join(" ")} for ${r.server}?`),
+        approveLaunch: (r) => deps.ask(describeLaunch(r)),
         openUrl: async (url) => deps.out(`Open this address to sign in: ${url}`),
       });
       const status = await manager.connect(name);

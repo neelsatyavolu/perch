@@ -7,7 +7,8 @@ import { runTask, type ApprovalRequest, type StepEvent } from "../src/agent/loop
 import type { Mode } from "../src/agent/permissions";
 import type { Browser } from "../src/browser/browser";
 import { mcpExtraTools, toolName, toToolResult } from "../src/mcp-client/agent-tools";
-import { deleteServer, McpManager, type LaunchRequest } from "../src/mcp-client/manager";
+import type { LaunchRequest } from "../src/mcp-client/launch";
+import { deleteServer, McpManager } from "../src/mcp-client/manager";
 import { addServer, EMPTY, RegistryStore, updateServer } from "../src/mcp-client/registry";
 import { storeSecrets } from "../src/mcp-client/secrets";
 import { fakeModel } from "../src/models/fake";
@@ -62,7 +63,7 @@ async function run(m: McpManager, script: Parameters<typeof fakeModel>[0], opts:
 test("a stdio server asks before its first launch, with secret arguments hidden, and only once", async () => {
   const first = manager();
   expect(await first.start()).toEqual([{ name: "fixture", state: "connected", tools: 9 }]);
-  expect(launches).toEqual([{ server: "fixture", command: process.execPath, args: [SERVER, "--token", "••••"] }]);
+  expect(launches).toEqual([{ server: "fixture", transport: "stdio", command: process.execPath, args: [SERVER, "--token", "••••"], env: { FIXTURE_TOKEN: "••••" }, fromEnv: [], warnings: [] }]);
   await first.close();
   await manager().start();
   expect(launches).toHaveLength(1);
@@ -71,6 +72,39 @@ test("a stdio server asks before its first launch, with secret arguments hidden,
   await store.save(updateServer(reg, "fixture", { config: { ...reg.servers[0]!.config, args: [SERVER, "--other"] } as never }));
   await manager().start();
   expect(launches).toHaveLength(2);
+});
+
+test("the launch request shows plain env values and flags variables that change what a program loads", async () => {
+  await store.update((reg) => {
+    const config = reg.servers[0]!.config;
+    return updateServer(reg, "fixture", { config: { ...config, env: { ...(config.transport === "stdio" ? config.env : {}), LOG_LEVEL: "debug", NODE_OPTIONS: "--require /tmp/x.js", DYLD_INSERT_LIBRARIES: "/tmp/x.dylib", WORKDIR: "${HOME}/w" } } as never });
+  });
+  await manager(false).start();
+  expect(launches[0]).toMatchObject({
+    env: { FIXTURE_TOKEN: "••••", LOG_LEVEL: "debug", NODE_OPTIONS: "--require /tmp/x.js", DYLD_INSERT_LIBRARIES: "/tmp/x.dylib", WORKDIR: "${HOME}/w" },
+    fromEnv: ["HOME"],
+    warnings: ["NODE_OPTIONS changes what the program loads when it starts.", "DYLD_INSERT_LIBRARIES changes what the program loads when it starts."],
+  });
+});
+
+test("a remote server asks before its first connection and names the variables it would send", async () => {
+  let requests = 0;
+  const fetchStub = (async () => (requests++, new Response("no", { status: 500 }))) as unknown as typeof fetch;
+  const headers = await storeSecrets("remote", { transport: "http", url: "https://mcp.example.test/mcp?team=${TEAM_ID}", headers: { Authorization: "Bearer ${OPENAI_API_KEY}", "X-Plain": "${OTHER}" } }, kc);
+  await store.save(addServer(EMPTY, { name: "remote", config: headers, enabled: true, trusted: false, addedAt: "x" }));
+  const m = new McpManager({ store, keychain: kc, approveLaunch: async (r) => (launches.push(r), false), openUrl: async () => undefined, fetch: fetchStub, env: { OPENAI_API_KEY: "sk-fake" } });
+  managers.push(m);
+  expect(await m.start()).toEqual([{ name: "remote", state: "declined", tools: 0, error: "You did not allow this server to run." }]);
+  expect(requests).toBe(0);
+  expect(launches).toEqual([{
+    server: "remote",
+    transport: "http",
+    url: "https://mcp.example.test/mcp?team=${TEAM_ID}",
+    headers: ["Authorization", "X-Plain"],
+    fromEnv: ["TEAM_ID", "OPENAI_API_KEY", "OTHER"],
+    warnings: ["Perch would send values from its environment to this server: TEAM_ID, OPENAI_API_KEY, OTHER."],
+  }]);
+  expect(JSON.stringify(launches)).not.toContain("sk-fake");
 });
 
 test("declining the launch leaves the server off with a plain status", async () => {

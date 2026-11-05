@@ -1,6 +1,6 @@
 /**
- * Keeps the user's enabled MCP servers connected for perchd: asks before a stdio server's first
- * launch (and whenever its command changes), resolves secrets from the Keychain at launch,
+ * Keeps the user's enabled MCP servers connected for perchd: asks before a server first runs or is
+ * first connected to (and whenever what it runs or where it connects changes), resolves secrets from the Keychain at launch,
  * tracks each server's tools and status, and reconnects a server that went away.
  */
 
@@ -10,16 +10,20 @@ import { connectRemote } from "./http";
 import type { RequestOptions } from "./jsonrpc";
 import { clientAccount, OAuthProvider, tokenAccount } from "./oauth";
 import { findServer, removeServer, updateServer, type RegistryStore } from "./registry";
-import { launchFingerprint, resolveConfig, secretAccounts, secretArgIndexes } from "./secrets";
+import { launchFingerprint, launchRequest, type LaunchRequest } from "./launch";
+import { resolveConfig, secretAccounts } from "./secrets";
 import { StdioTransport } from "./stdio";
 import type { ServerEntry } from "./types";
 
-export type LaunchRequest = { server: string; command: string; args: string[]; cwd?: string };
+export type { LaunchRequest } from "./launch";
 
 export type ManagerOptions = {
   store: RegistryStore;
   keychain: SecretStore;
-  /** Asked before an imported or new stdio server first runs. Secret arguments show as ••••. */
+  /**
+   * Asked before a server first runs (stdio) or is first connected to (remote), and again whenever
+   * its command, arguments, env, URL or headers change. Secret values show as ••••.
+   */
   approveLaunch: (request: LaunchRequest) => Promise<boolean>;
   /** Opens an OAuth sign-in page for the user (a tab in Perch). */
   openUrl: (url: string) => Promise<void>;
@@ -112,13 +116,9 @@ export class McpManager {
   }
 
   private async checkLaunch(entry: ServerEntry): Promise<ServerEntry | null> {
-    if (entry.config.transport !== "stdio") return entry;
     const fingerprint = launchFingerprint(entry.config);
     if (entry.approvedLaunch === fingerprint) return entry;
-    const hidden = new Set(secretArgIndexes(entry.config.args));
-    const args = entry.config.args.map((a, i) => (typeof a === "string" && !hidden.has(i) ? a : typeof a === "object" && "env" in a ? `$${a.env}` : "••••"));
-    const ok = await this.opts.approveLaunch({ server: entry.name, command: entry.config.command, args, ...(entry.config.cwd ? { cwd: entry.config.cwd } : {}) });
-    if (!ok) return null;
+    if (!(await this.opts.approveLaunch(await launchRequest(entry, this.opts.keychain)))) return null;
     await this.opts.store.update((reg) => updateServer(reg, entry.name, { approvedLaunch: fingerprint }));
     return { ...entry, approvedLaunch: fingerprint };
   }

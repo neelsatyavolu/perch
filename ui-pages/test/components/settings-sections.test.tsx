@@ -118,8 +118,15 @@ describe("Privacy and security", () => {
     fireEvent.change(r.getByRole("combobox", { name: "DNS resolver" }), { target: { value: "custom" } });
     const addr = await r.findByRole("textbox", { name: "Resolver address" });
     fireEvent.input(addr, { target: { value: "http://dns.example" } });
+    expect(r.getByText("Lookups keep using Cloudflare until you save an address.")).toBeTruthy();
+    expect((await r.api.getPrivacy()).dohProvider).toBe("cloudflare");
     fireEvent.click(r.getByRole("button", { name: "Save" }));
     expect(await r.findByText("Enter the resolver's https:// address")).toBeTruthy();
+    expect((await r.api.getPrivacy()).dohProvider).toBe("cloudflare");
+    fireEvent.input(addr, { target: { value: "https://dns.example/dns-query" } });
+    fireEvent.click(r.getByRole("button", { name: "Save" }));
+    await waitFor(async () => expect(await r.api.getPrivacy()).toMatchObject({ dohProvider: "custom", dohCustomUrl: "https://dns.example/dns-query" }));
+    await waitFor(() => expect(r.queryByText("Lookups keep using Cloudflare until you save an address.")).toBeNull());
     fireEvent.click(r.getByRole("switch", { name: "Perch updates" }));
     await waitFor(async () => expect((await r.api.getPrivacy()).backgroundConnections.find((c) => c.id === "updates")?.enabled).toBe(false));
     fireEvent.click(r.getByRole("button", { name: "Forget github.com" }));

@@ -2,7 +2,7 @@ import { useState } from "preact/hooks";
 import type { DohProvider, PrivacyPatch, PrivacySettings, SiteData } from "../../api";
 import { formatBytes } from "../../lib/labels";
 import { relativeTime } from "../../lib/time";
-import { checkEndpointUrl } from "../../lib/validate";
+import { checkDohUrl } from "../../lib/validate";
 import { useAction, useApi, useLoad } from "../../ui/frame";
 import { Dialog } from "../../ui/Dialog";
 import { Icon, X } from "../../ui/icons";
@@ -63,6 +63,8 @@ export function Privacy() {
   const privacy = useLoad((a) => a.getPrivacy());
   const [dohUrl, setDohUrl] = useState<string | null>(null);
   const [dohError, setDohError] = useState<string | null>(null);
+  /** "Custom" picked in the menu but not saved yet: it is sent together with a valid address. */
+  const [pendingCustom, setPendingCustom] = useState(false);
   const p = privacy.data;
   const apply = async (run: () => Promise<PrivacySettings>) => {
     const next = await act(run);
@@ -71,12 +73,23 @@ export function Privacy() {
   const patch = (x: PrivacyPatch) => apply(() => api.setPrivacy(x));
   if (!p) return <p class="mute">{privacy.error ?? ""}</p>;
 
-  const saveDohUrl = () => {
-    const c = checkEndpointUrl(dohUrl ?? p.dohCustomUrl);
-    if (!c.ok || !c.value.startsWith("https://")) return setDohError("Enter the resolver's https:// address");
+  const saveDohUrl = async () => {
+    const c = checkDohUrl(dohUrl ?? p.dohCustomUrl);
+    if (!c.ok) return setDohError(c.error);
     setDohError(null);
-    patch({ dohCustomUrl: c.value });
+    const next = await act(() => api.setPrivacy({ dohProvider: "custom", dohCustomUrl: c.value }), "Encrypted DNS uses your resolver");
+    if (next) {
+      privacy.set(next);
+      setPendingCustom(false);
+    }
   };
+  const pickResolver = (d: DohProvider) => {
+    setDohError(null);
+    if (d === "custom") return setPendingCustom(true);
+    setPendingCustom(false);
+    patch({ dohProvider: d });
+  };
+  const resolver: DohProvider = pendingCustom ? "custom" : p.dohProvider;
 
   return (
     <div class="sec">
@@ -97,14 +110,15 @@ export function Privacy() {
           </Row>
           <Row id="doh" title="Encrypted DNS" detail="Looks up site addresses over HTTPS, and falls back to your network's DNS if the resolver is unreachable">
             {p.dnsOverHttps && (
-              <select class="picker sm" aria-label="DNS resolver" value={p.dohProvider} onChange={(e) => patch({ dohProvider: (e.currentTarget as HTMLSelectElement).value as DohProvider })}>
+              <select class="picker sm" aria-label="DNS resolver" value={resolver} onChange={(e) => pickResolver((e.currentTarget as HTMLSelectElement).value as DohProvider)}>
                 {(Object.keys(DOH) as DohProvider[]).map((d) => <option key={d} value={d}>{DOH[d]}</option>)}
               </select>
             )}
             <Switch label="Encrypted DNS" describedBy="doh-d" checked={p.dnsOverHttps} onChange={(v) => patch({ dnsOverHttps: v })} />
           </Row>
-          {p.dnsOverHttps && p.dohProvider === "custom" && (
+          {p.dnsOverHttps && resolver === "custom" && (
             <form class="add-rule" style={{ gridTemplateColumns: "1fr auto" }} onSubmit={(e) => { e.preventDefault(); saveDohUrl(); }}>
+              {pendingCustom && <p class="note" style={{ gridColumn: "1 / -1" }}>Lookups keep using {DOH[p.dohProvider]} until you save an address.</p>}
               <input class="field mono" aria-label="Resolver address" placeholder="https://dns.example/dns-query" value={dohUrl ?? p.dohCustomUrl}
                 aria-invalid={dohError ? "true" : undefined} onInput={(e) => setDohUrl((e.currentTarget as HTMLInputElement).value)} />
               <button type="submit" class="btn">Save</button>

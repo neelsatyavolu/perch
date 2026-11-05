@@ -23,6 +23,10 @@ const SETTINGS_KIND = "settings";
 const SETTINGS_ID = "0000000000000001";
 const CHANGES = "changes";
 const DEFAULT_SETTINGS: MemorySettings = { extraction: true, paused: false, episodicRetentionDays: null };
+/** Used when saved settings cannot be read: never turn memory back on that the user may have turned off. */
+const SAFE_SETTINGS: MemorySettings = { extraction: false, paused: true, episodicRetentionDays: null };
+/** How damaged settings are listed in `damaged`. */
+const DAMAGED_SETTINGS = "settings";
 const MAX_FACTS_PER_PAGE = 200;
 const MAX_PAGES = 5000;
 const CONTEXT_LIMIT = 4000;
@@ -57,8 +61,13 @@ export class MemoryStore {
       }
     }
     store.damaged = damaged;
-    const saved = await folder.get(SETTINGS_KIND, SETTINGS_ID).catch(() => null);
-    if (saved) store.config = { ...DEFAULT_SETTINGS, ...(JSON.parse(saved) as Partial<MemorySettings>) };
+    try {
+      const saved = await folder.get(SETTINGS_KIND, SETTINGS_ID);
+      if (saved) store.config = { ...DEFAULT_SETTINGS, ...(JSON.parse(saved) as Partial<MemorySettings>) };
+    } catch {
+      store.config = SAFE_SETTINGS;
+      store.damaged = [...damaged, DAMAGED_SETTINGS];
+    }
     return store;
   }
 
@@ -107,6 +116,7 @@ export class MemoryStore {
       if (![30, 90, null].includes(next.episodicRetentionDays)) throw new Error("episodic retention must be 30, 90 or never (null)");
       await this.folder.put(SETTINGS_KIND, SETTINGS_ID, JSON.stringify(next));
       this.config = next;
+      this.damaged = this.damaged.filter((d) => d !== DAMAGED_SETTINGS);
       return next;
     });
   }

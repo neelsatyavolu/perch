@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mockKeychain, type KeyStore } from "../src/memory/keychain";
@@ -163,4 +163,18 @@ test("fuse blends keyword and vector ranks; an embedder can lift a page with no 
   const { store } = await open({ embedder });
   await store.addFacts([{ category: "people", title: "Maya Chen", text: "Sister in Lisbon" }, { category: "concepts", title: "Tea", text: "Likes green tea" }], "chat");
   expect((await store.search("sibling")).map((h) => h.path)).toEqual(["people/maya-chen.md"]);
+});
+
+test("damaged settings are reported and fall back to paused with extraction off until saved again", async () => {
+  const keys = mockKeychain();
+  const { store, dir } = await open({ keys });
+  await store.updateSettings({ extraction: false });
+  const [file] = walk(join(dir, "settings"));
+  writeFileSync(file!, Buffer.from("not an encrypted record"));
+  const again = await MemoryStore.open({ dir, keys, profile: "default", now: () => clock });
+  expect(again.settings()).toMatchObject({ extraction: false, paused: true });
+  expect(again.damaged).toEqual(["settings"]);
+  await again.updateSettings({ paused: false });
+  expect(again.damaged).toEqual([]);
+  expect((await MemoryStore.open({ dir, keys, profile: "default", now: () => clock })).settings()).toMatchObject({ extraction: false, paused: false });
 });

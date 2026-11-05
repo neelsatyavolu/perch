@@ -33,6 +33,7 @@ Add `--show` to watch the browser and `--mode ask|guard|skip` to change the perm
 | `src/page/screenshot.ts`, `repl.ts` | Masked screenshots, coordinate clicks, guarded JavaScript |
 | `src/agent/` | Tools, permission modes, audit log, the task loop and system prompt |
 | `src/models/` | Responses API (Codex, Grok), Anthropic Messages API, a scripted fake |
+| `src/app/` | The app API for Perch's pages: encrypted chats and artifacts, runs with approvals, side chats bound to tabs, an isolated artifact origin (`bun run src/app/main.ts --mock-keychain` to try it with `ui/`) |
 
 ## Rules this code keeps
 

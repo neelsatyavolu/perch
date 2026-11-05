@@ -72,4 +72,5 @@ ui/
 - **Secure Enclave wrapping of the profile key.** Needs a signed app with the right entitlement (plan 3b/8). The key sits in the Keychain now; the vault takes a key source, so wrapping slots in later.
 - **Syntax highlighting, math, Mermaid and React artifacts.** Code renders plain with a language label; the rest render as code until a small highlighter is chosen against the bundle budget.
 - **Dictation and file attach.** The buttons are in the composer layout but need browser APIs (macOS speech, file chooser) that the Chromium plan provides; they are shown disabled with a reason.
-- **`@` mentions of memory and skills.** Memory and skills are other tracks; `@` lists open tabs only for now.
+- **`@` mentions.** Tabs come from the browser's panel controller, memory and skills from other tracks; the placeholder keeps the spec's wording so the page does not change when they land.
+- **Live thumbnail of the agent's tab** (spec 6.1, moment 1). Needs a screencast from the agent tab; the live step line with the perch dot is built.

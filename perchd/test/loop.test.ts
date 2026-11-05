@@ -220,6 +220,21 @@ test("when time runs out the loop stops calling tools and asks for the best answ
   expect(model.requests).toHaveLength(2);
 });
 
+test("calls left in a turn when time runs out are not run, but each still gets a result", async () => {
+  const two: TurnEvent[] = [
+    { type: "tool_call", call: { id: "slow_1", name: "wait_for", args: { seconds: 0.4 } } },
+    { type: "tool_call", call: { id: "slow_2", name: "wait_for", args: { seconds: 0.4 } } },
+    { type: "done" },
+  ];
+  const started = Date.now();
+  const { events, model } = await run((req) => (req.toolChoice === "none" ? say("Best answer so far.") : two), { maxMs: 300 });
+  expect(Date.now() - started).toBeLessThan(800);
+  expect(events.at(-1)).toEqual({ type: "final", text: "Best answer so far." });
+  const results = model.requests.at(-1)!.messages.filter((m) => m.role === "tool");
+  expect(results.map((m) => m.role === "tool" && m.callId)).toEqual(["slow_1", "slow_2"]);
+  expect(results[1]).toMatchObject({ content: "Not run: the time for this task is up." });
+});
+
 test("budget and repeated-call notes reach the model in tool results", async () => {
   let seen = "";
   const { model } = await run([

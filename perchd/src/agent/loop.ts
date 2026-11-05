@@ -37,6 +37,7 @@ export type TaskOptions = {
 
 const DEFAULT_MAX_STEPS = 40;
 const DEFAULT_MAX_MS = 15 * 60_000;
+const TIME_UP = "Not run: the time for this task is up.";
 
 /** Sent once, in place of the first done after the agent has used the browser. */
 export const CHECK_BEFORE_DONE = [
@@ -80,6 +81,11 @@ export async function* runTask(opts: TaskOptions): AsyncIterable<StepEvent> {
         if (signal.aborted) {
           yield { type: "error", message: "Cancelled." };
           return;
+        }
+        if (progress.timeUp()) {
+          // Every call needs a result; the final turn follows.
+          messages.push({ role: "tool", callId: call.id, name: call.name, content: TIME_UP });
+          continue;
         }
         const outcome = yield* act(ctx, opts, call);
         if (signal.aborted) {

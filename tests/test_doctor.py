@@ -35,3 +35,14 @@ def test_missing_depot_tools_says_how(fake_probe_ok, paths):
     fake_probe_ok.present = set()
     detail = _failed(run_checks(fake_probe_ok, paths))["depot_tools"]
     assert f"git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git {paths.depot_tools}" in detail
+
+
+def test_node_modules_above_checkout_fails(fake_probe_ok, paths):
+    fake_probe_ok.present = {paths.depot_tools, paths.chromium.parent / "node_modules"}
+    detail = _failed(run_checks(fake_probe_ok, paths))["node_modules"]
+    assert str(paths.chromium.parent / "node_modules") in detail
+    assert "PERCH_CHROMIUM_DIR" in detail
+
+
+def test_no_node_modules_above_passes(fake_probe_ok, paths):
+    assert "node_modules" not in _failed(run_checks(fake_probe_ok, paths))

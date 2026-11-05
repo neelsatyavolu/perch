@@ -60,10 +60,13 @@ def run_checks(probe: Probe, paths: Paths) -> list[Check]:
     free_gib = probe.free_bytes(paths.chromium) / GIB
     python = probe.python_version()
     has_depot_tools = probe.exists(paths.depot_tools)
+    # TypeScript in the Chromium build reads @types from every node_modules above the checkout.
+    stray = [d / "node_modules" for d in (paths.chromium, *paths.chromium.parents) if probe.exists(d / "node_modules")]
     return [
         Check("arm64", machine == "arm64", "Apple silicon" if machine == "arm64" else f"this Mac is {machine}; Perch builds on Apple silicon only"),
         Check("xcode", xcode.startswith("/Applications/Xcode"), xcode if xcode.startswith("/Applications/Xcode") else f"selected developer dir is {xcode or 'none'}; install Xcode and run xcode-select -s /Applications/Xcode.app"),
         Check("disk", free_gib >= MIN_FREE_GIB, f"{free_gib:.0f} GiB free" + ("" if free_gib >= MIN_FREE_GIB else f"; the checkout and builds need {MIN_FREE_GIB} GiB")),
         Check("python", python >= MIN_PYTHON, f"Python {python[0]}.{python[1]}" + ("" if python >= MIN_PYTHON else f"; needs {MIN_PYTHON[0]}.{MIN_PYTHON[1]} or newer")),
+        Check("node_modules", not stray, "none above the checkout" if not stray else f"{stray[0]} breaks Chromium's TypeScript build; put the checkout elsewhere with PERCH_CHROMIUM_DIR or perch-build.local.json, for example /Users/Shared/chromium-perch"),
         Check("depot_tools", has_depot_tools, f"found at {paths.depot_tools}" if has_depot_tools else f"missing; run: git clone {DEPOT_TOOLS_URL} {paths.depot_tools}"),
     ]

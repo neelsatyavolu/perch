@@ -18,7 +18,7 @@
   color: var(--mute); border: 0; background: none; cursor: pointer; padding: 0;
   transition: background 120ms var(--ease), color 120ms var(--ease);
 }
-.ib:hover, .ib[aria-pressed="true"], .ib[aria-expanded="true"] { background: var(--hover); color: var(--ink); }
+.ib:hover, .ib[aria-pressed="true"] { background: var(--hover); color: var(--ink); }
 .ib.sm { width: 24px; height: 24px; }
 .ib.sm svg.i { width: 14px; height: 14px; }
 

@@ -23,9 +23,10 @@ test("every tool spec is a strict JSON Schema object", () => {
 test("bad calls come back as plain errors", async () => {
   const ctx = await newToolContext(env.browser);
   expect(await runTool(ctx, call("fly"))).toMatchObject({ isError: true, content: 'unknown tool "fly"' });
-  expect(await runTool(ctx, call("click"))).toMatchObject({ isError: true, content: 'missing argument "ref"' });
+  expect(await runTool(ctx, call("click"))).toMatchObject({ isError: true, content: 'missing argument "ref"; click takes ref' });
+  expect(await runTool(ctx, call("scroll", { direction: "down" }))).toMatchObject({ isError: true, content: 'unexpected argument "direction"; scroll takes dy (pixels, negative is up), ref' });
   expect(await runTool(ctx, call("click", { ref: 12 }))).toMatchObject({ isError: true, content: 'argument "ref" must be a string' });
-  expect(await runTool(ctx, call("click", { ref: "e1", color: "red" }))).toMatchObject({ isError: true, content: 'unexpected argument "color"' });
+  expect(await runTool(ctx, call("click", { ref: "e1", color: "red" }))).toMatchObject({ isError: true, content: 'unexpected argument "color"; click takes ref' });
   expect(await runTool(ctx, call("click", { __unparsed: "{ref:" }))).toMatchObject({ isError: true, content: 'the arguments for "click" were not valid JSON' });
   expect(await runTool(ctx, call("click", { ref: "e1)(" }))).toMatchObject({ isError: true, content: 'ref "e1)(" is not a valid ref; refs look like e12' });
   for (const url of ["javascript:alert(document.cookie)", "data:text/html,<script>1</script>", "file:///etc/passwd", "chrome://settings", "JavaScript:void 0"]) {
@@ -85,4 +86,28 @@ test("write_file saves into the chat's own folder and nowhere else", async () =>
   expect(existsSync("/etc/evil")).toBe(false);
   await ctx.close();
   expect(existsSync(ctx.workDir)).toBe(false);
+});
+
+test("wait_for can wait a few seconds and returns the page after", async () => {
+  const ctx = await newToolContext(env.browser);
+  await runTool(ctx, call("navigate", { url: env.site.url("/shop.html") }));
+  const started = Date.now();
+  const waited = await runTool(ctx, call("wait_for", { seconds: 1 }));
+  expect(Date.now() - started).toBeGreaterThanOrEqual(900);
+  expect(waited.content).toContain("waited 1 s");
+  expect(waited.content).toContain("Page: Northwind Shop");
+  expect(await runTool(ctx, call("wait_for", {}))).toMatchObject({ isError: true, content: "give text to wait for, or seconds to wait" });
+  await ctx.close();
+});
+
+test("the REPL says plainly that it has no network", async () => {
+  const ctx = await newToolContext(env.browser);
+  await runTool(ctx, call("navigate", { url: env.site.url("/shop.html") }));
+  for (const code of ["return await (await fetch('/w/api.php')).text()", "return await (await fetch('https://example.com/data.json')).json()"]) {
+    const r = await runTool(ctx, call("repl", { code }));
+    expect(r.isError).toBe(true);
+    expect(r.content).toContain("the REPL has no network access");
+    expect(r.content).toContain("navigate");
+  }
+  await ctx.close();
 });

@@ -14,6 +14,10 @@ import { IS_SECRET_JS } from "./secrets";
 
 export type ReplResult = { result: unknown; error?: string };
 
+export const NO_NETWORK_MESSAGE =
+  "the REPL has no network access: it reads a copy of the page. To read an API, a feed or another page, open its URL with navigate or open_tab (JSON and text pages work too), then read it";
+const NETWORK_ERROR = /Failed to fetch|Failed to parse URL|NetworkError|XMLHttpRequest|ERR_BLOCKED|WebSocket/i;
+
 export const READ_ONLY_MESSAGE = "the REPL is read-only; use click, type and select to change the page";
 
 const LOCK_DOWN = `(() => {
@@ -85,7 +89,8 @@ export async function repl(tab: Tab, code: string): Promise<ReplResult> {
   );
   if (res.exceptionDetails) {
     const description = res.exceptionDetails.exception?.description ?? res.exceptionDetails.text;
-    return { result: undefined, error: description.split("\n")[0]!.replace(/^(Uncaught )?(Type)?Error: /, "") };
+    const first = description.split("\n")[0]!.replace(/^(Uncaught )?(Type)?Error: /, "");
+    return { result: undefined, error: NETWORK_ERROR.test(first) ? NO_NETWORK_MESSAGE : first };
   }
   return { result: res.result.value };
 }

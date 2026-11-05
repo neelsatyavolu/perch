@@ -30,6 +30,7 @@ export type ToolContext = {
 
 const SCREENSHOT_WIDTH = 1280;
 const REPL_LIMIT = 20_000;
+const MAX_WAIT_S = 60;
 
 export async function newToolContext(browser: Browser): Promise<ToolContext> {
   const ctx: ToolContext = {
@@ -219,7 +220,13 @@ async function dispatch(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
     case "back":
       return withPage(ctx, tab, await back(tab));
     case "wait_for": {
-      const r = await waitFor(tab, { text: a.text, timeoutMs: Math.min(60, Number(a.timeout_s ?? 10)) * 1000 });
+      if (a.text === undefined) {
+        if (a.seconds === undefined) return { content: "give text to wait for, or seconds to wait", isError: true };
+        const seconds = Math.max(0, Math.min(MAX_WAIT_S, Number(a.seconds)));
+        await Bun.sleep(seconds * 1000);
+        return { content: `waited ${seconds} s\n\n${await page(ctx, tab)}` };
+      }
+      const r = await waitFor(tab, { text: a.text, timeoutMs: Math.min(MAX_WAIT_S, Number(a.timeout_s ?? a.seconds ?? 10)) * 1000 });
       return r.ok ? { content: r.note } : { content: r.error, isError: true };
     }
     case "screenshot": {

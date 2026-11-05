@@ -74,7 +74,7 @@ test("approving runs the action", async () => {
 test("a bad tool call is reported back and the loop goes on", async () => {
   const { events, model } = await run([() => tool("click", {}), (req) => say(lastTool(req).content)]);
   expect(model.requests).toHaveLength(2);
-  expect(events.at(-1)).toEqual({ type: "final", text: 'missing argument "ref"' });
+  expect(events.at(-1)).toEqual({ type: "final", text: 'missing argument "ref"; click takes ref' });
 });
 
 test("the loop stops at maxSteps with a clear message", async () => {
@@ -193,4 +193,14 @@ test("the system prompt tells every model to browse, handle dialogs and finish t
   const { systemPrompt } = await import("../src/agent/prompt");
   const prompt = systemPrompt({ mode: "skip", now: new Date("2026-11-05T09:00:00Z") });
   for (const phrase of ["never fill gaps from memory", "Never try to solve a CAPTCHA", "cookie", "search.brave.com", "YYYY-MM-DD", "every part of the task", "list what the task requires", "detail pages", "the site the task names", "write_file", "duckduckgo", "pick the matching suggestion", "every filter the task asks for"]) expect(prompt).toContain(phrase);
+});
+
+test("outside agents are told to reply, since they have no done tool", async () => {
+  const { systemPrompt } = await import("../src/agent/prompt");
+  const native = systemPrompt({ mode: "guard", now: new Date("2026-11-05T09:00:00Z") });
+  const outside = systemPrompt({ mode: "guard", now: new Date("2026-11-05T09:00:00Z"), finish: "reply" });
+  expect(native).toContain("call done");
+  expect(outside).not.toContain("done");
+  expect(outside).toContain("reply with");
+  for (const phrase of ["no network access", "result count", "Load more", "numbers behind the chart", "running low"]) expect(native).toContain(phrase);
 });

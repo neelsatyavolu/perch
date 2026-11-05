@@ -101,7 +101,7 @@ export async function runClaudeCode(opts: RunOptions): Promise<ExternalResult> {
   const mcpArgs = ["run", MCP_ENTRY, "--mode", mode, "--client", "claude-code", "--audit", opts.auditPath, "--profile", join(work, "profile")];
   mcpArgs.push(...browserArgs(opts));
   writeFileSync(mcpConfig, JSON.stringify({ mcpServers: { perch: { command: process.execPath, args: mcpArgs } } }));
-  const prompt = `${systemPrompt({ mode, now: new Date() })}\n\nYour tools are Perch's browser tools (mcp__perch__*). Do the task in the browser. When you finish, reply with the answer or the result in your final message, including the specific facts the task asks for.`;
+  const prompt = `${systemPrompt({ mode, now: new Date(), finish: "reply" })}\n\nYour tools are Perch's browser tools (mcp__perch__*). Do the task in the browser. When you finish, reply with the answer or the result in your final message, including the specific facts the task asks for.`;
   const child = Bun.spawn([claudeBinary(), ...claudeArgs({ model: opts.model ?? "claude-sonnet-5-5", mcpConfig, systemPrompt: prompt, task: opts.task })], {
     cwd: work,
     stdout: "pipe",
@@ -200,7 +200,7 @@ export async function runCodex(opts: RunOptions): Promise<ExternalResult> {
   const mode = opts.mode ?? "guard";
   const mcpArgs = ["run", MCP_ENTRY, "--mode", mode, "--client", "codex", "--audit", opts.auditPath, "--profile", join(work, "profile")];
   mcpArgs.push(...browserArgs(opts));
-  const prompt = `${systemPrompt({ mode, now: new Date() })}\n\nYour tools for this task are Perch's browser tools from the "perch" MCP server. Do not run shell commands or read files. Do the task in the browser, then reply with the answer, including the specific facts the task asks for.\n\nTask:\n${opts.task}`;
+  const prompt = `${systemPrompt({ mode, now: new Date(), finish: "reply" })}\n\nYour tools for this task are Perch's browser tools from the "perch" MCP server. Do not run shell commands or read files. Do the task in the browser, then reply with the answer, including the specific facts the task asks for.\n\nTask:\n${opts.task}`;
   const args = [
     "exec", "--json", "--skip-git-repo-check", "-s", "read-only",
     "-c", 'approval_policy="never"',

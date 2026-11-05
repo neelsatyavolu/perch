@@ -18,7 +18,7 @@ export async function skillsIn(dir: string, source: string): Promise<{ candidate
     entries
       .filter((e) => e.isDirectory() && !e.name.startsWith("."))
       .sort((a, b) => a.name.localeCompare(b.name))
-      .map(async (e) => {
+      .map(async (e): Promise<{ candidate: SkillCandidate } | { problem: { path: string; message: string } }> => {
         const path = join(dir, e.name);
         try {
           return { candidate: { source, dir: path, bundle: await readSkillFolder(path) } };

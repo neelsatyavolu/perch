@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,14 +10,6 @@ import { fakeModel } from "../src/models/fake";
 import type { TurnEvent } from "../src/models/types";
 import { openPerchData } from "../src/routines/service";
 
-const originalTz = process.env.TZ;
-beforeAll(() => {
-  process.env.TZ = "UTC";
-});
-afterAll(() => {
-  if (originalTz === undefined) delete process.env.TZ;
-  else process.env.TZ = originalTz;
-});
 const dirs: string[] = [];
 afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });

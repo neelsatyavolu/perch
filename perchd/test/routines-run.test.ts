@@ -1,4 +1,4 @@
-import { afterAll, afterEach, expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,11 +11,6 @@ import { runRoutine, type RunnerDeps } from "../src/routines/runner";
 import { Scheduler } from "../src/routines/scheduler";
 import { RoutineStore, type Routine } from "../src/routines/store";
 
-const originalTz = process.env.TZ;
-afterAll(() => {
-  if (originalTz === undefined) delete process.env.TZ;
-  else process.env.TZ = originalTz;
-});
 const dirs: string[] = [];
 afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
@@ -152,7 +147,6 @@ function scheduler(store: RoutineStore, graceMs?: number) {
 }
 
 test("the scheduler sets the next run, runs it when due, then moves to the following one", async () => {
-  process.env.TZ = "UTC";
   const { store } = await openStore();
   await store.save(routine());
   const { s, ran } = scheduler(store);
@@ -169,7 +163,6 @@ test("the scheduler sets the next run, runs it when due, then moves to the follo
 });
 
 test("missed runs (the Mac was asleep) run once on wake, or are skipped and recorded", async () => {
-  process.env.TZ = "UTC";
   const { store } = await openStore();
   await store.save(routine({ nextRunAt: "2026-11-02T08:00:00.000Z" }));
   await store.save(routine({ id: "fedcba9876543210fedcba9876543210", name: "Skipper", missed: "skip", nextRunAt: "2026-11-02T08:00:00.000Z" }));

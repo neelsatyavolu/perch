@@ -1,14 +1,14 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
+import { join } from "node:path";
 import { checkSchedule, describeSchedule, nextRun, parseCron, upcoming } from "../src/routines/schedule";
 
-const originalTz = process.env.TZ;
-beforeAll(() => {
-  process.env.TZ = "America/Los_Angeles";
-});
-afterAll(() => {
-  if (originalTz === undefined) delete process.env.TZ;
-  else process.env.TZ = originalTz;
-});
+/** Runs nextRun/upcoming in a child process with its own time zone; TZ cannot change reliably mid-process. */
+function inZone(tz: string, code: string): unknown {
+  const script = `import { nextRun, upcoming } from ${JSON.stringify(join(import.meta.dir, "../src/routines/schedule.ts"))};\nconst fmt = (d) => d && \`\${d.getFullYear()}-\${String(d.getMonth() + 1).padStart(2, "0")}-\${String(d.getDate()).padStart(2, "0")} \${String(d.getHours()).padStart(2, "0")}:\${String(d.getMinutes()).padStart(2, "0")}\`;\nconsole.log(JSON.stringify(${code}));`;
+  const proc = Bun.spawnSync([process.execPath, "-e", script], { env: { ...process.env, TZ: tz } });
+  if (proc.exitCode !== 0) throw new Error(proc.stderr.toString());
+  return JSON.parse(proc.stdout.toString());
+}
 /** Local wall-clock time in the test's time zone. */
 const at = (y: number, mo: number, d: number, h = 0, mi = 0) => new Date(y, mo - 1, d, h, mi);
 const local = (date: Date | null) => (date ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}` : null);
@@ -50,11 +50,17 @@ test("next run: month ends, leap days and day-of-month OR weekday", () => {
 });
 
 test("next run across daylight saving changes", () => {
+  const result = inZone(
+    "America/Los_Angeles",
+    `[
+      upcoming({ kind: "cron", expr: "30 1 * * *" }, new Date(2026, 9, 31, 12), 2).map(fmt),
+      fmt(nextRun({ kind: "cron", expr: "30 2 * * *" }, new Date(2026, 2, 7, 12))),
+      fmt(nextRun({ kind: "cron", expr: "30 2 * * *" }, new Date(2026, 2, 8, 12))),
+    ]`,
+  );
   // 2026-11-01 01:00 happens twice in Los Angeles; the run happens once.
-  expect(upcoming(cron("30 1 * * *"), at(2026, 10, 31, 12), 2).map(local)).toEqual(["2026-11-01 01:30", "2026-11-02 01:30"]);
   // 2026-03-08 02:30 does not exist; the run moves to the first minute after the gap.
-  expect(local(nextRun(cron("30 2 * * *"), at(2026, 3, 7, 12)))).toBe("2026-03-08 03:00");
-  expect(local(nextRun(cron("30 2 * * *"), at(2026, 3, 8, 12)))).toBe("2026-03-09 02:30");
+  expect(result).toEqual([["2026-11-01 01:30", "2026-11-02 01:30"], "2026-03-08 03:00", "2026-03-09 02:30"]);
 });
 
 test("schedules are described in plain words", () => {

@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,14 +8,6 @@ import { createRoutinesApi } from "../src/routines/api";
 import { Scheduler, type RunFn } from "../src/routines/scheduler";
 import { RoutineStore, type RunRecord } from "../src/routines/store";
 
-const originalTz = process.env.TZ;
-beforeAll(() => {
-  process.env.TZ = "UTC";
-});
-afterAll(() => {
-  if (originalTz === undefined) delete process.env.TZ;
-  else process.env.TZ = originalTz;
-});
 const dirs: string[] = [];
 afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });

@@ -73,10 +73,11 @@ test("search engines: user-added ones and the default; addresses from the token 
   ]);
 });
 
-test("cookies: v24 hash prefix removed, expired ones dropped", async () => {
+test("cookies: v24 hash prefix removed, expired ones dropped, partitioned ones left out", async () => {
   expect(await countChromeCookies(fx.profile)).toBe(2);
-  const { cookies, undecryptable } = await readChromeCookies(fx.profile, FAKE_KEY);
+  const { cookies, undecryptable, partitioned } = await readChromeCookies(fx.profile, FAKE_KEY);
   expect(undecryptable).toBe(0);
+  expect(partitioned).toBe(1);
   expect(cookies).toHaveLength(1);
   expect(cookies[0]).toMatchObject({ name: "sid", value: "test-session-value", domain: ".example.com", path: "/", secure: true, httpOnly: true, sameSite: "Lax" });
   expect(cookies[0]!.expires).toBeGreaterThan(Date.now() / 1000);

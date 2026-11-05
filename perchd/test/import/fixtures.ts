@@ -123,6 +123,10 @@ export function chromeProfile(home: string, dir = "Google/Chrome", profileDir = 
   const future = chromeUs(Date.now() + 86_400_000);
   addCookie.run(chromeUs(T0), ".example.com", "sid", sealed(".example.com", "test-session-value"), "/", future, 1, 1, chromeUs(T0), 1, chromeUs(T0));
   addCookie.run(chromeUs(T0), "old.example.com", "gone", sealed("old.example.com", "x"), "/", chromeUs(T0 - 86_400_000), 0, 0, chromeUs(T0), 1, chromeUs(T0));
+  // A partitioned (CHIPS) cookie: only readable under its top-level site, so it is not imported.
+  cookies
+    .prepare("INSERT INTO cookies VALUES (?, ?, ?, ?, '', ?, ?, ?, 1, 0, ?, 1, 1, 1, 0, 2, 443, ?, 0, 1)")
+    .run(chromeUs(T0), ".tracker.test", "https://embedder.test", "pid", sealed(".tracker.test", "partitioned"), "/", future, chromeUs(T0), chromeUs(T0));
   cookies.close();
 
   const ext = join(profile, "Extensions", "aaaabbbbccccddddeeeeffffgggghhhh", "1.2.0_0");

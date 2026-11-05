@@ -86,7 +86,7 @@ function chromiumReader(browser: BrowserInfo, profile: Profile): SourceReader {
         }
         case "cookies": {
           const r = await readChromeCookies(p, await getKey(keychain));
-          return { data: { cookies: r.cookies }, skipped: r.undecryptable };
+          return { data: { cookies: r.cookies }, skipped: r.undecryptable + r.partitioned };
         }
         case "extensions":
           return { data: { extensions: readChromeExtensions(p) } };

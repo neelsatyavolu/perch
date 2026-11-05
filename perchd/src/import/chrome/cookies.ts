@@ -1,11 +1,16 @@
 /**
  * Chromium cookies (`Network/Cookies`, or `Cookies` in older profiles). From database
  * version 24 the decrypted value starts with SHA-256(host_key), which is checked and removed.
+ *
+ * Partitioned (CHIPS) cookies, rows with a `top_frame_site_key`, are left out: the source browser
+ * only sends them under one top-level site, and importing them unpartitioned would let the
+ * third party read them on every site that embeds it. The Firefox reader does the same.
  */
 
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import type { Database } from "bun:sqlite";
 import { hasTable, withSqliteCopy } from "../sqlite-copy";
 import { fromChromium } from "../time";
 import type { Cookie } from "../types";
@@ -22,7 +27,12 @@ type Row = {
   is_httponly: number;
   samesite: number;
   is_persistent: number;
+  partition: string;
 };
+
+/** Older databases have no partition column; every cookie in them is unpartitioned. */
+const partitionColumn = (db: Database) =>
+  (db.query("SELECT name FROM pragma_table_info('cookies') WHERE name = 'top_frame_site_key'").get() ? "top_frame_site_key" : "''");
 
 export function chromeCookiesPath(profile: string): string | undefined {
   return [join(profile, "Network", "Cookies"), join(profile, "Cookies")].find((p) => existsSync(p));
@@ -31,21 +41,26 @@ export function chromeCookiesPath(profile: string): string | undefined {
 export function countChromeCookies(profile: string): Promise<number> {
   const path = chromeCookiesPath(profile);
   if (!path) return Promise.resolve(0);
-  return withSqliteCopy(path, (db) => (db.query("SELECT COUNT(*) AS n FROM cookies").get() as { n: number }).n);
+  return withSqliteCopy(path, (db) => (db.query(`SELECT COUNT(*) AS n FROM cookies WHERE ${partitionColumn(db)} = ''`).get() as { n: number }).n);
 }
 
 const SAME_SITE: Record<number, Cookie["sameSite"]> = { 0: "None", 1: "Lax", 2: "Strict" };
 
-export type CookieResult = { readonly cookies: readonly Cookie[]; readonly undecryptable: number };
+export type CookieResult = { readonly cookies: readonly Cookie[]; readonly undecryptable: number; readonly partitioned: number };
 
 export async function readChromeCookies(profile: string, key: SafeStorageKey, now = Date.now()): Promise<CookieResult> {
   const path = chromeCookiesPath(profile);
-  if (!path) return { cookies: [], undecryptable: 0 };
+  if (!path) return { cookies: [], undecryptable: 0, partitioned: 0 };
   return withSqliteCopy(path, (db) => {
     const version = hasTable(db, "meta") ? Number((db.query("SELECT value FROM meta WHERE key = 'version'").get() as { value: string } | null)?.value ?? 0) : 0;
-    const rows = db.query("SELECT host_key, name, value, encrypted_value, path, expires_utc, is_secure, is_httponly, samesite, is_persistent FROM cookies").all() as Row[];
+    const rows = db.query(`SELECT host_key, name, value, encrypted_value, path, expires_utc, is_secure, is_httponly, samesite, is_persistent, ${partitionColumn(db)} AS partition FROM cookies`).all() as Row[];
     let undecryptable = 0;
+    let partitioned = 0;
     const cookies = rows.flatMap((r): Cookie[] => {
+      if (r.partition) {
+        partitioned++;
+        return [];
+      }
       const expiresMs = r.is_persistent ? fromChromium(r.expires_utc) : undefined;
       if (expiresMs !== undefined && expiresMs <= now) return [];
       const value = r.value || plainValue(key, r, version);
@@ -66,7 +81,7 @@ export async function readChromeCookies(profile: string, key: SafeStorageKey, no
         },
       ];
     });
-    return { cookies, undecryptable };
+    return { cookies, undecryptable, partitioned };
   });
 }
 

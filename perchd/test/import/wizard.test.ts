@@ -144,7 +144,7 @@ test("importing from Chrome: bookmarks and history written, the rest sealed in o
     { type: "searchEngines", status: "bundled", count: 2 },
     { type: "passwords", status: "bundled", count: 1 },
     { type: "addresses", status: "bundled", count: 1 },
-    { type: "cookies", status: "bundled", count: 1 },
+    { type: "cookies", status: "bundled", count: 1, skipped: 1 },
     { type: "extensions", status: "bundled", count: 1 },
   ]);
   expect(keychain.asked).toEqual(["Chrome Safe Storage"]);

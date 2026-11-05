@@ -135,3 +135,14 @@ dialog.dlg::backdrop { background: rgba(0, 0, 0, 0.5); }
 .dlg-h h2 { font-size: 15px; flex: 1; }
 .dlg-b { padding: 4px 20px 16px; display: grid; gap: 14px; overflow-y: auto; max-height: calc(100vh - 200px); }
 .dlg-f { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px 16px; border-top: 1px solid var(--hair); }
+
+/* A search field with its icon (Settings nav, Memory list). */
+.snav-search {
+  display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; margin-bottom: 10px; border-radius: 8px;
+  background: var(--raised); color: var(--mute);
+}
+.snav-search:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.snav-search input { flex: 1; min-width: 0; border: 0; background: none; color: var(--ink); outline: none; font-size: 13px; }
+.snav-search input::placeholder { color: var(--mute); }
+.snav-search input::-webkit-search-cancel-button { display: none; }
+

@@ -6,15 +6,6 @@
   border-right: 1px solid var(--hair); position: sticky; top: 0; height: 100vh; overflow-y: auto;
 }
 .snav a.row { text-decoration: none; display: flex; }
-.snav-search {
-  display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; margin-bottom: 10px; border-radius: 8px;
-  background: var(--raised); color: var(--mute);
-}
-.snav-search:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
-.snav-search input { flex: 1; min-width: 0; border: 0; background: none; color: var(--ink); outline: none; font-size: 13px; }
-.snav-search input::placeholder { color: var(--mute); }
-.snav-search input::-webkit-search-cancel-button { display: none; }
-
 .spage { flex: 1; min-width: 0; padding: 32px; display: grid; gap: 28px; align-content: start; }
 .spage > * { max-width: 720px; width: 100%; }
 .spage h1 { font-size: 22px; letter-spacing: -0.01em; }

@@ -9,6 +9,7 @@ import { factKey, newPage, parsePage, renderPage, type Fact, type FactSource, ty
 import { RecordFolder } from "./records";
 import { cleanText, FILEABLE, isCategory, looksSecret, pagePath, type Category } from "./sanitize";
 import { cosine, fuse, MemoryIndex, pageText, type Embedder, type SearchHit, type SearchOptions } from "./search";
+import { DEFAULT_TAXONOMY, MAX_TAXONOMY, TAXONOMY_PATH } from "./taxonomy";
 
 export type NewFact = { category: Category; title: string; text: string; expires?: string };
 export type AddResult = { added: number; duplicates: number; rejected: { text: string; reason: string }[]; paths: string[] };
@@ -22,6 +23,7 @@ const PAGES = "pages";
 const SETTINGS_KIND = "settings";
 const SETTINGS_ID = "0000000000000001";
 const CHANGES = "changes";
+const TAXONOMY_KIND = "taxonomy";
 const DEFAULT_SETTINGS: MemorySettings = { extraction: true, paused: false, episodicRetentionDays: null };
 /** Used when saved settings cannot be read: never turn memory back on that the user may have turned off. */
 const SAFE_SETTINGS: MemorySettings = { extraction: false, paused: true, episodicRetentionDays: null };
@@ -39,6 +41,8 @@ export class MemoryStore {
   private readonly index = new MemoryIndex();
   private readonly vectors = new Map<string, Float32Array>();
   private config: MemorySettings = DEFAULT_SETTINGS;
+  /** The user's own TAXONOMY.md, or null for the default. */
+  private customTaxonomy: string | null = null;
   private queue: Promise<unknown> = Promise.resolve();
   /** Records that could not be decrypted at open; shown to the user, never silently dropped. */
   damaged: string[] = [];
@@ -66,7 +70,12 @@ export class MemoryStore {
       if (saved) store.config = { ...DEFAULT_SETTINGS, ...(JSON.parse(saved) as Partial<MemorySettings>) };
     } catch {
       store.config = SAFE_SETTINGS;
-      store.damaged = [...damaged, DAMAGED_SETTINGS];
+      store.damaged = [...store.damaged, DAMAGED_SETTINGS];
+    }
+    try {
+      store.customTaxonomy = await folder.get(TAXONOMY_KIND, SETTINGS_ID);
+    } catch {
+      store.damaged = [...store.damaged, TAXONOMY_KIND];
     }
     return store;
   }
@@ -118,6 +127,29 @@ export class MemoryStore {
       this.config = next;
       this.damaged = this.damaged.filter((d) => d !== DAMAGED_SETTINGS);
       return next;
+    });
+  }
+
+  /** TAXONOMY.md: the filing rules, the user's own when they changed them. */
+  taxonomy(): string {
+    return this.customTaxonomy ?? DEFAULT_TAXONOMY;
+  }
+
+  isTaxonomyCustom(): boolean {
+    return this.customTaxonomy !== null;
+  }
+
+  /** Saves the user's TAXONOMY.md, or goes back to the default when text is null. Wiping memory keeps it. */
+  setTaxonomy(text: string | null): Promise<string> {
+    return this.exclusive(async () => {
+      const clean = text === null ? null : text.trim();
+      if (clean !== null && (!clean || clean.length > MAX_TAXONOMY)) throw new Error(`TAXONOMY.md must have 1 to ${MAX_TAXONOMY} characters`);
+      if (clean === null) await this.folder.remove(TAXONOMY_KIND, SETTINGS_ID);
+      else await this.folder.put(TAXONOMY_KIND, SETTINGS_ID, clean);
+      this.customTaxonomy = clean;
+      this.damaged = this.damaged.filter((d) => d !== TAXONOMY_KIND);
+      await this.log([{ time: this.stamp(), action: "edit", path: TAXONOMY_PATH, detail: clean === null ? "Filing rules reset to the default" : "Filing rules changed", source: "user" }]);
+      return this.taxonomy();
     });
   }
 

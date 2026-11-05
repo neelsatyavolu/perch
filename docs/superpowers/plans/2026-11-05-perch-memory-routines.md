@@ -48,6 +48,7 @@ perchd/src/memory/
   search.ts     in-memory FTS5 index, query escaping, optional embedder rerank
   store.ts      MemoryStore: pages, facts, settings, change log, wipe
   extract.ts    extraction from a finished chat (model tool call)
+  taxonomy.ts   TAXONOMY.md: default filing rules; the user's own copy is an encrypted record
   dream.ts      consolidation: rules + model merges, dated log
   setup.ts      "Set up your memory": sources, questionnaire, draft, review, save
   sources.ts    Chromium history and bookmarks readers, tab list, chat summaries
@@ -86,9 +87,19 @@ Shared files touched: `perchd/src/agent/loop.ts` (optional `memory` option: extr
 - **The Memory and Routines pages themselves.** WebUI belongs to plan 3b; this plan ships the typed functions they call.
 - **MCP `memory_search` for outside agents.** The function is ready; wiring it into `mcp.ts` belongs to the MCP track.
 - **Scheduled browsing-history extraction** (spec 8, opt-in). Setup reads history once with the user's review; a background job that files facts from history without review needs its own consent design, so there is no setting for it yet.
+- **Wiring into the real entry points.** No caller of `runTask` (`cli.ts`, `external.ts`, `mcp.ts`) passes `memory` yet, and nothing calls `openPerchData`, so memory and routines are reached only from tests until the daemon/app track opens them at startup (`openPerchData(...).start()`), passes `chatMemory()` into sidebar chats and serves the two APIs. Those are shared files owned by other tracks.
 - **`perch memory search|read` CLI.** Belongs to the CLI track; it can call `createMemoryApi`.
 - **Encrypting the shared audit log.** The audit log belongs to the agent core. Memory calls write only the action and category to it, never the query or the fact.
 
 ## Notes from review (Codex, 2026-11-05), all fixed
 
 Memory contents in the plaintext audit log; a lost key replaced when only routines existed; extraction filing standing rules or facts the user declined; concurrent routine saves sharing a temp file; dreaming overwriting edits made while the model answered; merge cycles deleting both pages; queued runs using stale settings. Skip-mode routines can still send and delete unattended by design (the user chose Skip); payments never run unattended in any mode, proved on a real page in `test/routines-browser.test.ts`.
+
+## Notes from the second review (2026-11-05), all fixed
+
+- Unattended routine runs could save to USER.md or topic pages with no approval in Guard and Skip, so a page could plant text in every later chat. Now every `memory_save` in an unattended run asks, so it is declined and listed in the run's `declined`; in any chat, saving to USER.md asks like saving to MEMORY.md (`test/memory-agent.test.ts`, `test/routines-service.test.ts`).
+- Dreaming's model pass could rewrite a standing rule. MEMORY.md is no longer shown to the model or changed by it, and a merged fact may only use words from the facts it merges plus a few joining words (`test/memory-dream.test.ts`).
+- Routine writes were read-modify-write on stale copies, so a pause or mode change made during a tick could be undone. `RoutineStore.update(id, change)` applies changes to the latest copy inside the write queue; the scheduler, runner and API all use it (`test/routines-run.test.ts`, `test/routines-api.test.ts`).
+- Unreadable memory settings silently turned extraction back on. They are now listed in `damaged` and memory stays paused with extraction off until the user saves settings (`test/memory-store.test.ts`).
+- A routine still running when its next time came was dropped with no record. That time is now recorded as skipped (`test/routines-run.test.ts`).
+- TAXONOMY.md was only a code constant. It is now readable and editable through `getTaxonomy`, `setTaxonomy` and `resetTaxonomy`, stored encrypted, kept through a wipe, and used by extraction, setup and `memory_save` (`test/memory-taxonomy.test.ts`).

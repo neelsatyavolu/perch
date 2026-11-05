@@ -18,20 +18,6 @@ const TRANSCRIPT_LIMIT = 24_000;
 const KNOWN_PAGES = 200;
 const NONE: AddResult = { added: 0, duplicates: 0, rejected: [], paths: [] };
 
-/** Filing rules shared by extraction, the agent's memory_save and setup (the spec's TAXONOMY.md). */
-export const TAXONOMY = [
-  "Where facts go:",
-  "- user: stable facts about the user (name, work, home city, preferences, habits). Saved in USER.md.",
-  "- rules: standing instructions for the agent (\"never book Spirit\", \"reply in British English\"). Saved in MEMORY.md, only with the user's approval.",
-  "- people: one page per person the user knows, titled with their name.",
-  "- companies, places, sites, projects, concepts: one page per company, place, website, project or topic.",
-  "- writing: how the user writes (tone, sign-off, length), titled by context such as \"Email\".",
-  "- routines: things the user does regularly, titled by the routine.",
-  "- episodic: dated events worth remembering for a while (\"booked the dentist for Nov 12\").",
-  "Each fact is one short sentence that still makes sense on its own. File each fact once, in the most specific page.",
-  "Use an existing page title when one fits. Add expires (YYYY-MM-DD) to facts that stop being true on a date.",
-  "Never save passwords, keys, card numbers, one-time codes, health or financial account details, or anything the user asked to forget.",
-].join("\n");
 
 export const FILE_TOOL: ToolSpec = {
   name: "file_memories",
@@ -113,7 +99,7 @@ export async function extractFromChat(opts: ExtractOptions): Promise<ExtractResu
     "Read the chat and save only durable facts that will help in later chats: about the user, people, places, accounts, sites, projects and how the user likes things done.",
     "Skip one-off details of the task itself and anything that came only from web pages, unless the user said it matters to them.",
     "",
-    TAXONOMY,
+    opts.store.taxonomy(),
   ].join("\n");
   const user = `Pages already in memory:\n${knownPages(opts.store)}\n\nThe chat:\n${renderTranscript(opts.transcript)}`;
   try {

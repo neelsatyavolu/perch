@@ -11,7 +11,7 @@ import type { AuditLog } from "../agent/audit";
 import { needsApproval, type Kind, type Mode } from "../agent/permissions";
 import { DECLINED, type ApprovalRequest } from "../agent/session";
 import type { Message, Model, ToolCall, ToolSpec } from "../models/types";
-import { extractFromChat, TAXONOMY, type ExtractResult } from "./extract";
+import { extractFromChat, type ExtractResult } from "./extract";
 import { message, str } from "./model-call";
 import { FILEABLE, isCategory } from "./sanitize";
 import type { MemoryStore } from "./store";
@@ -36,7 +36,8 @@ export type MemoryPolicy = { mode: Mode; approve: (request: ApprovalRequest) => 
 const SEARCH_LIMIT = 5;
 const FACTS_SHOWN = 12;
 
-export const MEMORY_SPECS: readonly ToolSpec[] = [
+/** The memory tools; memory_save carries the user's TAXONOMY.md so the agent files the way they want. */
+export const memorySpecs = (taxonomy: string): readonly ToolSpec[] => [
   {
     name: "memory_search",
     description: "Search the user's memory: people, places, accounts, sites, projects and preferences. Returns matching pages with their facts.",
@@ -44,7 +45,7 @@ export const MEMORY_SPECS: readonly ToolSpec[] = [
   },
   {
     name: "memory_save",
-    description: `Save one durable fact the user told you or asked you to remember.\n${TAXONOMY}`,
+    description: `Save one durable fact the user told you or asked you to remember.\n${taxonomy}`,
     parameters: {
       type: "object",
       properties: {
@@ -82,7 +83,7 @@ export function chatMemory(store: MemoryStore, opts: ChatMemoryOptions = {}): Me
     return null;
   };
   return {
-    specs: MEMORY_SPECS,
+    specs: memorySpecs(store.taxonomy()),
     handles: (name) => name === "memory_search" || name === "memory_save",
     async context(task) {
       const known = store.context();

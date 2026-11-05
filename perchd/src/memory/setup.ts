@@ -11,7 +11,7 @@ import { newId } from "./page";
 import { cleanText, looksSecret, MAX_TITLE, type Category } from "./sanitize";
 import { summarizeBookmarks, summarizeChats, summarizeHistory, summarizeTabs, type Bookmark, type ChatSummary, type HistoryRow, type TabRow } from "./sources";
 import type { AddResult, MemoryStore } from "./store";
-import { TAXONOMY } from "./extract";
+import { DEFAULT_TAXONOMY } from "./taxonomy";
 
 export type SourceId = "history" | "bookmarks" | "tabs" | "chats" | "questionnaire" | "webSearch";
 export type SetupSources = Record<SourceId, boolean>;
@@ -125,14 +125,14 @@ async function gather(sources: SetupSources, inputs: SetupInputs): Promise<strin
   return parts.join("\n\n");
 }
 
-export async function buildProfile(opts: { model: Model; sources: SetupSources; inputs: SetupInputs; now: Date; signal?: AbortSignal }): Promise<{ draft: ProfileDraft } | { error: string }> {
+export async function buildProfile(opts: { model: Model; sources: SetupSources; inputs: SetupInputs; now: Date; taxonomy?: string; signal?: AbortSignal }): Promise<{ draft: ProfileDraft } | { error: string }> {
   const material = await gather(opts.sources, opts.inputs);
   const system = [
     "You help the user of Perch, a web browser with an agent, set up its memory.",
     "From the material below, propose short facts that will help Perch write in the user's voice, find their accounts and sites, and know the people they deal with.",
     "Only state what the material supports. Do not guess names, ages, health, money or politics. Prefer fewer, solid items.",
     "",
-    TAXONOMY,
+    opts.taxonomy ?? DEFAULT_TAXONOMY,
   ].join("\n");
   const user = material || "There is no material. Propose nothing.";
   try {

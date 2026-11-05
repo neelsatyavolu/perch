@@ -12,6 +12,9 @@ import { CATEGORIES, FILEABLE, MAX_FACT, MAX_TITLE, type Category } from "./sani
 import type { SearchHit } from "./search";
 import { addItem, buildProfile, DEFAULT_SOURCES, editItem, GROUPS, QUESTIONS, removeItem, saveProfile, SOURCES, type Group, type ProfileDraft, type SetupInputs, type SetupSources, type SourceId } from "./setup";
 import type { AddResult, Change, MemorySettings, MemoryStore, PageSummary } from "./store";
+import { MAX_TAXONOMY, TAXONOMY_PATH } from "./taxonomy";
+
+export type TaxonomyView = { path: string; text: string; custom: boolean };
 
 export type MemoryApiDeps = { store: MemoryStore; model: () => Promise<Model>; setupInputs: () => SetupInputs; now?: () => Date };
 export const WIPE_CONFIRMATION = "delete all memory";
@@ -35,6 +38,7 @@ export function createMemoryApi(deps: MemoryApiDeps) {
     if (!page) throw new Error("This memory page no longer exists.");
     return page;
   };
+  const taxonomyView = (): TaxonomyView => ({ path: TAXONOMY_PATH, text: store.taxonomy(), custom: store.isTaxonomyCustom() });
   const factRef = (input: Record<string, unknown>) => {
     const page = pageOf(input);
     const section = oneOf(input, "section", ["current", "history"] as const, "current");
@@ -112,6 +116,13 @@ export function createMemoryApi(deps: MemoryApiDeps) {
         return store.updateSettings(patch);
       }),
 
+    getTaxonomy: (): Promise<ApiResult<TaxonomyView>> => attempt(() => taxonomyView()),
+
+    setTaxonomy: (input: unknown): Promise<ApiResult<TaxonomyView>> =>
+      attempt(async () => (await store.setTaxonomy(text(record(input), "text", { max: MAX_TAXONOMY, label: "TAXONOMY.md" })), taxonomyView())),
+
+    resetTaxonomy: (): Promise<ApiResult<TaxonomyView>> => attempt(async () => (await store.setTaxonomy(null), taxonomyView())),
+
     changes: (input: unknown = {}): Promise<ApiResult<Change[]>> => attempt(() => store.changes(int(record(input), "limit", { min: 1, max: 1000, fallback: 200 }))),
 
     dreamNow: (): Promise<ApiResult<DreamReport>> => attempt(async () => dream({ store, model: await deps.model(), now: now() })),
@@ -126,7 +137,7 @@ export function createMemoryApi(deps: MemoryApiDeps) {
         if (!Object.values(sources).some(Boolean)) throw new Error("Turn on at least one source.");
         const rawAnswers = record(i.answers ?? {});
         const answers = Object.fromEntries(QUESTIONS.map((q) => [q.id, text(rawAnswers, q.id, { max: 500, optional: true, label: q.text })]));
-        const result = await buildProfile({ model: await deps.model(), sources, inputs: { ...deps.setupInputs(), answers }, now: now() });
+        const result = await buildProfile({ model: await deps.model(), sources, inputs: { ...deps.setupInputs(), answers }, now: now(), taxonomy: store.taxonomy() });
         if ("error" in result) throw new Error(result.error);
         if (drafts.size >= MAX_DRAFTS) drafts.delete(drafts.keys().next().value!);
         return keep(result.draft);

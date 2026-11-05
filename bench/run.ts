@@ -1,7 +1,7 @@
 /**
  * Perch benchmark runner.
  *
- *   bun run bench/run.ts --suite bu|om2w [--agent claude-code|codex] [--limit N] [--per-category K] [--concurrency 2]
+ *   bun run bench/run.ts --suite bu|om2w [--agent claude-code|codex] [--limit N] [--per-category K] [--only ids.txt] [--concurrency 2]
  *                        [--model claude-sonnet-5-5] [--judge claude-opus-5-5] [--out <dir>] [--resume]
  *                        [--executable <Perch.app/Contents/MacOS/Perch>]   drive a real Perch build in a window
  *
@@ -38,6 +38,11 @@ function loadSuite(suite: string): Task[] {
 function pick(tasks: Task[]): Task[] {
   const per = arg("--per-category");
   let chosen = tasks;
+  const only = arg("--only");
+  if (only) {
+    const ids = new Set(readFileSync(only, "utf8").split(/\s+/).filter(Boolean));
+    chosen = chosen.filter((t) => ids.has(t.id));
+  }
   if (per) {
     const counts = new Map<string, number>();
     chosen = tasks.filter((t) => {

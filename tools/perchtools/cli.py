@@ -11,6 +11,7 @@ from typing import Any
 
 from .checkout import checkout
 from .doctor import SystemProbe, run_checks
+from .patching import Generator, PatchFailed, apply_series, continue_series, export_series
 from .paths import REPO, Paths, load_paths
 from .run import run
 from .version import bump, latest_stable_mac, read_version, write_version
@@ -19,6 +20,9 @@ from .version import bump, latest_stable_mac, read_version, write_version
 def fetch_json(url: str) -> Any:
     with urllib.request.urlopen(url, timeout=30) as response:
         return json.load(response)
+
+
+GENERATORS: list[Generator] = []
 
 
 def current_paths() -> Paths:
@@ -45,6 +49,33 @@ def _cmd_checkout(args: argparse.Namespace) -> int:
     return 0
 
 
+def _state_file(paths: Paths):
+    return paths.chromium / "perch-apply-state.json"
+
+
+def _cmd_apply(args: argparse.Namespace) -> int:
+    paths = current_paths()
+    try:
+        if args.continue_:
+            continue_series(paths.src, REPO / "patches", GENERATORS, _state_file(paths))
+        else:
+            tag = read_version(REPO / "version.json").chromium
+            apply_series(paths.src, tag, REPO / "patches", REPO / "overlay", GENERATORS, _state_file(paths))
+    except PatchFailed as failure:
+        print(failure, file=sys.stderr)
+        return 2
+    print(f"Applied Perch's changes to {paths.src} on branch perch.")
+    return 0
+
+
+def _cmd_export(args: argparse.Namespace) -> int:
+    paths = current_paths()
+    tag = read_version(REPO / "version.json").chromium
+    for path in export_series(paths.src, tag, REPO / "patches"):
+        print(path.relative_to(REPO))
+    return 0
+
+
 def _cmd_version(args: argparse.Namespace) -> int:
     path = REPO / "version.json"
     info = read_version(path)
@@ -68,6 +99,10 @@ def build_parser() -> argparse.ArgumentParser:
     version.set_defaults(func=_cmd_version)
     sub.add_parser("doctor", help="check this Mac can build Chromium").set_defaults(func=_cmd_doctor)
     sub.add_parser("checkout", help="check out the pinned Chromium tag").set_defaults(func=_cmd_checkout)
+    apply = sub.add_parser("apply", help="apply the overlay, patches and generated changes")
+    apply.add_argument("--continue", dest="continue_", action="store_true", help="resume after fixing a failed patch")
+    apply.set_defaults(func=_cmd_apply)
+    sub.add_parser("export", help="write the perch branch's commits back to patches/").set_defaults(func=_cmd_export)
     return parser
 
 

@@ -60,3 +60,53 @@ def fake_probe_ok(paths):
 @pytest.fixture
 def recorder():
     return Recorder()
+
+
+def git(cwd, *args):
+    return subprocess.run(["git", "-C", str(cwd), *args], check=True, capture_output=True, text=True).stdout
+
+
+TAG = "1.0.0.0"
+
+
+@pytest.fixture
+def chromium_like(tmp_path):
+    """A small git repo shaped like the Chromium src checkout, tagged 1.0.0.0."""
+    src = tmp_path / "chromium" / "src"
+    (src / "b").mkdir(parents=True)
+    (src / "a.txt").write_text("alpha\n")
+    (src / "b" / "c.txt").write_text("c1\nc2\n")
+    (src / ".gitignore").write_text("out/\n")
+    git(src.parent, "init", "-q", "src")
+    git(src, "add", "-A")
+    git(src, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "base")
+    git(src, "tag", TAG)
+    return src
+
+
+def make_patch(src, edit):
+    """Run edit(src) on a clean tree and return the resulting diff, then undo it."""
+    edit(src)
+    git(src, "add", "-A")
+    diff = git(src, "diff", "--cached", "--no-color")
+    git(src, "reset", "-q", "--hard")
+    git(src, "clean", "-fdq")
+    return diff
+
+
+@pytest.fixture
+def patch_dirs(chromium_like, tmp_path):
+    src = chromium_like
+    patches = tmp_path / "patches"
+    (patches / "perch").mkdir(parents=True)
+    (patches / "perch" / "one.patch").write_text(
+        "# Perch: why one exists\n" + make_patch(src, lambda s: (s / "a.txt").write_text("alpha\none\n"))
+    )
+    (patches / "perch" / "two.patch").write_text(make_patch(src, lambda s: (s / "b" / "c.txt").write_text("c1\nc2\ntwo\n")))
+    (patches / "perch" / "three.patch").write_text(make_patch(src, lambda s: (s / "d.txt").write_text("delta\n")))
+    (patches / "series").write_text("# order matters\nperch/one.patch\n\nperch/two.patch\nperch/three.patch\n")
+    overlay = tmp_path / "overlay"
+    (overlay / "b").mkdir(parents=True)
+    (overlay / "b" / "new.txt").write_text("from overlay\n")
+    (overlay / ".keep").write_text("")
+    return {"patches": patches, "overlay": overlay, "state": tmp_path / "chromium" / "perch-apply-state.json"}

@@ -42,3 +42,32 @@ def test_checkout_refuses_when_doctor_fails(monkeypatch, fake_probe_ok, paths, r
     monkeypatch.setattr(cli, "run", recorder)
     assert cli.main(["checkout"]) == 1
     assert recorder.calls == []
+
+
+def _cli_repo(monkeypatch, tmp_path, chromium_like, patch_dirs):
+    from perchtools.paths import Paths
+
+    repo = patch_dirs["patches"].parent
+    (repo / "version.json").write_text(json.dumps({"perch": "0.1.0", "build": 1, "chromium": "1.0.0.0"}))
+    monkeypatch.setattr(cli, "REPO", repo)
+    monkeypatch.setattr(cli, "GENERATORS", [])
+    paths = Paths(repo=repo, chromium=chromium_like.parent, src=chromium_like, depot_tools=tmp_path / "dt")
+    monkeypatch.setattr(cli, "current_paths", lambda: paths)
+    return paths
+
+
+def test_cli_apply_then_export(monkeypatch, tmp_path, chromium_like, patch_dirs):
+    _cli_repo(monkeypatch, tmp_path, chromium_like, patch_dirs)
+    assert cli.main(["apply"]) == 0
+    assert (chromium_like / "d.txt").exists()
+    assert cli.main(["export"]) == 0
+
+
+def test_cli_apply_failure_exits_2_with_next_step(monkeypatch, tmp_path, capsys, chromium_like, patch_dirs):
+    _cli_repo(monkeypatch, tmp_path, chromium_like, patch_dirs)
+    two = patch_dirs["patches"] / "perch" / "two.patch"
+    two.write_text(two.read_text().replace(" c2\n", " zz\n"))
+    assert cli.main(["apply"]) == 2
+    err = capsys.readouterr().err
+    assert "perch/two.patch" in err and "perch-build apply --continue" in err
+    assert cli.main(["apply", "--continue"]) == 2

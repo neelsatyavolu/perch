@@ -14,6 +14,7 @@
     "typescript": "5.9.3"
   },
   "dependencies": {
-    "@neelsatyavolu/shared-ai-auth": "github:neelsatyavolu/shared-ai-auth#7290ee3"
+    "@neelsatyavolu/shared-ai-auth": "github:neelsatyavolu/shared-ai-auth#7290ee3",
+    "smol-toml": "1.9.1"
   }
 }

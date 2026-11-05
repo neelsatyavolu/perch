@@ -2,7 +2,8 @@ import { afterAll, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { MacKeychain, MemoryKeychain, type Runner } from "../src/secure/keychain";
+import { MacKeychain, MemoryKeychain, type SecretStore } from "../src/secure/keychain";
+import { createKeychain } from "../src/secure/mac-security";
 import { dataKey, openSealed, readSealedJson, seal, writeSealedJson } from "../src/secure/sealed";
 
 const dir = mkdtempSync(join(tmpdir(), "perch-secure-"));
@@ -19,40 +20,97 @@ test("the memory keychain stores, reads and deletes", async () => {
   expect(await kc.get("mcp/a/env/KEY")).toBeNull();
 });
 
-function recorder(reply: { code: number; stdout: string } = { code: 0, stdout: "" }) {
-  const calls: { args: string[]; stdin?: string }[] = [];
-  const run: Runner = async (args, stdin) => {
-    calls.push({ args, stdin });
-    return { ...reply, stderr: "" };
+const darwin = process.platform === "darwin";
+const keychainList = () => Bun.spawnSync(["/usr/bin/security", "list-keychains", "-d", "user"]).stdout.toString();
+
+/** A throwaway keychain file: never the login keychain, and never added to the search list. */
+function withKeychain(run: (kc: MacKeychain, path: string) => Promise<void>) {
+  return async () => {
+    const path = join(dir, `t-${Math.random().toString(36).slice(2)}.keychain-db`);
+    const file = createKeychain(path, "throwaway-test-password");
+    try {
+      await run(new MacKeychain({ service: "PerchTest", keychain: file.ref }), path);
+    } finally {
+      file.destroy();
+    }
   };
-  return { calls, run };
 }
 
-test("a Keychain write never puts the secret in the process arguments", async () => {
-  const { calls, run } = recorder();
-  await new MacKeychain({ service: "Perch", run }).set("mcp/a/env/KEY", FAKE);
-  expect(calls).toHaveLength(1);
-  expect(calls[0]!.args).toEqual(["-i"]);
-  expect(calls[0]!.args.join(" ")).not.toContain(FAKE);
-  // The value goes in as hex on stdin, so quotes and spaces in a secret cannot break the command.
-  const hex = Buffer.from(Buffer.from(FAKE, "utf8").toString("base64"), "utf8").toString("hex");
-  expect(calls[0]!.stdin).toBe(`add-generic-password -U -s "Perch" -a "mcp/a/env/KEY" -X ${hex}\n`);
-});
+test.skipIf(!darwin)("the Keychain stores, replaces, adds only when missing and deletes", withKeychain(async (kc) => {
+  const before = keychainList();
+  expect(await kc.get("mcp/a/env/KEY")).toBeNull();
+  await kc.set("mcp/a/env/KEY", 'päss "word" \n');
+  expect(await kc.get("mcp/a/env/KEY")).toBe('päss "word" \n');
+  await kc.set("mcp/a/env/KEY", FAKE);
+  expect(await kc.get("mcp/a/env/KEY")).toBe(FAKE);
+  expect(await kc.add("mcp/a/env/KEY", "other")).toBe(false);
+  expect(await kc.get("mcp/a/env/KEY")).toBe(FAKE);
+  expect(await kc.add("mcp/b/env/KEY", "new")).toBe(true);
+  expect(await kc.get("mcp/b/env/KEY")).toBe("new");
+  await kc.delete("mcp/a/env/KEY");
+  await kc.delete("mcp/a/env/KEY");
+  expect(await kc.get("mcp/a/env/KEY")).toBeNull();
+  expect(keychainList()).toBe(before);
+}));
 
-test("a Keychain read decodes the stored value and treats exit 44 as missing", async () => {
-  const stored = Buffer.from("päss \"word\"", "utf8").toString("base64");
-  const found = recorder({ code: 0, stdout: `${stored}\n` });
-  expect(await new MacKeychain({ run: found.run }).get("x")).toBe("päss \"word\"");
-  expect(found.calls[0]!.args).toEqual(["find-generic-password", "-s", "Perch", "-a", "x", "-w"]);
-  const missing = recorder({ code: 44, stdout: "" });
-  expect(await new MacKeychain({ run: missing.run }).get("x")).toBeNull();
-});
+test.skipIf(!darwin)("only the program running Perch may read a Keychain item, not /usr/bin/security", withKeychain(async (kc, path) => {
+  await kc.set("mcp/a/env/KEY", FAKE);
+  // dump-keychain -a lists access lists without decrypting anything, so it never prompts.
+  const dump = Bun.spawnSync(["/usr/bin/security", "dump-keychain", "-a", path], { timeout: 10_000 }).stdout.toString();
+  expect(dump).not.toContain(FAKE);
+  const entries = dump.split(/\n\s*entry \d+:\n/).slice(1);
+  const decrypt = entries.find((e) => /authorizations \(\d+\):.*\bdecrypt\b/.test(e));
+  expect(decrypt).toBeDefined();
+  const apps = [...decrypt!.matchAll(/^\s+\d+: (\S+)/gm)].map((m) => m[1]);
+  expect(apps).toEqual([process.execPath]);
+  expect(decrypt).not.toContain("applications: <null>");
+}));
 
-test("Keychain account names are checked before they reach the command", async () => {
-  const { run } = recorder();
-  const kc = new MacKeychain({ run });
+test("Keychain account names are checked before they reach the Keychain", async () => {
+  const kc = new MacKeychain();
   await expect(kc.set('a" -w "evil', FAKE)).rejects.toThrow("not a valid Keychain account name");
   await expect(kc.get("a\nb")).rejects.toThrow("not a valid Keychain account name");
+  await expect(kc.add("", FAKE)).rejects.toThrow("not a valid Keychain account name");
+});
+
+/** A keychain where reads and writes take turns with other callers, like two processes would. */
+class SlowKeychain extends MemoryKeychain {
+  sets = 0;
+  override async get(account: string) {
+    await Bun.sleep(5);
+    return super.get(account);
+  }
+  override async set(account: string, value: string) {
+    this.sets++;
+    await Bun.sleep(5);
+    return super.set(account, value);
+  }
+  override async add(account: string, value: string) {
+    await Bun.sleep(5);
+    return super.add(account, value);
+  }
+}
+
+test("two first uses of the data key at once agree on one key", async () => {
+  const kc = new SlowKeychain();
+  const [a, b] = await Promise.all([dataKey(kc), dataKey(kc)]);
+  expect(a.equals(b)).toBe(true);
+  expect(kc.sets).toBe(0);
+});
+
+test("a data key made by another process first is used, not replaced", async () => {
+  const shared = new SlowKeychain();
+  // Two stores over one keychain stand in for two processes: no shared in-process cache.
+  const other: SecretStore = {
+    get: (a) => shared.get(a),
+    set: (a, v) => shared.set(a, v),
+    add: (a, v) => shared.add(a, v),
+    delete: (a) => shared.delete(a),
+  };
+  const [mine, theirs] = await Promise.all([dataKey(shared), dataKey(other)]);
+  expect(mine.equals(theirs)).toBe(true);
+  expect(Buffer.from((await shared.get("data-key"))!, "base64").equals(mine)).toBe(true);
+  expect(shared.sets).toBe(0);
 });
 
 test("sealed data round-trips and fails on a wrong key, a wrong label or tampering", async () => {

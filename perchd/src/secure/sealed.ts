@@ -16,17 +16,34 @@ const IV = 12;
 const TAG = 16;
 const DATA_KEY_ACCOUNT = "data-key";
 
-/** The data key, created on first use. */
-export async function dataKey(store: SecretStore, account = DATA_KEY_ACCOUNT): Promise<Buffer> {
-  const existing = await store.get(account);
-  if (existing) {
-    const key = Buffer.from(existing, "base64");
-    if (key.length !== 32) throw new Error("the stored data key is damaged");
-    return key;
-  }
-  const key = randomBytes(32);
-  await store.set(account, key.toString("base64"));
+const keys = new WeakMap<SecretStore, ReadonlyMap<string, Promise<Buffer>>>();
+
+function decodeKey(stored: string): Buffer {
+  const key = Buffer.from(stored, "base64");
+  if (key.length !== 32) throw new Error("the stored data key is damaged");
   return key;
+}
+
+async function loadOrCreateKey(store: SecretStore, account: string): Promise<Buffer> {
+  const existing = await store.get(account);
+  if (existing) return decodeKey(existing);
+  const key = randomBytes(32);
+  // Create-only: if another process made the key first, use that one rather than replacing it,
+  // or every file sealed with it would become unreadable.
+  if (await store.add(account, key.toString("base64"))) return key;
+  const winner = await store.get(account);
+  if (!winner) throw new Error("the data key could not be created");
+  return decodeKey(winner);
+}
+
+/** The data key, created on first use. One lookup per store and account in this process. */
+export function dataKey(store: SecretStore, account = DATA_KEY_ACCOUNT): Promise<Buffer> {
+  const cached = keys.get(store)?.get(account);
+  if (cached) return cached;
+  const pending = loadOrCreateKey(store, account);
+  keys.set(store, new Map([...(keys.get(store) ?? []), [account, pending]]));
+  pending.catch(() => keys.set(store, new Map([...(keys.get(store) ?? [])].filter(([a]) => a !== account))));
+  return pending;
 }
 
 export function seal(key: Buffer, plaintext: string, label: string): Buffer {

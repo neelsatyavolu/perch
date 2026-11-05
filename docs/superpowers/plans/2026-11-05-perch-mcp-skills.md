@@ -4,7 +4,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-11-02-perch-design.md` 7.4, 7.5, 11.1. Roadmap row 4.
 
-**Branch:** `perch/mcp-skills`. All work is in `perchd/`, tested with `bun test` against fixture servers written in the tests and fixture configs in a temporary HOME. No test touches the real Keychain, the user's config files or the network.
+**Branch:** `perch/mcp-skills`. All work is in `perchd/`, tested with `bun test` against fixture servers written in the tests and fixture configs in a temporary HOME. No test touches the login Keychain (Keychain tests use a throwaway keychain file), the user's config files or the network.
 
 ## Aside parity checklist (this area)
 
@@ -22,7 +22,7 @@
 
 - Every value from a server's `env`, `headers` (and Codex `http_headers`, `bearer_token_env_var`), and secret-looking command arguments (`--token x`, `--api-key=x`) is written to the Keychain on save. The registry stores only a reference (`{ secret: id }`).
 - The registry and user skills are encrypted with AES-256-GCM (`node:crypto`). The data key is a random 32-byte key kept in the Keychain. **Deferred:** wrapping that key with a Secure Enclave key (spec 11.1) needs a signed native helper; it lands with the browser build (plan 3b).
-- Keychain writes go through `security -i` on stdin, so a secret never appears in a process's argument list.
+- Keychain calls go through Security.framework in-process (bun:ffi), so each item's access list trusts only the program running perchd. Items made through `/usr/bin/security` would trust that tool, and any process could read them with it. In development the trusted program is `bun`; a release must ship the signed perchd binary. The data key is created create-only and cached per process, so two first uses never make two keys.
 - The import preview never contains a secret value: only names and where each value goes.
 - An imported stdio server asks for approval before its first launch, and again whenever its command or arguments change.
 - MCP tool output is cut to 20,000 characters, as REPL output is.
@@ -30,7 +30,8 @@
 ## File layout
 
 ```
-perchd/src/secure/keychain.ts     SecretStore interface; macOS Keychain (security -i); in-memory store for tests
+perchd/src/secure/keychain.ts     SecretStore interface; macOS Keychain; in-memory store for tests
+perchd/src/secure/mac-security.ts Security.framework calls through bun:ffi
 perchd/src/secure/sealed.ts       AES-256-GCM sealed JSON files keyed by a Keychain data key
 perchd/src/mcp-client/types.ts    server entry types and validation at the boundary
 perchd/src/mcp-client/registry.ts encrypted server registry, immutable updates

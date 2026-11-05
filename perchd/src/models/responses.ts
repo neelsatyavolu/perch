@@ -1,6 +1,6 @@
 /** The OpenAI Responses API: Codex (ChatGPT sign-in), Grok (xAI sign-in or key) and the OpenAI API (key). */
 
-import { openStream, sseJson, upstreamMessage, type Attempt } from "./http";
+import { openStream, redactSecrets, sseJson, upstreamMessage, type Attempt } from "./http";
 import { ModelError, parseArgs, type Effort, type Message, type Model, type ToolSpec, type TurnEvent, type TurnRequest } from "./types";
 
 export const CODEX_URL = "https://chatgpt.com/backend-api/codex/responses";
@@ -118,7 +118,7 @@ export function responsesModel(opts: ResponsesOptions, fetchImpl: typeof fetch =
           }
           case "response.failed":
           case "error":
-            throw new ModelError(event.response?.error?.message ?? event.error?.message ?? event.message ?? "The model failed.");
+            throw new ModelError(redactSecrets(String(event.response?.error?.message ?? event.error?.message ?? event.message ?? "The model failed.")).split(tokens.accessToken).join("[redacted]"));
         }
       }
       throw new ModelError("The model stopped before finishing. Try again.");

@@ -13,7 +13,7 @@ test("nothing connected: every role is empty", () => {
 });
 
 test("ChatGPT alone fills all six roles with its own tiers", () => {
-  const roles = resolveRoles(defaultSettings(), avail([["codex", ["gpt-6-astra", "gpt-6.1-sol", "gpt-6-luna"]]]));
+  const roles = resolveRoles(defaultSettings(), avail([["codex", ["gpt-6-astra", "gpt-6.1-sol", "gpt-6-luna", "gpt-image-2.5-sunburst"]]]));
   expect(roles.default).toMatchObject({ provider: "codex", model: "gpt-6-astra", source: "default" });
   expect(roles.deep?.model).toBe("gpt-6-astra");
   expect(roles.standard?.model).toBe("gpt-6.1-sol");
@@ -26,7 +26,7 @@ test("subscriptions come before API keys; image goes to a provider that makes im
   const roles = resolveRoles(defaultSettings(), avail([["anthropic", ["claude-opus-5-5"]], ["claude-code", []], ["gemini", []]]));
   expect(roles.default).toMatchObject({ provider: "claude-code", model: "claude-opus-5-5" });
   // Claude Code runs whole tasks, so it cannot be the Visual model; the Anthropic key can.
-  expect(roles.visual).toMatchObject({ provider: "anthropic", model: "claude-sonnet-5-5" });
+  expect(roles.visual).toMatchObject({ provider: "anthropic", model: "claude-opus-5-5" });
   expect(roles.image).toMatchObject({ provider: "gemini", model: "gemini-nano-banana-2.1" });
 });
 
@@ -55,6 +55,13 @@ test("a retired model falls back to the provider's default", () => {
   const roles = resolveRoles(settings, avail([["codex", ["gpt-6-astra", "gpt-6.1-sol", "gpt-6-luna"]]]));
   expect(roles.standard).toMatchObject({ model: "gpt-6.1-sol", source: "fallback" });
   expect(roles.standard?.note).toContain("gpt-5-old is no longer offered");
+});
+
+test("when the provider's list leaves out its preset, a model it does offer is used", () => {
+  const settings = withRoles({ deep: { provider: "codex", model: "gpt-6-astra" } });
+  const roles = resolveRoles(settings, avail([["codex", ["gpt-6-luna"]]]));
+  expect(roles.deep).toMatchObject({ provider: "codex", model: "gpt-6-luna", source: "fallback" });
+  expect(roles.deep?.note).toBe("gpt-6-astra is no longer offered by ChatGPT, so GPT-6 Luna is used.");
 });
 
 test("an effort the model does not take is dropped", () => {

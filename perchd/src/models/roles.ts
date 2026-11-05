@@ -46,13 +46,16 @@ function lookup(provider: ProviderId, model: string, available: Availability): M
   return list.find((m) => m.id === model) ?? null;
 }
 
+/** The provider's preset for the role when it is offered, else its first suitable listed model. */
 function candidate(role: Role, provider: ProviderId, available: Availability): ModelInfo | null {
+  const list = available.get(provider) ?? [];
   const preset = PROVIDERS[provider].defaults[role];
   if (preset) {
-    const info = (available.get(provider) ?? []).find((m) => m.id === preset) ?? describeModel(provider, preset);
-    return unfit(role, provider, info) ? null : info;
+    // Only an unknown list lets the preset through unchecked.
+    const info = list.length ? list.find((m) => m.id === preset) : describeModel(provider, preset);
+    if (info && !unfit(role, provider, info)) return info;
   }
-  return (available.get(provider) ?? []).find((m) => !unfit(role, provider, m)) ?? null;
+  return list.find((m) => !unfit(role, provider, m)) ?? null;
 }
 
 const keepEffort = (info: ModelInfo, effort?: RoleEffort) => (effort && info.efforts.includes(effort) ? { effort } : {});

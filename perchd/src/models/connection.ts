@@ -59,7 +59,7 @@ export async function fetchModelList(ctx: ListContext): Promise<ModelInfo[]> {
     } catch {
       /* not JSON */
     }
-    throw new ProviderError(`${def.label} answered with an error (HTTP ${res.status}).${detail}`, "unreachable");
+    throw new ProviderError(`${def.label} answered with an error (HTTP ${res.status}).${detail}`, "invalid");
   }
   try {
     return parseModelList(ctx.provider, JSON.parse(text));

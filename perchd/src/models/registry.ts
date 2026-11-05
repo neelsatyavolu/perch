@@ -154,9 +154,15 @@ export function createModelRegistry(opts: RegistryOptions) {
     const entries = await Promise.all(
       PROVIDER_IDS.map(async (id) => {
         if ((await state(id)) !== "connected") return null;
-        // A list that cannot be fetched right now counts as unknown, not as empty.
-        const models = await listModels(id).catch(() => []);
-        return [id, models] as const;
+        try {
+          return [id, await listModels(id)] as const;
+        } catch (error) {
+          // A rejected key or an unreachable provider cannot serve a role now, so others take over.
+          const code = error instanceof ProviderError ? error.code : "unreachable";
+          if (code === "auth" || code === "unreachable") return null;
+          // Otherwise the list is unknown (an endpoint without /models), not empty.
+          return [id, [] as ModelInfo[]] as const;
+        }
       }),
     );
     return new Map(entries.filter((e): e is readonly [ProviderId, ModelInfo[]] => e !== null));
@@ -246,6 +252,19 @@ export function createModelRegistry(opts: RegistryOptions) {
     if (id === "claude-code") {
       const found = await claudeCode();
       return found.installed ? { ok: true, message: "Claude Code is installed.", models: CLAUDE_MODELS.length, latencyMs: 0 } : { ok: false, message: "Claude Code is no longer installed.", code: "not-connected" };
+    }
+    if (id === "grok") {
+      // Grok's models come from the shared catalog, so ask xAI directly with the sign-in.
+      const started = now();
+      try {
+        const { accessToken } = await subs.tokens("grok");
+        await fetchModelList({ provider: "grok", baseUrl: baseUrl("grok"), credential: accessToken, fetch: fetchImpl });
+        const count = (await listModels("grok")).length;
+        return { ok: true, message: connectedMessage(count), models: count, latencyMs: now() - started };
+      } catch (error) {
+        const e = error instanceof ProviderError ? error : new ProviderError("The connection test failed.", "unreachable");
+        return { ok: false, message: e.message, code: e.code };
+      }
     }
     if (id !== "codex") return check(id);
     // ChatGPT has no model list endpoint: send one tiny request with the fast model.

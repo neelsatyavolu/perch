@@ -123,6 +123,29 @@ test("a rejected refresh marks the sign-in expired; sign-out removes it", async 
   await expect(auth.tokens("grok")).rejects.toThrow("Sign in to Grok");
 });
 
+test("signing out while a refresh is in flight keeps the user signed out", async () => {
+  let release: () => void = () => {};
+  const gate = new Promise<void>((r) => (release = r));
+  let n = 0;
+  server = fakeServer(async () => {
+    if (n++ === 0) return json({ access_token: "acc-1", refresh_token: "ref-1", expires_in: 3600 });
+    await gate;
+    return json({ access_token: "acc-2", refresh_token: "ref-2", expires_in: 3600 });
+  });
+  let clock = Date.now();
+  const { keychain, auth } = setup({ now: () => clock });
+  await auth.startSignIn("grok");
+  await auth.finishSignIn("grok", "code");
+  clock += 7200_000;
+  const refreshing = auth.tokens("grok").catch((e: Error) => e);
+  await Bun.sleep(20);
+  await auth.signOut("grok");
+  release();
+  expect(String(await refreshing)).toContain("Signed out of Grok");
+  expect(await keychain.get("oauth:grok")).toBeNull();
+  expect(await auth.status("grok")).toBe("signed-out");
+});
+
 test("unreadable stored tokens count as signed out", async () => {
   server = tokenServer();
   const { keychain, auth } = setup();

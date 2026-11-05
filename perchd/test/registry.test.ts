@@ -44,6 +44,10 @@ function providers(): FakeServer {
         return json({ data: [{ id: "qwen3:8b" }, { id: "llava:13b" }] });
       case "POST /ollama/v1/chat/completions":
         return sse([{ choices: [{ delta: { content: "hi from ollama" }, finish_reason: "stop" }] }]);
+      case "GET /grok/v1/models":
+        return auth === "Bearer grok-access-0123456789" ? json({ data: [{ id: "grok-4.7" }] }) : json({ error: { message: "bad token" } }, 401);
+      case "POST /oauth2/token":
+        return json({ access_token: "grok-access-0123456789", refresh_token: "grok-refresh-0123456789", expires_in: 3600 });
       case "POST /oauth/token":
         return json({ access_token: "chatgpt-access-0123456789", refresh_token: "chatgpt-refresh-0123456789", expires_in: 3600 });
       case "POST /codex/responses":
@@ -64,6 +68,7 @@ async function setup(extra: Partial<RegistryOptions> = {}) {
     anthropic: `${fake.url}/anthropic/v1`,
     openai: `${fake.url}/openai/v1`,
     codex: `${fake.url}/codex`,
+    grok: `${fake.url}/grok/v1`,
   };
   // Token requests go to the real auth hosts' paths on the fake server.
   const routed = (async (url: string | URL | Request, init?: RequestInit) => {
@@ -244,6 +249,29 @@ test("with no image provider, image generation says what to connect", async () =
 test("modelFor a role with nothing connected explains what to do", async () => {
   const { registry } = await setup();
   await expect(registry.modelFor("default")).rejects.toThrow("Connect a model provider");
+});
+
+test("Grok's connection test asks xAI with the sign-in, and fails once the token is refused", async () => {
+  const { registry, keychain } = await setup();
+  await registry.startSignIn("grok");
+  await registry.finishSignIn("grok", "bare-code");
+  expect(await registry.testConnection("grok")).toMatchObject({ ok: true });
+  expect(server!.seen.find((s) => s.path === "/grok/v1/models")!.headers.authorization).toBe("Bearer grok-access-0123456789");
+  const stored = JSON.parse((await keychain.get("oauth:grok"))!);
+  await keychain.set("oauth:grok", JSON.stringify({ ...stored, accessToken: "stale-token-0123456789" }));
+  expect(await registry.testConnection("grok")).toMatchObject({ ok: false, code: "auth", message: "Sign in to Grok again in Settings → Models." });
+});
+
+test("a key revoked after connecting stops serving roles; another provider takes over", async () => {
+  let clock = Date.now();
+  const { registry, keychain } = await setup({ now: () => clock });
+  await registry.setKey("anthropic", ANTHROPIC_KEY);
+  await registry.setKey("openai", OPENAI_KEY);
+  await registry.setRole("deep", { provider: "openai", model: "gpt-6-astra" });
+  await keychain.set("api-key:openai", "sk-revoked-0123456789abcdef");
+  clock += 11 * 60_000; // past the model list cache
+  const roles = await registry.getRoles();
+  expect(roles.deep).toMatchObject({ provider: "anthropic", source: "fallback" });
 });
 
 test("a model from the picker must be offered and able to use tools", async () => {

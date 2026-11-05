@@ -3,7 +3,7 @@
  * endpoint), LM Studio, Ollama and any custom endpoint (spec 7.3, "more providers").
  */
 
-import { openStream, sseJson, upstreamMessage } from "./http";
+import { openStream, redactSecrets, sseJson, upstreamMessage } from "./http";
 import type { ProviderId } from "./ids";
 import { PROVIDERS } from "./providers";
 import { ModelError, parseArgs, type Message, type Model, type ToolCall, type TurnEvent, type TurnRequest } from "./types";
@@ -54,8 +54,10 @@ export function toChatMessages(system: string, messages: Message[]): ChatMessage
 
 type PendingCall = { id: string; name: string; json: string; meta?: Record<string, unknown> };
 
-function mergeToolDelta(calls: Map<number, PendingCall>, delta: any, position: number): Map<number, PendingCall> {
-  const index = typeof delta?.index === "number" ? delta.index : position;
+/** Servers that omit `index` start a call with an id and continue it without one. */
+function mergeToolDelta(calls: Map<number, PendingCall>, delta: any): Map<number, PendingCall> {
+  const last = Math.max(-1, ...calls.keys());
+  const index = typeof delta?.index === "number" ? delta.index : (delta?.id || last < 0) ? last + 1 : last;
   const prev = calls.get(index) ?? { id: "", name: "", json: "" };
   const next: PendingCall = {
     id: delta?.id || prev.id,
@@ -102,17 +104,21 @@ export function chatCompletionsModel(opts: ChatCompletionsOptions, fetchImpl: ty
       });
       let calls = new Map<number, PendingCall>();
       let usage: { input: number; output: number } | undefined;
+      let finished = false;
+      const clean = (message: string) => (key ? redactSecrets(message).split(key).join("[redacted]") : redactSecrets(message));
       for await (const chunk of sseJson(stream, signal)) {
-        if (chunk?.error) throw new ModelError(String(chunk.error.message ?? chunk.error ?? "The model failed."));
+        if (chunk?.error) throw new ModelError(clean(String(chunk.error.message ?? chunk.error ?? "The model failed.")));
         if (chunk?.usage) usage = { input: chunk.usage.prompt_tokens ?? 0, output: chunk.usage.completion_tokens ?? 0 };
-        const delta = chunk?.choices?.[0]?.delta;
+        const choice = chunk?.choices?.[0];
+        if (choice?.finish_reason) finished = true;
+        const delta = choice?.delta;
         if (typeof delta?.content === "string" && delta.content) yield { type: "text", delta: delta.content };
         if (Array.isArray(delta?.tool_calls)) {
-          delta.tool_calls.forEach((d: unknown, i: number) => {
-            calls = mergeToolDelta(calls, d, calls.size + i);
-          });
+          for (const d of delta.tool_calls) calls = mergeToolDelta(calls, d);
         }
       }
+      // A stream cut off before its finish reason may hold half a tool call: never run it.
+      if (!finished) throw new ModelError("The model stopped before finishing. Try again.");
       const ordered = [...calls.entries()].sort(([a], [b]) => a - b);
       for (const [index, c] of ordered) {
         if (!c.name) continue;

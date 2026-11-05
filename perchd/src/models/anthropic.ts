@@ -1,6 +1,6 @@
 /** The Anthropic Messages API, for people who use a Claude API key (spec 7.3). */
 
-import { openStream, sseJson, upstreamMessage } from "./http";
+import { openStream, redactSecrets, sseJson, upstreamMessage } from "./http";
 import { ModelError, parseArgs, type Message, type Model, type TurnEvent, type TurnRequest } from "./types";
 
 export const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -88,7 +88,7 @@ export function anthropicModel(opts: { model: string; apiKey: () => Promise<stri
             yield { type: "done", usage: { input, output } };
             return;
           case "error":
-            throw new ModelError(event.error?.message ?? "The model failed.");
+            throw new ModelError(redactSecrets(String(event.error?.message ?? "The model failed.")).split(key).join("[redacted]"));
         }
       }
       throw new ModelError("The model stopped before finishing. Try again.");

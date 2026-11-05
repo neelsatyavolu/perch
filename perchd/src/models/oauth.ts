@@ -55,9 +55,15 @@ export function createSubscriptionAuth(opts: SubscriptionAuthOptions) {
   let listeners = new Map<SubscriptionId, LoopbackHandle>();
   let expired = new Set<SubscriptionId>();
   let refreshing = new Map<SubscriptionId, Promise<Tokens>>();
+  // Bumped by sign-out, so a token request still in flight cannot save tokens afterwards.
+  let generations = new Map<SubscriptionId, number>();
+  const generation = (p: SubscriptionId) => generations.get(p) ?? 0;
 
   const stored = async (p: SubscriptionId) => parseStored(await opts.keychain.get(secretName(p)));
-  const save = (p: SubscriptionId, t: Tokens) => opts.keychain.set(secretName(p), JSON.stringify(t));
+  async function save(p: SubscriptionId, t: Tokens, since: number): Promise<void> {
+    if (generation(p) !== since) throw new ProviderError(`Signed out of ${label(p)}.`, "not-connected");
+    await opts.keychain.set(secretName(p), JSON.stringify(t));
+  }
   const without = <K, V>(map: Map<K, V>, key: K) => new Map([...map].filter(([k]) => k !== key));
 
   function live(p: SubscriptionId): Pending | null {
@@ -74,13 +80,16 @@ export function createSubscriptionAuth(opts: SubscriptionAuthOptions) {
   }
 
   async function complete(p: SubscriptionId, code: string, verifier: string): Promise<void> {
+    const since = generation(p);
     let tokens: Tokens;
     try {
       tokens = await exchangeCode(p, code, verifier, fetchOpt);
     } catch {
       throw new ProviderError(`Perch could not finish signing in to ${label(p)}. Start again from Settings → Models.`, "auth");
     }
-    await save(p, tokens);
+    // Cancelled or replaced while the code was being exchanged: keep nothing.
+    if (pending.get(p)?.pkce.verifier !== verifier) throw new ProviderError(`That ${label(p)} sign-in was cancelled. Start again from Settings → Models.`);
+    await save(p, tokens, since);
     pending = without(pending, p);
     expired = new Set([...expired].filter((x) => x !== p));
     opts.onChange?.(p);
@@ -134,11 +143,11 @@ export function createSubscriptionAuth(opts: SubscriptionAuthOptions) {
   async function refresh(p: SubscriptionId, current: Tokens): Promise<Tokens> {
     const inflight = refreshing.get(p);
     if (inflight) return inflight;
+    const since = generation(p);
     const run = (async () => {
+      let next: Tokens;
       try {
-        const next = await refreshTokens(p, current.refreshToken, { ...fetchOpt, previous: current });
-        await save(p, next);
-        return next;
+        next = await refreshTokens(p, current.refreshToken, { ...fetchOpt, previous: current });
       } catch (error) {
         // A 4xx means the sign-in was revoked or expired; anything else is a network problem.
         if (/\((4\d\d)\)/.test(String((error as Error)?.message))) {
@@ -148,6 +157,8 @@ export function createSubscriptionAuth(opts: SubscriptionAuthOptions) {
         }
         throw new ProviderError(`Perch could not reach ${label(p)} to renew the sign-in. Check your connection.`, "unreachable");
       }
+      await save(p, next, since);
+      return next;
     })();
     refreshing = new Map(refreshing).set(p, run);
     try {
@@ -172,6 +183,7 @@ export function createSubscriptionAuth(opts: SubscriptionAuthOptions) {
   }
 
   async function signOut(p: SubscriptionId): Promise<void> {
+    generations = new Map(generations).set(p, generation(p) + 1);
     pending = without(pending, p);
     stopListener(p);
     expired = new Set([...expired].filter((x) => x !== p));

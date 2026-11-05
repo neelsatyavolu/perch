@@ -93,6 +93,43 @@ test("a 401 names the provider and never repeats the key", async () => {
   expect(String(error)).not.toContain(KEY);
 });
 
+test("a stream cut off before its finish reason never yields the half-made tool call", async () => {
+  server = fakeServer(() => sse([{ choices: [{ delta: { tool_calls: [{ index: 0, id: "c1", function: { name: "click", arguments: '{"ref":"e' } }] } }] }]));
+  const model = chatCompletionsModel({ provider: "ollama", baseUrl: server.url, model: "m", apiKey: async () => null });
+  const seen: TurnEvent[] = [];
+  const error = await (async () => {
+    for await (const e of model.turn(REQ, new AbortController().signal)) seen.push(e);
+  })().catch((e: Error) => e);
+  expect(String(error)).toContain("stopped before finishing");
+  expect(seen.some((e) => e.type === "tool_call")).toBe(false);
+});
+
+test("tool-call deltas without an index continue the call that has an id", async () => {
+  server = fakeServer(() =>
+    sse([
+      { choices: [{ delta: { tool_calls: [{ id: "a", function: { name: "click", arguments: '{"ref":' } }] } }] },
+      { choices: [{ delta: { tool_calls: [{ function: { arguments: '"e1"}' } }] } }] },
+      { choices: [{ delta: { tool_calls: [{ id: "b", function: { name: "snapshot", arguments: "{}" } }] }, finish_reason: "tool_calls" }] },
+    ]),
+  );
+  const model = chatCompletionsModel({ provider: "lmstudio", baseUrl: server.url, model: "m", apiKey: async () => null });
+  const calls = (await collect(model)).filter((e) => e.type === "tool_call");
+  expect(calls).toEqual([
+    { type: "tool_call", call: { id: "a", name: "click", args: { ref: "e1" } } },
+    { type: "tool_call", call: { id: "b", name: "snapshot", args: {} } },
+  ]);
+});
+
+test("an error in the stream hides the key, even one with no known prefix", async () => {
+  const odd = "custom-gateway-credential-42";
+  server = fakeServer(() => sse([{ error: { message: `denied for ${odd} and ${KEY}` } }]));
+  const model = chatCompletionsModel({ provider: "custom", baseUrl: server.url, model: "m", apiKey: async () => odd });
+  const error = await collect(model).catch((e: Error) => e);
+  expect(String(error)).toContain("denied for [redacted]");
+  expect(String(error)).not.toContain(odd);
+  expect(String(error)).not.toContain(KEY);
+});
+
 test("an error body in the stream is thrown in plain words", async () => {
   server = fakeServer(() => sse([{ error: { message: "model not loaded" } }]));
   const model = chatCompletionsModel({ provider: "lmstudio", baseUrl: server.url, model: "m", apiKey: async () => null });

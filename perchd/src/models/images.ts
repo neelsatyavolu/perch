@@ -6,7 +6,7 @@
 
 import { existsSync, statSync, writeFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
-import { openStream, sseJson, upstreamMessage } from "./http";
+import { openStream, redactSecrets, sseJson, upstreamMessage } from "./http";
 import type { ImageApi } from "./providers";
 import { ModelError } from "./types";
 
@@ -101,7 +101,10 @@ async function viaCodex(opts: ImageGeneratorOptions, prompt: string, shape: Imag
   const images: string[] = [];
   for await (const event of sseJson(stream, signal)) {
     if (event.type === "response.output_item.done" && event.item?.type === "image_generation_call" && typeof event.item.result === "string") images.push(event.item.result);
-    if (event.type === "response.failed" || event.type === "error") throw new ModelError(event.response?.error?.message ?? event.error?.message ?? "The image model failed.");
+    if (event.type === "response.failed" || event.type === "error") {
+      const message = String(event.response?.error?.message ?? event.error?.message ?? "The image model failed.");
+      throw new ModelError(redactSecrets(message).split(token).join("[redacted]"));
+    }
   }
   return images;
 }

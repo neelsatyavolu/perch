@@ -20,11 +20,14 @@
 
 ## Security rules this plan holds to
 
-- Every value from a server's `env`, `headers` (and Codex `http_headers`, `bearer_token_env_var`), and secret-looking command arguments (`--token x`, `--api-key=x`) is written to the Keychain on save. The registry stores only a reference (`{ secret: id }`).
+- Every value from a server's `env`, `headers` (and Codex `http_headers`, `bearer_token_env_var`), and secret-looking command arguments (`--token x`, `--api-key=x`, `--header "Authorization: ..."`, `-e TOKEN=...`) is written to the Keychain on save. The registry stores only a reference (`{ secret: id }`).
 - The registry and user skills are encrypted with AES-256-GCM (`node:crypto`). The data key is a random 32-byte key kept in the Keychain. **Deferred:** wrapping that key with a Secure Enclave key (spec 11.1) needs a signed native helper; it lands with the browser build (plan 3b).
 - Keychain calls go through Security.framework in-process (bun:ffi), so each item's access list trusts only the program running perchd. Items made through `/usr/bin/security` would trust that tool, and any process could read them with it. In development the trusted program is `bun`; a release must ship the signed perchd binary. The data key is created create-only and cached per process, so two first uses never make two keys.
 - The import preview never contains a secret value: only names and where each value goes.
-- An imported stdio server asks for approval before its first launch, and again whenever its command or arguments change.
+- A server asks for approval before it first runs (stdio) or is first connected to (remote), and again whenever its command, arguments, cwd, env, URL or headers change. The request shows plain env values, flags loader variables (`NODE_OPTIONS`, `DYLD_*`, `PYTHON*` and the like), and names every environment variable the server would read or be sent.
+- Servers from a project folder's file (`.mcp.json`, `.cursor/mcp.json`, `.vscode/mcp.json`) are marked in the preview and not picked unless approved in their own app: for `.mcp.json`, Claude Code's `enabledMcpjsonServers` / `disabledMcpjsonServers` / `enableAllProjectMcpServers` in `~/.claude.json` and `~/.claude/settings.json` (never the project's own checked-in settings).
+- Registry changes go through `RegistryStore.update`, queued in process and guarded by a lock folder across processes, so the CLI and the daemon cannot overwrite each other.
+- OAuth reuses the registered client and its loopback port, and refuses metadata whose `issuer` or `resource` does not match the address it was looked up for.
 - MCP tool output is cut to 20,000 characters, as REPL output is.
 
 ## File layout
@@ -83,10 +86,11 @@ bun run src/mcp-client/cli.ts import --save all      # or --save github,linear
 bun run src/mcp-client/cli.ts list
 bun run src/mcp-client/cli.ts tools github           # asks before running a stdio server for the first time
 bun run src/mcp-client/cli.ts trust github | disable github | remove github
+bun run src/mcp-client/cli.ts oauth corp <client-id> --port 8765   # servers without automatic OAuth registration
 bun run src/mcp-client/cli.ts skills import --save all
 bun run src/mcp-client/cli.ts skills                 # built-in and imported skills
 ```
 
-Settings go to `~/Library/Application Support/Perch` (`--dir` to use another folder); secrets go to the login Keychain under the service "Perch". In code, pass `extraTools: combineExtraTools(mcpExtraTools(manager), skillExtraTools(catalog))` to `runTask`.
+Settings go to `~/Library/Application Support/Perch` (`--dir` to use another folder); secrets go to the login Keychain under the service "Perch". To run a task with them: `bun run src/cli.ts run --model anthropic --mcp "<task>"` (built-in skills are always offered; `--mcp` adds the user's servers and skills). In code, `loadAgentExtras` (`src/mcp-client/agent-extras.ts`) returns the `extraTools` to pass to `runTask`.
 
 Packaging note: the built-in skills are read from `perchd/skills/` next to the source (`BUILT_IN_SKILLS_DIR`). The compiled perchd binary needs that folder shipped in the app bundle and the path passed to `SkillCatalog.load({ builtInDir })`.

@@ -7,8 +7,10 @@
 export type Value = string | { secret: string } | { env: string };
 
 export type StdioConfig = { transport: "stdio"; command: string; args: Value[]; env: Record<string, Value>; cwd?: string };
+/** An app registered with the server's sign-in provider, for servers that do not allow automatic registration. */
+export type OAuthClientConfig = { clientId: string; callbackPort?: number };
 /** "http" is Streamable HTTP and falls back to the older SSE transport; "sse" is SSE only. */
-export type HttpConfig = { transport: "http" | "sse"; url: string; headers: Record<string, Value> };
+export type HttpConfig = { transport: "http" | "sse"; url: string; headers: Record<string, Value>; oauth?: OAuthClientConfig };
 export type ServerConfig = StdioConfig | HttpConfig;
 
 export type ServerEntry = {
@@ -59,6 +61,16 @@ function parseMap(raw: unknown, where: string, keyPattern: RegExp): Record<strin
   );
 }
 
+const CLIENT_ID = /^[\x21-\x7e]{1,256}$/;
+
+function parseOAuth(raw: unknown): OAuthClientConfig {
+  const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  if (typeof o.clientId !== "string" || !CLIENT_ID.test(o.clientId)) fail("oauth.clientId must be 1-256 visible characters");
+  const port = o.callbackPort;
+  if (port !== undefined && !(Number.isInteger(port) && (port as number) >= 1024 && (port as number) <= 65535)) fail("oauth.callbackPort must be a port from 1024 to 65535");
+  return { clientId: o.clientId, ...(port === undefined ? {} : { callbackPort: port as number }) };
+}
+
 export function parseConfig(raw: unknown): ServerConfig {
   if (!raw || typeof raw !== "object") fail("server config must be an object");
   const c = raw as Record<string, unknown>;
@@ -84,7 +96,7 @@ export function parseConfig(raw: unknown): ServerConfig {
     }
     const local = url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]";
     if (url.protocol !== "https:" && !(url.protocol === "http:" && local)) fail("remote MCP servers must use https (plain http only for localhost)");
-    return { transport: c.transport, url: url.toString(), headers: parseMap(c.headers, "headers", HEADER_NAME) };
+    return { transport: c.transport, url: url.toString(), headers: parseMap(c.headers, "headers", HEADER_NAME), ...(c.oauth === undefined ? {} : { oauth: parseOAuth(c.oauth) }) };
   }
   return fail('transport must be "stdio", "http" or "sse"');
 }

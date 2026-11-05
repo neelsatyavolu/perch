@@ -174,3 +174,21 @@ test("sign-in details that name another issuer or another resource are refused",
   await expect(wrongResource.unauthorized(null)).rejects.toThrow("The server's sign-in details are for a different address");
   expect(kc.accounts()).toEqual([]);
 });
+
+test("a client id set for the server is used instead of registering, on its fixed callback port", async () => {
+  const kc = new MemoryKeychain();
+  const before = state.registered;
+  const port = await new Promise<number>((resolve) => { const probe = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response() }); const p = probe.port!; probe.stop(true); resolve(p); });
+  const auth = new OAuthProvider({ server: "notes", serverUrl: `${base}/mcp`, keychain: kc, openUrl, client: { clientId: "preregistered-perch", callbackPort: port } });
+  expect(await auth.unauthorized(null)).toBe(true);
+  expect(state.registered).toBe(before);
+  expect(state.lastAuthorize!.get("client_id")).toBe("preregistered-perch");
+  expect(state.lastAuthorize!.get("redirect_uri")).toBe(`http://127.0.0.1:${port}/callback`);
+  expect(JSON.parse((await kc.get(tokenAccount("notes")))!).client_id).toBe("preregistered-perch");
+});
+
+test("a server without automatic registration says how to add a client id", async () => {
+  const noRegistration = rewriting("/.well-known/oauth-authorization-server/as", (d) => ({ ...d, registration_endpoint: undefined }));
+  const auth = new OAuthProvider({ server: "notes", serverUrl: `${base}/mcp`, keychain: new MemoryKeychain(), openUrl, fetch: noRegistration });
+  await expect(auth.unauthorized(null)).rejects.toThrow("bun run src/mcp-client/cli.ts oauth notes <client-id>");
+});

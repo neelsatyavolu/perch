@@ -44,6 +44,18 @@ test("import --save, list, tools, trust and remove", async () => {
   expect((await cli(["list"])).text).not.toContain("github");
 });
 
+test("oauth sets a hand-registered client id on a remote server", async () => {
+  await cli(["import", "--save", "all"]);
+  expect((await cli(["oauth", "fixture", "my-client"])).text).toContain("fixture is not a remote server");
+  writeFileSync(join(home, ".claude.json"), JSON.stringify({ mcpServers: { remote: { type: "http", url: "https://mcp.example.test/mcp" } } }));
+  await cli(["import", "--save", "all"]);
+  const r = await cli(["oauth", "remote", "my-client", "--port", "8765"]);
+  expect(r.code).toBe(0);
+  expect(r.text).toContain("remote: done.");
+  expect((await cli(["list"])).text).toContain("remote  on  http https://mcp.example.test/mcp  (from Claude Code (user)), signs in as my-client on port 8765");
+  expect((await cli(["oauth", "remote", "x", "--port", "80"])).text).toContain("oauth.callbackPort must be a port from 1024 to 65535");
+});
+
 test("skills import and list", async () => {
   expect((await cli(["skills", "import", "--save", "all"])).text).toContain("Imported notes.");
   const list = (await cli(["skills"])).text;

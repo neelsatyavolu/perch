@@ -130,7 +130,8 @@ export class McpManager {
     if (resolved.transport === "stdio") {
       return McpClient.connect(new StdioTransport({ command: resolved.command, args: resolved.args, env: resolved.env, cwd: resolved.cwd, baseEnv: env }), { timeoutMs });
     }
-    const auth = new OAuthProvider({ server: entry.name, serverUrl: resolved.url, keychain: this.opts.keychain, openUrl: this.opts.openUrl, fetch: this.opts.fetch });
+    const preset = entry.config.transport !== "stdio" ? entry.config.oauth : undefined;
+    const auth = new OAuthProvider({ server: entry.name, serverUrl: resolved.url, keychain: this.opts.keychain, openUrl: this.opts.openUrl, fetch: this.opts.fetch, ...(preset ? { client: preset } : {}) });
     // A configured Authorization header wins; OAuth is only for servers that ask for it.
     const useOAuth = !Object.keys(resolved.headers).some((h) => h.toLowerCase() === "authorization");
     return connectRemote(resolved.transport, { url: resolved.url, headers: resolved.headers, fetch: this.opts.fetch, timeoutMs, ...(useOAuth ? { auth } : {}) });

@@ -23,6 +23,7 @@ beforeAll(() => {
     mcpServers: {
       github: { type: "stdio", command: "npx", args: ["-y", "@modelcontextprotocol/server-github"], env: { GITHUB_PERSONAL_ACCESS_TOKEN: S.gh } },
       linear: { type: "http", url: "https://mcp.linear.app/mcp", headers: { Authorization: `Bearer ${S.linear}` } },
+      corp: { type: "http", url: "https://mcp.corp.test/mcp", oauth: { clientId: "corp-client", callbackPort: 8765 }, headersHelper: "/usr/local/bin/corp-headers" },
     },
     projects: { [project]: { mcpServers: { "site-db": { command: "uvx", args: ["db-mcp", "--api-key", S.proj] } }, enabledMcpjsonServers: ["sentry", "github"] } },
   }));
@@ -105,6 +106,8 @@ test("each format maps to Perch's shape", () => {
   expect(byName("sentry").config).toEqual({ transport: "sse", url: "https://mcp.sentry.dev/sse", headers: {} });
   expect(byName("1password").config).toEqual({ transport: "stdio", command: "1password-mcp", args: ["--vault", "Work"], env: { OP_SERVICE_ACCOUNT_TOKEN: { env: "OP_SERVICE_ACCOUNT_TOKEN" } } });
   expect(byName("figma").config).toEqual({ transport: "http", url: "https://mcp.figma.com/mcp", headers: { Authorization: "Bearer ${FIGMA_TOKEN}" } });
+  expect(byName("corp").config).toEqual({ transport: "http", url: "https://mcp.corp.test/mcp", headers: {}, oauth: { clientId: "corp-client", callbackPort: 8765 } });
+  expect(byName("corp").warnings).toEqual(["Claude Code runs a command (headersHelper) to make this server's headers. Perch does not run it; add the headers after importing."]);
   expect(byName("firecrawl").enabled).toBe(false);
   expect(byName("old").enabled).toBe(false);
   const pw = byName("playwright");

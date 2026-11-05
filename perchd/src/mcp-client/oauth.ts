@@ -19,6 +19,8 @@ export type OAuthOptions = {
   fetch?: typeof fetch;
   timeoutMs?: number;
   now?: () => number;
+  /** A client registered by hand, for servers without automatic registration. */
+  client?: { clientId: string; callbackPort?: number };
 };
 
 type Tokens = { access_token: string; token_type?: string; refresh_token?: string; expires_at?: number; token_endpoint: string; client_id: string };
@@ -172,7 +174,9 @@ export class OAuthProvider implements AuthProvider {
 
   private async register(meta: AsMeta, redirectUri: string, stored: Client | null): Promise<Client> {
     if (stored?.redirect_uri === redirectUri) return stored;
-    if (!meta.registration_endpoint) throw new Error("The server needs a registered app and does not allow automatic registration. Add a client id in the server's settings.");
+    if (!meta.registration_endpoint) {
+      throw new Error(`The server does not let Perch register itself. Register Perch with the server's sign-in provider, then add the client id: bun run src/mcp-client/cli.ts oauth ${this.opts.server} <client-id> [--port <callback port>]`);
+    }
     const res = await this.doFetch(meta.registration_endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -190,12 +194,14 @@ export class OAuthProvider implements AuthProvider {
     const { meta, scope, resource } = await this.discover(www);
     const verifier = b64url(randomBytes(32));
     const state = b64url(randomBytes(16));
+    const preset = this.opts.client;
     // Listen on the port registered last time, so the same client keeps working; another port means a new registration.
-    const stored = await this.storedClient(meta);
-    const callback = waitForCallback(state, this.opts.timeoutMs ?? 300_000, stored ? loopbackPort(stored.redirect_uri) : 0);
+    const stored = preset ? null : await this.storedClient(meta);
+    const port = preset ? (preset.callbackPort ?? 0) : stored ? loopbackPort(stored.redirect_uri) : 0;
+    const callback = waitForCallback(state, this.opts.timeoutMs ?? 300_000, port, Boolean(preset?.callbackPort));
     try {
       const redirectUri = `http://${LOOPBACK}:${callback.port}/callback`;
-      const client = await this.register(meta, redirectUri, stored);
+      const client = preset ? { client_id: preset.clientId } : await this.register(meta, redirectUri, stored);
       const auth = new URL(meta.authorization_endpoint);
       const params: Record<string, string> = {
         response_type: "code",
@@ -254,7 +260,7 @@ function loopbackPort(uri: string): number {
 }
 
 /** A one-shot loopback server for the redirect. It checks state, so another page cannot inject a code. */
-function waitForCallback(state: string, timeoutMs: number, preferredPort = 0): { port: number; code: Promise<string>; stop: () => void } {
+function waitForCallback(state: string, timeoutMs: number, preferredPort = 0, exact = false): { port: number; code: Promise<string>; stop: () => void } {
   let settle: { resolve: (c: string) => void; reject: (e: Error) => void } = { resolve: () => undefined, reject: () => undefined };
   const code = new Promise<string>((resolve, reject) => (settle = { resolve, reject }));
   code.catch(() => undefined);
@@ -276,7 +282,9 @@ function waitForCallback(state: string, timeoutMs: number, preferredPort = 0): {
   try {
     server = listen(preferredPort);
   } catch {
-    server = listen(0); // the old port is taken by another app
+    // The port is taken by another app. A hand-registered client only works on its own port.
+    if (exact) throw new Error(`Port ${preferredPort}, which this server's sign-in uses, is taken by another app. Close it and try again.`);
+    server = listen(0);
   }
   const timer = setTimeout(() => settle.reject(new Error("Sign-in timed out. Try again.")), timeoutMs);
   return {

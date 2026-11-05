@@ -118,7 +118,9 @@ export function fromJsonEntry(raw: unknown, ctx: { vscode?: boolean; workspace?:
     };
   }
   const url = String(raw.url ?? raw.serverUrl);
-  return { config: { transport, url, headers: stringMap(raw.headers, warnings, "header", Boolean(ctx.vscode), ctx.workspace) }, enabled, warnings };
+  if (typeof raw.headersHelper === "string") warnings.push("Claude Code runs a command (headersHelper) to make this server's headers. Perch does not run it; add the headers after importing.");
+  const oauth = isObject(raw.oauth) && typeof raw.oauth.clientId === "string" ? { clientId: raw.oauth.clientId, ...(typeof raw.oauth.callbackPort === "number" ? { callbackPort: raw.oauth.callbackPort } : {}) } : null;
+  return { config: { transport, url, headers: stringMap(raw.headers, warnings, "header", Boolean(ctx.vscode), ctx.workspace), ...(oauth ? { oauth } : {}) }, enabled, warnings };
 }
 
 /** Codex and Grok [mcp_servers.<name>] tables. */

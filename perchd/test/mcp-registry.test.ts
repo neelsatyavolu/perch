@@ -29,6 +29,9 @@ test("entries are validated at the boundary", () => {
   expect(() => parseEntry({ name: "a", config: { transport: "stdio", command: "x", env: { "BAD-NAME": "1" } } })).toThrow("invalid name");
   expect(() => parseEntry({ name: "a", config: { transport: "stdio", command: "x", args: [{ secret: 1 }] } })).toThrow("args[0]");
   expect(sanitizeName("my server (prod)")).toBe("my-server-prod");
+  expect(parseEntry({ name: "a", config: { transport: "http", url: "https://x.test/mcp", oauth: { clientId: "c", callbackPort: 8080 } } }).config).toMatchObject({ oauth: { clientId: "c", callbackPort: 8080 } });
+  expect(() => parseEntry({ name: "a", config: { transport: "http", url: "https://x.test/mcp", oauth: { clientId: "", callbackPort: 80 } } })).toThrow("oauth");
+  expect(() => parseEntry({ name: "a", config: { transport: "http", url: "https://x.test/mcp", oauth: { clientId: "c", callbackPort: 99999 } } })).toThrow("oauth");
 });
 
 test("registry updates return new objects and keep the old ones unchanged", () => {

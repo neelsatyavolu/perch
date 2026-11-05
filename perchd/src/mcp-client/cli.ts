@@ -4,6 +4,7 @@
  *   bun run src/mcp-client/cli.ts import [--project <dir>] [--save all|<name,name>]
  *   bun run src/mcp-client/cli.ts list | remove <name> | trust <name> | untrust <name> | enable <name> | disable <name>
  *   bun run src/mcp-client/cli.ts tools <name>
+ *   bun run src/mcp-client/cli.ts oauth <name> <client-id> [--port <callback port>]
  *   bun run src/mcp-client/cli.ts skills [import [--save all|<name,name>] | list]
  *
  * Settings live in ~/Library/Application Support/Perch (override with --dir); secrets in the Keychain.
@@ -54,7 +55,7 @@ export async function run(argv: string[], deps: CliDeps): Promise<number> {
   const dir = flag(argv, "--dir")[0] ?? settingsDir(deps.home);
   const store = new RegistryStore(join(dir, "mcp-servers.enc"), deps.keychain);
   const skills = new SkillStore(join(dir, "skills"), deps.keychain);
-  const [command, name] = argv.filter((a, i) => !a.startsWith("--") && !argv[i - 1]?.startsWith("--"));
+  const [command, name, value] = argv.filter((a, i) => !a.startsWith("--") && !argv[i - 1]?.startsWith("--"));
   const save = flag(argv, "--save")[0];
 
   switch (command) {
@@ -78,7 +79,8 @@ export async function run(argv: string[], deps: CliDeps): Promise<number> {
       if (reg.servers.length === 0) deps.out("No MCP servers yet. Run import to bring them in from your other apps.");
       for (const s of reg.servers) {
         const where = s.config.transport === "stdio" ? s.config.command : s.config.url;
-        deps.out(`${s.name}  ${s.enabled ? "on" : "off"}${s.trusted ? ", trusted" : ""}  ${s.config.transport} ${where}${s.source ? `  (from ${s.source})` : ""}`);
+        const oauth = s.config.transport !== "stdio" && s.config.oauth ? `, signs in as ${s.config.oauth.clientId}${s.config.oauth.callbackPort ? ` on port ${s.config.oauth.callbackPort}` : ""}` : "";
+        deps.out(`${s.name}  ${s.enabled ? "on" : "off"}${s.trusted ? ", trusted" : ""}  ${s.config.transport} ${where}${s.source ? `  (from ${s.source})` : ""}${oauth}`);
       }
       return 0;
     }
@@ -92,6 +94,22 @@ export async function run(argv: string[], deps: CliDeps): Promise<number> {
       else {
         const patch = { trust: { trusted: true }, untrust: { trusted: false }, enable: { enabled: true }, disable: { enabled: false } }[command];
         await store.update((reg) => updateServer(reg, name, patch));
+      }
+      deps.out(`${name}: done.`);
+      return 0;
+    }
+    case "oauth": {
+      if (!name || !value) return deps.out("Name the server and the client id: oauth <name> <client-id> [--port <callback port>]"), 1;
+      const port = flag(argv, "--port")[0];
+      try {
+        await store.update((reg) => {
+          const entry = reg.servers.find((s) => s.name === name);
+          if (!entry) throw new Error(`no server named "${name}"`);
+          if (entry.config.transport === "stdio") throw new Error(`${name} is not a remote server; only remote servers sign in.`);
+          return updateServer(reg, name, { config: { ...entry.config, oauth: { clientId: value, ...(port ? { callbackPort: Number(port) } : {}) } } });
+        });
+      } catch (error) {
+        return deps.out((error as Error).message), 1;
       }
       deps.out(`${name}: done.`);
       return 0;
@@ -127,7 +145,7 @@ export async function run(argv: string[], deps: CliDeps): Promise<number> {
       return 0;
     }
     default:
-      deps.out("Commands: import, list, remove, trust, untrust, enable, disable, tools, skills");
+      deps.out("Commands: import, list, remove, trust, untrust, enable, disable, tools, oauth, skills");
       return command ? 1 : 0;
   }
 }

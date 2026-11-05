@@ -77,7 +77,7 @@ function isAppearance(v: Partial<Appearance>): v is Appearance {
     (THEME_NAMES as readonly string[]).includes(String(v.theme)) &&
     (ACCENT_NAMES as readonly string[]).includes(String(v.accent)) &&
     (THEME_NAMES as readonly string[]).includes(String(v.darkTheme)) &&
-    v.darkTheme !== "paper" &&
+    String(v.darkTheme) !== "paper" &&
     typeof v.matchSystem === "boolean" &&
     typeof v.hideChrome === "boolean" &&
     typeof v.revealOnHover === "boolean" &&

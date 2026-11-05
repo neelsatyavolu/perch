@@ -104,7 +104,7 @@ export function Welcome() {
         <h1 class="serif-title" ref={heading} tabIndex={-1}>Welcome to Perch</h1>
         <p class="wl-lead">A browser with an agent that works on the sites you're signed in to. What it learns stays on this Mac, encrypted.</p>
         <div class="wl-actions">
-          <button type="button" class="btn primary" onClick={() => { setStep("appearance"); focus(); }}>Get started</button>
+          <button type="button" class="btn primary" onClick={() => { setStep("appearance"); focus(); }}>Set up Perch</button>
           <button type="button" class="btn quiet" onClick={() => finish()}>Skip setup</button>
         </div>
       </main>

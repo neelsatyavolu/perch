@@ -9,7 +9,7 @@ describe("Welcome", () => {
   test("walks through look, models, import and memory, then opens a new tab", async () => {
     const r = renderWithApi(<Welcome />);
     expect(await r.findByRole("heading", { level: 1, name: "Welcome to Perch" })).toBeTruthy();
-    fireEvent.click(r.getByRole("button", { name: "Get started" }));
+    fireEvent.click(r.getByRole("button", { name: "Set up Perch" }));
 
     expect(await r.findByRole("heading", { level: 1, name: "Pick a look" })).toBeTruthy();
     expect(r.getByText("Step 1 of 4")).toBeTruthy();

@@ -4,7 +4,7 @@ import type { ArtifactServer } from "./artifact-server";
 import type { ArtifactStore } from "./artifacts";
 import type { Windows } from "./app";
 import type { ChatStore } from "./chats";
-import type { AppInfo, Chat, ChatSettings } from "./protocol";
+import type { AppInfo, ArtifactKind, Chat, ChatSettings } from "./protocol";
 import { AppError, type RunManager } from "./runs";
 import * as v from "./validate";
 
@@ -53,12 +53,55 @@ async function sideChat(ctx: RouteContext, tabId: string, body: unknown) {
   return announced(ctx, await ctx.chats.create({ tab, settings: { ...ctx.defaults, ...settings } }));
 }
 
+const MARKER = /\[\[artifact:([^\]]+)\]\]/g;
+
+/**
+ * A branch gets its own copies of the artifacts its messages show, so it keeps them when the
+ * source chat is deleted, and new versions in one chat do not change the other.
+ */
+async function branchChat(ctx: RouteContext, sourceId: string, messageId: string): Promise<Chat> {
+  const branch = await ctx.chats.branch(sourceId, messageId);
+  const referenced = new Set(branch.messages.flatMap((m) => [...(m.artifacts ?? []), ...[...m.text.matchAll(MARKER)].map((x) => x[1]!)]));
+  const copies = new Map<string, string>();
+  for (const id of referenced) {
+    if (ctx.artifacts.get(id)?.chatId === sourceId) copies.set(id, (await ctx.artifacts.copy(id, branch.id)).id);
+  }
+  if (!copies.size) return branch;
+  const swap = (id: string) => copies.get(id) ?? id;
+  return ctx.chats.update(branch.id, (c) => ({
+    ...c,
+    messages: c.messages.map((m) => ({
+      ...m,
+      text: m.text.replace(MARKER, (_, id: string) => `[[artifact:${swap(id)}]]`),
+      ...(m.artifacts ? { artifacts: m.artifacts.map(swap) } : {}),
+    })),
+  }));
+}
+
+function artifactVersion(ctx: RouteContext, id: string, query: URLSearchParams) {
+  const record = ctx.artifacts.get(id);
+  if (!record) throw new AppError("This artifact no longer exists", 404);
+  const version = query.has("version") ? Number(query.get("version")) : record.versions.length;
+  const content = Number.isInteger(version) && version >= 1 ? ctx.artifacts.content(id, version) : undefined;
+  if (!content) throw new AppError(`Version ${query.get("version")} does not exist`, 404);
+  return { record, version, content };
+}
+
+const IMAGE_EXT: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif" };
+const TEXT_EXT: Record<ArtifactKind, string> = { html: "html", markdown: "md", code: "txt", svg: "svg", csv: "csv", json: "json", image: "png" };
+
+function fileExtension(kind: ArtifactKind, language: string | undefined, mime: string | undefined): string {
+  if (kind === "image") return IMAGE_EXT[mime ?? ""] ?? "png";
+  if (kind === "code" && language && /^[\w]{1,16}$/.test(language)) return language;
+  return TEXT_EXT[kind];
+}
+
 export function exportMarkdown(ctx: RouteContext, chat: Chat): string {
   const titleOf = (id: string) => ctx.artifacts.get(id)?.title ?? "artifact";
   const lines = [`# ${chat.title}`, ""];
   for (const m of chat.messages) {
     lines.push(`**${m.role === "user" ? "You" : "Perch"}** · ${m.time.slice(0, 16).replace("T", " ")}`, "");
-    lines.push(m.text.replace(/\[\[artifact:([^\]]+)\]\]/g, (_, id: string) => `[Artifact: ${titleOf(id)}]`), "");
+    lines.push(m.text.replace(MARKER, (_, id: string) => `[Artifact: ${titleOf(id)}]`), "");
     if (m.stopped) lines.push("_Stopped_", "");
     if (m.error) lines.push(`_${m.error}_`, "");
   }
@@ -102,7 +145,7 @@ export const ROUTES: Route[] = [
   route("DELETE", "/api/chats/:id", async (ctx, [id]) => {
     chatOf(ctx, id!);
     ctx.runs.cancel(id!);
-    await ctx.runs.idle();
+    await ctx.runs.idleFor(id!);
     await ctx.artifacts.removeForChat(id!);
     await ctx.chats.remove(id!);
     ctx.runs.announceRemoved(id!);
@@ -118,7 +161,7 @@ export const ROUTES: Route[] = [
     const o = v.object(body);
     v.onlyKeys(o, ["messageId"]);
     chatOf(ctx, id!);
-    return ctx.chats.branch(id!, v.id(o.messageId, "messageId")).then(
+    return branchChat(ctx, id!, v.id(o.messageId, "messageId")).then(
       (chat) => announced(ctx, chat),
       (e: Error) => {
         throw new AppError(e.message, 404);
@@ -138,15 +181,24 @@ export const ROUTES: Route[] = [
     return ctx.runs.artifactMeta(record);
   }),
   route("GET", "/api/artifacts/:id", (ctx, [id], _, query) => {
-    const record = ctx.artifacts.get(id!);
-    if (!record) throw new AppError("This artifact no longer exists", 404);
-    const version = query.has("version") ? Number(query.get("version")) : record.versions.length;
-    const content = Number.isInteger(version) ? ctx.artifacts.content(id!, version) : undefined;
-    if (!content || version < 1) throw new AppError(`Version ${query.get("version")} does not exist`, 404);
+    const { record, version, content } = artifactVersion(ctx, id!, query);
     return {
       meta: { ...ctx.runs.artifactMeta(record), version, url: ctx.artifactServer.urlFor(record.id, version) },
       content: record.kind === "image" ? null : content.content,
     };
+  }),
+  route("GET", "/api/artifacts/:id/file", (ctx, [id], _, query) => {
+    const { record, content } = artifactVersion(ctx, id!, query);
+    const image = record.kind === "image";
+    const name = `${record.title.replace(/[^\w .-]/g, "_")}.${fileExtension(record.kind, record.language, content.mime)}`;
+    return new Response(image ? Buffer.from(content.content, "base64") : content.content, {
+      headers: {
+        "content-type": image ? content.mime ?? "application/octet-stream" : "text/plain; charset=utf-8",
+        "content-disposition": `attachment; filename="${name}"`,
+        "x-content-type-options": "nosniff",
+        "cache-control": "no-store",
+      },
+    });
   }),
   route("POST", "/api/approvals/:id", (ctx, [id], body) => {
     const o = v.object(body);
@@ -169,6 +221,22 @@ export const ROUTES: Route[] = [
     const o = v.object(body);
     v.onlyKeys(o, ["windowId"]);
     return { chat: (await ctx.chats.moveTab(id!, v.id(o.windowId, "windowId"))) ?? null };
+  }),
+  route("PUT", "/api/tabs", async (ctx, _, body) => {
+    const o = v.object(body);
+    v.onlyKeys(o, ["tabs"]);
+    if (!Array.isArray(o.tabs) || o.tabs.length > 10_000) throw new AppError('"tabs" must be a list of up to 10,000 tabs');
+    const tabs = o.tabs.map((t, i) => v.tabInfo(t, `tabs[${i}]`));
+    ctx.windows.replace(tabs);
+    const released = await ctx.chats.keepTabs(new Set(tabs.map((t) => t.id)));
+    for (const chatId of released) ctx.runs.announce(chatId);
+    return { released };
+  }),
+  route("PATCH", "/api/tabs/:id", (ctx, [id], body) => {
+    const o = v.object(body);
+    v.onlyKeys(o, ["windowId", "title", "url"]);
+    const tab = v.tabInfo({ ...o, id });
+    return { state: ctx.windows.update(tab) };
   }),
   route("DELETE", "/api/tabs/:id", async (ctx, [id]) => {
     ctx.windows.forget(id!);

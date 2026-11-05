@@ -90,6 +90,8 @@ test("the artifact origin sends a strict CSP and a sandbox", async () => {
   expect(csp).toContain("default-src 'none'");
   expect(csp).toContain("sandbox allow-scripts");
   expect(csp).not.toContain("allow-same-origin");
+  // No popups: window.open would carry data out to any site.
+  expect(csp).not.toContain("allow-popups");
   expect(csp).toContain("connect-src 'none'");
   expect(csp).toContain("frame-ancestors chrome://perch-chat");
   expect(res.headers.get("x-content-type-options")).toBe("nosniff");
@@ -126,4 +128,19 @@ test("removing a chat's artifacts deletes their files", async () => {
   await store.removeForChat(other);
   expect(readdirSync(join(dir, "artifacts")).length).toBe(before - 1);
   expect(store.forChat(other)).toEqual([]);
+});
+
+test("a copy keeps every version under a new id and chat, and survives removing the source chat", async () => {
+  const other = "22222222-2222-4222-8222-222222222222";
+  const from = "33333333-3333-4333-8333-333333333333";
+  const a = await store.save({ chatId: from, title: "Plan", kind: "markdown", content: "v1" });
+  await store.save({ chatId: from, title: "Plan", kind: "markdown", content: "v2" });
+  const copy = await store.copy(a.id, other);
+  expect(copy.id).not.toBe(a.id);
+  expect(copy).toMatchObject({ chatId: other, title: "Plan", kind: "markdown" });
+  expect(copy.versions.map((x) => x.content)).toEqual(["v1", "v2"]);
+  await store.removeForChat(from);
+  expect(store.get(a.id)).toBeUndefined();
+  expect(store.content(copy.id)?.content).toBe("v2");
+  await expect(store.copy("missing", other)).rejects.toThrow(/no artifact/);
 });

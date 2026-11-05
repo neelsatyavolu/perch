@@ -120,6 +120,13 @@ export class ChatStore {
     return chat ? this.update(chat.id, (c) => ({ ...c, tab: null })) : undefined;
   }
 
+  /** The browser's open tabs: side chats bound to any other tab go to history. Returns their ids. */
+  async keepTabs(openTabIds: ReadonlySet<string>): Promise<string[]> {
+    const stale = [...this.chats.values()].filter((c) => c.tab && !openTabIds.has(c.tab.id));
+    await Promise.all(stale.map((c) => this.update(c.id, (x) => ({ ...x, tab: null }))));
+    return stale.map((c) => c.id);
+  }
+
   private async save(chat: Chat): Promise<void> {
     if (!UUID.test(chat.id)) throw new Error("chat ids are UUIDs");
     await writePrivate(this.dir, `${chat.id}${EXT}`, await this.vault.sealJson(chat.id, chat));

@@ -2,6 +2,13 @@
  * Where Perch keeps secrets: the macOS Keychain (spec 11.1). The adapter uses the `security` tool
  * and writes the secret on its stdin, so it never appears in a process list. Tests use the
  * in-memory keychain and never touch the real one.
+ *
+ * Limit: an item created by `security add-generic-password` trusts `/usr/bin/security` in its ACL,
+ * so any process running as the user can read it with `security find-generic-password -w`
+ * without a prompt. That protects copies of the files made off this Mac, not against software
+ * already running as the user. The Perch build must create and read the key from its own signed
+ * binary through Security.framework, with an ACL or access group limited to that binary, and hand
+ * it to perchd over its private pipe (docs/design/webui-hosting.md, "Data key").
  */
 
 export interface Keychain {

@@ -81,6 +81,19 @@ export class ArtifactStore {
     });
   }
 
+  /** A copy of an artifact, every version included, owned by another chat. */
+  async copy(id: string, toChatId: string): Promise<ArtifactRecord> {
+    const source = this.records.get(id);
+    if (!source) throw new Error(`no artifact ${id}`);
+    if (!UUID.test(toChatId)) throw new Error("artifacts belong to a chat id");
+    const next: ArtifactRecord = { ...source, id: crypto.randomUUID(), chatId: toChatId, versions: [...source.versions] };
+    return this.queue.run(next.id, async () => {
+      await writePrivate(this.dir, `${next.id}${EXT}`, await this.vault.sealJson(next.id, next));
+      this.records.set(next.id, next);
+      return next;
+    });
+  }
+
   async removeForChat(chatId: string): Promise<void> {
     await Promise.all(
       this.forChat(chatId).map((r) =>

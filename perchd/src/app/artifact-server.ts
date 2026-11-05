@@ -7,6 +7,12 @@
  *
  * Addresses carry a capability, an HMAC of the artifact id and version under a per-launch secret,
  * so another local page cannot guess its way to a chat's artifacts.
+ *
+ * Limit: CSP cannot stop a page from navigating its own frame (`location = "https://..."`) or a
+ * `<meta http-equiv="refresh">`, and either can carry data out in the address. No popups are
+ * allowed, so `window.open` is closed. Inside Perch a navigation throttle on artifact frames must
+ * cancel every navigation that leaves `perch-artifact://` (docs/design/webui-hosting.md). In this
+ * development server that gap stays open.
  */
 
 import { createHmac, timingSafeEqual } from "node:crypto";
@@ -29,7 +35,7 @@ export function artifactCsp(frameAncestors: string[]): string {
     "form-action 'none'",
     "base-uri 'none'",
     `frame-ancestors ${frameAncestors.length ? frameAncestors.join(" ") : "'none'"}`,
-    "sandbox allow-scripts allow-popups",
+    "sandbox allow-scripts",
   ].join("; ");
 }
 

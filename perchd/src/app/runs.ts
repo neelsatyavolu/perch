@@ -114,6 +114,11 @@ export class RunManager {
     return true;
   }
 
+  /** Resolves when this chat's run, if one is going, has finished. Other chats' runs do not count. */
+  async idleFor(chatId: string): Promise<void> {
+    while (this.runs.has(chatId)) await this.runs.get(chatId)!.done;
+  }
+
   /** Resolves when every run that is going now has finished. */
   async idle(): Promise<void> {
     while (this.runs.size) await Promise.all([...this.runs.values()].map((r) => r.done));

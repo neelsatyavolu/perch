@@ -111,7 +111,7 @@ test("cancel stops the run, declines a waiting approval and marks the reply stop
   expect(runs.cancel(chat.id)).toBe(false);
 });
 
-test("a second message waits until the first run ends", async () => {
+test("a second message is refused while the first run is going, and accepted after", async () => {
   let release!: () => void;
   const gate = new Promise<void>((r) => (release = r));
   const runs = manager(async function* () {
@@ -194,4 +194,30 @@ test("summaries carry the run status for the perch dot", async () => {
   release();
   await runs.idle();
   expect(runs.summary(chats.get(chat.id)!)).toMatchObject({ status: "idle", preview: "ok" });
+});
+
+test("idleFor waits for one chat's run and not for another chat that is waiting at an approval", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  const runs = manager(async function* (input) {
+    if (input.task.includes("approve")) {
+      await input.approve(sendReq);
+      yield { type: "final", text: "sent" };
+      return;
+    }
+    await gate;
+    yield { type: "final", text: "done" };
+  });
+  const waiting = await chats.create({});
+  const quick = await chats.create({});
+  await runs.send(waiting.id, "approve this");
+  await waitFor(() => of("run.approval")[0]);
+  await runs.send(quick.id, "first");
+  release();
+  const outcome = await Promise.race([runs.idleFor(quick.id).then(() => "idle"), Bun.sleep(1000).then(() => "hung")]);
+  expect(outcome).toBe("idle");
+  expect(runs.status(quick.id)).toBe("idle");
+  expect(runs.status(waiting.id)).toBe("waiting");
+  runs.cancel(waiting.id);
+  await runs.idle();
 });

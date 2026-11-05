@@ -208,3 +208,82 @@ test("pages hear about renames and removals", async () => {
   await until(() => events.find((e) => e.type === "chat.removed" && e.chatId === chat.id));
   ws.close();
 });
+
+test("a tab switch reaches every page as window.active, and closing the active tab clears it", async () => {
+  const { ws, events } = await socket();
+  const side = (await (await api("/api/tabs/t20/chat", { method: "POST", json: { windowId: "w5" } })).json()) as Chat;
+  await api("/api/windows/w5/active", { method: "POST", json: { tab: { id: "t20", title: "Mail", url: "https://mail.example" } } });
+  const shown = await until(() => events.find((e) => e.type === "window.active" && e.state.windowId === "w5" && e.state.tab?.id === "t20"));
+  expect(shown.type === "window.active" && shown.state.chatId).toBe(side.id);
+  await api("/api/tabs/t20", { method: "DELETE" });
+  await until(() => events.find((e) => e.type === "window.active" && e.state.windowId === "w5" && e.state.tab === null));
+  ws.close();
+});
+
+test("deleting a chat does not wait for another chat's run", async () => {
+  const { ws, events } = await socket();
+  const waiting = (await (await api("/api/chats", { method: "POST", json: {} })).json()) as Chat;
+  const doomed = (await (await api("/api/chats", { method: "POST", json: {} })).json()) as Chat;
+  await api(`/api/chats/${waiting.id}/messages`, { method: "POST", json: { text: "This needs approval" } });
+  const ask = await until(() => events.find((e): e is Extract<AppEvent, { type: "run.approval" }> => e.type === "run.approval" && e.chatId === waiting.id));
+  const outcome = await Promise.race([api(`/api/chats/${doomed.id}`, { method: "DELETE" }).then((r) => r.status), Bun.sleep(1000).then(() => "hung")]);
+  expect(outcome).toBe(200);
+  expect(app.runs.status(waiting.id)).toBe("waiting");
+  await api(`/api/approvals/${ask.card.id}`, { method: "POST", json: { approved: false } });
+  await app.runs.idle();
+  ws.close();
+});
+
+test("a branch keeps its artifacts after the source chat is deleted", async () => {
+  const chat = (await (await api("/api/chats", { method: "POST", json: {} })).json()) as Chat;
+  await api(`/api/chats/${chat.id}/messages`, { method: "POST", json: { text: "Make me a card" } });
+  await app.runs.idle();
+  const reply = app.chats.get(chat.id)!.messages[1]!;
+  const branch = (await (await api(`/api/chats/${chat.id}/branch`, { method: "POST", json: { messageId: reply.id } })).json()) as Chat;
+  const copied = branch.messages[1]!.artifacts![0]!;
+  expect(copied).not.toBe(reply.artifacts![0]);
+  expect(branch.messages[1]!.text).toContain(`[[artifact:${copied}]]`);
+  expect((await api(`/api/chats/${chat.id}`, { method: "DELETE" })).status).toBe(200);
+  const view = await (await api(`/api/chats/${branch.id}`)).json();
+  expect(view.artifacts.map((a: { id: string; title: string }) => [a.id, a.title])).toEqual([[copied, "Card"]]);
+  expect((await (await api(`/api/artifacts/${copied}`)).json()).content).toBe("<p>hi</p>");
+});
+
+test("an image artifact downloads through the API as an attachment", async () => {
+  const chat = (await (await api("/api/chats", { method: "POST", json: {} })).json()) as Chat;
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+  const meta = await (await api(`/api/chats/${chat.id}/artifacts`, { method: "POST", json: { title: "Chart", kind: "image", mime: "image/png", content: png.toString("base64") } })).json();
+  const res = await api(`/api/artifacts/${meta.id}/file?version=1`);
+  expect(res.status).toBe(200);
+  expect(res.headers.get("content-type")).toBe("image/png");
+  expect(res.headers.get("content-disposition")).toBe('attachment; filename="Chart.png"');
+  expect(Buffer.from(await res.arrayBuffer()).equals(png)).toBe(true);
+  expect((await api(`/api/artifacts/${meta.id}/file?version=9`)).status).toBe(404);
+  expect((await fetch(`${app.server.url}/api/artifacts/${meta.id}/file`)).status).toBe(401);
+});
+
+test("the browser's open-tab list replaces the known tabs and frees side chats of tabs it does not have", async () => {
+  const kept = (await (await api("/api/tabs/t30/chat", { method: "POST", json: { windowId: "w6" } })).json()) as Chat;
+  const stale = (await (await api("/api/tabs/t31/chat", { method: "POST", json: { windowId: "w6" } })).json()) as Chat;
+  const tabs = [
+    { id: "t30", windowId: "w6", title: "Mail", url: "https://mail.example" },
+    { id: "t32", windowId: "w7", title: "Docs", url: "https://docs.example" },
+  ];
+  const res = await (await api("/api/tabs", { method: "PUT", json: { tabs } })).json();
+  expect(res.released).toEqual([stale.id]);
+  expect(app.chats.get(stale.id)!.tab).toBeNull();
+  expect(app.chats.get(kept.id)!.tab).toEqual({ id: "t30", windowId: "w6" });
+  expect(app.windows.tabs()).toEqual(tabs);
+  expect((await api("/api/tabs", { method: "PUT", json: { tabs: [{ id: "bad id!" }] } })).status).toBe(400);
+});
+
+test("a navigation updates the tab, and the window showing it hears about it", async () => {
+  const { ws, events } = await socket();
+  await api("/api/windows/w8/active", { method: "POST", json: { tab: { id: "t40", title: "Inbox", url: "https://mail.example" } } });
+  const res = await api("/api/tabs/t40", { method: "PATCH", json: { windowId: "w8", title: "Re: Lunch", url: "https://mail.example/m/1" } });
+  expect(res.status).toBe(200);
+  await until(() => events.find((e) => e.type === "window.active" && e.state.tab?.title === "Re: Lunch"));
+  expect(app.windows.tab("t40")).toEqual({ id: "t40", windowId: "w8", title: "Re: Lunch", url: "https://mail.example/m/1" });
+  expect(app.windows.state("w8").tab?.url).toBe("https://mail.example/m/1");
+  ws.close();
+});

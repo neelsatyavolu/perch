@@ -39,7 +39,7 @@ export function startServer(opts: Options): Server {
   const originAllowed = (origin: string | null) => origin === null || opts.allowedOrigins.includes(origin) || origin === selfOrigin;
   const cors = (origin: string | null): Record<string, string> =>
     origin && origin !== selfOrigin && opts.allowedOrigins.includes(origin)
-      ? { "access-control-allow-origin": origin, vary: "Origin", "access-control-allow-headers": "authorization, content-type", "access-control-allow-methods": "GET, POST, PATCH, DELETE" }
+      ? { "access-control-allow-origin": origin, vary: "Origin", "access-control-allow-headers": "authorization, content-type", "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE" }
       : {};
 
   async function handleApi(req: Request, url: URL, origin: string | null): Promise<Response> {
@@ -51,7 +51,7 @@ export function startServer(opts: Options): Server {
     if (!found) return json({ error: "not found" }, 404, headers);
     try {
       let body: unknown;
-      if (req.method === "POST" || req.method === "PATCH") {
+      if (req.method === "POST" || req.method === "PUT" || req.method === "PATCH") {
         if (Number(req.headers.get("content-length") ?? 0) > MAX_BODY) throw new AppError("The request is too large", 413);
         const raw = await req.text();
         if (raw.length > MAX_BODY) throw new AppError("The request is too large", 413);

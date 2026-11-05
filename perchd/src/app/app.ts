@@ -37,12 +37,15 @@ export type App = {
   stop(): Promise<void>;
 };
 
-/** What each window's sidebar shows: the active tab and that tab's side chat. */
+/**
+ * What each window's sidebar shows: the active tab and that tab's side chat. Every change to a
+ * window's active tab, or to that tab's title or address, reaches the pages as `window.active`.
+ */
 export class Windows {
   private active = new Map<string, TabInfo | null>();
   private known = new Map<string, TabInfo>();
 
-  constructor(private readonly chats: ChatStore) {}
+  constructor(private readonly chats: ChatStore, private readonly emit: (event: AppEvent) => void = () => {}) {}
 
   state(windowId: string): WindowState {
     const tab = this.active.get(windowId) ?? null;
@@ -57,12 +60,36 @@ export class Windows {
       if (chat && chat.tab?.windowId !== windowId) await this.chats.moveTab(tab.id, windowId);
     }
     this.active.set(windowId, tab);
-    return this.state(windowId);
+    return this.announce(windowId);
+  }
+
+  /** A tab's title or address changed. The window showing it hears about it. */
+  update(tab: TabInfo): WindowState | null {
+    this.known.set(tab.id, tab);
+    if (this.active.get(tab.windowId)?.id !== tab.id) return null;
+    this.active.set(tab.windowId, tab);
+    return this.announce(tab.windowId);
+  }
+
+  /** Every tab the browser has open now, in every window. A window whose active tab is gone shows none. */
+  replace(tabs: TabInfo[]): void {
+    const ids = new Set(tabs.map((t) => t.id));
+    this.known = new Map(tabs.map((t) => [t.id, t]));
+    for (const [w, t] of this.active) {
+      if (t && !ids.has(t.id)) {
+        this.active.set(w, null);
+        this.announce(w);
+      }
+    }
   }
 
   forget(tabId: string): void {
     this.known.delete(tabId);
-    for (const [w, t] of this.active) if (t?.id === tabId) this.active.set(w, null);
+    for (const [w, t] of this.active) {
+      if (t?.id !== tabId) continue;
+      this.active.set(w, null);
+      this.announce(w);
+    }
   }
 
   tab(tabId: string): TabInfo | undefined {
@@ -72,13 +99,19 @@ export class Windows {
   tabs(): TabInfo[] {
     return [...this.known.values()];
   }
+
+  private announce(windowId: string): WindowState {
+    const state = this.state(windowId);
+    this.emit({ type: "window.active", state });
+    return state;
+  }
 }
 
 export async function startApp(opts: AppOptions): Promise<App> {
   const chats = await ChatStore.load(join(opts.dataDir, "chats"), opts.vault);
   const artifacts = await ArtifactStore.load(join(opts.dataDir, "artifacts"), opts.vault);
-  const windows = new Windows(chats);
   let publish: (event: AppEvent) => void = () => {};
+  const windows = new Windows(chats, (event) => publish(event));
   let ownOrigin: string | null = null;
   // Perch's pages may frame artifacts; so may the development pages this server itself serves.
   const artifactServer = startArtifactServer({ store: artifacts, frameAncestors: () => [...opts.allowedOrigins, ...(opts.uiDir && ownOrigin ? [ownOrigin] : [])] });

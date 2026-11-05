@@ -7,3 +7,4 @@ dist/
 scripts/maintainer.local
 .superpowers/
 perch-build.local.json
+perchd/node_modules/

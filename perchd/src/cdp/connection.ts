@@ -15,6 +15,8 @@ export class CdpConnection {
   private readonly pending = new Map<number, Pending>();
   private readonly listeners = new Map<string, Set<Listener>>();
   private closedError: Error | null = null;
+  /** The browser's process id, when launched by us. */
+  pid?: number;
   private resolveClosed!: (error: Error | null) => void;
   readonly closed: Promise<Error | null> = new Promise((resolve) => (this.resolveClosed = resolve));
 

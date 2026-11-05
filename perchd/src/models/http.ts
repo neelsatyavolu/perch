@@ -4,7 +4,8 @@ import { ModelError } from "./types";
 
 const MAX_ATTEMPTS = 4;
 const RETRY_MS = 800;
-const IDLE_MS = 90_000;
+/** Reasoning models can think silently for minutes before the first event. */
+export const IDLE_MS = 300_000;
 
 export type Attempt = { url: string; init: RequestInit };
 
@@ -39,7 +40,7 @@ export async function openStream(
   throw failure;
 }
 
-/** Yields each SSE `data:` payload, parsed as JSON. Gives up after 90 s of silence. */
+/** Yields each SSE `data:` payload, parsed as JSON. Gives up after five minutes of silence. */
 export async function* sseJson(body: ReadableStream<Uint8Array>, signal: AbortSignal): AsyncIterable<any> {
   const reader = body.getReader();
   const decoder = new TextDecoder();

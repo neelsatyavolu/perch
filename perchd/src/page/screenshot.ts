@@ -2,41 +2,70 @@
 
 import type { Tab } from "../browser/tab";
 import type { ActionResult } from "./actions";
-import { IS_SECRET_JS } from "./secrets";
+import { captureLayout } from "./layout";
+import { isSecretField, rememberedSecrets } from "./secrets";
 
 export type Screenshot = { jpegBase64: string; width: number; height: number };
+type Box = { x: number; y: number; w: number; h: number };
 
-const COVER = `(() => {
-  const isSecret = ${IS_SECRET_JS};
-  let covered = 0;
-  for (const el of document.querySelectorAll('input')) {
-    if (!isSecret(el) || !el.value) continue;
-    const r = el.getBoundingClientRect();
-    if (r.width === 0 || r.height === 0) continue;
-    const box = document.createElement('div');
-    box.setAttribute('data-perch-mask', '');
-    box.style.cssText = 'position:fixed;z-index:2147483647;pointer-events:none;background:#000;' +
-      'left:' + r.left + 'px;top:' + r.top + 'px;width:' + r.width + 'px;height:' + r.height + 'px';
-    document.documentElement.appendChild(box);
-    covered++;
+/** Embedded payment forms (card fields in a provider's iframe): covered whole. */
+const PAYMENT_FRAME = /stripe|braintree|adyen|paypal|checkout|payment|squareup|klarna|affirm|card/i;
+
+/**
+ * Viewport boxes of every secret field, in the page, its same-process iframes and shadow roots,
+ * plus any payment iframe. Found through DOMSnapshot, so page script cannot hide them.
+ */
+async function secretBoxes(tab: Tab): Promise<Box[]> {
+  const layout = await captureLayout(tab);
+  const remembered = rememberedSecrets(tab);
+  const ids = new Set(remembered);
+  for (const [id, attrs] of layout.attrs) {
+    const isFrame = "src" in attrs || "srcdoc" in attrs || attrs.title !== undefined;
+    if (isSecretField(attrs)) {
+      ids.add(id);
+      remembered.add(id);
+    } else if (isFrame && PAYMENT_FRAME.test(`${attrs.src ?? ""} ${attrs.title ?? ""} ${attrs.name ?? ""}`)) ids.add(id);
   }
-  return covered;
+  const boxes = await Promise.all(
+    [...ids].map(async (backendNodeId) => {
+      const res = await tab.send<{ quads: number[][] }>("DOM.getContentQuads", { backendNodeId }).catch(() => ({ quads: [] as number[][] }));
+      return res.quads.map((q) => {
+        const xs = [q[0]!, q[2]!, q[4]!, q[6]!];
+        const ys = [q[1]!, q[3]!, q[5]!, q[7]!];
+        return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+      });
+    }),
+  );
+  return boxes.flat().filter((b) => b.w > 0 && b.h > 0);
+}
+
+const cover = (boxes: Box[]) => `(() => {
+  for (const b of ${JSON.stringify(boxes)}) {
+    const el = document.createElement('div');
+    el.setAttribute('data-perch-mask', '');
+    el.style.cssText = 'position:fixed;z-index:2147483647;pointer-events:none;background:#000;left:' + b.x + 'px;top:' + b.y + 'px;width:' + b.w + 'px;height:' + b.h + 'px';
+    document.documentElement.appendChild(el);
+  }
 })()`;
 const UNCOVER = "document.querySelectorAll('[data-perch-mask]').forEach((el) => el.remove())";
 
 export async function screenshot(tab: Tab, opts: { maxWidth?: number; quality?: number } = {}): Promise<Screenshot> {
-  const [width, height] = await tab.evaluate<[number, number]>("[innerWidth, innerHeight]");
-  const scale = opts.maxWidth && width > opts.maxWidth ? opts.maxWidth / width : 1;
-  await tab.evaluate(COVER);
+  const { cssVisualViewport: view } = await tab.send<{ cssVisualViewport: { pageX: number; pageY: number; clientWidth: number; clientHeight: number } }>(
+    "Page.getLayoutMetrics",
+  );
+  const scale = opts.maxWidth && view.clientWidth > opts.maxWidth ? opts.maxWidth / view.clientWidth : 1;
+  const boxes = await secretBoxes(tab);
+  if (boxes.length) await tab.evaluate(cover(boxes));
   try {
     const { data } = await tab.send<{ data: string }>("Page.captureScreenshot", {
       format: "jpeg",
       quality: opts.quality ?? 70,
-      clip: { x: 0, y: 0, width, height, scale },
+      // The clip is in page coordinates: start at the scroll position, not the top of the page.
+      clip: { x: view.pageX, y: view.pageY, width: view.clientWidth, height: view.clientHeight, scale },
     });
-    return { jpegBase64: data, width: Math.round(width * scale), height: Math.round(height * scale) };
+    return { jpegBase64: data, width: Math.round(view.clientWidth * scale), height: Math.round(view.clientHeight * scale) };
   } finally {
-    await tab.evaluate(UNCOVER).catch(() => undefined);
+    if (boxes.length) await tab.evaluate(UNCOVER).catch(() => undefined);
   }
 }
 

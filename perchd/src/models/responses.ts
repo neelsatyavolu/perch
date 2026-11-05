@@ -63,11 +63,13 @@ function build(opts: ResponsesOptions, tokens: ResponsesTokens, req: TurnRequest
 
 export function responsesModel(opts: ResponsesOptions, fetchImpl: typeof fetch = fetch): Model {
   const signIn = opts.provider === "codex" ? "Sign in to ChatGPT again in Perch's settings." : "Sign in to Grok again in Perch's settings.";
+  // Once the provider rejects reasoning effort for this model, stop sending it.
+  let effortRejected = false;
   return {
     id: `${opts.provider}:${opts.model}`,
     async *turn(req: TurnRequest, signal: AbortSignal): AsyncIterable<TurnEvent> {
       const tokens = await opts.getToken();
-      let effort = req.effort;
+      let effort = effortRejected ? undefined : req.effort;
       const body = await openStream(() => build(opts, tokens, req, effort), {
         fetch: fetchImpl,
         signal,
@@ -75,6 +77,7 @@ export function responsesModel(opts: ResponsesOptions, fetchImpl: typeof fetch =
         adjust: (text) => {
           if (!effort || !/effort|reasoning/i.test(text)) return false;
           effort = undefined;
+          effortRejected = true;
           return true;
         },
       });

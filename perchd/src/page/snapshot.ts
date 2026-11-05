@@ -15,7 +15,7 @@
 import type { Tab } from "../browser/tab";
 import { captureLayout, placement, type Layout } from "./layout";
 import { RefTable, refsFor } from "./refs";
-import { isSecretField, REDACTED } from "./secrets";
+import { isSecretField, REDACTED, rememberedSecrets } from "./secrets";
 
 export type Snapshot = { text: string; refs: RefTable; omitted: number };
 export const DEFAULT_BUDGET = 12_000;
@@ -23,12 +23,14 @@ const TEXT_LIMIT = 160;
 
 const INTERACTIVE = new Set([
   "button", "link", "textbox", "searchbox", "combobox", "checkbox", "radio", "switch", "menuitem",
-  "menuitemcheckbox", "menuitemradio", "tab", "option", "slider", "spinbutton", "listbox", "treeitem",
+  "menuitemcheckbox", "menuitemradio", "tab", "option", "slider", "spinbutton", "treeitem",
 ]);
+/** Interactive roles that can contain more interactive elements (nested tree items). */
+const NESTING = new Set(["treeitem"]);
 const VALUED = new Set(["textbox", "searchbox", "combobox", "spinbutton", "slider"]);
 const CONTAINERS = new Set([
   "navigation", "main", "search", "dialog", "alertdialog", "region", "form", "status", "alert",
-  "complementary", "contentinfo", "banner", "table", "list", "menu", "menubar", "tablist", "toolbar", "tree", "grid",
+  "complementary", "contentinfo", "banner", "table", "list", "menu", "menubar", "tablist", "toolbar", "tree", "grid", "listbox",
 ]);
 const NAME_ONLY_CONTAINERS = new Set(["region", "form", "list", "banner", "contentinfo"]);
 
@@ -48,6 +50,7 @@ type Tree = { frameId: string; nodes: Map<string, AXNode>; root: AXNode | undefi
 
 type Ctx = {
   trees: Map<string, Tree>;
+  secrets: Set<number>;
   frameOwners: Map<number, string>;
   layout: Layout;
   refs: RefTable;
@@ -64,7 +67,8 @@ export async function snapshot(tab: Tab, opts: { budget?: number; full?: boolean
   await enableAccessibility(tab);
   const [owners, layout] = await Promise.all([frameOwners(tab, frames.slice(1)), captureLayout(tab)]);
   const trees = await loadTrees(tab, frames, layout, full);
-  const ctx: Ctx = { trees, frameOwners: owners, layout, refs: refsFor(tab), full, omitted: 0 };
+  await fillMissingAttrs(tab, trees, layout);
+  const ctx: Ctx = { trees, secrets: rememberedSecrets(tab), frameOwners: owners, layout, refs: refsFor(tab), full, omitted: 0 };
   const main = trees.get(frames[0]!)!;
   const lines = main.root ? renderChildren(ctx, main, main.root, 0) : [];
   return fitBudget(lines, budget, ctx.omitted, ctx.refs);
@@ -83,7 +87,30 @@ async function enableAccessibility(tab: Tab): Promise<void> {
 }
 
 /** Leaf roles whose children add nothing to the snapshot. */
-const LEAVES = new Set([...INTERACTIVE, "heading", "StaticText", "img"]);
+const LEAVES = new Set([...[...INTERACTIVE].filter((r) => !NESTING.has(r)), "StaticText", "img"]);
+
+/**
+ * Value-bearing fields the layout pass found no attributes for (for example in frames it did not
+ * capture) get them from DOM.describeNode, so secret detection never fails open.
+ */
+async function fillMissingAttrs(tab: Tab, trees: Map<string, Tree>, layout: Layout): Promise<void> {
+  const missing: number[] = [];
+  for (const tree of trees.values()) {
+    for (const node of tree.nodes.values()) {
+      const id = node.backendDOMNodeId;
+      if (id !== undefined && VALUED.has(str(node.role)) && str(node.value) && !layout.attrs.has(id)) missing.push(id);
+    }
+  }
+  await Promise.all(
+    missing.map(async (backendNodeId) => {
+      const { node } = await tab.send<{ node: { attributes?: string[] } }>("DOM.describeNode", { backendNodeId }).catch(() => ({ node: {} as { attributes?: string[] } }));
+      const pairs = node.attributes ?? [];
+      const attrs: Record<string, string> = {};
+      for (let i = 0; i + 1 < pairs.length; i += 2) attrs[pairs[i]!.toLowerCase()] = pairs[i + 1]!;
+      layout.attrs.set(backendNodeId, attrs);
+    }),
+  );
+}
 
 /**
  * Fetches the accessibility tree level by level, opening only nodes near the viewport.
@@ -197,9 +224,10 @@ function renderNode(ctx: Ctx, tree: Tree, node: AXNode, depth: number): string[]
     return [`${pad}- iframe${name ? ` "${name}"` : ""}`, ...body];
   }
   if (INTERACTIVE.has(role) && node.backendDOMNodeId !== undefined) {
-    return [`${pad}- ${role} "${name}" [ref=${ctx.refs.refFor(node.backendDOMNodeId, tree.frameId)}]${extras(ctx, node, role)}`];
+    const line = `${pad}- ${role} "${name}" [ref=${ctx.refs.refFor(node.backendDOMNodeId, tree.frameId)}]${extras(ctx, node, role)}`;
+    return NESTING.has(role) ? [line, ...interactiveInside(ctx, tree, node, depth + 1)] : [line];
   }
-  if (role === "heading") return [`${pad}- heading "${name}" [level=${prop(node, "level") ?? 2}]`];
+  if (role === "heading") return [`${pad}- heading "${name}" [level=${prop(node, "level") ?? 2}]`, ...interactiveInside(ctx, tree, node, depth + 1)];
   if (role === "StaticText") return name ? [`${pad}- text "${name}"`] : [];
   if (role === "img") return name ? [`${pad}- img "${name}"`] : [];
   if (role === "row") return renderRow(ctx, tree, node, depth);
@@ -210,6 +238,11 @@ function renderNode(ctx: Ctx, tree: Tree, node: AXNode, depth: number): string[]
     return [`${pad}- ${role}${name ? ` "${name}"` : ""}`, ...body];
   }
   return renderChildren(ctx, tree, node, depth);
+}
+
+/** Only the lines with refs from a node's subtree: links in headings, nested tree items. */
+function interactiveInside(ctx: Ctx, tree: Tree, node: AXNode, depth: number): string[] {
+  return renderChildren(ctx, tree, node, depth).filter((line) => line.includes("[ref="));
 }
 
 /** A table row on one line: plain cells as text, interactive cells as their own lines below. */
@@ -227,9 +260,13 @@ function renderRow(ctx: Ctx, tree: Tree, row: AXNode, depth: number): string[] {
 function extras(ctx: Ctx, node: AXNode, role: string): string {
   const parts: string[] = [];
   if (VALUED.has(role)) {
-    const attrs = node.backendDOMNodeId !== undefined ? ctx.layout.attrs.get(node.backendDOMNodeId) : undefined;
+    const id = node.backendDOMNodeId;
+    const attrs = id !== undefined ? ctx.layout.attrs.get(id) : undefined;
     const value = str(node.value);
-    if (attrs && isSecretField(attrs)) {
+    if (id !== undefined && attrs && isSecretField(attrs)) ctx.secrets.add(id);
+    // Fail closed: a field with a value but no known attributes is treated as secret.
+    const secret = id !== undefined && (ctx.secrets.has(id) || (value !== "" && attrs === undefined && role !== "combobox"));
+    if (secret) {
       if (value) parts.push(`value="${REDACTED}"`);
     } else if (value) parts.push(`value="${clean(value, 200)}"`);
   }

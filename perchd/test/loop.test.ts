@@ -3,7 +3,8 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AuditLog } from "../src/agent/audit";
-import { runTask, type StepEvent } from "../src/agent/loop";
+import { runTask, type ApprovalRequest, type StepEvent } from "../src/agent/loop";
+import type { Mode } from "../src/agent/permissions";
 import { fakeModel } from "../src/models/fake";
 import type { Message, TurnEvent, TurnRequest } from "../src/models/types";
 import { setup } from "./helpers";
@@ -24,15 +25,21 @@ const refIn = (req: TurnRequest, label: string) => {
   return match[1]!;
 };
 
-async function run(script: Parameters<typeof fakeModel>[0], opts: { approve?: boolean; maxSteps?: number } = {}) {
+async function run(
+  script: Parameters<typeof fakeModel>[0],
+  opts: { approve?: boolean | ((req: ApprovalRequest) => boolean); maxSteps?: number; mode?: Mode; signal?: AbortSignal } = {},
+) {
   const model = fakeModel(script);
   const audit = new AuditLog(join(dir, `audit-${++n}.jsonl`));
   const events: StepEvent[] = [];
-  for await (const event of runTask({ model, browser: env.browser, task: "Email Maya", mode: "guard", approve: async () => opts.approve ?? false, audit, maxSteps: opts.maxSteps })) {
+  const approve = async (req: ApprovalRequest) => (typeof opts.approve === "function" ? opts.approve(req) : opts.approve ?? false);
+  for await (const event of runTask({ model, browser: env.browser, task: "Email Maya", mode: opts.mode ?? "guard", approve, audit, maxSteps: opts.maxSteps, signal: opts.signal })) {
     events.push(event);
   }
   return { events, model, audit };
 }
+
+const auditLines = (audit: AuditLog) => readFileSync(audit.path, "utf8").trim().split("\n").map((l) => JSON.parse(l));
 
 const sendScript = (afterSend: (req: TurnRequest) => TurnEvent[]) => [
   () => tool("navigate", { url: env.site.url("/mail.html") }),
@@ -108,4 +115,65 @@ test("the dev CLI refuses models it cannot sign in to yet", async () => {
 test("the dev CLI runs a task with the fake model", async () => {
   const { main } = await import("../src/cli");
   expect(await main(["run", "--model", "fake", "say hi"])).toBe(0);
+});
+
+
+test("a ref that is not in the latest snapshot is looked up live and still asks", async () => {
+  const { events } = await run([
+    () => tool("navigate", { url: env.site.url("/far.html") }),
+    () => tool("snapshot", { full: true }),
+    (req) => { const ref = refIn(req, 'button "Send"'); refs.send = ref; return tool("snapshot"); },
+    () => tool("click", { ref: refs.send! }),
+    () => say("stopped"),
+  ]);
+  expect(events.find((e) => e.type === "approval")).toMatchObject({ request: { kind: "risky", target: { role: "button", name: "Send" } } });
+});
+const refs: { send?: string } = {};
+
+test("a malformed call returns its error without asking for approval", async () => {
+  let asked = false;
+  const { events, model } = await run([() => tool("click", { ref: "e1)(" }), (req) => say(lastTool(req).content)], { approve: () => (asked = true) });
+  expect(asked).toBe(false);
+  expect(events.at(-1)).toEqual({ type: "final", text: 'ref "e1)(" is not a valid ref; refs look like e12' });
+  expect(model.requests).toHaveLength(2);
+});
+
+test("the approval request says exactly what will be sent", async () => {
+  const { events } = await run([
+    () => tool("navigate", { url: env.site.url("/far.html") }),
+    (req) => tool("type", { ref: refIn(req, 'textbox "Message"'), text: "Running ten minutes late", submit: true }),
+    () => say("ok"),
+  ]);
+  const approval = events.find((e) => e.type === "approval") as Extract<StepEvent, { type: "approval" }>;
+  expect(approval.request.summary).toContain("Running ten minutes late");
+});
+
+test("on a payment page, Continue asks even in Skip mode", async () => {
+  const { events } = await run([
+    () => tool("navigate", { url: env.site.url("/shop.html") }),
+    (req) => tool("click", { ref: refIn(req, 'button "Continue"') }),
+    () => say("ok"),
+  ], { mode: "skip" });
+  expect(events.find((e) => e.type === "approval")).toMatchObject({ request: { kind: "payment" } });
+});
+
+test("the audit log records where navigate went", async () => {
+  const { audit } = await run([() => tool("navigate", { url: env.site.url("/shop.html") }), () => say("ok")]);
+  expect(auditLines(audit)[0]).toMatchObject({ action: "navigate", site: "127.0.0.1", url: env.site.url("/shop.html") });
+});
+
+test("cancelling stops the rest of the turn's tool calls", async () => {
+  const controller = new AbortController();
+  const twoCalls = (req: TurnRequest): TurnEvent[] => [
+    { type: "tool_call", call: { id: "a", name: "click", args: { ref: refIn(req, 'button "Send"') } } },
+    { type: "tool_call", call: { id: "b", name: "navigate", args: { url: env.site.url("/shop.html") } } },
+    { type: "done" },
+  ];
+  const { events, audit } = await run([
+    () => tool("navigate", { url: env.site.url("/far.html") }),
+    () => tool("snapshot", { full: true }),
+    twoCalls,
+  ], { approve: () => { controller.abort(); return false; }, signal: controller.signal });
+  expect(events.at(-1)).toEqual({ type: "error", message: "Cancelled." });
+  expect(auditLines(audit).some((e) => e.action === "navigate" && e.url?.endsWith("/shop.html"))).toBe(false);
 });

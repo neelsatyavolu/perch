@@ -37,7 +37,7 @@ export class Browser {
     const { targetInfos } = await this.conn.send<{ targetInfos: { targetId: string; type: string; url: string; title: string }[] }>(
       "Target.getTargets",
     );
-    return targetInfos.filter((t) => t.type === "page").map((t) => ({ id: t.targetId, url: t.url, title: t.title }));
+    return targetInfos.filter((t) => t.type === "page" && !Tab.hidden.has(t.targetId)).map((t) => ({ id: t.targetId, url: t.url, title: t.title }));
   }
 
   close(): Promise<void> {

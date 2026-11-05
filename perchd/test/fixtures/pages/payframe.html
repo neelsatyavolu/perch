@@ -1,0 +1,6 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Pay</title><style>body{margin:0;font:14px system-ui}</style></head><body>
+<iframe id="f" srcdoc="<label>Card password <input id='p' type='password' style='width:200px;height:40px'></label>" style="width:400px;height:80px;border:0"></iframe>
+<secret-box></secret-box>
+<script>
+customElements.define('secret-box', class extends HTMLElement { connectedCallback() { this.attachShadow({ mode: 'open' }).innerHTML = "<input id='s' type='password' style='width:200px;height:40px'>"; } });
+</script></body></html>

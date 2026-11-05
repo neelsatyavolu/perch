@@ -9,6 +9,7 @@
 <label>Card number <input id="card" autocomplete="cc-number"></label>
 <label>Country <select id="country"><option value="us">United States</option><option value="ca">Canada</option><option value="in">India</option></select></label>
 <label><input id="remember" type="checkbox"> Remember me</label>
+<button id="show" onclick="const p = document.getElementById('password'); p.type = p.type === 'password' ? 'text' : 'password'">Show password</button>
 <button id="signin">Sign in</button>
 <button id="notice">Show notice</button>
 <p id="status" role="status"></p>

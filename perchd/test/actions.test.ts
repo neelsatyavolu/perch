@@ -129,3 +129,15 @@ test("scroll, hover, waitFor and back", async () => {
   expect(await tab.title()).toBe("Orders");
   await tab.close();
 });
+
+
+test("action notes never include a secret field's value", async () => {
+  const tab = await env.browser.newTab(env.site.url("/form.html"));
+  const snap = await snapshot(tab);
+  const ref = refOf(snap, 'textbox "Password"');
+  await type(tab, snap.refs, ref, "hunter2-secret");
+  const clicked = await click(tab, snap.refs, ref);
+  const hovered = await hover(tab, snap.refs, ref);
+  expect(JSON.stringify([clicked, hovered])).not.toContain("hunter2");
+  await tab.close();
+});

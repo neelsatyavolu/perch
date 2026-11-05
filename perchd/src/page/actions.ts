@@ -42,14 +42,36 @@ async function call<T>(tab: Tab, objectId: string, fn: string, args: unknown[] =
   return res.result.value as T;
 }
 
+/**
+ * Role and name of an element, for notes, approvals and "covered by" errors. Field values are
+ * never used as names (they may be secrets), except the label of an input button.
+ */
 const DESCRIBE = `function () {
   const el = this.nodeType === 1 ? this : this.parentElement;
-  const owner = el && el.closest('[role],dialog,button,a,input,select,textarea,label,h1,h2,h3') || el;
-  if (!owner) return 'something';
-  const role = owner.getAttribute('role') || ({ A: 'link', DIALOG: 'dialog', INPUT: 'textbox', SELECT: 'combobox', TEXTAREA: 'textbox', H1: 'heading', H2: 'heading', H3: 'heading' })[owner.tagName] || owner.tagName.toLowerCase();
-  const name = (owner.getAttribute('aria-label') || owner.innerText || owner.value || '').replace(/\\s+/g, ' ').trim().slice(0, 60);
-  return name ? role + ' "' + name + '"' : role;
+  const owner = (el && el.closest('[role],dialog,button,a,input,select,textarea,label,h1,h2,h3')) || el;
+  if (!owner) return { role: 'element', name: '' };
+  const tag = owner.tagName;
+  const type = (owner.getAttribute('type') || '').toLowerCase();
+  const role = owner.getAttribute('role') || ({ A: 'link', DIALOG: 'dialog', SELECT: 'combobox', TEXTAREA: 'textbox', H1: 'heading', H2: 'heading', H3: 'heading', BUTTON: 'button', LABEL: 'label' })[tag]
+    || (tag === 'INPUT' ? (['button', 'submit', 'reset'].includes(type) ? 'button' : type === 'checkbox' ? 'checkbox' : type === 'radio' ? 'radio' : type === 'search' ? 'searchbox' : 'textbox') : tag.toLowerCase());
+  const isField = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+  const label = owner.getAttribute('aria-label') || (owner.labels && owner.labels[0] && owner.labels[0].innerText) || owner.getAttribute('placeholder') || owner.getAttribute('title') || '';
+  const text = isField ? (['button', 'submit', 'reset'].includes(type) ? owner.value : '') : owner.innerText;
+  return { role, name: (label || text || '').replace(/\\s+/g, ' ').trim().slice(0, 80) };
 }`;
+
+type Described = { role: string; name: string };
+const show = (d: Described) => (d.name ? `${d.role} "${d.name}"` : d.role);
+
+/** Role and name of the element behind a ref, read live from the page. */
+export async function describeRef(tab: Tab, refs: RefTable, ref: string): Promise<Described | undefined> {
+  try {
+    const node = await liveNode(tab, refs, ref);
+    return await call<Described>(tab, node.objectId, DESCRIBE);
+  } catch {
+    return undefined;
+  }
+}
 
 /** The centre of an element's first visible box, after scrolling it into view. */
 async function centre(tab: Tab, backendNodeId: number): Promise<{ x: number; y: number }> {
@@ -67,12 +89,14 @@ async function assertHittable(tab: Tab, target: { objectId: string }, point: { x
   if (!object.objectId) return;
   const inside = await tab.send<{ result: { value?: boolean } }>("Runtime.callFunctionOn", {
     objectId: target.objectId,
-    functionDeclaration: "function (other) { for (let n = other; n; n = n.parentNode || n.host) { if (n === this) return true; } return false; }",
+    // The hit counts if it is the target, inside it, or inside a label for it (custom checkboxes).
+    functionDeclaration:
+      "function (other) { for (let n = other; n; n = n.parentNode || n.host) { if (n === this) return true; if (n.tagName === 'LABEL' && n.control === this) return true; } return false; }",
     arguments: [{ objectId: object.objectId }],
     returnByValue: true,
   });
   if (inside.result.value) return;
-  throw new Error(`covered by ${await call<string>(tab, object.objectId, DESCRIBE)}`);
+  throw new Error(`covered by ${show(await call<Described>(tab, object.objectId, DESCRIBE))}`);
 }
 
 async function mouse(tab: Tab, type: string, point: { x: number; y: number }, extra: object = {}): Promise<void> {
@@ -84,7 +108,7 @@ export function click(tab: Tab, refs: RefTable, ref: string): Promise<ActionResu
     const node = await liveNode(tab, refs, ref);
     const point = await centre(tab, node.backendNodeId);
     await assertHittable(tab, node, point);
-    const label = await call<string>(tab, node.objectId, DESCRIBE);
+    const label = show(await call<Described>(tab, node.objectId, DESCRIBE));
     await mouse(tab, "mouseMoved", point);
     await mouse(tab, "mousePressed", point, { button: "left", buttons: 1, clickCount: 1 });
     await mouse(tab, "mouseReleased", point, { button: "left", buttons: 0, clickCount: 1 });
@@ -96,7 +120,7 @@ export function hover(tab: Tab, refs: RefTable, ref: string): Promise<ActionResu
   return attempt(async () => {
     const node = await liveNode(tab, refs, ref);
     await mouse(tab, "mouseMoved", await centre(tab, node.backendNodeId));
-    return ok(`hovered ${await call<string>(tab, node.objectId, DESCRIBE)}`);
+    return ok(`hovered ${show(await call<Described>(tab, node.objectId, DESCRIBE))}`);
   });
 }
 
@@ -141,9 +165,9 @@ export function press(tab: Tab, combo: string): Promise<ActionResult> {
   return attempt(async () => {
     const parsed = parseKey(combo);
     if (!parsed) return fail(`unknown key "${combo}"`);
-    const { def, modifiers } = parsed;
+    const { def, modifiers, commands } = parsed;
     const base = { key: def.key, code: def.code, windowsVirtualKeyCode: def.keyCode, modifiers };
-    await tab.send("Input.dispatchKeyEvent", { type: def.text ? "keyDown" : "rawKeyDown", ...base, text: def.text });
+    await tab.send("Input.dispatchKeyEvent", { type: def.text ? "keyDown" : "rawKeyDown", ...base, text: def.text, ...(commands ? { commands } : {}) });
     await tab.send("Input.dispatchKeyEvent", { type: "keyUp", ...base });
     return ok(`pressed ${combo}`);
   });

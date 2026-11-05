@@ -7,6 +7,8 @@ export type AuditEntry = {
   time: string;
   tab: string;
   site: string;
+  /** Where navigate and open_tab went. */
+  url?: string;
   action: string;
   detail?: string;
   client: string;

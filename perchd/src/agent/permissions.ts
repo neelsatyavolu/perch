@@ -4,8 +4,9 @@
  *
  *   read     looking around: navigate, snapshot, scroll, read-only REPL
  *   change   ordinary edits: typing, choosing, clicking "Next"
- *   risky    sends, posts, deletes, shares, uploads, Enter in a text field, anything unseen
- *   payment  money and passwords: always asks, even in Skip confirmation
+ *   risky    sends, posts, deletes, shares, uploads, Enter in a text field, an element not in the last snapshot
+ *   payment  money and passwords, and anything that moves a checkout or password form forward:
+ *            always asks, even in Skip confirmation
  */
 
 import type { ToolCall } from "../models/types";
@@ -16,30 +17,45 @@ export type SiteRule = "allow" | "ask" | "never";
 export type Decision = "run" | "ask" | "block";
 export type Target = { role: string; name: string };
 
+/** What the page around an action looks like: a checkout, or a password change. */
+export type PageContext = { payment?: boolean; passwordChange?: boolean };
+
 const READ_TOOLS = new Set(["navigate", "snapshot", "screenshot", "scroll", "hover", "wait_for", "back", "tabs", "open_tab", "switch_tab", "done"]);
-const CHANGE_TOOLS = new Set(["click", "type", "select", "press"]);
 
 const RISKY = /\b(send|post|publish|submit|delete|remove|discard|share|invite|transfer|confirm|sign up|unsubscribe|reply|forward|archive|trash)\b/i;
-const PAYMENT = /\b(pay|buy|place order|purchase|checkout|check out|subscribe|book now|confirm payment|donate|change password|update password|reset password)\b/i;
+const PAYMENT =
+  /\b(pay|buy|purchase|checkout|check out|place (your )?order|submit (your )?order|complete (your )?(order|purchase|booking|reservation|payment|checkout)|reserve|request to book|book( now| it)?|confirm (and|&) pay|confirm (your )?(booking|purchase|payment|order|reservation)|subscribe|donate|start (your )?(free )?trial|upgrade)\b/i;
 const MONEY = /[$€£¥₹]\s?\d|\d\s?(usd|eur|gbp|inr|jpy)\b/i;
-const REPL_WRITES = /\.(click|submit|requestSubmit|dispatchEvent|focus|remove|append\w*|insert\w*|set\w*)\s*\(|\.(value|checked|innerHTML|textContent)\s*=|\bfetch\s*\(|XMLHttpRequest|sendBeacon|\blocation\b\s*(\.\w+\s*)?=|\bopen\s*\(|execCommand/;
+const PASSWORD = /\b(change|update|reset|save|set) (your |the )?password\b/i;
+/** Buttons that move a checkout or a password form forward. */
+const ADVANCES = /\b(continue|next|confirm|complete|submit|save|update|done|apply|finish|proceed|place|order|pay|book|reserve|change|set|verify)\b/i;
 const SEARCHY = /search|find|filter|lookup/i;
 
-export function classify(call: ToolCall, target?: Target): Kind {
+export function classify(call: ToolCall, target?: Target, page: PageContext = {}): Kind {
   const name = target?.name ?? "";
+  const guarded = Boolean(page.payment || page.passwordChange);
   if (READ_TOOLS.has(call.name)) return "read";
-  if (call.name === "repl") return REPL_WRITES.test(String(call.args.code ?? "")) ? "risky" : "read";
-  if (call.name === "upload" || call.name === "click_at" || call.name === "type_text") return "risky";
-  if (!CHANGE_TOOLS.has(call.name)) return "risky";
-  if (call.name === "click" || (call.name === "press" && isEnter(call))) {
-    if (PAYMENT.test(name) || MONEY.test(name)) return "payment";
-    if (call.name === "click" && RISKY.test(name)) return "risky";
-    if (call.name === "press") {
-      const searchField = target?.role === "searchbox" || target?.role === "combobox" || SEARCHY.test(name);
-      return searchField ? "change" : "risky";
-    }
+  // The REPL runs in a read-only sandbox (src/page/repl.ts); writes go through the other tools.
+  if (call.name === "repl") return "read";
+  if (call.name === "upload") return "risky";
+  if (call.name === "click_at" || call.name === "type_text") return guarded ? "payment" : "risky";
+  if (call.name === "select" || (call.name === "type" && !call.args.submit)) return "change";
+  if (call.name === "press" && !isEnter(call)) return "change";
+  if (call.name === "press" || call.name === "type") {
+    // Enter, or typing with submit: it sends whatever form the field is in.
+    if (guarded) return "payment";
+    const searchField = target?.role === "searchbox" || target?.role === "combobox" || SEARCHY.test(name);
+    return searchField ? "change" : "risky";
   }
-  return "change";
+  if (call.name === "click" || call.name === "hover") {
+    if (call.name === "hover") return "read";
+    if (!target) return "risky";
+    if (PAYMENT.test(name) || MONEY.test(name) || PASSWORD.test(name)) return "payment";
+    if (guarded && ADVANCES.test(name)) return "payment";
+    if (RISKY.test(name)) return "risky";
+    return "change";
+  }
+  return "risky";
 }
 
 function isEnter(call: ToolCall): boolean {

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { describeTarget, newToolContext, runTool, TOOL_SPECS } from "../src/agent/tools";
+import { checkCall, describeTarget, newToolContext, runTool, TOOL_SPECS } from "../src/agent/tools";
 import { setup } from "./helpers";
 
 let env: Awaited<ReturnType<typeof setup>>;
@@ -27,6 +27,12 @@ test("bad calls come back as plain errors", async () => {
   expect(await runTool(ctx, call("click", { ref: 12 }))).toMatchObject({ isError: true, content: 'argument "ref" must be a string' });
   expect(await runTool(ctx, call("click", { ref: "e1", color: "red" }))).toMatchObject({ isError: true, content: 'unexpected argument "color"' });
   expect(await runTool(ctx, call("click", { __unparsed: "{ref:" }))).toMatchObject({ isError: true, content: 'the arguments for "click" were not valid JSON' });
+  expect(await runTool(ctx, call("click", { ref: "e1)(" }))).toMatchObject({ isError: true, content: 'ref "e1)(" is not a valid ref; refs look like e12' });
+  for (const url of ["javascript:alert(document.cookie)", "data:text/html,<script>1</script>", "file:///etc/passwd", "chrome://settings", "JavaScript:void 0"]) {
+    expect(await runTool(ctx, call("navigate", { url }))).toMatchObject({ isError: true });
+    expect(await runTool(ctx, call("open_tab", { url }))).toMatchObject({ isError: true });
+  }
+  expect(checkCall(call("navigate", { url: "javascript:1" }))).toBe("Perch's agent only opens http and https pages");
   await ctx.close();
 });
 

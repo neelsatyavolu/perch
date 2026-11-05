@@ -3,12 +3,12 @@
 import type { Browser } from "../browser/browser";
 import { Tab } from "../browser/tab";
 import type { ToolCall } from "../models/types";
-import { back, click, hover, press, scroll, select, type, upload, waitFor, type ActionResult } from "../page/actions";
+import { back, click, describeRef, hover, press, scroll, select, type, upload, waitFor, type ActionResult } from "../page/actions";
 import { refsFor } from "../page/refs";
 import { repl } from "../page/repl";
 import { clickAt, screenshot } from "../page/screenshot";
 import { snapshot } from "../page/snapshot";
-import type { Target } from "./permissions";
+import type { PageContext, Target } from "./permissions";
 import { TOOL_SPECS, validate } from "./tool-specs";
 
 export { TOOL_SPECS };
@@ -47,19 +47,30 @@ async function currentTab(ctx: ToolContext): Promise<Tab> {
   return ctx.tab;
 }
 
+/** Adds https:// to bare hosts; anything with another scheme is left for checkCall to refuse. */
 function normalizeUrl(url: string): string {
   const trimmed = url.trim();
-  return /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) || /^(about|data|javascript):/i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  return /^[a-z][a-z0-9+.-]*:/i.test(trimmed) && !/^(localhost|[a-z0-9-]+(\.[a-z0-9-]+)+):\d+(\/|$)/i.test(trimmed) ? trimmed : `https://${trimmed}`;
 }
 
-/** Waits briefly for the page to react, and for any navigation the action started. */
-async function settle(tab: Tab): Promise<void> {
-  await Bun.sleep(150);
-  for (let i = 0; i < 50; i++) {
-    const state = await tab.evaluate<string>("document.readyState").catch(() => "loading");
-    if (state === "complete") return;
-    await Bun.sleep(100);
+const WEB_URL = /^https?:\/\//i;
+const REF = /^e\d{1,7}$/;
+
+/**
+ * Problems with a call that mean it must not run: schema errors, malformed refs, and URLs that
+ * are not web pages. javascript: and data: run script with no approval, and file: reads local
+ * files into the model's context, so the agent only opens http and https (and about:blank).
+ */
+export function checkCall(call: ToolCall): string | null {
+  const problem = validate(call.name, call.args);
+  if (problem) return problem;
+  const ref = call.args.ref;
+  if (typeof ref === "string" && !REF.test(ref)) return `ref "${ref}" is not a valid ref; refs look like e12`;
+  if (call.name === "navigate" || call.name === "open_tab") {
+    const url = normalizeUrl(String(call.args.url));
+    if (url !== "about:blank" && !WEB_URL.test(url)) return "Perch's agent only opens http and https pages";
   }
+  return null;
 }
 
 async function page(ctx: ToolContext, tab: Tab, full = false): Promise<string> {
@@ -70,9 +81,10 @@ async function page(ctx: ToolContext, tab: Tab, full = false): Promise<string> {
 }
 
 async function withPage(ctx: ToolContext, tab: Tab, result: ActionResult): Promise<ToolResult> {
-  if (!result.ok) return { content: result.error, isError: true };
-  await settle(tab);
-  return { content: `${result.note}\n\n${await page(ctx, tab)}` };
+  if (!result.ok) return { content: [result.error, ...tab.takeDialogNotes()].join("\n"), isError: true };
+  await tab.settle();
+  const notes = tab.takeDialogNotes();
+  return { content: `${[result.note, ...notes].join("\n")}\n\n${await page(ctx, tab)}` };
 }
 
 /** Role and name of the element a ref-based call targets, from the last snapshot of the tab. */
@@ -80,8 +92,51 @@ export function describeTarget(ctx: ToolContext, call: ToolCall): Target | undef
   const ref = call.args.ref;
   const text = ctx.tab ? ctx.lastSnapshot.get(ctx.tab) : undefined;
   if (typeof ref !== "string" || !text) return undefined;
+  if (!REF.test(ref)) return undefined;
   const match = text.match(new RegExp(`- (\\S+) "((?:[^"\\\\]|\\\\.)*)" \\[ref=${ref}\\]`));
   return match ? { role: match[1]!, name: match[2]!.replace(/\\(.)/g, "$1") } : undefined;
+}
+
+/** The target of a ref the last snapshot did not show, read live from the page. */
+export async function liveTarget(ctx: ToolContext, call: ToolCall): Promise<Target | undefined> {
+  const ref = call.args.ref;
+  if (!ctx.tab || typeof ref !== "string" || !REF.test(ref)) return undefined;
+  return describeRef(ctx.tab, refsFor(ctx.tab), ref);
+}
+
+const PAGE_CONTEXT_JS = `(() => {
+  const words = (el) => [el.name, el.id, el.getAttribute('aria-label'), el.placeholder, el.getAttribute('autocomplete')].join(' ');
+  const inputs = [...document.querySelectorAll('input')];
+  const card = inputs.some((el) => /(^|\\s)cc-/i.test(el.getAttribute('autocomplete') || '') || /card.?number|cardnumber|\\bcvc\\b|\\bcvv\\b|security code|expiration/i.test(words(el)));
+  const payFrame = [...document.querySelectorAll('iframe')].some((f) => /stripe|braintree|adyen|paypal|checkout|payment|squareup|klarna|affirm|card/i.test([f.src, f.title, f.name].join(' ')));
+  const checkoutUrl = /checkout|payment|\\/pay(\\/|$)|\\/order\\/(review|confirm)|\\/cart\\/confirm|\\/booking\\/(confirm|review|payment)/i.test(location.pathname);
+  const newPassword = inputs.some((el) => /new-password/i.test(el.getAttribute('autocomplete') || '') || (el.type === 'password' && /new|confirm/i.test(words(el))));
+  return { payment: card || payFrame || checkoutUrl, passwordChange: newPassword };
+})()`;
+
+/** Whether the current page is a checkout or a password change; both make more actions ask. */
+export async function pageContext(ctx: ToolContext): Promise<PageContext> {
+  if (!ctx.tab) return {};
+  return ctx.tab.evaluate<PageContext>(PAGE_CONTEXT_JS).catch(() => ({}));
+}
+
+/** What an approval card shows besides the target: the text, files or form values that go out. */
+export async function approvalDetail(ctx: ToolContext, call: ToolCall): Promise<string> {
+  const a = call.args;
+  if (call.name === "type") return `"${String(a.text)}"${a.submit ? " and press Enter" : ""}`;
+  if (call.name === "upload") return (a.paths as string[]).join(", ");
+  if (call.name === "select") return `"${String(a.value)}"`;
+  if (call.name !== "click" || !ctx.tab || typeof a.ref !== "string" || !REF.test(a.ref)) return "";
+  const fields = await ctx.tab
+    .evaluate<string>(`(() => {
+      const isSecret = (el) => el.type === 'password' || /(^|\\s)(cc-|one-time-code|current-password|new-password)/i.test(el.getAttribute('autocomplete') || '');
+      const form = document.activeElement && document.activeElement.form || document.forms[0];
+      if (!form) return '';
+      return [...form.elements].filter((el) => el.name && el.type !== 'hidden' && el.type !== 'submit' && el.value)
+        .slice(0, 8).map((el) => (el.labels && el.labels[0] ? el.labels[0].innerText.trim() : el.name) + ': ' + (isSecret(el) ? '••••' : String(el.value).slice(0, 120))).join('; ');
+    })()`)
+    .catch(() => "");
+  return fields ? `with ${fields}` : "";
 }
 
 /** For a key press: the focused element, which is what the key acts on. */
@@ -101,7 +156,7 @@ export async function focusedTarget(ctx: ToolContext): Promise<Target | undefine
 }
 
 export async function runTool(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
-  const problem = validate(call.name, call.args);
+  const problem = checkCall(call);
   if (problem) return { content: problem, isError: true };
   try {
     return await dispatch(ctx, call);

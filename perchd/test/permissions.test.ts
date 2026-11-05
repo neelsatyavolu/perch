@@ -27,11 +27,33 @@ test.each([
   [call("press", { key: "ArrowDown" }), { role: "textbox", name: "Message" }, "change"],
   [call("click_at", { x: 10, y: 10 }), undefined, "risky"],
   [call("repl", { code: "return document.title" }), undefined, "read"],
-  [call("repl", { code: "document.querySelector('#send').click()" }), undefined, "risky"],
-  [call("repl", { code: "fetch('/api/delete', { method: 'POST' })" }), undefined, "risky"],
+  [call("repl", { code: "document.querySelector('#send').click()" }), undefined, "read"],
   [call("mystery_tool"), undefined, "risky"],
+  [call("click", { ref: "e1" }), { role: "button", name: "Place your order" }, "payment"],
+  [call("click", { ref: "e1" }), { role: "button", name: "Complete booking" }, "payment"],
+  [call("click", { ref: "e1" }), { role: "button", name: "Reserve" }, "payment"],
+  [call("click", { ref: "e1" }), { role: "button", name: "Request to book" }, "payment"],
+  [call("click", { ref: "e1" }), { role: "button", name: "Submit order" }, "payment"],
+  [call("click", { ref: "e1" }), { role: "link", name: "Facebook" }, "change"],
+  [call("click", { ref: "e1" }), undefined, "risky"],
+  [call("type", { ref: "e2", text: "Running late", submit: true }), { role: "textbox", name: "Message" }, "risky"],
+  [call("type", { ref: "e2", text: "perch", submit: true }), { role: "searchbox", name: "Search mail" }, "change"],
 ] as const)("classify %o on %o is %s", (c, target, kind) => {
   expect(classify(c, target)).toBe(kind as Kind);
+});
+
+test.each([
+  [call("click", { ref: "e1" }), { role: "button", name: "Continue" }, { payment: true }, "payment"],
+  [call("click", { ref: "e1" }), { role: "button", name: "Next" }, { payment: true }, "payment"],
+  [call("click", { ref: "e1" }), { role: "link", name: "Shipping policy" }, { payment: true }, "change"],
+  [call("click_at", { x: 1, y: 1 }), undefined, { payment: true }, "payment"],
+  [call("press", { key: "Enter" }), { role: "iframe", name: "" }, { payment: true }, "payment"],
+  [call("type", { ref: "e3", text: "123", submit: true }), { role: "textbox", name: "Security code" }, { payment: true }, "payment"],
+  [call("click", { ref: "e1" }), { role: "button", name: "Save" }, { passwordChange: true }, "payment"],
+  [call("click", { ref: "e1" }), { role: "button", name: "Update" }, { passwordChange: true }, "payment"],
+  [call("click", { ref: "e1" }), { role: "button", name: "Save" }, {}, "change"],
+] as const)("in page context, classify %o on %o with %o is %s", (c, target, page, kind) => {
+  expect(classify(c, target, page)).toBe(kind as Kind);
 });
 
 const MODES: Mode[] = ["ask", "guard", "skip"];

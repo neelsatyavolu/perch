@@ -13,7 +13,8 @@ export type Layout = {
   viewHeight: number;
 };
 
-const FIELD_TAGS = new Set(["INPUT", "TEXTAREA", "SELECT"]);
+/** Elements whose attributes are kept: form fields (secret detection) and iframes (payment frames). */
+const FIELD_TAGS = new Set(["INPUT", "TEXTAREA", "SELECT", "IFRAME"]);
 const ROOT_TAGS = new Set(["#document", "HTML", "BODY"]);
 
 type Doc = {

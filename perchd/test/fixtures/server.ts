@@ -10,6 +10,7 @@ export function startFixtures(): { url: (path: string) => string; stop: () => vo
     async fetch(req) {
       const { pathname } = new URL(req.url);
       if (pathname === "/redirect") return Response.redirect("/mail.html", 302);
+      if (pathname === "/slow-page") return Bun.sleep(800).then(() => new Response(Bun.file(join(PAGES, "shop.html")), { headers: { "content-type": "text/html; charset=utf-8" } }));
       if (pathname === "/slow") return new Promise((resolve) => setTimeout(() => resolve(new Response("<title>Slow</title>", { headers: { "content-type": "text/html" } })), 2000));
       const file = Bun.file(join(PAGES, pathname.replace(/^\/+/, "") || "mail.html"));
       if (!(await file.exists()) || pathname.includes("..")) return new Response("not found", { status: 404 });

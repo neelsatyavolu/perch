@@ -43,6 +43,8 @@ export function anthropicModel(opts: { model: string; apiKey: () => Promise<stri
         system: req.system,
         messages: toAnthropicMessages(req.messages),
         tools: req.tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.parameters })),
+        // One action at a time, as with the Responses adapter: each result is checked before the next.
+        ...(req.tools.length ? { tool_choice: { type: "auto", disable_parallel_tool_use: true } } : {}),
         stream: true,
       };
       const stream = await openStream(

@@ -5,7 +5,7 @@ import type { Effort, Message, Model, ToolCall, TurnRequest } from "../models/ty
 import type { AuditLog } from "./audit";
 import { classify, needsApproval, type Kind, type Mode, type SiteRule, type Target } from "./permissions";
 import { systemPrompt } from "./prompt";
-import { describeTarget, focusedTarget, newToolContext, runTool, TOOL_SPECS, type ToolContext } from "./tools";
+import { approvalDetail, checkCall, describeTarget, focusedTarget, liveTarget, newToolContext, pageContext, runTool, TOOL_SPECS, type ToolContext } from "./tools";
 
 export type ApprovalRequest = { call: ToolCall; target?: Target; kind: Kind; site: string; summary: string };
 
@@ -61,7 +61,15 @@ export async function* runTask(opts: TaskOptions): AsyncIterable<StepEvent> {
         return;
       }
       for (const call of calls) {
+        if (signal.aborted) {
+          yield { type: "error", message: "Cancelled." };
+          return;
+        }
         const outcome = yield* act(ctx, opts, call);
+        if (signal.aborted) {
+          yield { type: "error", message: "Cancelled." };
+          return;
+        }
         if (outcome.final !== undefined) {
           yield { type: "final", text: outcome.final };
           return;
@@ -77,14 +85,23 @@ export async function* runTask(opts: TaskOptions): AsyncIterable<StepEvent> {
 
 type Outcome = { final?: string; message: Extract<Message, { role: "tool" }> };
 
+const READS = new Set(["navigate", "snapshot", "screenshot", "scroll", "hover", "wait_for", "back", "tabs", "open_tab", "switch_tab", "done", "repl"]);
+
 async function* act(ctx: ToolContext, opts: TaskOptions, call: ToolCall): AsyncGenerator<StepEvent, Outcome> {
-  const target = call.name === "press" ? await focusedTarget(ctx) : describeTarget(ctx, call);
-  const kind = classify(call, target);
-  const site = await currentHost(ctx);
-  const decision = needsApproval(opts.mode, kind, opts.siteRule?.(site));
-  const detail = target ? `${target.role} "${target.name}"` : summarizeArgs(call);
-  const entry = { time: new Date().toISOString(), tab: ctx.tab?.id ?? "", site, action: call.name, detail, client: opts.client ?? "sidebar" };
   const reply = (content: string, image?: string): Outcome => ({ message: { role: "tool", callId: call.id, name: call.name, content, image } });
+  // A call that cannot run is answered at once: no approval prompt for something that would fail.
+  const problem = checkCall(call);
+  if (problem) return reply(problem);
+
+  const target = call.name === "press" ? await focusedTarget(ctx) : describeTarget(ctx, call) ?? (await liveTarget(ctx, call));
+  const page = READS.has(call.name) ? {} : await pageContext(ctx);
+  const kind = classify(call, target, page);
+  const destination = call.name === "navigate" || call.name === "open_tab" ? String(call.args.url) : undefined;
+  const site = destination ? hostOf(destination) : await currentHost(ctx);
+  const decision = needsApproval(opts.mode, kind, opts.siteRule?.(site));
+  const what = target ? `${target.role} "${target.name}"` : summarizeArgs(call);
+  const detail = kind === "read" ? what : [what, await approvalDetail(ctx, call)].filter(Boolean).join(" ");
+  const entry = { time: new Date().toISOString(), tab: ctx.tab?.id ?? "", site, url: destination, action: call.name, detail, client: opts.client ?? "sidebar" };
 
   if (decision === "block") {
     await opts.audit.append({ ...entry, approved: null, result: "blocked" });
@@ -105,6 +122,14 @@ async function* act(ctx: ToolContext, opts: TaskOptions, call: ToolCall): AsyncG
   if (result.done) return { final: result.content, message: reply(result.content).message };
   if (!result.isError) yield { type: "step", label: label(call, target, site) };
   return reply(result.content, result.image);
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(/^[a-z]+:/i.test(url) ? url : `https://${url}`).hostname;
+  } catch {
+    return url;
+  }
 }
 
 async function currentHost(ctx: ToolContext): Promise<string> {

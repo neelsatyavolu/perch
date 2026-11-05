@@ -5,6 +5,8 @@ import type { CdpConnection } from "../cdp/connection";
 export type WaitUntil = "load" | "networkidle";
 const LIFECYCLE: Record<WaitUntil, string> = { load: "load", networkidle: "networkIdle" };
 const NAV_TIMEOUT_MS = 30_000;
+const COMMAND_TIMEOUT_MS = 30_000;
+const SETTLE_LIMIT_MS = 10_000;
 
 export class TabClosedError extends Error {
   constructor() {
@@ -12,14 +14,46 @@ export class TabClosedError extends Error {
   }
 }
 
+export class PageTimeoutError extends Error {
+  constructor() {
+    super("the page stopped responding");
+  }
+}
+
 export class Tab {
+  /** Perch's own scratch tabs (the REPL sandbox), left out of tab lists. */
+  static readonly hidden = new Set<string>();
+  /** How long one CDP command may take before the page counts as frozen. */
+  timeoutMs = COMMAND_TIMEOUT_MS;
   private closedReject: ((error: Error) => void)[] = [];
   private isClosed = false;
   private readonly lifecycle: { loaderId: string; name: string }[] = [];
+  private dialogNotes: string[] = [];
+  private mainFrameId = "";
+  private navigationPending = false;
+  private loading = false;
 
   private constructor(readonly conn: CdpConnection, readonly id: string, readonly session: string) {
     conn.on("Page.lifecycleEvent", (p: { loaderId: string; name: string; frameId: string }, sid) => {
       if (sid === session) this.lifecycle.push({ loaderId: p.loaderId, name: p.name });
+    });
+    // Dialogs block the page until answered, so answer at once and tell the model what happened.
+    conn.on("Page.javascriptDialogOpening", (p: { type: string; message: string }, sid) => {
+      if (sid !== session) return;
+      const accept = p.type === "alert" || p.type === "beforeunload";
+      const kind = p.type === "alert" ? "an alert" : p.type === "beforeunload" ? "a leave-page prompt" : `a ${p.type} dialog`;
+      this.dialogNotes.push(`The page showed ${kind}: "${p.message}". Perch ${accept ? "closed" : "dismissed"} it.`);
+      void conn.send("Page.handleJavaScriptDialog", { accept }, session).catch(() => undefined);
+    });
+    const main = (frameId: string) => frameId === this.mainFrameId;
+    conn.on("Page.frameRequestedNavigation", (p: { frameId: string }, sid) => {
+      if (sid === session && main(p.frameId)) this.navigationPending = true;
+    });
+    conn.on("Page.frameStartedLoading", (p: { frameId: string }, sid) => {
+      if (sid === session && main(p.frameId)) [this.loading, this.navigationPending] = [true, false];
+    });
+    conn.on("Page.frameStoppedLoading", (p: { frameId: string }, sid) => {
+      if (sid === session && main(p.frameId)) [this.loading, this.navigationPending] = [false, false];
     });
     const markClosed = () => {
       if (this.isClosed) return;
@@ -38,6 +72,8 @@ export class Tab {
       tab.send("Runtime.enable"),
       tab.send("Page.setLifecycleEventsEnabled", { enabled: true }),
     ]);
+    const { frameTree } = await tab.send<{ frameTree: { frame: { id: string } } }>("Page.getFrameTree");
+    tab.mainFrameId = frameTree.frame.id;
     return tab;
   }
 
@@ -45,14 +81,43 @@ export class Tab {
     return this.isClosed;
   }
 
-  /** Sends a CDP command on this tab's session; fails with "tab closed" once the tab is gone. */
+  /**
+   * Sends a CDP command on this tab's session. Fails with "tab closed" once the tab is gone, and
+   * with "the page stopped responding" when it takes longer than timeoutMs.
+   */
   async send<T = any>(method: string, params: object = {}): Promise<T> {
     if (this.isClosed) throw new TabClosedError();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new PageTimeoutError()), this.timeoutMs);
+    });
     try {
-      return await this.whileOpen(this.conn.send<T>(method, params, this.session));
+      return await Promise.race([this.whileOpen(this.conn.send<T>(method, params, this.session)), timeout]);
     } catch (error) {
+      if (error instanceof PageTimeoutError) throw error;
       if (this.isClosed || /session|target closed|No target/i.test(String(error))) throw new TabClosedError();
       throw error;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** Notes about dialogs the page showed since the last call; each note is returned once. */
+  takeDialogNotes(): string[] {
+    const notes = this.dialogNotes;
+    this.dialogNotes = [];
+    return notes;
+  }
+
+  /** After an action: waits for any navigation it started to finish loading, up to 10 s. */
+  async settle(): Promise<void> {
+    await Bun.sleep(150);
+    const started = Date.now();
+    while ((this.navigationPending || this.loading) && Date.now() - started < SETTLE_LIMIT_MS && !this.isClosed) await Bun.sleep(50);
+    while (Date.now() - started < SETTLE_LIMIT_MS) {
+      const state = await this.evaluate<string>("document.readyState").catch(() => "loading");
+      if (state === "complete" || this.isClosed) return;
+      await Bun.sleep(100);
     }
   }
 

@@ -58,7 +58,10 @@ export async function launchChromium(opts: LaunchOptions): Promise<CdpConnection
   RETIRED.push(child, toBrowser, fromBrowser);
   const exited = new Promise<void>((resolve) => child.once("exit", () => resolve()));
   const conn = new CdpConnection(
-    (message) => toBrowser.write(encode(message)),
+    (message) => {
+      if (toBrowser.destroyed || !toBrowser.writable) throw new Error("browser closed");
+      toBrowser.write(encode(message));
+    },
     async () => {
       try {
         await Promise.race([conn.send("Browser.close"), exited]);
@@ -70,6 +73,10 @@ export async function launchChromium(opts: LaunchOptions): Promise<CdpConnection
       clearTimeout(timer);
     },
   );
+  conn.pid = child.pid;
+  const onStreamError = (error: Error) => conn.fail(new Error(`browser closed (${error.message})`));
+  toBrowser.on("error", onStreamError);
+  fromBrowser.on("error", onStreamError);
   const decoder = new FrameDecoder();
   fromBrowser.on("data", (chunk: Buffer) => {
     for (const message of decoder.push(chunk)) conn.handle(message);

@@ -33,7 +33,7 @@ describe("reader view", () => {
     expect(reader).toContain("Paragraph 1 of the article");
     expect(reader).not.toContain("Sponsored");
     expect(reader).not.toContain("Copyright Field Notes");
-    expect(await tab.evaluate("document.documentElement.style.overflow")).toBe("hidden");
+    expect(await tab.evaluate<string>("document.documentElement.style.overflow")).toBe("hidden");
     await tab.close();
   });
 
@@ -52,7 +52,7 @@ describe("reader view", () => {
     const dom = JSON.stringify(root);
     expect(dom.split("onerror").length - 1).toBe(1); // only the page's own image
     expect(dom.split("javascript:").length - 1).toBe(1); // only the page's own link
-    expect(await tab.evaluate("window.pwned")).toBeNull();
+    expect(await tab.evaluate<unknown>("window.pwned")).toBeNull();
     await tab.close();
   });
 
@@ -62,7 +62,7 @@ describe("reader view", () => {
     await waitFor(() => readerOpen(tab), "reader view");
     await toggleReader(tab);
     await waitFor(async () => !(await readerOpen(tab)), "reader view to close");
-    expect(await tab.evaluate("document.documentElement.style.overflow")).toBe("");
+    expect(await tab.evaluate<string>("document.documentElement.style.overflow")).toBe("");
     await tab.close();
   });
 

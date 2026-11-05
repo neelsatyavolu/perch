@@ -25,7 +25,7 @@ async function clickPage(tab: Tab): Promise<void> {
 
 async function videoTab(): Promise<Tab> {
   const tab = await h.open(h.site.url("site.localhost", "/video.html"));
-  expect(await tab.evaluate("playVideo()")).toBe(true);
+  expect(await tab.evaluate<boolean>("playVideo()")).toBe(true);
   await waitFor(() => tab.evaluate<boolean>("v.readyState >= 2 && !v.paused"), "the video to play");
   return tab;
 }
@@ -35,11 +35,11 @@ describe("playback speed keys", () => {
     const tab = await videoTab();
     await pressKey(tab, "]");
     await pressKey(tab, "]");
-    expect(await tab.evaluate("v.playbackRate")).toBe(1.5);
+    expect(await tab.evaluate<number>("v.playbackRate")).toBe(1.5);
     await pressKey(tab, "[");
     await pressKey(tab, "[");
     await pressKey(tab, "[");
-    expect(await tab.evaluate("v.playbackRate")).toBe(0.75);
+    expect(await tab.evaluate<number>("v.playbackRate")).toBe(0.75);
     await tab.close();
   });
 
@@ -47,8 +47,8 @@ describe("playback speed keys", () => {
     const tab = await videoTab();
     await tab.evaluate("document.getElementById('field').focus()");
     await pressKey(tab, "]");
-    expect(await tab.evaluate("v.playbackRate")).toBe(1);
-    expect(await tab.evaluate("document.getElementById('field').value")).toBe("]");
+    expect(await tab.evaluate<number>("v.playbackRate")).toBe(1);
+    expect(await tab.evaluate<string>("document.getElementById('field').value")).toBe("]");
     await tab.close();
   });
 });
@@ -78,7 +78,7 @@ describe("picture in picture", () => {
     );
     await waitFor(() => tab.evaluate<boolean>("document.hidden"), "the tab to be hidden");
     await Bun.sleep(500);
-    expect(await tab.evaluate("pipLog")).toEqual([]);
+    expect(await tab.evaluate<string[]>("pipLog")).toEqual([]);
     await h.sw(`chrome.tabs.remove(${other})`);
     await tab.close();
   });

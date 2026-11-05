@@ -71,7 +71,7 @@ describe("link preview", () => {
     const tab = await h.open(h.site.url("site.localhost", "/links.html"));
     await hover(tab, await center(tab, "#story"));
     await Bun.sleep(800);
-    expect(await tab.evaluate("!!document.querySelector('perch-link-preview')")).toBe(false);
+    expect(await tab.evaluate<boolean>("!!document.querySelector('perch-link-preview')")).toBe(false);
     await tab.close();
   });
 
@@ -93,7 +93,7 @@ describe("link preview", () => {
       "the opened tab",
     );
     await h.sw(`chrome.tabs.remove(${opened})`);
-    expect(await tab.evaluate("!!document.querySelector('perch-link-preview')")).toBe(false);
+    expect(await tab.evaluate<boolean>("!!document.querySelector('perch-link-preview')")).toBe(false);
     await tab.close();
   });
 });

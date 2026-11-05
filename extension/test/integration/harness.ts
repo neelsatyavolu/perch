@@ -35,7 +35,9 @@ export async function launch(extraArgs: string[] = []) {
   const browser = await Browser.launch({
     userDataDir: profile,
     // Extensions.loadUnpacked (rather than --load-extension) reports manifest errors to the test.
-    args: ["--enable-unsafe-extension-debugging", "--autoplay-policy=no-user-gesture-required", ...extraArgs],
+    // Each test tab has a window of its own; headless stacks them, and without the occlusion flag a
+    // covered window stops painting part way through a screenshot.
+    args: ["--enable-unsafe-extension-debugging", "--autoplay-policy=no-user-gesture-required", "--disable-backgrounding-occluded-windows", ...extraArgs],
   });
   const { id: extensionId } = await browser.conn.send<{ id: string }>("Extensions.loadUnpacked", { path: ext });
 

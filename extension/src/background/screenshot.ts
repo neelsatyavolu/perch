@@ -9,6 +9,8 @@ import { putShot } from "../shot/store";
 
 /** Chrome allows two visible-tab captures per second (MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND). */
 const CAPTURE_GAP_MS = 520;
+/** Shared across screenshots, so two taken back to back still respect Chrome's rate. */
+let lastCapture = 0;
 
 type Metrics = { pageHeight: number; viewportHeight: number; viewportWidth: number; dpr: number; scrollX: number; scrollY: number };
 
@@ -16,12 +18,13 @@ export async function fullPageScreenshot(tabId: number): Promise<string> {
   const tab = await chrome.tabs.get(tabId);
   if (!tab.url || !/^(https?|file):/.test(tab.url)) throw new Error("Perch can only capture web pages.");
   if (!tab.active) await chrome.tabs.update(tabId, { active: true });
+  // Captures read the window's visible tab; an unfocused, covered window may not be painting.
+  await chrome.windows.update(tab.windowId, { focused: true });
 
   const metrics = await inPage(tabId, measure);
   const plan = planTiles({ pageHeight: metrics.pageHeight, viewportHeight: metrics.viewportHeight, dpr: metrics.dpr });
   let canvas: OffscreenCanvas | null = null;
   let ctx: OffscreenCanvasRenderingContext2D | null = null;
-  let lastCapture = 0;
   try {
     for (const [index, tile] of plan.tiles.entries()) {
       if (index === 1) await inPage(tabId, hideFixed);
@@ -46,7 +49,7 @@ export async function fullPageScreenshot(tabId: number): Promise<string> {
   }
   const blob = await canvas!.convertToBlob({ type: "image/png" });
   const id = await putShot({ blob, title: tab.title ?? "", url: tab.url, truncated: plan.truncated, created: Date.now() });
-  await chrome.tabs.create({ url: chrome.runtime.getURL(`shot.html?id=${id}`), index: tab.index + 1, openerTabId: tabId });
+  await chrome.tabs.create({ url: chrome.runtime.getURL(`shot.html?id=${id}`), windowId: tab.windowId, index: tab.index + 1, openerTabId: tabId });
   return id;
 }
 
@@ -72,7 +75,10 @@ function measure(): Metrics {
 
 async function scrollToY(y: number): Promise<number> {
   scrollTo({ top: y, left: 0, behavior: "instant" });
-  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  // Two frames let the page paint at the new position. A hidden or occluded page gets no frames,
+  // but the capture itself still draws it, so wait at most a short while.
+  const frames = new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  await Promise.race([frames, new Promise((r) => setTimeout(r, 250))]);
   await new Promise((r) => setTimeout(r, 60));
   return scrollY;
 }

@@ -1,7 +1,8 @@
 /**
  * Flint, the owner's mail app, as a tool for Perch's agent. It runs the `flint` command, which
  * talks to the running Flint app. Reading runs freely; changing mail follows the permission
- * mode; sending asks in Perch and then waits for Flint's own approval as well.
+ * mode; mail that leaves the Mac (send, rsvp, unsubscribe) asks in Perch in every mode and under
+ * any site rule except "never", then waits for Flint's own approval as well.
  */
 
 import { existsSync } from "node:fs";
@@ -16,6 +17,8 @@ export type AppToolResult = { content: string; isError?: boolean };
 const READ = ["status", "list", "search", "read", "summarize", "receipts", "drafts", "folders", "invites", "queue"];
 const CHANGE = ["draft", "reply", "forward", "mark-read", "unread", "pin", "unpin", "snooze", "unsnooze", "move", "undo", "cancel", "attachment"];
 const RISKY = ["archive", "trash", "spam", "mute", "unmute", "draft-delete", "send", "rsvp", "unsubscribe"];
+/** Commands that send mail to someone: Perch asks first even in Skip. */
+const ALWAYS_ASK = new Set(["send", "rsvp", "unsubscribe"]);
 const KINDS: Record<string, Kind> = Object.fromEntries([...READ.map((c) => [c, "read"]), ...CHANGE.map((c) => [c, "change"]), ...RISKY.map((c) => [c, "risky"])]);
 
 /** Options that read local files or change who Flint thinks is acting. */
@@ -42,6 +45,10 @@ export function flintBinary(env: Record<string, string | undefined> = process.en
 
 export function flintKind(args: Record<string, unknown>): Kind {
   return KINDS[String(args.command)] ?? "risky";
+}
+
+export function flintAlwaysAsks(args: Record<string, unknown>): boolean {
+  return ALWAYS_ASK.has(String(args.command));
 }
 
 /** A plain error for a call that must not run, or null. */

@@ -39,7 +39,8 @@ export async function prepareCall(ctx: ToolContext, opts: CallPolicy, call: Tool
   const kind = classify(call, target, page);
   const destination = call.name === "navigate" || call.name === "open_tab" ? String(call.args.url) : undefined;
   const site = app ? app.site : destination ? hostOf(destination) : await currentHost(ctx);
-  const decision = needsApproval(opts.mode, kind, opts.siteRule?.(site));
+  const ruled = needsApproval(opts.mode, kind, opts.siteRule?.(site));
+  const decision = ruled === "run" && app?.alwaysAsks(call.args) ? "ask" : ruled;
   const what = target ? `${target.role} "${target.name}"` : summarizeArgs(call);
   const detail = kind === "read" ? what : [what, await approvalDetail(ctx, call)].filter(Boolean).join(" ");
   const entry = { time: new Date().toISOString(), tab: ctx.tab?.id ?? "", site, url: destination, action: call.name, detail, client: opts.client ?? "sidebar" };

@@ -72,3 +72,28 @@ test("through Perch's rules: reads run, sends ask, and the audit names Flint", a
     delete process.env.PERCH_FLINT_BIN;
   }
 });
+
+test("mail that leaves the Mac asks even in Skip and under an allow rule; a never rule still blocks", async () => {
+  process.env.PERCH_FLINT_BIN = bin;
+  const asked: string[] = [];
+  const ctx = { tab: null, owned: [], lastSnapshot: new WeakMap(), shotScale: 1, workDir: dir.dir } as unknown as ToolContext;
+  const policy = (siteRule?: "allow" | "never"): CallPolicy => ({
+    mode: "skip",
+    audit: new AuditLog(join(dir.dir, "audit-skip.jsonl")),
+    client: "sidebar",
+    siteRule: () => siteRule,
+    approve: async (r) => (asked.push(r.summary), false),
+  });
+  try {
+    for (const command of ["send", "rsvp", "unsubscribe"]) {
+      const r = await callTool(ctx, policy(), { id: command, name: "flint", args: { command, args: ["7"] } });
+      expect(r.content).toBe("The user declined this action. Do not try it again; ask or finish.");
+    }
+    await callTool(ctx, policy("allow"), { id: "a", name: "flint", args: { command: "send", args: ["8"] } });
+    expect(asked).toEqual(["flint send 7 on Flint", "flint rsvp 7 on Flint", "flint unsubscribe 7 on Flint", "flint send 8 on Flint"]);
+    expect(await callTool(ctx, policy(), { id: "b", name: "flint", args: { command: "archive", args: ["7"] } })).toEqual({ content: "ok archive" });
+    expect((await callTool(ctx, policy("never"), { id: "c", name: "flint", args: { command: "send", args: ["9"] } })).content).toContain("Blocked");
+  } finally {
+    delete process.env.PERCH_FLINT_BIN;
+  }
+});

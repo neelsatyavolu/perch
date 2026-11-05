@@ -63,6 +63,23 @@ test("press Enter in the search box submits the form", async () => {
   await tab.close();
 });
 
+test("upload finds the hidden file input behind a styled button", async () => {
+  const profile = tempProfile();
+  const file = join(profile.dir, "cv.pdf");
+  writeFileSync(file, "%PDF");
+  const tab = await env.browser.newTab(env.site.url("/hiddenfile.html"));
+  const snap = await snapshot(tab);
+  const buttons = [...snap.text.matchAll(/button "Upload file" \[ref=(e\d+)\]/g)].map((m) => m[1]!);
+  expect(buttons.length).toBe(2);
+  expect(await upload(tab, snap.refs, buttons[0]!, [file])).toMatchObject({ ok: true });
+  expect(await upload(tab, snap.refs, buttons[1]!, [file])).toMatchObject({ ok: true });
+  expect(await tab.evaluate<string>("document.getElementById('resume').files[0]?.name")).toBe("cv.pdf");
+  expect(await tab.evaluate<string>("document.getElementById('letter').files[0]?.name")).toBe("cv.pdf");
+  expect(await upload(tab, snap.refs, refOf(snap, 'button "Not an upload"'), [file])).toMatchObject({ ok: false });
+  await tab.close();
+  profile.cleanup();
+});
+
 test("upload sets the file input", async () => {
   const profile = tempProfile();
   const file = join(profile.dir, "notes.txt");

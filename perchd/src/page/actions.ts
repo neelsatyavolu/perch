@@ -258,12 +258,46 @@ export function scroll(tab: Tab, opts: { refs?: RefTable; ref?: string; dy?: num
   });
 }
 
+/**
+ * Sites often hide the real <input type=file> behind a styled button or drop zone. Find the input
+ * that belongs to the element the agent chose: the element itself, the control of its label, an
+ * input inside it, or the one file input in its nearest enclosing section.
+ */
+const FILE_INPUT_FOR = `function () {
+  const isFile = (el) => el && el.tagName === 'INPUT' && (el.type || '').toLowerCase() === 'file';
+  const el = this.nodeType === 1 ? this : this.parentElement;
+  if (!el) return null;
+  if (isFile(el)) return el;
+  const label = el.closest('label');
+  if (label && isFile(label.control)) return label.control;
+  const inside = el.querySelectorAll('input[type=file]');
+  if (inside.length === 1) return inside[0];
+  for (let up = el.parentElement, depth = 0; up && depth < 4; up = up.parentElement, depth++) {
+    const found = up.querySelectorAll('input[type=file]');
+    if (found.length === 1) return found[0];
+    if (found.length > 1) return null;
+  }
+  const all = document.querySelectorAll('input[type=file]');
+  return all.length === 1 ? all[0] : null;
+}`;
+
+async function fileInputFor(tab: Tab, node: Node): Promise<string | undefined> {
+  const res = await tab.sendIn<{ result: { objectId?: string; subtype?: string } }>(node.session, "Runtime.callFunctionOn", {
+    objectId: node.objectId,
+    functionDeclaration: FILE_INPUT_FOR,
+    returnByValue: false,
+  });
+  return res.result.subtype === "null" ? undefined : res.result.objectId;
+}
+
 export function upload(tab: Tab, refs: RefTable, ref: string, paths: string[]): Promise<ActionResult> {
   return attempt(async () => {
     const missing = paths.filter((p) => !existsSync(p));
     if (missing.length) return fail(`file not found: ${missing.join(", ")}`);
     const node = await liveNode(tab, refs, ref);
-    await tab.sendIn(node.session, "DOM.setFileInputFiles", { files: paths, backendNodeId: node.backendNodeId });
+    const input = await fileInputFor(tab, node);
+    if (!input) return fail(`${ref} is not a file upload control, and no file input belongs to it`);
+    await tab.sendIn(node.session, "DOM.setFileInputFiles", { files: paths, objectId: input });
     return ok(`attached ${paths.length} file${paths.length === 1 ? "" : "s"}`);
   });
 }

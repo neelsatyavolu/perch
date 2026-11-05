@@ -101,6 +101,18 @@ test("done ends the task with its answer", async () => {
   expect(events).toEqual([{ type: "final", text: "Nothing to do." }]);
 });
 
+test("the first done after real work gets one check turn, the second finishes", async () => {
+  let review = "";
+  const { events } = await run([
+    () => tool("tabs"),
+    () => tool("done", { answer: "Draft answer" }),
+    (req) => { review = lastTool(req).content; return tool("done", { answer: "Checked answer" }); },
+  ]);
+  expect(review).toMatch(/from memory/);
+  expect(events.at(-1)).toEqual({ type: "final", text: "Checked answer" });
+  expect(events.filter((e) => e.type === "final")).toHaveLength(1);
+});
+
 test("a model error ends the task with that message", async () => {
   const { events } = await run([]);
   expect(events.at(-1)).toEqual({ type: "error", message: "the fake model's script ran out" });
@@ -180,5 +192,5 @@ test("cancelling stops the rest of the turn's tool calls", async () => {
 test("the system prompt tells every model to browse, handle dialogs and finish the task", async () => {
   const { systemPrompt } = await import("../src/agent/prompt");
   const prompt = systemPrompt({ mode: "skip", now: new Date("2026-11-05T09:00:00Z") });
-  for (const phrase of ["never from memory", "cookie", "search.brave.com", "YYYY-MM-DD", "every part of the task", "list what the task requires", "detail pages", "the site the task names", "write_file"]) expect(prompt).toContain(phrase);
+  for (const phrase of ["never fill gaps from memory", "Never try to solve a CAPTCHA", "cookie", "search.brave.com", "YYYY-MM-DD", "every part of the task", "list what the task requires", "detail pages", "the site the task names", "write_file"]) expect(prompt).toContain(phrase);
 });

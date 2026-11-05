@@ -33,12 +33,22 @@ export type TaskOptions = {
 
 const DEFAULT_MAX_STEPS = 40;
 
+/** Sent once, in place of the first done after the agent has used the browser. */
+export const CHECK_BEFORE_DONE = [
+  "Before you finish, check your answer against the task, one requirement at a time:",
+  "- Did a page you opened in this task show each fact? Anything guessed or from memory is not done yet: open the page that has it now.",
+  "- Did you apply every filter, collect every item, and finish every step the task asks for?",
+  "If something is missing, keep working. If everything is backed by pages, call done again with your answer (corrected if needed).",
+].join("\n");
+
 export async function* runTask(opts: TaskOptions): AsyncIterable<StepEvent> {
   const ctx = await newToolContext(opts.browser);
   const messages: Message[] = [{ role: "user", text: opts.task }];
   const signal = opts.signal ?? new AbortController().signal;
   const system = systemPrompt({ mode: opts.mode, now: new Date() });
   const maxSteps = opts.maxSteps ?? DEFAULT_MAX_STEPS;
+  let worked = false;
+  let checked = false;
   try {
     for (let step = 0; step < maxSteps; step++) {
       let text = "";
@@ -70,10 +80,16 @@ export async function* runTask(opts: TaskOptions): AsyncIterable<StepEvent> {
           yield { type: "error", message: "Cancelled." };
           return;
         }
+        if (outcome.final !== undefined && worked && !checked && step < maxSteps - 1) {
+          checked = true;
+          messages.push({ ...outcome.message, content: CHECK_BEFORE_DONE });
+          continue;
+        }
         if (outcome.final !== undefined) {
           yield { type: "final", text: outcome.final };
           return;
         }
+        worked = true;
         messages.push(outcome.message);
       }
     }

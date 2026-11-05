@@ -273,11 +273,16 @@ function renderClickable(ctx: Ctx, tree: Tree, node: AXNode, depth: number): str
   if (id === undefined || tree.session || !ctx.layout.clickable.has(id)) return null;
   const inner = renderChildren(ctx, tree, node, depth + 1);
   if (inner.length === 0 || inner.some((line) => line.includes("[ref="))) return null;
-  const text = clean(textOf(tree, node).join(" "));
-  if (!text) return null;
+  const full = textOf(tree, node).join(" ").replace(/\s+/g, " ").trim();
+  if (!full) return null;
   const ref = ctx.refs.refFor(id, tree.frameId, tree.session, tree.owner);
-  return [`${"  ".repeat(depth)}- clickable "${text}" [ref=${ref}]`];
+  const pad = "  ".repeat(depth);
+  // Short items read as one line; a long clickable block keeps its text so nothing is lost.
+  if (full.length <= SHORT_CLICKABLE && inner.length <= 3) return [`${pad}- clickable "${clean(full)}" [ref=${ref}]`];
+  return [`${pad}- clickable [ref=${ref}]`, ...inner];
 }
+
+const SHORT_CLICKABLE = 120;
 
 function textOf(tree: Tree, node: AXNode): string[] {
   const role = str(node.role);

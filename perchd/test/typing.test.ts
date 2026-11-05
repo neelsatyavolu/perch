@@ -23,6 +23,8 @@ test("type sends key events, so suggestion lists open, and says what was suggest
   snap = await snapshot(tab);
   expect(snap.text).toContain('link "job link"');
   expect(snap.text).not.toContain('clickable "Card');
+  // A long clickable block keeps all of its text.
+  expect(snap.text).toMatch(/- clickable \[ref=e\d+\]\n {2}- text "Senior HR partner, Miami\. .*whole region this year\."/);
   expect(await click(tab, snap.refs, refOf(snap, 'clickable "Miami, FL"'))).toMatchObject({ ok: true });
   expect(await tab.evaluate<string>("document.getElementById('out').textContent")).toBe("Location: Miami, FL");
   const later = await type(tab, snap.refs, refOf(snap, 'combobox "From"'), "san");

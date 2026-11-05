@@ -3,7 +3,7 @@
  * skipped; a file that cannot be parsed is reported as a problem and the rest still import.
  */
 
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { parse as parseToml } from "smol-toml";
 import { fromJsonEntry, fromTomlEntry, parseJsonc, type Candidate, type Problem } from "./normalize";
@@ -35,6 +35,32 @@ function jsonServers(source: string, key: "mcpServers" | "servers", ctx: { vscod
     const data = parseJsonc(text);
     return fromJsonMap(source, path, isObject(data) ? data[key] : undefined, ctx);
   };
+}
+
+/** VS Code's settings.json keeps servers under "mcp": { "servers": ... }. */
+function vscodeSettings(source: string): Reader {
+  return (path, text) => {
+    const data = parseJsonc(text);
+    const mcp = isObject(data) ? data.mcp : undefined;
+    return fromJsonMap(source, path, isObject(mcp) ? mcp.servers : undefined, { vscode: true });
+  };
+}
+
+/** VS Code and Insiders: the default profile's mcp.json and settings.json, then each named profile's. */
+async function vscodeFiles(appSupport: string): Promise<[string, Reader][]> {
+  const apps: [string, string][] = [["Code", "VS Code"], ["Code - Insiders", "VS Code Insiders"]];
+  const perApp = await Promise.all(
+    apps.map(async ([folder, label]): Promise<[string, Reader][]> => {
+      const user = join(appSupport, folder, "User");
+      const profiles = (await readdir(join(user, "profiles"), { withFileTypes: true }).catch(() => [])).filter((e) => e.isDirectory()).map((e) => e.name).sort();
+      const scopes: [string, string][] = [[user, label], ...profiles.map((p): [string, string] => [join(user, "profiles", p), `${label} (profile ${p})`])];
+      return scopes.flatMap(([dir, source]): [string, Reader][] => [
+        [join(dir, "mcp.json"), jsonServers(source, "servers", { vscode: true })],
+        [join(dir, "settings.json"), vscodeSettings(source)],
+      ]);
+    }),
+  );
+  return perApp.flat();
 }
 
 function fromJsonMap(source: string, path: string, map: unknown, ctx: { vscode?: boolean; workspace?: string } = {}): Found {
@@ -150,8 +176,7 @@ export async function findImports(opts: FindOptions): Promise<Found> {
     [join(grokHome, "config.toml"), tomlServers("Grok")],
     [join(appSupport, "Claude", "claude_desktop_config.json"), jsonServers("Claude Desktop", "mcpServers")],
     [join(home, ".cursor", "mcp.json"), jsonServers("Cursor", "mcpServers")],
-    [join(appSupport, "Code", "User", "mcp.json"), jsonServers("VS Code", "servers", { vscode: true })],
-    [join(appSupport, "Code - Insiders", "User", "mcp.json"), jsonServers("VS Code Insiders", "servers", { vscode: true })],
+    ...(await vscodeFiles(appSupport)),
   ];
   const inProject = (reader: Reader, approval?: McpjsonApproval): Reader => (path, text) => fromProjectFile(reader(path, text), approval);
   const perProject: [string, Reader][] = dirs.flatMap((dir): [string, Reader][] => [

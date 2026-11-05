@@ -201,6 +201,29 @@ test("project .mcp.json servers are picked only when Claude Code approved them",
   rmSync(h, { recursive: true, force: true });
 });
 
+test("VS Code: servers in settings.json and in each profile are found", async () => {
+  const h = mkdtempSync(join(tmpdir(), "perch-import-vscode-"));
+  const user = join(h, "Library", "Application Support", "Code", "User");
+  write(join(user, "settings.json"), `{
+    // settings.json is JSONC too
+    "editor.fontSize": 13,
+    "mcp": { "servers": { "from-settings": { "command": "node", "args": ["s.js"], "env": { "KEY": "\${env:MY_KEY}" } } } },
+  }`);
+  write(join(user, "profiles", "a1b2", "mcp.json"), JSON.stringify({ servers: { "from-profile": { type: "http", url: "https://mcp.profile.test/mcp" } } }));
+  write(join(user, "profiles", "a1b2", "settings.json"), JSON.stringify({ mcp: { servers: { "profile-settings": { command: "p" } } } }));
+  write(join(h, "Library", "Application Support", "Code - Insiders", "User", "profiles", "z9", "mcp.json"), JSON.stringify({ servers: { insiders: { command: "i" } } }));
+  const r = await findImports({ home: h });
+  expect(r.problems).toEqual([]);
+  expect(r.candidates.map((c) => `${c.source}: ${c.name}`).sort()).toEqual([
+    "VS Code (profile a1b2): from-profile",
+    "VS Code (profile a1b2): profile-settings",
+    "VS Code Insiders (profile z9): insiders",
+    "VS Code: from-settings",
+  ]);
+  expect(r.candidates.find((c) => c.name === "from-settings")!.config).toMatchObject({ env: { KEY: "${MY_KEY}" } });
+  rmSync(h, { recursive: true, force: true });
+});
+
 test("CODEX_HOME and extra project folders are honoured", async () => {
   const h = mkdtempSync(join(tmpdir(), "perch-import-env-"));
   write(join(h, "alt-codex", "config.toml"), `[mcp_servers.alt]\ncommand = "alt"\n`);

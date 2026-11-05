@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isPrivateHost, mayPreview, parseMeta } from "../../src/preview/meta";
+import { PRIVATE_URL_PATTERNS, isPrivateHost, mayPreview, parseMeta } from "../../src/preview/meta";
 
 describe("parseMeta", () => {
   test("prefers Open Graph, falls back to Twitter and plain tags, and resolves the image", () => {
@@ -48,5 +48,39 @@ describe("address guard", () => {
     expect(mayPreview("https://news.example/", "https://other.example/")).toBe(true);
     expect(mayPreview("http://site.localhost:3000/", "http://other.localhost:3000/a")).toBe(true);
     expect(mayPreview("https://news.example/", "file:///etc/passwd")).toBe(false);
+  });
+
+  test("trailing dots, single-label names and intranet suffixes count as private", () => {
+    for (const host of ["localhost.", "x.localhost.", "nas.local.", "router", "nas", "router.", "printer.lan", "box.home.arpa", "wiki.corp", "intranet", "db.internal."]) {
+      expect(isPrivateHost(host)).toBe(true);
+    }
+    for (const link of ["http://localhost./", "http://x.localhost.:8080/a", "http://router/", "http://nas:5000/", "http://nas.local./", "https://printer.lan/"]) {
+      expect(mayPreview("https://news.example/", link)).toBe(false);
+    }
+    expect(mayPreview("https://news.example/", "https://example.com./")).toBe(true);
+  });
+});
+
+describe("network guard patterns", () => {
+  const guarded = (url: string) => PRIVATE_URL_PATTERNS.some((p) => new RegExp(p, "i").test(new URL(url).href));
+
+  test("match every private address class isPrivateHost knows, as Chrome writes the URL", () => {
+    const urls = [
+      "http://localhost/", "http://localhost.:8080/x", "http://app.localhost:3000/", "http://router/", "http://nas:5000/a?b",
+      "http://nas.local./", "https://printer.lan/", "http://box.home.arpa/", "http://127.0.0.1/", "http://0x7f.1/", "http://2130706433/",
+      "http://10.0.0.8:9/", "http://172.20.1.1/", "http://192.168.1.1/admin", "http://169.254.169.254/latest", "http://100.64.0.1/",
+      "http://[::1]:7000/", "http://[fd00::1]/", "http://[fe80::1]/", "http://[::ffff:127.0.0.1]/", "http://user:pw@router/",
+    ];
+    for (const url of urls) {
+      expect(isPrivateHost(new URL(url).hostname)).toBe(true);
+      expect(guarded(url)).toBe(true);
+    }
+  });
+
+  test("leave public addresses alone", () => {
+    for (const url of ["https://example.com/", "https://example.com./a", "http://8.8.8.8/", "http://172.32.0.1/", "http://[2001:db8::1]/", "https://local.example.com/", "https://lan.example/x"]) {
+      expect(isPrivateHost(new URL(url).hostname)).toBe(false);
+      expect(guarded(url)).toBe(false);
+    }
   });
 });

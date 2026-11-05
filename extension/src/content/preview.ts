@@ -111,8 +111,9 @@ function render(preview: Preview): HTMLElement {
     close();
   });
   const parts: Node[] = [];
-  if (preview.image) {
-    const img = el("img", { class: "image", attrs: { alt: "", referrerpolicy: "no-referrer", loading: "eager", decoding: "async" } });
+  // The service worker sends the image as a data: URL; the page itself never requests it.
+  if (preview.image?.startsWith("data:image/")) {
+    const img = el("img", { class: "image", attrs: { alt: "", loading: "eager", decoding: "async" } });
     img.addEventListener("error", () => img.remove());
     img.src = preview.image;
     parts.push(img);

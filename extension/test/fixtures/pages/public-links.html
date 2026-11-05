@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Public links</title></head>
+<body style="font: 16px sans-serif; padding: 40px">
+  <p><a id="hop" href="/to-local?path=/story.html">A link that redirects to loopback</a></p>
+  <p><a id="peek" href="/peek.html">A page whose image redirects to loopback</a></p>
+  <p><a id="dot" href="">A loopback name with a trailing dot</a></p>
+  <script>document.getElementById("dot").href = `http://localhost.:${location.port}/story.html`;</script>
+</body>
+</html>

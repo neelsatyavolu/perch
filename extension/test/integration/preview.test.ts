@@ -1,10 +1,11 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type { Tab } from "../../../perchd/src/browser/tab";
 import { launch, piercedText, waitFor, type Harness } from "./harness";
 
 let h: Harness;
 beforeAll(async () => {
-  h = await launch();
+  // public.test stands in for a public web site: it is not a private name, but it reaches the fixtures.
+  h = await launch(["--host-resolver-rules=MAP public.test 127.0.0.1"]);
 }, 60_000);
 afterAll(async () => {
   await h?.close();
@@ -44,6 +45,24 @@ async function clickButton(tab: Tab, label: string): Promise<void> {
   }
 }
 
+/** The src of the card's image, read through CDP's pierced DOM. */
+async function cardImage(tab: Tab): Promise<string | null> {
+  const { root } = await tab.send<{ root: DomNode & { attributes?: string[] } }>("DOM.getDocument", { depth: -1, pierce: true });
+  const find = (node: DomNode & { attributes?: string[] }): string | null => {
+    if (node.nodeName === "IMG") {
+      const attrs = node.attributes ?? [];
+      const at = attrs.indexOf("src");
+      if (at >= 0) return attrs[at + 1] ?? null;
+    }
+    for (const child of [...(node.children ?? []), ...(node.shadowRoots ?? [])]) {
+      const hit = find(child);
+      if (hit) return hit;
+    }
+    return null;
+  };
+  return find(root);
+}
+
 const cardText = (tab: Tab, needle: string) =>
   waitFor(async () => {
     const text = await piercedText(tab);
@@ -64,6 +83,10 @@ describe("link preview", () => {
     expect(fetched.length).toBe(1);
     expect(fetched[0]!.cookie).toBeNull();
     expect(fetched[0]!.query).toBe("");
+    // The image arrives as a data: URL from the worker; the page never requests it.
+    const src = await waitFor(() => cardImage(tab), "the card image");
+    expect(src.startsWith("data:image/png;base64,")).toBe(true);
+    expect(await tab.evaluate<boolean>(`performance.getEntriesByType("resource").some((e) => e.name.includes("card.png"))`)).toBe(false);
     await tab.close();
   });
 
@@ -97,3 +120,37 @@ describe("link preview", () => {
     await tab.close();
   });
 });
+
+describe("link preview on a public page never reaches private addresses", () => {
+  let mark = 0;
+  beforeEach(() => void (mark = h.site.hits.length));
+  const loopbackHits = (path: string) => h.site.hits.slice(mark).filter((hit) => hit.host !== "public.test" && hit.path === path);
+
+  test("a link that redirects to loopback is refused at the hop", async () => {
+    const tab = await h.open(h.site.url("public.test", "/public-links.html"));
+    await hover(tab, await center(tab, "#hop"), SHIFT);
+    await cardText(tab, "Perch does not preview");
+    expect(h.site.hits.some((hit) => hit.host === "public.test" && hit.path === "/to-local")).toBe(true);
+    expect(loopbackHits("/story.html")).toHaveLength(0);
+    await tab.close();
+  });
+
+  test("a loopback name with a trailing dot is refused before any request", async () => {
+    const tab = await h.open(h.site.url("public.test", "/public-links.html"));
+    await hover(tab, await center(tab, "#dot"), SHIFT);
+    await cardText(tab, "Perch does not preview links to this kind of address.");
+    expect(loopbackHits("/story.html")).toHaveLength(0);
+    await tab.close();
+  });
+
+  test("an og:image that redirects to loopback is dropped without reaching it", async () => {
+    const tab = await h.open(h.site.url("public.test", "/public-links.html"));
+    await hover(tab, await center(tab, "#peek"), SHIFT);
+    await cardText(tab, "A public page");
+    await Bun.sleep(300);
+    expect(await cardImage(tab)).toBeNull();
+    expect(loopbackHits("/card.png")).toHaveLength(0);
+    await tab.close();
+  });
+});
+

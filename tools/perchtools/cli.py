@@ -21,7 +21,7 @@ from .rename import rename_product_strings
 from .series import read_series
 from .sparkle import fetch_sparkle, load_pin
 from .run import run
-from .version import bump, latest_stable_mac, read_version, write_version
+from .version import VersionInfo, bump, latest_stable_mac, read_version, write_version
 
 
 def fetch_json(url: str) -> Any:
@@ -144,6 +144,32 @@ def _cmd_release(args: argparse.Namespace) -> int:
     return 0
 
 
+def rebase(paths: Paths, repo: Path, kind: str, version: str | None, run=run) -> VersionInfo:
+    """Pin a new Chromium version, check it out and replay Perch's changes onto it."""
+    current = read_version(repo / "version.json")
+    target = version or latest_stable_mac(fetch_json)
+    if target == current.chromium:
+        raise ValueError(f"version.json already pins Chromium {target}")
+    info = bump(current, kind, target)
+    write_version(repo / "version.json", info)
+    checkout(paths, info.chromium, run=run)
+    apply_series(paths.src, info.chromium, repo / "patches", repo / "overlay", GENERATORS, _state_file(paths))
+    return info
+
+
+def _cmd_rebase(args: argparse.Namespace) -> int:
+    try:
+        info = rebase(current_paths(), REPO, "security" if args.security else "rebase", args.version, run)
+    except ValueError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+    except PatchFailed as failure:
+        print(failure, file=sys.stderr)
+        return 2
+    print(f"Perch {info.perch} (build {info.build}) now applies cleanly on Chromium {info.chromium}.")
+    return 0
+
+
 def _cmd_version(args: argparse.Namespace) -> int:
     path = REPO / "version.json"
     info = read_version(path)
@@ -179,6 +205,10 @@ def build_parser() -> argparse.ArgumentParser:
     rel = sub.add_parser("release", help="check, write the appcast and publish to GitHub")
     rel.add_argument("--dry-run", action="store_true", help="write everything to dist/release and publish nothing")
     rel.set_defaults(func=_cmd_release)
+    reb = sub.add_parser("rebase", help="move to a new Chromium version (latest Stable by default)")
+    reb.add_argument("--security", action="store_true", help="a security point release: bump the patch version")
+    reb.add_argument("version", nargs="?", help="Chromium version, e.g. 158.0.8127.30")
+    reb.set_defaults(func=_cmd_rebase)
     sub.add_parser("export", help="write the perch branch's commits back to patches/").set_defaults(func=_cmd_export)
     return parser
 

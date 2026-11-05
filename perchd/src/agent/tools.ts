@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import type { Browser } from "../browser/browser";
 import { Tab } from "../browser/tab";
+import { appTool } from "../apps/index";
 import type { ToolCall } from "../models/types";
 import { back, click, describeRef, drag, hover, press, scroll, select, type, upload, waitFor, type ActionResult } from "../page/actions";
 import { openPage } from "../page/navigation";
@@ -73,6 +74,8 @@ const REF = /^e\d{1,7}$/;
 export function checkCall(call: ToolCall): string | null {
   const problem = validate(call.name, call.args);
   if (problem) return problem;
+  const app = appTool(call.name);
+  if (app) return app.check(call.args);
   const ref = call.args.ref;
   if (typeof ref === "string" && !REF.test(ref)) return `ref "${ref}" is not a valid ref; refs look like e12`;
   if (call.name === "drag") {
@@ -206,6 +209,8 @@ export async function runTool(ctx: ToolContext, call: ToolCall): Promise<ToolRes
 async function dispatch(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
   const a = call.args as Record<string, any>;
   if (call.name === "done") return { content: String(a.answer), done: true };
+  const app = appTool(call.name);
+  if (app) return app.run(call.args);
   if (call.name === "tabs") return { content: await listTabs(ctx) };
   if (call.name === "write_file") {
     // Only a plain file name: no folders, so nothing can be written outside the chat's folder.

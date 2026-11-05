@@ -105,12 +105,16 @@ export async function liveTarget(ctx: ToolContext, call: ToolCall): Promise<Targ
 }
 
 const PAGE_CONTEXT_JS = `(() => {
+  const visible = (el) => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
   const words = (el) => [el.name, el.id, el.getAttribute('aria-label'), el.placeholder, el.getAttribute('autocomplete')].join(' ');
-  const inputs = [...document.querySelectorAll('input')];
-  const card = inputs.some((el) => /(^|\\s)cc-/i.test(el.getAttribute('autocomplete') || '') || /card.?number|cardnumber|\\bcvc\\b|\\bcvv\\b|security code|expiration/i.test(words(el)));
-  const payFrame = [...document.querySelectorAll('iframe')].some((f) => /stripe|braintree|adyen|paypal|checkout|payment|squareup|klarna|affirm|card/i.test([f.src, f.title, f.name].join(' ')));
+  const inputs = [...document.querySelectorAll('input')].filter(visible);
+  const card = inputs.some((el) => /(^|\\s)cc-/i.test(el.getAttribute('autocomplete') || '') || /card.?number|cardnumber|\\bcvc\\b|\\bcvv\\b|security code|expiration date/i.test(words(el)));
+  const payFrame = [...document.querySelectorAll('iframe')].filter(visible).some((f) =>
+    /js\\.stripe\\.com|braintree|adyen|paypal|squareup|klarna|affirm|checkout\\.com|payments?\\./i.test(f.src) || /payment|card number|secure (card|checkout)/i.test(f.title || ''));
   const checkoutUrl = /checkout|payment|\\/pay(\\/|$)|\\/order\\/(review|confirm)|\\/cart\\/confirm|\\/booking\\/(confirm|review|payment)/i.test(location.pathname);
-  const newPassword = inputs.some((el) => /new-password/i.test(el.getAttribute('autocomplete') || '') || (el.type === 'password' && /new|confirm/i.test(words(el))));
+  const passwords = inputs.filter((el) => el.type === 'password');
+  const newPassword = passwords.some((el) => /new-password/i.test(el.getAttribute('autocomplete') || '')) ||
+    (passwords.length >= 2 && passwords.some((el) => /new|confirm/i.test(words(el))));
   return { payment: card || payFrame || checkoutUrl, passwordChange: newPassword };
 })()`;
 

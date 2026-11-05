@@ -102,7 +102,11 @@ async function assertHittable(tab: Tab, target: Node, point: { x: number; y: num
   // Inside a cross-site iframe, hit-test in the frame's own coordinates and session.
   const offset = await frameOffset(tab, target.owner);
   const local = { x: Math.round(point.x - offset.x), y: Math.round(point.y - offset.y) };
-  const hit = await tab.sendIn<{ backendNodeId: number }>(target.session, "DOM.getNodeForLocation", { ...local, includeUserAgentShadowDOM: true });
+  const hit = await tab
+    .sendIn<{ backendNodeId: number }>(target.session, "DOM.getNodeForLocation", { ...local, includeUserAgentShadowDOM: true })
+    .catch(() => {
+      throw new Error("the element is hidden or clipped on screen; scroll its container or open the panel it is in");
+    });
   const { object } = await tab.sendIn<{ object: { objectId?: string } }>(target.session, "DOM.resolveNode", { backendNodeId: hit.backendNodeId });
   if (!object.objectId) return;
   const inside = await tab.sendIn<{ result: { value?: boolean } }>(target.session, "Runtime.callFunctionOn", {
@@ -125,8 +129,17 @@ export function click(tab: Tab, refs: RefTable, ref: string): Promise<ActionResu
   return attempt(async () => {
     const node = await liveNode(tab, refs, ref);
     const point = await centre(tab, node);
-    await assertHittable(tab, node, point);
     const label = show(await call<Described>(tab, node, DESCRIBE));
+    try {
+      await assertHittable(tab, node, point);
+    } catch (error) {
+      // Styled checkboxes and radios are often drawn over by their own decoration. Toggle the
+      // control itself, as its label would, so the page gets its normal click and change events.
+      const toggle = await call<boolean>(tab, node, "function () { return this.tagName === 'INPUT' && (this.type === 'checkbox' || this.type === 'radio') && !this.disabled; }");
+      if (!toggle || !String(error).includes("covered by")) throw error;
+      await call(tab, node, "function () { this.click(); }");
+      return ok(`clicked ${label}`);
+    }
     await mouse(tab, "mouseMoved", point);
     await mouse(tab, "mousePressed", point, { button: "left", buttons: 1, clickCount: 1 });
     await mouse(tab, "mouseReleased", point, { button: "left", buttons: 0, clickCount: 1 });

@@ -181,3 +181,23 @@ test("Anthropic runs one tool call per turn, and long silent turns are allowed",
   expect(JSON.parse(body).tool_choice).toEqual({ type: "auto", disable_parallel_tool_use: true });
   expect(IDLE_MS).toBeGreaterThanOrEqual(300_000);
 });
+
+test("only visible fields decide whether a page is a password change", async () => {
+  const { pageContext } = await import("../src/agent/tools");
+  const ctx = await newToolContext(env.browser);
+  await runTool(ctx, call("navigate", { url: env.site.url("/login.html") }));
+  expect(await pageContext(ctx)).toEqual({ payment: false, passwordChange: false });
+  await runTool(ctx, call("navigate", { url: env.site.url("/newpass.html") }));
+  expect(await pageContext(ctx)).toEqual({ payment: false, passwordChange: true });
+  await ctx.close();
+});
+
+test("a checkbox under its own decoration clicks; a clipped button says so plainly", async () => {
+  const tab = await env.browser.newTab(env.site.url("/login.html"));
+  const snap = await snapshot(tab);
+  expect(await click(tab, snap.refs, refOf(snap, 'checkbox "Search all releases"'))).toMatchObject({ ok: true });
+  expect(await tab.evaluate<string>("document.getElementById('out').textContent")).toBe("all true");
+  const clipped = await click(tab, snap.refs, refOf(snap, 'button "Clipped"'));
+  expect(clipped).toEqual({ ok: false, error: "the element is hidden or clipped on screen; scroll its container or open the panel it is in" });
+  await tab.close();
+});

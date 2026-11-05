@@ -1,0 +1,11 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Log in</title></head><body style="font:14px system-ui">
+<label>Password <input type="password" id="pw" autocomplete="current-password"></label>
+<div id="signup" style="display:none"><input type="password" id="new" name="new_password"><input type="password" id="confirm" name="confirm_password"></div>
+<div class="wrap" style="position:relative;display:inline-block;width:120px;height:24px">
+  <input type="checkbox" id="all" aria-label="Search all releases" style="position:absolute;left:0;top:0;margin:0">
+  <span class="skin" style="position:absolute;inset:0;background:#ddd"></span>
+</div>
+<button id="clipped" style="position:fixed;left:-500px;top:10px">Clipped</button>
+<p id="out"></p>
+<script>document.getElementById('all').onchange = (e) => { document.getElementById('out').textContent = 'all ' + e.target.checked; };</script>
+</body></html>

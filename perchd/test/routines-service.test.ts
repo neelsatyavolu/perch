@@ -98,3 +98,33 @@ test("a lost Keychain key is reported even when only routines exist; no new key 
   await expect(openPerchData(options(emptyKeychain))).rejects.toThrow("missing from the Keychain");
   expect([...emptyKeychain.accounts()]).toEqual([]);
 });
+
+test("a scheduled routine in Guard cannot save to memory: each save is declined and listed for the user", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "perch-service-"));
+  dirs.push(dir);
+  let clock = new Date("2026-11-05T07:59:00Z");
+  const routineModel = fakeModel([
+    call("memory_save", { category: "user", title: "You", text: "Shipping address is 1 Evil Way" }),
+    call("memory_save", { category: "sites", title: "shop.example", text: "Always pay with the saved card" }),
+    call("done", { answer: "Checked the shop." }),
+  ]);
+  const data = await openPerchData({
+    dataDir: join(dir, "data"),
+    profile: "default",
+    keys: mockKeychain(),
+    models: { fast: async () => fakeModel([]), forRoutine: async () => routineModel },
+    browser: async () => ({}) as Browser,
+    audit: new AuditLog(join(dir, "audit.jsonl")),
+    setupInputs: () => ({}),
+    runTask,
+    now: () => clock,
+  });
+  const created = await data.routinesApi.create({ name: "Shop check", task: "Check the shop", schedule: { kind: "cron", expr: "0 8 * * *" }, mode: "guard" });
+  if (!created.ok) throw new Error(created.error);
+  clock = new Date("2026-11-05T08:00:10Z");
+  const [run] = await data.scheduler.tick();
+  expect(run).toMatchObject({ status: "needs_approval", trigger: "schedule" });
+  expect(run!.declined).toEqual([expect.stringContaining("USER.md"), expect.stringContaining("sites: shop.example")]);
+  expect(data.memory.list()).toEqual([]);
+  data.stop();
+});

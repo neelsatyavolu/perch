@@ -57,7 +57,7 @@ export async function openPerchData(opts: PerchDataOptions) {
     audit: opts.audit,
     browser: opts.browser,
     model: opts.models.forRoutine,
-    memory: () => chatMemory(memory),
+    memory: (_routine, run) => chatMemory(memory, { unattended: !run.attended }),
     runTask: opts.runTask,
     now,
   };

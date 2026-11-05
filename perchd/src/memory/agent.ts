@@ -2,7 +2,8 @@
  * Memory inside a chat: what the agent knows at the start (USER.md, MEMORY.md and the pages that
  * match the task), the memory_search and memory_save tools, and extraction when the chat ends.
  * memory_save is a "change": it waits for approval in Ask mode and runs in Guard and Skip, except
- * saving a standing rule (MEMORY.md), which always asks.
+ * saving to USER.md or MEMORY.md, which always asks because both go into every later chat. In a
+ * chat nobody is watching (an unattended routine run) every save asks, so it is declined and listed.
  * Incognito chats get no memory at all.
  */
 
@@ -23,6 +24,8 @@ export type MemoryAccess = {
   /** The memory part of the system prompt for this task. Empty when nothing is known. */
   context(task: string): Promise<string>;
   kind(call: ToolCall): Kind;
+  /** True when this call must ask whatever the permission mode. */
+  mustAsk(call: ToolCall): boolean;
   summary(call: ToolCall): string;
   run(call: ToolCall): Promise<MemoryToolResult>;
   chatEnded(transcript: readonly Message[]): void;
@@ -68,7 +71,9 @@ function checkArgs(call: ToolCall): string | null {
   return null;
 }
 
-export function chatMemory(store: MemoryStore, opts: { incognito?: boolean; extractWith?: Model; onExtracted?: (result: ExtractResult) => void } = {}): MemoryAccess | undefined {
+export type ChatMemoryOptions = { incognito?: boolean; unattended?: boolean; extractWith?: Model; onExtracted?: (result: ExtractResult) => void };
+
+export function chatMemory(store: MemoryStore, opts: ChatMemoryOptions = {}): MemoryAccess | undefined {
   if (opts.incognito) return undefined;
   const pathFor = (call: ToolCall) => {
     const category = str(call.args.category);
@@ -86,6 +91,7 @@ export function chatMemory(store: MemoryStore, opts: { incognito?: boolean; extr
       return body ? `${CONTEXT_NOTE}\n\n${body}` : "";
     },
     kind: (call) => (call.name === "memory_search" ? "read" : "change"),
+    mustAsk: (call) => call.name === "memory_save" && (Boolean(opts.unattended) || pathFor(call) !== null),
     summary(call) {
       if (call.name === "memory_search") return `Search memory for "${str(call.args.query)}"`;
       const where = pathFor(call) ?? `${str(call.args.category)}: ${str(call.args.title)}`;
@@ -130,8 +136,7 @@ function auditDetail(call: ToolCall): string {
 /** One memory tool call under the chat's permission mode: approval if needed, run, audit. */
 export async function* memoryCall(memory: MemoryAccess, policy: MemoryPolicy, call: ToolCall): AsyncGenerator<{ type: "approval"; request: ApprovalRequest } | { type: "step"; label: string }, MemoryToolResult> {
   const kind = memory.kind(call);
-  // A standing rule changes how the agent behaves in every later chat, so it always asks.
-  const decision = call.name === "memory_save" && call.args.category === "rules" ? "ask" : needsApproval(policy.mode, kind);
+  const decision = memory.mustAsk(call) ? "ask" : needsApproval(policy.mode, kind);
   const entry = { time: new Date().toISOString(), tab: "", site: "memory", action: call.name, detail: auditDetail(call), client: policy.client ?? "sidebar" };
   let approved: boolean | null = null;
   if (decision === "ask") {

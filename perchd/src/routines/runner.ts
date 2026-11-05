@@ -20,7 +20,8 @@ export type RunnerDeps = {
   audit: AuditLog;
   browser: () => Promise<Browser>;
   model: (routine: Routine) => Promise<Model>;
-  memory?: (routine: Routine) => MemoryAccess | undefined;
+  /** Memory for a run; `attended` is false when nobody can approve, so every save is declined. */
+  memory?: (routine: Routine, run: { attended: boolean }) => MemoryAccess | undefined;
   runTask?: (opts: TaskOptions) => AsyncIterable<StepEvent>;
   now?: () => Date;
   timeoutMs?: number;
@@ -58,7 +59,7 @@ export async function runRoutine(routine: Routine, trigger: RunTrigger, deps: Ru
   try {
     const [browser, model] = await Promise.all([deps.browser(), deps.model(routine)]);
     const run = deps.runTask ?? runTask;
-    for await (const event of run({ model, browser, task, mode: routine.mode, approve, audit: deps.audit, client: `routine:${routine.id}`, signal, memory: deps.memory?.(routine) })) {
+    for await (const event of run({ model, browser, task, mode: routine.mode, approve, audit: deps.audit, client: `routine:${routine.id}`, signal, memory: deps.memory?.(routine, { attended: Boolean(attended) }) })) {
       if (event.type !== "text") events.push(event);
       if (event.type === "final") answer = event.text;
       if (event.type === "error") {

@@ -1,0 +1,39 @@
+/* Import wizard. */
+
+.imp-page { min-height: 100vh; background: var(--card); padding: 0 32px; display: grid; justify-items: center; align-content: start; }
+.imp { width: 640px; max-width: 100%; padding: 48px 0; display: grid; gap: 20px; }
+.imp h1 { font-size: 22px; letter-spacing: -0.01em; }
+.steps-ol { list-style: none; margin: 0; padding: 0; display: flex; gap: 8px; flex-wrap: wrap; counter-reset: step; }
+.steps-ol li { color: var(--mute); font-size: 12px; display: flex; align-items: center; gap: 6px; counter-increment: step; }
+.steps-ol li::before {
+  content: counter(step); width: 20px; height: 20px; border-radius: 6px; display: grid; place-items: center;
+  border: 1px solid var(--hair-strong); font: 11px var(--mono);
+}
+.steps-ol li + li::after { order: -1; content: ""; width: 16px; height: 1px; background: var(--hair-strong); }
+.steps-ol li[aria-current="step"] { color: var(--ink); }
+.steps-ol li[aria-current="step"]::before { border-color: var(--accent); background: var(--accent-soft); }
+.steps-ol li.past { color: var(--body); }
+.imp-body { padding: 16px; display: grid; gap: 14px; }
+.imp-foot { display: flex; gap: 8px; align-items: center; }
+
+.pick-list { display: grid; gap: 6px; border: 0; margin: 0; padding: 0; min-width: 0; }
+.pick {
+  display: grid; grid-template-columns: auto auto 1fr; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 8px;
+  border: 1px solid var(--hair); cursor: pointer; transition: background 120ms var(--ease);
+}
+.pick.data { grid-template-columns: auto 1fr; }
+.pick:hover { background: var(--hover); }
+.pick.on, .pick:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.pick input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.pick-t { display: grid; gap: 2px; }
+.pick-sub { padding: 10px 2px 2px; }
+
+.needs { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.need { display: grid; gap: 8px; justify-items: start; padding: 12px; border: 1px solid var(--hair); border-radius: 8px; }
+.need p { color: var(--body); }
+.summary { margin: 0; padding: 0 0 0 18px; display: grid; gap: 6px; color: var(--ink); }
+
+@media (max-width: 640px) { .imp-page { padding: 0 16px; } }
+.need-file { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.imp-embedded, .imp-embedded .imp { padding: 0; width: 100%; }
+.imp-embedded h2 { font-size: 15px; }

@@ -1,0 +1,10 @@
+/* Welcome screen: one of the few places Geist Serif appears (DESIGN.md). */
+
+.wl { min-height: 100vh; background: var(--card); width: 560px; max-width: calc(100% - 32px); margin: 0 auto; padding: 72px 0 48px; display: grid; gap: 14px; align-content: start; }
+.wl-hero { justify-items: center; text-align: center; align-content: center; gap: 18px; }
+.wl-lead { color: var(--body); font-size: 14px; max-width: 52ch; }
+.wl-body { margin-top: 12px; }
+.wl-grid { display: grid; gap: 20px; }
+.wl-actions { display: flex; gap: 8px; margin-top: 16px; }
+.wl-hero .wl-actions { justify-content: center; }
+html:has(.wl), body:has(.wl) { background: var(--card); }

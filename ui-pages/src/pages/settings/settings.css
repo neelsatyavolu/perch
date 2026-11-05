@@ -1,0 +1,74 @@
+/* Settings: 220px nav on canvas, sections on card, 32px page edges (spec 6.4). */
+
+.settings { display: flex; min-height: 100vh; background: var(--card); }
+.snav {
+  width: 220px; flex: none; padding: 16px 8px; display: flex; flex-direction: column; gap: 2px; background: var(--canvas);
+  border-right: 1px solid var(--hair); position: sticky; top: 0; height: 100vh; overflow-y: auto;
+}
+.snav a.row { text-decoration: none; display: flex; }
+.spage { flex: 1; min-width: 0; padding: 32px; display: grid; gap: 28px; align-content: start; }
+.spage > * { max-width: 720px; width: 100%; }
+.spage h1 { font-size: 22px; letter-spacing: -0.01em; }
+.spage h1:focus-visible { outline-offset: 4px; }
+.sec { display: grid; gap: 28px; }
+
+.results { list-style: none; margin: 0; padding: 0; }
+.result {
+  width: 100%; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; min-height: 48px; padding: 8px 16px;
+  background: none; border: 0; border-bottom: 1px solid var(--hair); text-align: left; cursor: pointer;
+}
+.results li:last-child .result { border-bottom: 0; }
+.result:hover { background: var(--hover); }
+.result .n { color: var(--ink); }
+
+.srow.stack { grid-template-columns: 1fr; gap: 12px; }
+
+.mode-list { display: grid; }
+.mode-opt {
+  display: grid; grid-template-columns: 20px 1fr; gap: 10px; align-items: start; padding: 12px 16px; border: 0; border-bottom: 1px solid var(--hair);
+  background: none; text-align: left; cursor: pointer; width: 100%;
+}
+.mode-opt:last-child { border-bottom: 0; }
+.mode-opt .n { color: var(--ink); }
+.mode-opt .d { color: var(--mute); font-size: 12px; }
+.mode-opt .radio { width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--hair-strong); margin-top: 1px; display: grid; place-items: center; }
+.mode-opt[aria-checked="true"] { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+.mode-opt[aria-checked="true"] .radio { border-color: var(--accent); }
+.mode-opt[aria-checked="true"] .radio::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.mode-opt:disabled { cursor: default; }
+.mode-opt:disabled .n, .mode-opt:disabled .d { color: var(--mute); }
+
+.add-rule { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--hair); align-items: start; }
+.add-rule .field-error { grid-column: 1 / -1; }
+.cand { display: grid; grid-template-columns: auto 1fr; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--hair); align-items: start; }
+.cand:last-child { border-bottom: 0; }
+.cand .meta { display: grid; gap: 2px; min-width: 0; }
+.cand .mono { font-size: 12px; color: var(--mute); overflow-wrap: anywhere; }
+.cand-src { color: var(--ink); font-weight: 500; padding-top: 6px; }
+.secret-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: center; }
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; font-size: 13px; }
+.kv dt { color: var(--mute); }
+.kv dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+
+@media (max-width: 760px) {
+  .settings { flex-direction: column; }
+  .snav { width: auto; height: auto; position: static; border-right: 0; border-bottom: 1px solid var(--hair); }
+  .spage { padding: 24px 16px; }
+}
+
+/* Activity log (spec 7.4): Geist Mono for times and sites. */
+.audit { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
+.audit th { text-align: left; font-weight: 400; color: var(--mute); padding: 8px 12px; border-bottom: 1px solid var(--hair); }
+.audit td { padding: 8px 12px; border-bottom: 1px solid var(--hair); color: var(--body); vertical-align: top; overflow-wrap: anywhere; }
+.audit tr:last-child td { border-bottom: 0; }
+.audit th:nth-child(1) { width: 92px; }
+.audit th:nth-child(5) { width: 96px; }
+.audit .tab-t { display: block; color: var(--mute); }
+.audit .o-declined td:last-child, .audit .o-blocked td:last-child { color: var(--ink); }
+.audit-foot { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+@media (max-width: 760px) { .audit thead { display: none; } .audit tr { display: grid; padding: 8px 0; border-bottom: 1px solid var(--hair); } .audit td { border: 0; padding: 2px 12px; } }
+
+/* Overnight tidy log */
+.dream-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; }
+.dream-list h3 { font-size: 12px; font-weight: 500; color: var(--ink); }
+.dream-list ul { margin: 6px 0 0; padding-left: 18px; color: var(--body); display: grid; gap: 4px; }

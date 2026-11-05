@@ -1,0 +1,56 @@
+/* Perch's pages: base, type and focus. Colour tokens are set on :root by theme/apply.ts from
+   theme/tokens.ts; the values below are Ink + Blue, so the first paint is right before JS runs. */
+
+@font-face { font-family: "Geist Serif"; src: url("../fonts/geist-serif.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+
+:root {
+  --canvas: #000000; --card: #0E0E10; --raised: #1A1A1E; --hover: rgba(255,255,255,0.08);
+  --ink: #FCFDFF; --body: rgba(252,253,255,0.86); --mute: #A1A4A5;
+  --hair: rgba(255,255,255,0.06); --hair-strong: rgba(255,255,255,0.14);
+  --accent: #4C8DFF; --accent-soft: color-mix(in srgb, #4C8DFF 22%, #1A1A1E);
+  --btn-bg: #FCFDFF; --btn-fg: #000000; --ok: #3DD68C; --warn: #FFC53D; --danger: #FF453A;
+  --pop: 0 8px 24px rgba(0,0,0,0.45);
+  --sans: "Geist", "Geist Sans", ui-sans-serif, -apple-system, system-ui, sans-serif;
+  --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --serif: "Geist Serif", Georgia, serif;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --row: 32px;
+  color-scheme: dark;
+}
+:root[data-density="compact"] { --row: 28px; }
+
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; background: var(--card); color: var(--body); }
+body {
+  font-family: var(--sans); font-size: 13px; line-height: 1.45;
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+::selection { background: var(--accent-soft); color: var(--ink); }
+h1, h2, h3, p { margin: 0; }
+h1, h2, h3 { color: var(--ink); font-weight: 500; }
+a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+button, input, select, textarea { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.mute { color: var(--mute); }
+.ink { color: var(--ink); }
+.cap { font-size: 12px; color: var(--mute); }
+.serif-title { font-family: var(--serif); font-weight: 400; font-size: 40px; line-height: 1.05; letter-spacing: -0.02em; color: var(--ink); }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.grow { flex: 1; }
+
+/* Focus, on every control: 2px solid accent, 2px offset (DESIGN.md). */
+:focus { outline: none; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+
+svg.i { width: 16px; height: 16px; flex: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+}
+
+/* The page frame's own states. */
+.frame-msg { min-height: 100vh; display: grid; place-content: center; gap: 8px; text-align: center; padding: 32px; }
+.frame-msg h1 { font-size: 15px; }
+.frame-msg p { color: var(--mute); max-width: 48ch; }

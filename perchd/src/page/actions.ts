@@ -3,7 +3,7 @@
 import { existsSync } from "node:fs";
 import type { Tab } from "../browser/tab";
 import { parseKey } from "./keys";
-import { RefGone, type RefTable } from "./refs";
+import { RefGone, type RefTable, type RefTarget } from "./refs";
 
 export type ActionResult = { ok: true; note: string } | { ok: false; error: string };
 
@@ -18,25 +18,30 @@ async function attempt(work: () => Promise<ActionResult>): Promise<ActionResult>
   }
 }
 
+/** A live node: its ids, its session (for cross-site iframes) and the iframe that owns it. */
+type Node = RefTarget & { objectId: string };
+
 /** The live DOM object behind a ref, or RefGone if the page removed it. */
-async function liveNode(tab: Tab, refs: RefTable, ref: string): Promise<{ backendNodeId: number; objectId: string }> {
-  const { backendNodeId } = refs.resolve(ref);
+async function liveNode(tab: Tab, refs: RefTable, ref: string): Promise<Node> {
+  const target = refs.resolve(ref);
   let objectId: string | undefined;
   try {
-    ({ object: { objectId } } = await tab.send<{ object: { objectId?: string } }>("DOM.resolveNode", { backendNodeId }));
+    ({ object: { objectId } } = await tab.sendIn<{ object: { objectId?: string } }>(target.session, "DOM.resolveNode", { backendNodeId: target.backendNodeId }));
   } catch {
     throw new RefGone(ref);
   }
   if (!objectId) throw new RefGone(ref);
-  const connected = await call<boolean>(tab, objectId, "function () { return this.isConnected; }");
+  const node: Node = { ...target, objectId };
+  const connected = await call<boolean>(tab, node, "function () { return this.isConnected; }");
   if (!connected) throw new RefGone(ref);
-  return { backendNodeId, objectId };
+  return node;
 }
 
-async function call<T>(tab: Tab, objectId: string, fn: string, args: unknown[] = []): Promise<T> {
-  const res = await tab.send<{ result: { value?: T }; exceptionDetails?: { exception?: { description?: string }; text: string } }>(
+async function call<T>(tab: Tab, node: { objectId: string; session?: string }, fn: string, args: unknown[] = []): Promise<T> {
+  const res = await tab.sendIn<{ result: { value?: T }; exceptionDetails?: { exception?: { description?: string }; text: string } }>(
+    node.session,
     "Runtime.callFunctionOn",
-    { objectId, functionDeclaration: fn, arguments: args.map((value) => ({ value })), returnByValue: true, awaitPromise: true },
+    { objectId: node.objectId, functionDeclaration: fn, arguments: args.map((value) => ({ value })), returnByValue: true, awaitPromise: true },
   );
   if (res.exceptionDetails) throw new Error(res.exceptionDetails.exception?.description ?? res.exceptionDetails.text);
   return res.result.value as T;
@@ -67,27 +72,40 @@ const show = (d: Described) => (d.name ? `${d.role} "${d.name}"` : d.role);
 export async function describeRef(tab: Tab, refs: RefTable, ref: string): Promise<Described | undefined> {
   try {
     const node = await liveNode(tab, refs, ref);
-    return await call<Described>(tab, node.objectId, DESCRIBE);
+    return await call<Described>(tab, node, DESCRIBE);
   } catch {
     return undefined;
   }
 }
 
-/** The centre of an element's first visible box, after scrolling it into view. */
-async function centre(tab: Tab, backendNodeId: number): Promise<{ x: number; y: number }> {
-  await tab.send("DOM.scrollIntoViewIfNeeded", { backendNodeId }).catch(() => undefined);
-  const { quads } = await tab.send<{ quads: number[][] }>("DOM.getContentQuads", { backendNodeId });
+/** Top-left of a cross-site iframe's content box in page coordinates. */
+async function frameOffset(tab: Tab, owner: number | undefined): Promise<{ x: number; y: number }> {
+  if (owner === undefined) return { x: 0, y: 0 };
+  const { quads } = await tab.send<{ quads: number[][] }>("DOM.getContentQuads", { backendNodeId: owner });
+  const q = quads[0];
+  return q ? { x: Math.min(q[0]!, q[6]!), y: Math.min(q[1]!, q[3]!) } : { x: 0, y: 0 };
+}
+
+/** The centre of an element's first visible box, in page coordinates, after scrolling it into view. */
+async function centre(tab: Tab, node: Node): Promise<{ x: number; y: number }> {
+  if (node.owner !== undefined) await tab.send("DOM.scrollIntoViewIfNeeded", { backendNodeId: node.owner }).catch(() => undefined);
+  await tab.sendIn(node.session, "DOM.scrollIntoViewIfNeeded", { backendNodeId: node.backendNodeId }).catch(() => undefined);
+  const { quads } = await tab.sendIn<{ quads: number[][] }>(node.session, "DOM.getContentQuads", { backendNodeId: node.backendNodeId });
   const quad = quads.find((q) => Math.abs((q[4]! - q[0]!) * (q[5]! - q[1]!)) > 1);
   if (!quad) throw new Error("the element is not visible");
-  return { x: (quad[0]! + quad[2]! + quad[4]! + quad[6]!) / 4, y: (quad[1]! + quad[3]! + quad[5]! + quad[7]!) / 4 };
+  const offset = await frameOffset(tab, node.owner);
+  return { x: offset.x + (quad[0]! + quad[2]! + quad[4]! + quad[6]!) / 4, y: offset.y + (quad[1]! + quad[3]! + quad[5]! + quad[7]!) / 4 };
 }
 
 /** Fails with "covered by …" when another element would receive a click at the point. */
-async function assertHittable(tab: Tab, target: { objectId: string }, point: { x: number; y: number }): Promise<void> {
-  const hit = await tab.send<{ backendNodeId: number }>("DOM.getNodeForLocation", { x: Math.round(point.x), y: Math.round(point.y), includeUserAgentShadowDOM: true });
-  const { object } = await tab.send<{ object: { objectId?: string } }>("DOM.resolveNode", { backendNodeId: hit.backendNodeId });
+async function assertHittable(tab: Tab, target: Node, point: { x: number; y: number }): Promise<void> {
+  // Inside a cross-site iframe, hit-test in the frame's own coordinates and session.
+  const offset = await frameOffset(tab, target.owner);
+  const local = { x: Math.round(point.x - offset.x), y: Math.round(point.y - offset.y) };
+  const hit = await tab.sendIn<{ backendNodeId: number }>(target.session, "DOM.getNodeForLocation", { ...local, includeUserAgentShadowDOM: true });
+  const { object } = await tab.sendIn<{ object: { objectId?: string } }>(target.session, "DOM.resolveNode", { backendNodeId: hit.backendNodeId });
   if (!object.objectId) return;
-  const inside = await tab.send<{ result: { value?: boolean } }>("Runtime.callFunctionOn", {
+  const inside = await tab.sendIn<{ result: { value?: boolean } }>(target.session, "Runtime.callFunctionOn", {
     objectId: target.objectId,
     // The hit counts if it is the target, inside it, or inside a label for it (custom checkboxes).
     functionDeclaration:
@@ -96,7 +114,7 @@ async function assertHittable(tab: Tab, target: { objectId: string }, point: { x
     returnByValue: true,
   });
   if (inside.result.value) return;
-  throw new Error(`covered by ${show(await call<Described>(tab, object.objectId, DESCRIBE))}`);
+  throw new Error(`covered by ${show(await call<Described>(tab, { objectId: object.objectId, session: target.session }, DESCRIBE))}`);
 }
 
 async function mouse(tab: Tab, type: string, point: { x: number; y: number }, extra: object = {}): Promise<void> {
@@ -106,9 +124,9 @@ async function mouse(tab: Tab, type: string, point: { x: number; y: number }, ex
 export function click(tab: Tab, refs: RefTable, ref: string): Promise<ActionResult> {
   return attempt(async () => {
     const node = await liveNode(tab, refs, ref);
-    const point = await centre(tab, node.backendNodeId);
+    const point = await centre(tab, node);
     await assertHittable(tab, node, point);
-    const label = show(await call<Described>(tab, node.objectId, DESCRIBE));
+    const label = show(await call<Described>(tab, node, DESCRIBE));
     await mouse(tab, "mouseMoved", point);
     await mouse(tab, "mousePressed", point, { button: "left", buttons: 1, clickCount: 1 });
     await mouse(tab, "mouseReleased", point, { button: "left", buttons: 0, clickCount: 1 });
@@ -119,8 +137,8 @@ export function click(tab: Tab, refs: RefTable, ref: string): Promise<ActionResu
 export function hover(tab: Tab, refs: RefTable, ref: string): Promise<ActionResult> {
   return attempt(async () => {
     const node = await liveNode(tab, refs, ref);
-    await mouse(tab, "mouseMoved", await centre(tab, node.backendNodeId));
-    return ok(`hovered ${show(await call<Described>(tab, node.objectId, DESCRIBE))}`);
+    await mouse(tab, "mouseMoved", await centre(tab, node));
+    return ok(`hovered ${show(await call<Described>(tab, node, DESCRIBE))}`);
   });
 }
 
@@ -128,11 +146,12 @@ export function hover(tab: Tab, refs: RefTable, ref: string): Promise<ActionResu
 export function type(tab: Tab, refs: RefTable, ref: string, text: string, opts: { submit?: boolean } = {}): Promise<ActionResult> {
   return attempt(async () => {
     const node = await liveNode(tab, refs, ref);
-    const special = await setSpecialInput(tab, node.objectId, text);
+    const special = await setSpecialInput(tab, node, text);
     if (special) return special;
-    await tab.send("DOM.scrollIntoViewIfNeeded", { backendNodeId: node.backendNodeId }).catch(() => undefined);
-    await tab.send("DOM.focus", { backendNodeId: node.backendNodeId });
-    await call(tab, node.objectId, "function () { if (typeof this.select === 'function') this.select(); else if (this.isContentEditable) document.execCommand('selectAll'); }");
+    if (node.owner !== undefined) await tab.send("DOM.scrollIntoViewIfNeeded", { backendNodeId: node.owner }).catch(() => undefined);
+    await tab.sendIn(node.session, "DOM.scrollIntoViewIfNeeded", { backendNodeId: node.backendNodeId }).catch(() => undefined);
+    await tab.sendIn(node.session, "DOM.focus", { backendNodeId: node.backendNodeId });
+    await call(tab, node, "function () { if (typeof this.select === 'function') this.select(); else if (this.isContentEditable) document.execCommand('selectAll'); }");
     if (text) await tab.send("Input.insertText", { text });
     else await press(tab, "Delete");
     if (opts.submit) await press(tab, "Enter");
@@ -153,13 +172,13 @@ const FORMATS: Record<string, [string, string]> = {
  * Date, time, month, week and colour inputs ignore typed text in Chromium, so their value is set
  * the way the browser's picker sets it: through the value setter, then input and change events.
  */
-async function setSpecialInput(tab: Tab, objectId: string, text: string): Promise<ActionResult | null> {
-  const kind = await call<string>(tab, objectId, "function () { return this.tagName === 'INPUT' ? (this.getAttribute('type') || '').toLowerCase() : ''; }");
+async function setSpecialInput(tab: Tab, node: Node, text: string): Promise<ActionResult | null> {
+  const kind = await call<string>(tab, node, "function () { return this.tagName === 'INPUT' ? (this.getAttribute('type') || '').toLowerCase() : ''; }");
   const format = FORMATS[kind];
   if (!format) return null;
   const applied = await call<string>(
     tab,
-    objectId,
+    node,
     `function (v) {
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
       setter.call(this, v);
@@ -179,7 +198,7 @@ export function select(tab: Tab, refs: RefTable, ref: string, choice: string): P
     const node = await liveNode(tab, refs, ref);
     const result = await call<{ chosen?: string; options?: string[] }>(
       tab,
-      node.objectId,
+      node,
       `function (choice) {
         const opts = Array.from(this.options || []);
         const want = choice.trim().toLowerCase();
@@ -213,7 +232,8 @@ export function scroll(tab: Tab, opts: { refs?: RefTable; ref?: string; dy?: num
   return attempt(async () => {
     if (opts.ref && opts.refs) {
       const node = await liveNode(tab, opts.refs, opts.ref);
-      await tab.send("DOM.scrollIntoViewIfNeeded", { backendNodeId: node.backendNodeId });
+      if (node.owner !== undefined) await tab.send("DOM.scrollIntoViewIfNeeded", { backendNodeId: node.owner }).catch(() => undefined);
+      await tab.sendIn(node.session, "DOM.scrollIntoViewIfNeeded", { backendNodeId: node.backendNodeId });
       return ok(`scrolled ${opts.ref} into view`);
     }
     const [w, h] = await tab.evaluate<[number, number]>("[innerWidth, innerHeight]");
@@ -230,7 +250,7 @@ export function upload(tab: Tab, refs: RefTable, ref: string, paths: string[]): 
     const missing = paths.filter((p) => !existsSync(p));
     if (missing.length) return fail(`file not found: ${missing.join(", ")}`);
     const node = await liveNode(tab, refs, ref);
-    await tab.send("DOM.setFileInputFiles", { files: paths, backendNodeId: node.backendNodeId });
+    await tab.sendIn(node.session, "DOM.setFileInputFiles", { files: paths, backendNodeId: node.backendNodeId });
     return ok(`attached ${paths.length} file${paths.length === 1 ? "" : "s"}`);
   });
 }

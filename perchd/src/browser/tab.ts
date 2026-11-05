@@ -32,6 +32,8 @@ export class Tab {
   private mainFrameId = "";
   private navigationPending = false;
   private loading = false;
+  /** Cross-site iframes run in their own process and session: frame id → session id. */
+  readonly frameSessions = new Map<string, string>();
 
   private constructor(readonly conn: CdpConnection, readonly id: string, readonly session: string) {
     conn.on("Page.lifecycleEvent", (p: { loaderId: string; name: string; frameId: string }, sid) => {
@@ -44,6 +46,13 @@ export class Tab {
       const kind = p.type === "alert" ? "an alert" : p.type === "beforeunload" ? "a leave-page prompt" : `a ${p.type} dialog`;
       this.dialogNotes.push(`The page showed ${kind}: "${p.message}". Perch ${accept ? "closed" : "dismissed"} it.`);
       void conn.send("Page.handleJavaScriptDialog", { accept }, session).catch(() => undefined);
+    });
+    conn.on("Target.attachedToTarget", (p: { sessionId: string; targetInfo: { targetId: string; type: string } }, sid) => {
+      if (sid === session && p.targetInfo.type === "iframe") this.frameSessions.set(p.targetInfo.targetId, p.sessionId);
+    });
+    conn.on("Target.detachedFromTarget", (p: { sessionId: string; targetId?: string }, sid) => {
+      if (sid !== session) return;
+      for (const [frameId, child] of this.frameSessions) if (child === p.sessionId) this.frameSessions.delete(frameId);
     });
     const main = (frameId: string) => frameId === this.mainFrameId;
     conn.on("Page.frameRequestedNavigation", (p: { frameId: string }, sid) => {
@@ -74,6 +83,8 @@ export class Tab {
     ]);
     const { frameTree } = await tab.send<{ frameTree: { frame: { id: string } } }>("Page.getFrameTree");
     tab.mainFrameId = frameTree.frame.id;
+    // Cross-site iframes get their own sessions, so their content can be read and acted on.
+    await tab.send("Target.setAutoAttach", { autoAttach: true, waitForDebuggerOnStart: false, flatten: true });
     return tab;
   }
 
@@ -86,13 +97,18 @@ export class Tab {
    * with "the page stopped responding" when it takes longer than timeoutMs.
    */
   async send<T = any>(method: string, params: object = {}): Promise<T> {
+    return this.sendIn<T>(undefined, method, params);
+  }
+
+  /** Like send, on a cross-site iframe's session when one is given. */
+  async sendIn<T = any>(frameSession: string | undefined, method: string, params: object = {}): Promise<T> {
     if (this.isClosed) throw new TabClosedError();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<never>((_, reject) => {
       timer = setTimeout(() => reject(new PageTimeoutError()), this.timeoutMs);
     });
     try {
-      return await Promise.race([this.whileOpen(this.conn.send<T>(method, params, this.session)), timeout]);
+      return await Promise.race([this.whileOpen(this.conn.send<T>(method, params, frameSession ?? this.session)), timeout]);
     } catch (error) {
       if (error instanceof PageTimeoutError) throw error;
       if (this.isClosed || /session|target closed|No target/i.test(String(error))) throw new TabClosedError();

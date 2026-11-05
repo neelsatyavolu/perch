@@ -1,0 +1,5 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Cross-site frame</title><style>body{margin:0;font:14px system-ui}</style></head><body>
+<h1>Booking</h1>
+<iframe id="x" style="width:500px;height:200px;border:0;margin:20px"></iframe>
+<script>document.getElementById('x').src = location.href.replace('127.0.0.1', 'localhost').replace('xframe.html', 'xinner.html');</script>
+</body></html>

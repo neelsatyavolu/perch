@@ -18,13 +18,16 @@ export const IS_SECRET_JS = `(el) => {
     .some((t) => /^(cc-.+|one-time-code|current-password|new-password)$/.test(t));
 }`;
 
-const secretNodes = new WeakMap<object, Set<number>>();
+const secretNodes = new WeakMap<object, Set<string>>();
+
+/** The key for a remembered secret: the frame's session (or "main") and the node id. */
+export const secretKey = (backendNodeId: number, session?: string) => `${session ?? "main"}:${backendNodeId}`;
 
 /**
  * Nodes a tab has ever shown as secret fields. A "Show password" toggle changes the field's type
  * to text; the field stays secret because it is remembered here.
  */
-export function rememberedSecrets(tab: object): Set<number> {
+export function rememberedSecrets(tab: object): Set<string> {
   let set = secretNodes.get(tab);
   if (!set) secretNodes.set(tab, (set = new Set()));
   return set;

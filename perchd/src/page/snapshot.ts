@@ -15,7 +15,7 @@
 import type { Tab } from "../browser/tab";
 import { captureLayout, placement, type Layout } from "./layout";
 import { RefTable, refsFor } from "./refs";
-import { isSecretField, REDACTED, rememberedSecrets } from "./secrets";
+import { isSecretField, REDACTED, rememberedSecrets, secretKey } from "./secrets";
 
 export type Snapshot = { text: string; refs: RefTable; omitted: number };
 export const DEFAULT_BUDGET = 12_000;
@@ -49,11 +49,15 @@ type AXNode = {
   backendDOMNodeId?: number;
 };
 type FrameTree = { frame: { id: string }; childFrames?: FrameTree[] };
-type Tree = { frameId: string; nodes: Map<string, AXNode>; root: AXNode | undefined };
+/**
+ * One frame's accessibility tree. A cross-site iframe has its own session, its owning iframe
+ * element in the page, and its own field attributes (node ids repeat across processes).
+ */
+type Tree = { frameId: string; nodes: Map<string, AXNode>; root: AXNode | undefined; session?: string; owner?: number; attrs?: Map<number, Record<string, string>> };
 
 type Ctx = {
   trees: Map<string, Tree>;
-  secrets: Set<number>;
+  secrets: Set<string>;
   frameOwners: Map<number, string>;
   layout: Layout;
   refs: RefTable;
@@ -65,11 +69,13 @@ export async function snapshot(tab: Tab, opts: { budget?: number; full?: boolean
   const budget = opts.budget ?? DEFAULT_BUDGET;
   await tab.send("DOM.getDocument", { depth: 0 });
   const { frameTree } = await tab.send<{ frameTree: FrameTree }>("Page.getFrameTree");
-  const frames = flattenFrames(frameTree);
+  const inProcess = flattenFrames(frameTree);
+  const crossSite = [...tab.frameSessions.keys()].filter((id) => !inProcess.includes(id));
+  const frames = [...inProcess, ...crossSite];
   const full = opts.full ?? false;
-  await enableAccessibility(tab);
+  await enableAccessibility(tab, undefined);
   const [owners, layout] = await Promise.all([frameOwners(tab, frames.slice(1)), captureLayout(tab)]);
-  const trees = await loadTrees(tab, frames, layout, full);
+  const trees = await loadTrees(tab, frames, layout, full, owners);
   await fillMissingAttrs(tab, trees, layout);
   const ctx: Ctx = { trees, secrets: rememberedSecrets(tab), frameOwners: owners, layout, refs: refsFor(tab), full, omitted: 0 };
   const main = trees.get(frames[0]!)!;
@@ -81,12 +87,15 @@ function flattenFrames(tree: FrameTree): string[] {
   return [tree.frame.id, ...(tree.childFrames ?? []).flatMap(flattenFrames)];
 }
 
-const enabled = new WeakSet<Tab>();
+const enabled = new WeakMap<Tab, Set<string>>();
 
-async function enableAccessibility(tab: Tab): Promise<void> {
-  if (enabled.has(tab)) return;
-  await tab.send("Accessibility.enable");
-  enabled.add(tab);
+async function enableAccessibility(tab: Tab, session: string | undefined): Promise<void> {
+  let sessions = enabled.get(tab);
+  if (!sessions) enabled.set(tab, (sessions = new Set()));
+  const key = session ?? "main";
+  if (sessions.has(key)) return;
+  await tab.sendIn(session, "Accessibility.enable");
+  sessions.add(key);
 }
 
 /** Leaf roles whose children add nothing to the snapshot. */
@@ -97,37 +106,43 @@ const LEAVES = new Set([...[...INTERACTIVE].filter((r) => !NESTING.has(r)), "Sta
  * capture) get them from DOM.describeNode, so secret detection never fails open.
  */
 async function fillMissingAttrs(tab: Tab, trees: Map<string, Tree>, layout: Layout): Promise<void> {
-  const missing: number[] = [];
+  const work: Promise<void>[] = [];
   for (const tree of trees.values()) {
+    const store = tree.session ? (tree.attrs ??= new Map()) : layout.attrs;
     for (const node of tree.nodes.values()) {
       const id = node.backendDOMNodeId;
-      if (id !== undefined && VALUED.has(str(node.role)) && str(node.value) && !layout.attrs.has(id)) missing.push(id);
+      if (id === undefined || !VALUED.has(str(node.role)) || store.has(id)) continue;
+      work.push(
+        tab
+          .sendIn<{ node: { attributes?: string[] } }>(tree.session, "DOM.describeNode", { backendNodeId: id })
+          .then(({ node: described }) => {
+            const pairs = described.attributes ?? [];
+            const attrs: Record<string, string> = {};
+            for (let i = 0; i + 1 < pairs.length; i += 2) attrs[pairs[i]!.toLowerCase()] = pairs[i + 1]!;
+            store.set(id, attrs);
+          })
+          .catch(() => undefined),
+      );
     }
   }
-  await Promise.all(
-    missing.map(async (backendNodeId) => {
-      const { node } = await tab.send<{ node: { attributes?: string[] } }>("DOM.describeNode", { backendNodeId }).catch(() => ({ node: {} as { attributes?: string[] } }));
-      const pairs = node.attributes ?? [];
-      const attrs: Record<string, string> = {};
-      for (let i = 0; i + 1 < pairs.length; i += 2) attrs[pairs[i]!.toLowerCase()] = pairs[i + 1]!;
-      layout.attrs.set(backendNodeId, attrs);
-    }),
-  );
+  await Promise.all(work);
 }
 
 /**
  * Fetches the accessibility tree level by level, opening only nodes near the viewport.
  * A full fetch of a 10,000-row page takes about 7 s; this takes a fraction of a second.
  */
-async function loadTree(tab: Tab, frameId: string, layout: Layout, full: boolean): Promise<Tree> {
-  const { node: root } = await tab.send<{ node: AXNode }>("Accessibility.getRootAXNode", { frameId });
+async function loadTree(tab: Tab, frameId: string, layout: Layout, full: boolean, session?: string): Promise<Tree> {
+  await enableAccessibility(tab, session);
+  const { node: root } = await tab.sendIn<{ node: AXNode }>(session, "Accessibility.getRootAXNode", { frameId });
   const nodes = new Map<string, AXNode>([[root.nodeId, root]]);
   let frontier = [root];
   while (frontier.length > 0) {
     const open = frontier.filter(
-      (n) => (n.childIds?.length ?? 0) > 0 && !LEAVES.has(str(n.role)) && (full || placement(layout, n.backendDOMNodeId) === "near"),
+      // A cross-site frame is loaded in full: its node ids are not in the page's layout.
+      (n) => (n.childIds?.length ?? 0) > 0 && !LEAVES.has(str(n.role)) && (full || session !== undefined || placement(layout, n.backendDOMNodeId) === "near"),
     );
-    const results = await Promise.all(open.map((n) => tab.send<{ nodes: AXNode[] }>("Accessibility.getChildAXNodes", { id: n.nodeId, frameId })));
+    const results = await Promise.all(open.map((n) => tab.sendIn<{ nodes: AXNode[] }>(session, "Accessibility.getChildAXNodes", { id: n.nodeId, frameId })));
     frontier = [];
     for (const { nodes: batch } of results) {
       for (const node of batch) {
@@ -137,15 +152,19 @@ async function loadTree(tab: Tab, frameId: string, layout: Layout, full: boolean
       }
     }
   }
-  return { frameId, nodes, root };
+  return { frameId, nodes, root, ...(session ? { session } : {}) };
 }
 
-async function loadTrees(tab: Tab, frames: string[], layout: Layout, full: boolean): Promise<Map<string, Tree>> {
+async function loadTrees(tab: Tab, frames: string[], layout: Layout, full: boolean, owners: Map<number, string>): Promise<Map<string, Tree>> {
   const trees = new Map<string, Tree>();
+  const ownerOf = new Map([...owners].map(([owner, frameId]) => [frameId, owner]));
   await Promise.all(
     frames.map(async (frameId) => {
       try {
-        trees.set(frameId, await loadTree(tab, frameId, layout, full));
+        const session = tab.frameSessions.get(frameId);
+        const tree = await loadTree(tab, frameId, layout, full, session);
+        if (session) tree.owner = ownerOf.get(frameId);
+        trees.set(frameId, tree);
       } catch {
         trees.set(frameId, { frameId, nodes: new Map(), root: undefined });
       }
@@ -220,14 +239,16 @@ function renderNode(ctx: Ctx, tree: Tree, node: AXNode, depth: number): string[]
   const name = clean(str(node.name));
   const pad = "  ".repeat(depth);
 
-  const ownedFrame = node.backendDOMNodeId !== undefined ? ctx.frameOwners.get(node.backendDOMNodeId) : undefined;
+  // Iframe owners are page nodes; ids inside a cross-site frame may repeat them by chance.
+  const ownedFrame = !tree.session && node.backendDOMNodeId !== undefined ? ctx.frameOwners.get(node.backendDOMNodeId) : undefined;
   if (ownedFrame) {
     const inner = ctx.trees.get(ownedFrame);
     const body = inner?.root ? renderChildren(ctx, inner, inner.root, depth + 1) : [];
     return [`${pad}- iframe${name ? ` "${name}"` : ""}`, ...body];
   }
   if (INTERACTIVE.has(role) && node.backendDOMNodeId !== undefined) {
-    const line = `${pad}- ${ROLE_NAMES[role] ?? role} "${name}" [ref=${ctx.refs.refFor(node.backendDOMNodeId, tree.frameId)}]${extras(ctx, node, role)}`;
+    const ref = ctx.refs.refFor(node.backendDOMNodeId, tree.frameId, tree.session, tree.owner);
+    const line = `${pad}- ${ROLE_NAMES[role] ?? role} "${name}" [ref=${ref}]${extras(ctx, tree, node, role)}`;
     return NESTING.has(role) ? [line, ...interactiveInside(ctx, tree, node, depth + 1)] : [line];
   }
   if (role === "heading") return [`${pad}- heading "${name}" [level=${prop(node, "level") ?? 2}]`, ...interactiveInside(ctx, tree, node, depth + 1)];
@@ -260,15 +281,16 @@ function renderRow(ctx: Ctx, tree: Tree, row: AXNode, depth: number): string[] {
   return [`${"  ".repeat(depth)}- row "${plain.join(" | ")}"`, ...actionable];
 }
 
-function extras(ctx: Ctx, node: AXNode, role: string): string {
+function extras(ctx: Ctx, tree: Tree, node: AXNode, role: string): string {
   const parts: string[] = [];
   if (VALUED.has(role)) {
     const id = node.backendDOMNodeId;
-    const attrs = id !== undefined ? ctx.layout.attrs.get(id) : undefined;
+    const attrs = id === undefined ? undefined : tree.session ? tree.attrs?.get(id) : ctx.layout.attrs.get(id);
     const value = str(node.value);
-    if (id !== undefined && attrs && isSecretField(attrs)) ctx.secrets.add(id);
+    const key = id === undefined ? "" : secretKey(id, tree.session);
+    if (id !== undefined && attrs && isSecretField(attrs)) ctx.secrets.add(key);
     // Fail closed: a field with a value but no known attributes is treated as secret.
-    const secret = id !== undefined && (ctx.secrets.has(id) || (value !== "" && attrs === undefined && role !== "combobox"));
+    const secret = id !== undefined && (ctx.secrets.has(key) || (value !== "" && attrs === undefined && role !== "combobox"));
     if (secret) {
       if (value) parts.push(`value="${REDACTED}"`);
     } else if (value) parts.push(`value="${clean(value, 200)}"`);

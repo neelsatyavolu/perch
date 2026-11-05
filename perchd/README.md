@@ -59,6 +59,7 @@ bun run src/cli.ts run --model role:deep "…"      # or --model codex, --model 
 | `src/memory/` | Encrypted memory pages (key in the Keychain), in-RAM FTS5 search, extraction, dreaming, "Set up your memory", memory tools, Memory page API |
 | `src/routines/` | Cron schedules, encrypted routines and runs, the unattended runner, the scheduler, Routines API, and `openPerchData` that wires it all |
 | `src/sync/` | End-to-end encrypted sync client for `server/`: item encryption, key wrapping and recovery, the sync engine and merge rules, pairing, the encrypted relay channel, Keychain storage |
+| `src/app/` | The app API for Perch's pages: encrypted chats and artifacts, runs with approvals, side chats bound to tabs, an isolated artifact origin (`bun run src/app/main.ts --mock-keychain` to try it with `ui/`) |
 
 ## Rules this code keeps
 

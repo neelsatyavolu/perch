@@ -54,7 +54,7 @@ export function Menu<T extends string>({ label, children, choices, selected, onP
   return (
     <div class="menu-wrap" ref={root}>
       <button type="button" class={mono ? "pill mono" : "pill"} aria-haspopup="listbox" aria-expanded={open} aria-label={label} title={label} onClick={() => setOpen(!open)}>
-        {children}
+        <span class="pill-t">{children}</span>
         <Icon name="down" size={12} />
       </button>
       {open && (

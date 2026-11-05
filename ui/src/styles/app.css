@@ -37,6 +37,12 @@ svg.i { stroke: currentColor; fill: none; stroke-width: 1.5; stroke-linecap: rou
   border: 0; font-size: 12px; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; transition: color var(--t-hover) var(--ease); }
 .pill:hover { color: var(--ink); }
 .pill.mono { font-family: var(--mono); }
+/* The label shrinks with an ellipsis in a narrow sidebar; the chevron always shows. */
+.pill-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pill-t > svg { vertical-align: -2px; margin-right: 4px; }
+.pill > svg { flex: none; }
+.under > .menu-wrap { flex: none; }
+.under > .menu-wrap:last-child { flex: 0 1 auto; }
 
 /* The perch dot: the only looping animation, and only while a task really runs */
 .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: none; display: inline-block; }

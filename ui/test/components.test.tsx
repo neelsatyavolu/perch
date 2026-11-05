@@ -7,7 +7,7 @@ import { clampWidth, parseCsv, PANE } from "../src/components/artifact-pane";
 import { ChatList } from "../src/components/chat-list";
 import { Composer, PLACEHOLDER } from "../src/components/composer";
 import { PerchDot } from "../src/components/icon";
-import { Message, Steps } from "../src/components/message";
+import { LiveRun, Message, Steps } from "../src/components/message";
 import { resolveTheme } from "../src/theme/theme";
 
 let root: HTMLElement;
@@ -206,4 +206,15 @@ test("system theme follows macOS appearance and Increase Contrast", () => {
   expect(resolveTheme("system", media(false, false))).toBe("paper");
   expect(resolveTheme("system", media(false, true))).toBe("contrast");
   expect(resolveTheme("dusk", media(false, true))).toBe("dusk");
+});
+
+test("a run waiting for approval still counts its last step; a working run shows it on the live line", () => {
+  const waiting = mount(<LiveRun text="" steps={["Read the message", "Checked the calendar"]} waiting />);
+  expect(waiting.querySelector(".steps")?.textContent).toContain("2 steps · Checked the calendar");
+  expect(waiting.querySelector(".work")).toBeNull();
+  render(null, root);
+  root.remove();
+  const working = mount(<LiveRun text="" steps={["Read the message", "Checked the calendar"]} waiting={false} />);
+  expect(working.querySelector(".steps")?.textContent).toContain("1 step · Read the message");
+  expect(working.querySelector(".work")?.textContent).toContain("Checked the calendar");
 });

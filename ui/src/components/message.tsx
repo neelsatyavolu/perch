@@ -96,7 +96,8 @@ export function Message({ message, artifact, onBranch }: MessageProps) {
 export function LiveRun({ text, steps, waiting }: { text: string; steps: string[]; waiting: boolean }) {
   return (
     <div class="reply live">
-      <Steps steps={steps.slice(0, -1)} />
+      {/* While an approval card is up it is the only status, so the last step joins the list. */}
+      <Steps steps={waiting ? steps : steps.slice(0, -1)} />
       {text && <Markdown text={text} />}
       {!waiting && (
         <div class="work" role="status">

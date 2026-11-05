@@ -26,6 +26,9 @@ const RISKY = /\b(send|post|publish|submit|delete|remove|discard|share|invite|tr
 const PAYMENT =
   /\b(pay|buy|purchase|checkout|check out|place (your )?order|submit (your )?order|complete (your )?(order|purchase|booking|reservation|payment|checkout)|reserve|request to book|book( now| it)?|confirm (and|&) pay|confirm (your )?(booking|purchase|payment|order|reservation)|subscribe|donate|start (your )?(free )?trial|upgrade)\b/i;
 const MONEY = /[$€£¥₹]\s?\d|\d\s?(usd|eur|gbp|inr|jpy)\b/i;
+/** A button that is a price ("$9.99") or charges one ("Get it for $4.99", "Continue ($19.99)"). */
+const PRICE_ONLY = /^\s*(price:?\s*)?(us|ca|a)?[$€£¥₹]\s?\d[\d,.]*\s*$/i;
+const FOR_PRICE = /\bfor\s*(us|ca|a)?[$€£¥₹]\s?\d/i;
 const PASSWORD = /\b(change|update|reset|save|set) (your |the )?password\b/i;
 /** Buttons that move a checkout or a password form forward. */
 const ADVANCES = /\b(continue|next|confirm|complete|submit|save|update|done|apply|finish|proceed|place|order|pay|book|reserve|change|set|verify)\b/i;
@@ -52,12 +55,23 @@ export function classify(call: ToolCall, target?: Target, page: PageContext = {}
   if (call.name === "click" || call.name === "hover") {
     if (call.name === "hover") return "read";
     if (!target) return "risky";
-    if (PAYMENT.test(name) || MONEY.test(name) || PASSWORD.test(name)) return "payment";
+    if (PAYMENT.test(name) || PASSWORD.test(name) || charges(target, guarded)) return "payment";
     if (guarded && ADVANCES.test(name)) return "payment";
     if (RISKY.test(name)) return "risky";
     return "change";
   }
   return "risky";
+}
+
+/**
+ * A money amount alone is not a payment: filters ("Under $25,000"), salary bands and price labels
+ * carry one too. It counts on a checkout page, or on a button that charges it.
+ */
+function charges(target: Target, guarded: boolean): boolean {
+  if (!MONEY.test(target.name)) return false;
+  if (guarded) return true;
+  if (target.role !== "button") return false;
+  return PRICE_ONLY.test(target.name) || FOR_PRICE.test(target.name) || ADVANCES.test(target.name);
 }
 
 function isEnter(call: ToolCall): boolean {

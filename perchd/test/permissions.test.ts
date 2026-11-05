@@ -35,6 +35,11 @@ test.each([
   [call("click", { ref: "e1" }), { role: "button", name: "Request to book" }, "payment"],
   [call("click", { ref: "e1" }), { role: "button", name: "Submit order" }, "payment"],
   [call("click", { ref: "e1" }), { role: "link", name: "Facebook" }, "change"],
+  [call("click", { ref: "e1" }), { role: "button", name: "Under $25,000" }, "change"],
+  [call("click", { ref: "e1" }), { role: "link", name: "Middle Income Jobs ($30K-$49K)" }, "change"],
+  [call("click", { ref: "e1" }), { role: "checkbox", name: "My device will have a $0 trade-in value unless I reset it. I agree to Terms" }, "change"],
+  [call("click", { ref: "e1" }), { role: "button", name: "$9.99" }, "payment"],
+  [call("click", { ref: "e1" }), { role: "button", name: "Get it for US$4.99" }, "payment"],
   [call("click", { ref: "e1" }), undefined, "risky"],
   [call("type", { ref: "e2", text: "Running late", submit: true }), { role: "textbox", name: "Message" }, "risky"],
   [call("type", { ref: "e2", text: "perch", submit: true }), { role: "searchbox", name: "Search mail" }, "change"],
@@ -52,6 +57,7 @@ test.each([
   [call("click", { ref: "e1" }), { role: "button", name: "Save" }, { passwordChange: true }, "payment"],
   [call("click", { ref: "e1" }), { role: "button", name: "Update" }, { passwordChange: true }, "payment"],
   [call("click", { ref: "e1" }), { role: "button", name: "Save" }, {}, "change"],
+  [call("click", { ref: "e1" }), { role: "button", name: "Under $25,000" }, { payment: true }, "payment"],
 ] as const)("in page context, classify %o on %o with %o is %s", (c, target, page, kind) => {
   expect(classify(c, target, page)).toBe(kind as Kind);
 });

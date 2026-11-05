@@ -72,3 +72,28 @@ test("pending calls reject once the browser closes", async () => {
   await expect(pending).rejects.toThrow("browser closed");
   profile.cleanup();
 });
+
+test("a browser launched after another one closed keeps running", async () => {
+  const { Browser } = await import("../src/browser/browser");
+  const { scroll } = await import("../src/page/actions");
+  const { snapshot } = await import("../src/page/snapshot");
+  const { startFixtures } = await import("./fixtures/server");
+  const first = tempProfile();
+  const old = await launchChromium({ executable: await findChromeForTesting(), userDataDir: first.dir, headless: true });
+  await old.close();
+  first.cleanup();
+  Bun.gc(true);
+
+  const second = tempProfile();
+  const site = startFixtures();
+  const browser = await Browser.launch({ userDataDir: second.dir });
+  const tab = await browser.newTab(site.url("/long.html"));
+  for (let i = 0; i < 5; i++) {
+    expect(await scroll(tab, { dy: 1500 })).toMatchObject({ ok: true });
+    Bun.gc(true);
+    expect((await snapshot(tab)).text).toContain("[ref=");
+  }
+  await browser.close();
+  site.stop();
+  second.cleanup();
+}, 20_000);

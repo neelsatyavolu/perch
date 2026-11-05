@@ -29,6 +29,8 @@ export class FrameDecoder {
   }
 }
 
+const RETIRED: unknown[] = [];
+
 export type LaunchOptions = { executable: string; userDataDir: string; headless: boolean; args?: string[] };
 
 export async function launchChromium(opts: LaunchOptions): Promise<CdpConnection> {
@@ -45,8 +47,15 @@ export async function launchChromium(opts: LaunchOptions): Promise<CdpConnection
   const child = spawn(opts.executable, args, { stdio: ["ignore", "ignore", "pipe", "pipe", "pipe"] });
   const toBrowser = child.stdio[3] as Writable;
   const fromBrowser = child.stdio[4] as Readable;
-  child.stderr?.resume();
+  if (process.env.PERCH_CHROME_LOG) {
+    const { createWriteStream } = await import("node:fs");
+    child.stderr?.pipe(createWriteStream(`${process.env.PERCH_CHROME_LOG}.${child.pid}.log`));
+  } else child.stderr?.resume();
 
+  // Our ends of a finished browser's pipes are never closed or collected: under Bun, their late
+  // cleanup can close descriptor numbers a newer browser's pipes have reused, which makes that
+  // browser exit mid-session. Two descriptors per launch is a small, bounded cost.
+  RETIRED.push(child, toBrowser, fromBrowser);
   const exited = new Promise<void>((resolve) => child.once("exit", () => resolve()));
   const conn = new CdpConnection(
     (message) => toBrowser.write(encode(message)),

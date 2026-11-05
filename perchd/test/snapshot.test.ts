@@ -74,3 +74,14 @@ test("refs resolve to DOM nodes", async () => {
   expect(() => snap.refs.resolve("e99999")).toThrow("ref e99999 is gone; take a new snapshot");
   await tab.close();
 });
+
+test("after scrolling, the snapshot follows the viewport and counts rows above", async () => {
+  const tab = await env.browser.newTab(env.site.url("/long.html"));
+  await tab.evaluate("scrollTo(0, 40000)");
+  const snap = await snapshot(tab);
+  expect(snap.text).toMatch(/- … [\d,]+ more above/);
+  expect(snap.text).toMatch(/- … [\d,]+ more below/);
+  expect(snap.text).not.toContain("View order 1\"");
+  expect(snap.text).toMatch(/link "View order \d{4}" \[ref=e\d+\]/);
+  await tab.close();
+});

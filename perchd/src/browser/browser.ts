@@ -20,9 +20,14 @@ export class Browser {
     return new Browser(conn);
   }
 
-  /** Opens a background tab, so the user's current tab keeps focus. */
+  /**
+   * Opens an agent tab without taking focus from the user's tab. Chromium does not draw hidden
+   * background tabs, and input events wait for a drawn frame, so a plain background tab never
+   * receives clicks; an unfocused window of its own stays visible to the renderer. (Inside Perch,
+   * plan 3b keeps agent tabs drawing in the "Agent" tab group instead.)
+   */
   async newTab(url?: string): Promise<Tab> {
-    const { targetId } = await this.conn.send<{ targetId: string }>("Target.createTarget", { url: "about:blank", background: true });
+    const { targetId } = await this.conn.send<{ targetId: string }>("Target.createTarget", { url: "about:blank", newWindow: true, background: true });
     const tab = await Tab.attach(this.conn, targetId);
     if (url) await tab.navigate(url);
     return tab;

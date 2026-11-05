@@ -46,6 +46,22 @@ describe("cookie banners", () => {
     expect((await consentOn("/sourcepoint.html")).consent).toBe("rejected");
   });
 
+  test("Cookiebot: clicks Deny, not Allow selection or Allow all", async () => {
+    expect((await consentOn("/cookiebot.html")).consent).toBe("denied");
+  });
+
+  test("Didomi: clicks Disagree and close", async () => {
+    expect((await consentOn("/didomi.html")).consent).toBe("disagreed");
+  });
+
+  test("Didomi with no first-layer disagree: Manage options, Disagree to all, Save", async () => {
+    expect((await consentOn("/didomi-popup.html")).consent).toBe("saved:disagreed");
+  });
+
+  test("TrustArc: clicks Required Cookies Only", async () => {
+    expect((await consentOn("/trustarc.html")).consent).toBe("required");
+  });
+
   test("Quantcast with no first-layer reject: More options, Reject all, Save & exit", async () => {
     expect((await consentOn("/quantcast.html")).consent).toBe("saved:none");
   });

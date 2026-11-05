@@ -19,6 +19,7 @@ import { mergeBookmarksFile } from "../../src/import/write/bookmarks-file";
 import { addHistory } from "../../src/import/write/history-db";
 import { profileInUse } from "../../src/import/write/profile-lock";
 import { snapshot } from "../../src/page/snapshot";
+import { applyCookies } from "../../src/import/cookies-cdp";
 
 const ARGS = ["--use-mock-keychain", "--password-store=basic"];
 let dir: string;
@@ -29,7 +30,10 @@ beforeAll(async () => {
   server = Bun.serve({
     port: 0,
     hostname: "127.0.0.1",
-    fetch: () => new Response("<title>Fixture page</title><p>hello</p>", { headers: { "content-type": "text/html", "set-cookie": "fixture=cookie-value-1; Max-Age=86400; Path=/; SameSite=Lax" } }),
+    fetch: (req) =>
+      new URL(req.url).pathname === "/echo"
+        ? new Response(`<title>Echo</title><pre id="c">${(req.headers.get("cookie") ?? "").replace(/[<&]/g, "")}</pre>`, { headers: { "content-type": "text/html" } })
+        : new Response("<title>Fixture page</title><p>hello</p>", { headers: { "content-type": "text/html", "set-cookie": "fixture=cookie-value-1; Max-Age=86400; Path=/; SameSite=Lax" } }),
   });
   const browser = await Browser.launch({ userDataDir: dir, args: ARGS });
   const tab = await browser.newTab(`http://127.0.0.1:${server.port}/visited`);
@@ -76,4 +80,23 @@ test("bookmarks and history written while closed show up in Chrome", async () =>
   }
   // Chrome kept the file (a bad checksum or format would make it rewrite or drop the node).
   expect(readChromeBookmarks(join(profile, "Bookmarks")).bar.map((b) => b.title)).toContain("Imported bookmark");
+}, 60_000);
+
+test("imported cookies reach a running browser over the pipe; a bad one does not block the rest", async () => {
+  const browser = await Browser.launch({ userDataDir: dir, args: ARGS });
+  try {
+    const expires = Math.floor(Date.now() / 1000) + 3600;
+    const result = await applyCookies(browser.conn, [
+      { name: "imported", value: "from-test", domain: "127.0.0.1", path: "/", expires, secure: false, httpOnly: true, sameSite: "Lax" },
+      { name: "loose", value: "none-without-secure", domain: "127.0.0.1", path: "/", secure: false, httpOnly: false, sameSite: "None" },
+      { name: "bad;name", value: "x", domain: "", path: "/", secure: false, httpOnly: false },
+    ]);
+    expect(result).toEqual({ applied: 2, failed: 1 });
+    const tab = await browser.newTab(`http://127.0.0.1:${server.port}/echo`);
+    const sent = await tab.evaluate<string>("document.getElementById('c').textContent");
+    expect(sent).toContain("imported=from-test");
+    expect(sent).toContain("loose=none-without-secure");
+  } finally {
+    await browser.close();
+  }
 }, 60_000);

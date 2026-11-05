@@ -56,6 +56,8 @@ bun run src/cli.ts run --model role:deep "…"      # or --model codex, --model 
 | `src/agent/progress.ts`, `finish.ts` | Step and time budget notes, repeated-call notes, the final best-effort answer |
 | `src/models/` | Adapters (Responses, Anthropic, Chat Completions), providers and sign-in, model capabilities, task roles, image generation, and `registry.ts`, the API Settings → Models calls |
 | `src/config/` | Keychain access and the encrypted settings store |
+| `src/memory/` | Encrypted memory pages (key in the Keychain), in-RAM FTS5 search, extraction, dreaming, "Set up your memory", memory tools, Memory page API |
+| `src/routines/` | Cron schedules, encrypted routines and runs, the unattended runner, the scheduler, Routines API, and `openPerchData` that wires it all |
 
 ## Rules this code keeps
 
@@ -63,3 +65,5 @@ bun run src/cli.ts run --model role:deep "…"      # or --model codex, --model 
 - Saved secrets never reach a model: secret fields read as `••••` in snapshots, are covered in screenshots and cannot be read from the REPL.
 - Sends, posts, deletes and uploads wait for approval in Guard mode; payments and password changes always wait.
 - Every action is written to the audit log.
+- Memory, routines and run chats are AES-256-GCM encrypted per record; the search index lives only in RAM. Passwords, keys, card numbers and codes are never saved as memories.
+- Scheduled routines decline anything that needs approval, so they never pay unattended; in Ask and Guard they also never send, post or delete.

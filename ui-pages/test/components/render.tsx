@@ -8,9 +8,10 @@ import { PageFrame } from "../../src/ui/frame";
 
 export type Nav = { what: string; detail: unknown };
 
-export function renderWithApi(ui: ComponentChildren, options: FakeOptions = {}) {
+/** Pass `api` to render again against the same backend, as when a page is reloaded. */
+export function renderWithApi(ui: ComponentChildren, options: FakeOptions & { readonly api?: PerchApi } = {}) {
   const nav: Nav[] = [];
-  const api: PerchApi = createFakeApi({ stepMs: 0, onNavigate: (what, detail) => nav.push({ what, detail }), ...options });
+  const api: PerchApi = options.api ?? createFakeApi({ stepMs: 0, onNavigate: (what, detail) => nav.push({ what, detail }), ...options });
   const result = render(<PageFrame api={api}>{ui}</PageFrame>);
   return { ...result, api, nav };
 }

@@ -46,9 +46,50 @@ describe("Set up your memory", () => {
     expect(r.getByRole("switch", { name: "Web search for your name" }).getAttribute("aria-checked")).toBe("false");
     expect(r.getByRole("switch", { name: "Messages" }).hasAttribute("disabled")).toBe(true);
     expect(r.getByText("Needs Full Disk Access")).toBeTruthy();
-    expect(r.getByText("5 of 9 on")).toBeTruthy();
-    fireEvent.click(r.getByRole("switch", { name: "Claude memory" }));
-    expect(r.getByText("6 of 9 on")).toBeTruthy();
+    expect(r.getByText("4 of 9 on")).toBeTruthy();
+    fireEvent.click(r.getByRole("switch", { name: "Aside memory" }));
+    expect(r.getByText("3 of 9 on")).toBeTruthy();
+  });
+
+  test("an export source asks for its file when switched on; cancelling leaves it off", async () => {
+    window.location.hash = "#setup";
+    let answer: string | null = null;
+    const r = renderWithApi(<MemoryPage />, { pickFile: () => answer });
+    fireEvent.click(await r.findByRole("switch", { name: "ChatGPT memory" }));
+    await waitFor(() => expect(r.getByRole("switch", { name: "ChatGPT memory" }).getAttribute("aria-checked")).toBe("false"));
+    answer = "chatgpt-2026-11.zip";
+    fireEvent.click(r.getByRole("switch", { name: "ChatGPT memory" }));
+    await waitFor(() => expect(r.getByRole("switch", { name: "ChatGPT memory" }).getAttribute("aria-checked")).toBe("true"));
+    expect(r.getByText("From chatgpt-2026-11.zip")).toBeTruthy();
+    fireEvent.click(r.getByRole("button", { name: "Build my profile" }));
+    const review = await r.findByRole("region", { name: "What Perch learned" });
+    expect(await within(review).findByRole("button", { name: "Save to memory" })).toBeTruthy();
+  });
+
+  test("Messages offers Full Disk Access in System Settings", async () => {
+    window.location.hash = "#setup";
+    const r = renderWithApi(<MemoryPage />);
+    fireEvent.click(await r.findByRole("button", { name: "Open System Settings to allow Messages" }));
+    await waitFor(() => expect(r.nav.some((n) => n.what === "system-settings")).toBe(true));
+  });
+
+  test("coming back shows the finished draft, and follows a build that is still running", async () => {
+    window.location.hash = "#setup";
+    const first = renderWithApi(<MemoryPage />, { stepMs: 20 });
+    fireEvent.click(await first.findByRole("button", { name: "Build my profile" }));
+    await first.findByRole("progressbar", { name: "Building your profile" });
+    const api = first.api;
+    cleanup();
+
+    const again = renderWithApi(<MemoryPage />, { api });
+    expect(await again.findByRole("progressbar", { name: "Building your profile" })).toBeTruthy();
+    const review = await again.findByRole("region", { name: "What Perch learned" });
+    expect(await within(review).findByRole("button", { name: "Save to memory" }, { timeout: 3000 })).toBeTruthy();
+    cleanup();
+
+    const later = renderWithApi(<MemoryPage />, { api });
+    const panel = await later.findByRole("region", { name: "What Perch learned" });
+    expect(await within(panel).findByText("Draft · 8 facts")).toBeTruthy();
   });
 
   test("build, review (edit and remove), then save; nothing is saved before", async () => {

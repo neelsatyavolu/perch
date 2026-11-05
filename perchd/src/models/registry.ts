@@ -307,9 +307,10 @@ export function createModelRegistry(opts: RegistryOptions) {
       if (!resolved) throw new ProviderError("Connect a model provider in Settings → Models first.", "not-connected");
       return handleFor(resolved);
     }
-    const choice = checkChoice(target);
-    if ((await state(choice.provider)) !== "connected") throw new ProviderError(`Connect ${PROVIDERS[choice.provider].label} first.`, "not-connected");
-    const info = (await listModels(choice.provider).catch(() => [])).find((m) => m.id === choice.model) ?? describeModel(choice.provider, choice.model);
+    // A model from the picker must be offered and able to use Perch's tools, as for the Default role.
+    const available = await availability();
+    const choice = validateRoleChoice("default", checkChoice(target), available);
+    const info = (available.get(choice.provider) ?? []).find((m) => m.id === choice.model) ?? describeModel(choice.provider, choice.model);
     return handleFor({ ...choice, info });
   }
 

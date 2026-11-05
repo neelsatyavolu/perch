@@ -245,3 +245,12 @@ test("modelFor a role with nothing connected explains what to do", async () => {
   const { registry } = await setup();
   await expect(registry.modelFor("default")).rejects.toThrow("Connect a model provider");
 });
+
+test("a model from the picker must be offered and able to use tools", async () => {
+  const { registry } = await setup();
+  await registry.setKey("openai", OPENAI_KEY);
+  await expect(registry.modelFor({ provider: "openai", model: "gpt-image-2.5-sunburst" })).rejects.toThrow("cannot use Perch's tools");
+  await expect(registry.modelFor({ provider: "anthropic", model: "claude-opus-5-5" })).rejects.toThrow("Connect Anthropic first");
+  const handle = await registry.modelFor({ provider: "openai", model: "gpt-6-luna", effort: "low" });
+  expect(handle).toMatchObject({ kind: "model", provider: "openai", effort: "low" });
+});

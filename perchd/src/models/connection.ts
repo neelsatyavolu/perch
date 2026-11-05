@@ -23,9 +23,22 @@ function request(ctx: ListContext): { url: string; headers: Record<string, strin
   return { url: `${base}/models`, headers: ctx.credential ? { authorization: `Bearer ${ctx.credential}` } : {} };
 }
 
+/** OpenRouter lists models without a key, so its key is checked on its own endpoint first. */
+async function verifyOpenRouterKey(ctx: ListContext): Promise<void> {
+  if (ctx.provider !== "openrouter" || !ctx.credential) return;
+  try {
+    const res = await ctx.fetch(`${ctx.baseUrl.replace(/\/+$/, "")}/key`, { headers: { authorization: `Bearer ${ctx.credential}` }, signal: AbortSignal.timeout(LIST_TIMEOUT_MS) });
+    if (res.status === 401 || res.status === 403) throw new ProviderError("OpenRouter rejected that key. Check it and try again.", "auth");
+  } catch (error) {
+    if (error instanceof ProviderError) throw error;
+    throw new ProviderError("Could not reach OpenRouter. Check your connection.", "unreachable");
+  }
+}
+
 /** The provider's live model list. Throws a ProviderError in plain words on any failure. */
 export async function fetchModelList(ctx: ListContext): Promise<ModelInfo[]> {
   const def = PROVIDERS[ctx.provider];
+  await verifyOpenRouterKey(ctx);
   const { url, headers } = request(ctx);
   let res: Response;
   try {

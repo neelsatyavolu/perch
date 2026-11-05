@@ -78,3 +78,19 @@ def test_cli_build_uses_config(monkeypatch, paths, recorder):
     monkeypatch.setattr(cli, "run", recorder)
     assert cli.main(["build", "--config", "release"]) == 0
     assert recorder.calls[-1][-2:] == ["chrome", "chrome/installer/mac"]
+
+
+def test_cli_package_release_without_creds_explains(monkeypatch, capsys, paths):
+    monkeypatch.setattr(cli, "current_paths", lambda: paths)
+    for name in ["APPLE_SIGNING_IDENTITY", "APPLE_API_KEY", "APPLE_API_ISSUER", "APPLE_API_KEY_PATH"]:
+        monkeypatch.delenv(name, raising=False)
+    assert cli.main(["package", "--mode", "release"]) == 1
+    assert "scripts/with-apple-creds.sh" in capsys.readouterr().err
+
+
+def test_cli_package_adhoc_needs_no_creds(monkeypatch, paths):
+    seen = {}
+    monkeypatch.setattr(cli, "current_paths", lambda: paths)
+    monkeypatch.setattr(cli, "package", lambda p, info, mode, creds, run: seen.update(mode=mode, creds=creds) or p.repo / "x.dmg")
+    assert cli.main(["package", "--mode", "adhoc"]) == 0
+    assert seen == {"mode": "adhoc", "creds": None}

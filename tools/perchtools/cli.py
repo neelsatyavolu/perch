@@ -12,8 +12,10 @@ from typing import Any
 from .checkout import checkout
 from .doctor import SystemProbe, run_checks
 from .gnargs import build as build_chromium
+from .package import creds_from_env, package
 from .patching import Generator, PatchFailed, apply_series, continue_series, export_series
 from .paths import REPO, Paths, load_paths
+from .rename import rename_product_strings
 from .run import run
 from .version import bump, latest_stable_mac, read_version, write_version
 
@@ -23,7 +25,7 @@ def fetch_json(url: str) -> Any:
         return json.load(response)
 
 
-GENERATORS: list[Generator] = []
+GENERATORS: list[Generator] = [("product-name", rename_product_strings)]
 
 
 def current_paths() -> Paths:
@@ -83,6 +85,19 @@ def _cmd_build(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_package(args: argparse.Namespace) -> int:
+    creds = None
+    if args.mode == "release":
+        try:
+            creds = creds_from_env(os.environ)
+        except ValueError as error:
+            print(error, file=sys.stderr)
+            return 1
+    dmg = package(current_paths(), read_version(REPO / "version.json"), args.mode, creds, run)
+    print(f"Wrote {dmg}")
+    return 0
+
+
 def _cmd_version(args: argparse.Namespace) -> int:
     path = REPO / "version.json"
     info = read_version(path)
@@ -112,6 +127,9 @@ def build_parser() -> argparse.ArgumentParser:
     build = sub.add_parser("build", help="gn gen and autoninja")
     build.add_argument("--config", choices=["dev", "release"], default="dev")
     build.set_defaults(func=_cmd_build)
+    pkg = sub.add_parser("package", help="sign, package and notarize the release build")
+    pkg.add_argument("--mode", choices=["release", "adhoc"], default="release")
+    pkg.set_defaults(func=_cmd_package)
     sub.add_parser("export", help="write the perch branch's commits back to patches/").set_defaults(func=_cmd_export)
     return parser
 

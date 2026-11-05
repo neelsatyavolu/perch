@@ -28,7 +28,7 @@ export function harness(start = Date.now()) {
     const body = options.raw ?? (options.body === undefined ? undefined : JSON.stringify(options.body));
     const res = await app.fetch(new Request(`https://api.perchbrowser.com${path}`, { method, headers, body }), appEnv);
     const type = res.headers.get("content-type") ?? "";
-    const data = res.status === 101 ? null : type.includes("json") ? await res.json() : await res.text();
+    const data = res.status === 101 ? null : type.includes("json") ? await res.json() : type.includes("octet-stream") ? new Uint8Array(await res.arrayBuffer()) : await res.text();
     return { status: res.status, data, res };
   }
   return { app, mailer, clock, call, ip };

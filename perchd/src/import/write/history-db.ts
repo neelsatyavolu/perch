@@ -47,6 +47,13 @@ export function addHistory(path: string, entries: readonly HistoryEntry[]): numb
     })();
     return added;
   } finally {
+    // Chromium may keep History in WAL mode with exclusive locking; leave no WAL frames behind.
+    // A failed checkpoint must not hide the error that got us here, and the data is committed.
+    try {
+      db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+    } catch {
+      // The rows are committed; Chromium replays any WAL frames itself on open.
+    }
     db.close();
   }
 }

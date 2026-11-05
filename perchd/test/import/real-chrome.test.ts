@@ -69,12 +69,20 @@ test("bookmarks and history written while closed show up in Chrome", async () =>
   const browser = await Browser.launch({ userDataDir: dir, args: ARGS });
   try {
     expect(profileInUse(dir)).toBe(true);
-    const tab = await browser.newTab("chrome://history/");
-    await Bun.sleep(800);
-    expect((await snapshot(tab, { full: true })).text).toContain("Imported history page");
-    await tab.navigate("chrome://bookmarks/");
-    await Bun.sleep(800);
-    expect((await snapshot(tab, { full: true })).text).toContain("Imported bookmark");
+    const tab = await browser.newTab();
+    // The history backend loads after startup and WebUI pages fill in after load: reload and
+    // read the page until the text shows, for up to 20 s.
+    const pageText = async (url: string, wanted: string) => {
+      let text = "";
+      for (let i = 0; i < 20 && !text.includes(wanted); i++) {
+        await tab.navigate(url);
+        await Bun.sleep(i === 0 ? 500 : 1000);
+        text = (await snapshot(tab, { full: true })).text;
+      }
+      return text;
+    };
+    expect(await pageText("chrome://history/", "Imported history page")).toContain("Imported history page");
+    expect(await pageText("chrome://bookmarks/", "Imported bookmark")).toContain("Imported bookmark");
   } finally {
     await browser.close();
   }

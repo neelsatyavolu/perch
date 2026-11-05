@@ -108,11 +108,11 @@ describe("sync", () => {
         await bothThere;
         return blobs.put(key, value);
       } } } as typeof appEnv;
-    const send = (s: Session, bytes: Uint8Array) => h.app.fetch(new Request("https://api.perchbrowser.com/v1/sync/bookmarks/commit", {
+    const send = async (s: Session, bytes: Uint8Array) => Promise.resolve(h.app.fetch(new Request("https://api.perchbrowser.com/v1/sync/bookmarks/commit", {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${s.sessionToken}`, "cf-connecting-ip": h.ip },
       body: JSON.stringify({ items: [{ id: itemId(1), baseVersion: 0, keyVersion: 1, ciphertext: toBase64Url(bytes) }] }),
-    }), racing).then(async (res) => ({ data: (await res.json()) as any }));
+    }), racing)).then(async (res: Response) => ({ data: (await res.json()) as any }));
     const [ra, rb] = await Promise.all([send(a, first), send(b, second)]);
     const statuses = [ra.data.results[0].status, rb.data.results[0].status].sort();
     expect(statuses).toEqual(["conflict", "ok"]);

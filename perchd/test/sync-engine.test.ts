@@ -108,13 +108,113 @@ describe("sync engine", () => {
     expect(result.items.map((i) => i.naturalId)).toEqual(["keep"]);
   });
 
-  test("counts items it cannot read instead of failing the pull", async () => {
+  test("counts items it can never read (damaged, or a key it holds that does not open them)", async () => {
     const { mac, api } = await pair();
     await mac.push(emptySyncState, "bookmarks", [{ naturalId: "b", updatedAt: 1, data: 1 }]);
     const wrongKey = new SyncEngine(api, await makeKeyring([{ version: 1, raw: newSyncKey() }]), "dev_x");
     const result = await wrongKey.pull(emptySyncState, "bookmarks");
     expect(result.unreadable).toBe(1);
     expect(result.items).toEqual([]);
+  });
+
+  test("stops before an item under a newer key, and gets it once it has that key", async () => {
+    const { server, raw, api, mac } = await pair();
+    const first = await mac.push(emptySyncState, "bookmarks", [{ naturalId: "old", updatedAt: 1, data: "a" }]);
+    const laptop = new SyncEngine(api, await makeKeyring([{ version: 1, raw }]), "dev_laptop");
+    const seen = await laptop.pull(emptySyncState, "bookmarks");
+    // The Mac rotates and writes with version 2.
+    const v2 = { version: 2, raw: newSyncKey() };
+    server.state.keyVersion = 2;
+    const rotatedMac = new SyncEngine(api, await makeKeyring([{ version: 1, raw }, v2]), "dev_mac");
+    await rotatedMac.push(first.state, "bookmarks", [{ naturalId: "new", updatedAt: 2, data: "b" }]);
+    await expect(laptop.pull(seen.state, "bookmarks")).rejects.toBeInstanceOf(SyncKeyChangedError);
+    const updated = new SyncEngine(api, await makeKeyring([{ version: 1, raw }, v2]), "dev_laptop");
+    const after = await updated.pull(seen.state, "bookmarks");
+    expect(after.items.map((i) => i.data)).toEqual(["b"]);
+    expect(after.unreadable).toBe(0);
+  });
+
+  test("does not move past an item whose blob could not be fetched", async () => {
+    const { server, mac, laptop } = await pair({ inlineLimit: 100 });
+    await mac.push(emptySyncState, "skills", [{ naturalId: "s", updatedAt: 1, data: "x".repeat(500) }]);
+    server.state.failBlobs = true;
+    await expect(laptop.pull(emptySyncState, "skills")).rejects.toThrow();
+    server.state.failBlobs = false;
+    expect((await laptop.pull(emptySyncState, "skills")).items.map((i) => i.naturalId)).toEqual(["s"]);
+  });
+});
+
+describe("re-encryption after a rotation", () => {
+  async function rotated() {
+    const setup = await pair();
+    const v1 = { version: 1, raw: setup.raw };
+    const before = await setup.mac.push(emptySyncState, "history", [
+      { naturalId: "https://a.example/", updatedAt: 1, data: { url: "https://a.example/", visits: [1] } },
+      { naturalId: "https://b.example/", updatedAt: 2, data: { url: "https://b.example/", visits: [2] } },
+    ]);
+    const v2 = { version: 2, raw: newSyncKey() };
+    setup.server.state.keyVersion = 2;
+    const mac = new SyncEngine(setup.api, await makeKeyring([v1, v2]), "dev_mac");
+    return { ...setup, v1, v2, before, mac };
+  }
+
+  test("moves every item to the new key, and a device with only the new key reads them all", async () => {
+    const { server, api, v2, before, mac } = await rotated();
+    const moved = await mac.reencrypt(before.state, "history");
+    expect(moved.moved).toBe(2);
+    const live = [...server.state.items.values()].filter((i) => !i.deleted);
+    expect(live.map((i) => i.keyVersion)).toEqual([2, 2]);
+    const fresh = new SyncEngine(api, await makeKeyring([v2]), "dev_new");
+    const pulled = await fresh.pull(emptySyncState, "history");
+    expect(pulled.items.filter((i) => !i.deleted).map((i) => i.naturalId).sort()).toEqual(["https://a.example/", "https://b.example/"]);
+    expect(pulled.unreadable).toBe(0);
+    // Running it again finds nothing left to move.
+    expect((await mac.reencrypt(moved.state, "history")).moved).toBe(0);
+  });
+
+  test("another device sees the moved item, not a deletion of it", async () => {
+    const { api, v1, v2, before, mac } = await rotated();
+    const laptop = new SyncEngine(api, await makeKeyring([v1]), "dev_laptop");
+    const seen = await laptop.pull(emptySyncState, "history");
+    await mac.reencrypt(before.state, "history");
+    const updated = new SyncEngine(api, await makeKeyring([v1, v2]), "dev_laptop");
+    const after = await updated.pull(seen.state, "history");
+    expect(after.items.filter((i) => i.deleted)).toEqual([]);
+    expect(after.items.map((i) => i.naturalId).sort()).toEqual(["https://a.example/", "https://b.example/"]);
+  });
+
+  test("merges with an edit made under the new key before the move", async () => {
+    const { before, mac } = await rotated();
+    const edited = await mac.push(before.state, "history", [{ naturalId: "https://a.example/", updatedAt: 5, data: { url: "https://a.example/", visits: [5] } }]);
+    const moved = await mac.reencrypt(edited.state, "history");
+    expect(moved.moved).toBe(2);
+    const all = await mac.pull(emptySyncState, "history");
+    const a = all.items.find((i) => i.naturalId === "https://a.example/" && !i.deleted)!;
+    expect(a.data).toEqual({ url: "https://a.example/", visits: [1, 5] });
+  });
+
+  test("an older copy moved under an edit made since the rotation is not reported as a conflict", async () => {
+    const { api, raw, server } = await pair();
+    const v1 = { version: 1, raw };
+    const oldMac = new SyncEngine(api, await makeKeyring([v1]), "dev_mac");
+    const before = await oldMac.push(emptySyncState, "memory", [{ naturalId: "USER.md", updatedAt: 1, data: "Lives in Palo Alto." }]);
+    server.state.keyVersion = 2;
+    const mac = new SyncEngine(api, await makeKeyring([v1, { version: 2, raw: newSyncKey() }]), "dev_mac");
+    const edited = await mac.push(before.state, "memory", [{ naturalId: "USER.md", updatedAt: 3, data: "Lives in Palo Alto. Plays chess." }]);
+    const moved = await mac.reencrypt(edited.state, "memory");
+    expect(moved.moved).toBe(1);
+    expect(moved).not.toHaveProperty("conflictCopies");
+    const live = [...server.state.items.values()].filter((i) => !i.deleted);
+    expect(live).toHaveLength(1);
+    expect((await mac.pull(emptySyncState, "memory")).items.map((i) => i.data)).toEqual(["Lives in Palo Alto. Plays chess."]);
+  });
+
+  test("a deletion made before the move removes the old copy too, so the move cannot bring it back", async () => {
+    const { server, before, mac } = await rotated();
+    await mac.push(before.state, "history", [{ naturalId: "https://b.example/", updatedAt: 9, deleted: true }]);
+    const moved = await mac.reencrypt(before.state, "history");
+    expect(moved.moved).toBe(1);
+    expect([...server.state.items.values()].filter((i) => !i.deleted)).toHaveLength(1);
   });
 });
 

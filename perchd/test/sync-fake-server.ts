@@ -7,7 +7,7 @@ import type { FetchLike } from "../src/sync/api";
 type Stored = { id: string; version: number; keyVersion: number; seq: number; size: number; deleted: boolean; updatedAt: number; ciphertext?: string };
 
 export function fakeSyncServer(options: { keyVersion?: number; inlineLimit?: number } = {}) {
-  const state = { seq: 0, purgeSeq: 0, keyVersion: options.keyVersion ?? 1, items: new Map<string, Stored>(), commits: 0 };
+  const state = { seq: 0, purgeSeq: 0, keyVersion: options.keyVersion ?? 1, items: new Map<string, Stored>(), commits: 0, failBlobs: false };
   const inline = options.inlineLimit ?? Infinity;
   const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
   const out = (s: Stored) => {
@@ -44,6 +44,7 @@ export function fakeSyncServer(options: { keyVersion?: number; inlineLimit?: num
       return json({ items: page.map(out), next: page.at(-1)?.seq ?? after, more: all.length > limit });
     }
     if (action === "items" && id) {
+      if (state.failBlobs) return json({ error: { code: "unavailable", message: "Try again." } }, 503);
       const stored = state.items.get(`${collection}/${id}`);
       if (!stored?.ciphertext) return json({ error: { code: "no_item", message: "gone" } }, 404);
       const bytes = Buffer.from(stored.ciphertext, "base64url");

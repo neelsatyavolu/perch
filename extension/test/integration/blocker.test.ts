@@ -16,7 +16,7 @@ describe("content blocker", () => {
 
   test("blocks listed hosts and patterns, honours exceptions and third-party options", async () => {
     const tab = await h.open(h.site.url("site.localhost", "/blocker.html"));
-    expect(await tab.evaluate("done")).toEqual({
+    expect(await tab.evaluate<Record<string, string>>("done")).toEqual({
       ad: "blocked",
       allowed: "loaded",
       bannerAd: "blocked",

@@ -138,7 +138,7 @@ test("an approval goes through the API, and a stale one is refused", async () =>
   const chat = (await (await api("/api/chats", { method: "POST", json: {} })).json()) as Chat;
   await api(`/api/chats/${chat.id}/messages`, { method: "POST", json: { text: "This needs approval" } });
   const ask = await until(() => events.find((e): e is Extract<AppEvent, { type: "run.approval" }> => e.type === "run.approval"));
-  expect(ask.card).toMatchObject({ body: "On my way", confirm: "Type and press Enter" });
+  expect(ask.card).toMatchObject({ body: "On my way", confirm: "Send message" });
   const view = await (await api(`/api/chats/${chat.id}`)).json();
   expect(view.run.approval.id).toBe(ask.card.id);
   expect((await api(`/api/approvals/${ask.card.id}`, { method: "POST", json: { approved: "yes" } })).status).toBe(400);

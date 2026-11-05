@@ -145,7 +145,7 @@ for (const { theme, accent } of pairs) {
     }))()`);
     expect(seen.bg).toBe(hexToRgb(theme.canvas));
     expect(seen.accent.toUpperCase()).toBe(theme.dark ? accent.dark : accent.light);
-    expect(seen.confirm).toBe("Type and press Enter");
+    expect(seen.confirm).toBe("Send message");
     expect(seen.chip).toBe("Inbox (3) · Mailroom");
     expect(seen.dot).toBe(true);
     expect(seen.url).not.toContain(app.token);

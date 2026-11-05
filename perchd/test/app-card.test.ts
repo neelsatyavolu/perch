@@ -16,10 +16,18 @@ const req = (over: Partial<ApprovalRequest> & { name: string; args?: Record<stri
 test("a typed message shows exactly the text that goes out", () => {
   const card = describeApproval(req({ name: "type", args: { ref: "e4", text: "Hi Maya, Thursday at 3 works.", submit: true }, target: { role: "textbox", name: "Message" } }), ids);
   expect(card.body).toBe("Hi Maya, Thursday at 3 works.");
-  expect(card.confirm).toBe("Type and press Enter");
-  expect(card.title).toBe('Type into textbox "Message" and press Enter');
+  expect(card.confirm).toBe("Send message");
+  expect(card.title).toBe("Send a message");
   expect(card.site).toBe("mail.example.com");
   expect(card).toMatchObject(ids);
+});
+
+test("typing and pressing Enter is named for what it sends; other fields keep the plain words", () => {
+  const typed = (name: string, submit = true) => describeApproval(req({ name: "type", args: { text: "hi", submit }, target: { role: "textbox", name } }), ids);
+  expect(typed("Reply to Maya")).toMatchObject({ confirm: "Send message", title: "Send a message" });
+  expect(typed("Write a comment…")).toMatchObject({ confirm: "Post comment", title: "Post a comment" });
+  expect(typed("What's happening?")).toMatchObject({ confirm: "Type and press Enter" });
+  expect(typed("Message", false)).toMatchObject({ confirm: "Type text", title: 'Type into textbox "Message"' });
 });
 
 test("a click is labelled with the button's own words", () => {

@@ -9,6 +9,11 @@ import type { ApprovalCard } from "./protocol";
 const GENERIC = /^(ok|okay|confirm|yes|submit|continue|next|done|apply|save|go|proceed)$/i;
 const DESTRUCTIVE = /\b(delete|remove|trash|discard|erase|cancel subscription|close account)\b/i;
 const MAX_LABEL = 40;
+/** Fields whose Enter sends something, named by what goes out. A comment box is checked first. */
+const SENDS = [
+  { field: /\bcomment/i, title: "Post a comment", confirm: "Post comment" },
+  { field: /\b(message|reply|chat|dm)\b/i, title: "Send a message", confirm: "Send message" },
+] as const;
 
 type Ids = { id: string; chatId: string; runId: string };
 
@@ -26,6 +31,8 @@ export function describeApproval(req: ApprovalRequest, ids: Ids): ApprovalCard {
   switch (req.call.name) {
     case "type": {
       const submit = Boolean(a.submit);
+      const sends = submit ? SENDS.find((s) => s.field.test(req.target?.name ?? "")) : undefined;
+      if (sends) return card(sends.title, sends.confirm, { body: String(a.text ?? "") });
       return card(`Type into ${what || "a field"}${submit ? " and press Enter" : ""}`, submit ? "Type and press Enter" : "Type text", { body: String(a.text ?? "") });
     }
     case "click": {

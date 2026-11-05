@@ -9,6 +9,7 @@
  *            always asks, even in Skip confirmation
  */
 
+import { appTool } from "../apps/index";
 import type { ToolCall } from "../models/types";
 
 export type Mode = "ask" | "guard" | "skip";
@@ -37,6 +38,8 @@ const SEARCHY = /search|find|filter|lookup/i;
 export function classify(call: ToolCall, target?: Target, page: PageContext = {}): Kind {
   const name = target?.name ?? "";
   const guarded = Boolean(page.payment || page.passwordChange);
+  const app = appTool(call.name);
+  if (app) return app.kind(call.args);
   if (READ_TOOLS.has(call.name)) return "read";
   // The REPL runs in a read-only sandbox (src/page/repl.ts); writes go through the other tools.
   if (call.name === "repl") return "read";

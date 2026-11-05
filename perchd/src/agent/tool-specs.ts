@@ -1,5 +1,6 @@
 /** The browser tools, identical for every model, and a small validator for their arguments. */
 
+import { APP_TOOLS } from "../apps/index";
 import type { ToolSpec } from "../models/types";
 
 type Prop = { type: "string" | "number" | "boolean" | "array"; description?: string; items?: { type: "string" } };
@@ -32,7 +33,7 @@ export const TOOL_SPECS: ToolSpec[] = [
   spec("done", "Finish the task with a short answer for the user.", { answer: { type: "string" } }, ["answer"]),
 ];
 
-const BY_NAME = new Map(TOOL_SPECS.map((s) => [s.name, s]));
+const BY_NAME = new Map([...TOOL_SPECS, ...APP_TOOLS.map((t) => t.spec)].map((s) => [s.name, s]));
 
 /** Returns a plain error for the model, or null when the arguments fit the tool's schema. */
 export function validate(name: string, args: Record<string, unknown>): string | null {

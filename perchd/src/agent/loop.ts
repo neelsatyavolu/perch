@@ -1,5 +1,6 @@
 /** The agent loop: model turn, tool calls with permission checks, results back, until done. */
 
+import { agentToolSpecs } from "../apps/index";
 import type { Browser } from "../browser/browser";
 import type { Effort, Message, Model, ToolCall, TurnRequest } from "../models/types";
 import type { AuditLog } from "./audit";
@@ -54,7 +55,7 @@ export async function* runTask(opts: TaskOptions): AsyncIterable<StepEvent> {
       let text = "";
       const calls: ToolCall[] = [];
       try {
-        const req: TurnRequest = { system, messages: compact(messages), tools: TOOL_SPECS, effort: opts.effort };
+        const req: TurnRequest = { system, messages: compact(messages), tools: agentToolSpecs(TOOL_SPECS), effort: opts.effort };
         for await (const event of opts.model.turn(req, signal)) {
           if (event.type === "text") {
             text += event.delta;

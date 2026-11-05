@@ -3,6 +3,7 @@
  * Shared by the task loop (sidebar chats) and the MCP server (outside agents).
  */
 
+import { appTool } from "../apps/index";
 import type { ToolCall } from "../models/types";
 import type { AuditLog } from "./audit";
 import { classify, needsApproval, type Kind, type Mode, type SiteRule, type Target } from "./permissions";
@@ -33,10 +34,11 @@ export async function prepareCall(ctx: ToolContext, opts: CallPolicy, call: Tool
   if (problem) return { kind: "answer", result: { content: problem, isError: true } };
 
   const target = call.name === "press" ? await focusedTarget(ctx) : describeTarget(ctx, call) ?? (await liveTarget(ctx, call));
-  const page = READS.has(call.name) ? {} : await pageContext(ctx);
+  const app = appTool(call.name);
+  const page = READS.has(call.name) || app ? {} : await pageContext(ctx);
   const kind = classify(call, target, page);
   const destination = call.name === "navigate" || call.name === "open_tab" ? String(call.args.url) : undefined;
-  const site = destination ? hostOf(destination) : await currentHost(ctx);
+  const site = app ? app.site : destination ? hostOf(destination) : await currentHost(ctx);
   const decision = needsApproval(opts.mode, kind, opts.siteRule?.(site));
   const what = target ? `${target.role} "${target.name}"` : summarizeArgs(call);
   const detail = kind === "read" ? what : [what, await approvalDetail(ctx, call)].filter(Boolean).join(" ");
@@ -93,6 +95,7 @@ function verb(call: ToolCall): string {
 function summarizeArgs(call: ToolCall): string {
   if (call.name === "click_at") return `the point ${call.args.x}, ${call.args.y}`;
   if (call.name === "repl") return `(${String(call.args.code ?? "").length} characters of code)`;
+  if (appTool(call.name)) return [call.args.command, ...((call.args.args as string[] | undefined) ?? [])].join(" ");
   return "";
 }
 

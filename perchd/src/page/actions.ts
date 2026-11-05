@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import type { Tab } from "../browser/tab";
 import { parseKey } from "./keys";
 import { RefGone, type RefTable, type RefTarget } from "./refs";
+import { ANNOUNCES_SUGGESTIONS, suggestionNote, typeKeys, VISIBLE_SUGGESTIONS } from "./typing";
 
 export type ActionResult = { ok: true; note: string } | { ok: false; error: string };
 
@@ -165,10 +166,14 @@ export function type(tab: Tab, refs: RefTable, ref: string, text: string, opts: 
     await tab.sendIn(node.session, "DOM.scrollIntoViewIfNeeded", { backendNodeId: node.backendNodeId }).catch(() => undefined);
     await tab.sendIn(node.session, "DOM.focus", { backendNodeId: node.backendNodeId });
     await call(tab, node, "function () { if (typeof this.select === 'function') this.select(); else if (this.isContentEditable) document.execCommand('selectAll'); }");
-    if (text) await tab.send("Input.insertText", { text });
+    const watch = !opts.submit && text !== "" && !(await call<boolean>(tab, node, "function () { return this.type === 'password'; }"));
+    const suggestions = () => call<string[]>(tab, node, VISIBLE_SUGGESTIONS);
+    const before = watch ? await suggestions() : [];
+    if (text) await typeKeys(tab, text);
     else await press(tab, "Delete");
     if (opts.submit) await press(tab, "Enter");
-    return ok(`typed ${text.length} characters${opts.submit ? " and pressed Enter" : ""}`);
+    const note = watch ? await suggestionNote(suggestions, before, await call<boolean>(tab, node, ANNOUNCES_SUGGESTIONS)) : "";
+    return ok(`typed ${text.length} characters${opts.submit ? " and pressed Enter" : ""}${note}`);
   });
 }
 

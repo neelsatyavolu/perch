@@ -14,6 +14,11 @@ export type Layout = {
    * inside a container placed at the end of a long page; the container must not be pruned.
    */
   pinned: Set<number>;
+  /**
+   * Elements a person would see as clickable: the outermost element of a cursor: pointer run that
+   * is not a link, button or form field. Custom suggestion lists, chips and menus are often only this.
+   */
+  clickable: Set<number>;
   scrollY: number;
   viewHeight: number;
 };
@@ -21,6 +26,8 @@ export type Layout = {
 /** Elements whose attributes are kept: form fields (secret detection) and iframes (payment frames). */
 const FIELD_TAGS = new Set(["INPUT", "TEXTAREA", "SELECT", "IFRAME"]);
 const ROOT_TAGS = new Set(["#document", "HTML", "BODY"]);
+/** Tags that are interactive in the accessibility tree already, or whose control is. */
+const NATIVE_CONTROLS = new Set(["A", "BUTTON", "INPUT", "SELECT", "TEXTAREA", "LABEL", "SUMMARY", "OPTION", "#text", "HTML", "BODY"]);
 
 type Doc = {
   nodes: { backendNodeId: number[]; nodeName: number[]; attributes: number[][]; parentIndex: number[] };
@@ -29,10 +36,10 @@ type Doc = {
 
 export async function captureLayout(tab: Tab): Promise<Layout> {
   const [snap, view] = await Promise.all([
-    tab.send<{ documents: Doc[]; strings: string[] }>("DOMSnapshot.captureSnapshot", { computedStyles: ["position"] }),
+    tab.send<{ documents: Doc[]; strings: string[] }>("DOMSnapshot.captureSnapshot", { computedStyles: ["position", "cursor"] }),
     tab.evaluate<[number, number]>("[scrollY, innerHeight]"),
   ]);
-  const layout: Layout = { rects: new Map(), attrs: new Map(), mainNodes: new Set(), roots: new Set(), pinned: new Set(), scrollY: view[0], viewHeight: view[1] };
+  const layout: Layout = { rects: new Map(), attrs: new Map(), mainNodes: new Set(), roots: new Set(), pinned: new Set(), clickable: new Set(), scrollY: view[0], viewHeight: view[1] };
   snap.documents.forEach((doc, docIndex) => {
     const ids = doc.nodes.backendNodeId;
     if (docIndex === 0) for (const id of ids) layout.mainNodes.add(id);
@@ -49,6 +56,7 @@ export async function captureLayout(tab: Tab): Promise<Layout> {
         }
       }
     });
+    markClickable(doc, snap.strings, layout.clickable);
     doc.nodes.nodeName.forEach((nameIndex, i) => {
       const id = ids[i];
       const tag = snap.strings[nameIndex] ?? "";
@@ -71,4 +79,23 @@ export function placement(layout: Layout, backendNodeId: number | undefined): "a
   if (rect.y + rect.h < layout.scrollY - layout.viewHeight) return "above";
   if (rect.y > layout.scrollY + 2 * layout.viewHeight) return "below";
   return "near";
+}
+
+/** Adds the outermost cursor: pointer elements of one document that are not native controls. */
+function markClickable(doc: Doc, strings: string[], out: Set<number>): void {
+  const pointer = new Set<number>();
+  const laidOut = new Set(doc.layout.nodeIndex);
+  doc.layout.nodeIndex.forEach((nodeIndex, i) => {
+    if (strings[doc.layout.styles[i]?.[1] ?? -1] === "pointer") pointer.add(nodeIndex);
+  });
+  for (const nodeIndex of pointer) {
+    const tag = strings[doc.nodes.nodeName[nodeIndex] ?? -1] ?? "";
+    if (NATIVE_CONTROLS.has(tag)) continue;
+    // The cursor is inherited, so only the element where the pointer run starts counts.
+    let parent = doc.nodes.parentIndex[nodeIndex] ?? -1;
+    while (parent >= 0 && !laidOut.has(parent)) parent = doc.nodes.parentIndex[parent] ?? -1;
+    if (parent >= 0 && pointer.has(parent)) continue;
+    const id = doc.nodes.backendNodeId[nodeIndex];
+    if (id !== undefined) out.add(id);
+  }
 }

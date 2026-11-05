@@ -30,8 +30,11 @@ const PUNCTUATION: Record<string, [string, number]> = {
   "[": ["BracketLeft", 219], "]": ["BracketRight", 221], "\\": ["Backslash", 220], "-": ["Minus", 189], "=": ["Equal", 187], "`": ["Backquote", 192],
 };
 
-/** Parses "Enter", "a" or "Meta+Shift+K" into a key, a CDP modifier bitmask and any macOS editing command. */
+/** Parses "Enter", "a", " " or "Meta+Shift+K" into a key, a CDP modifier bitmask and any macOS editing command. */
 export function parseKey(combo: string): { def: KeyDef; modifiers: number; commands?: string[] } | null {
+  // A literal space or plus sign is the key itself, not a separator.
+  if (combo === " ") return { def: NAMED.space!, modifiers: 0 };
+  if (combo === "+") return { def: charDef("+", 0), modifiers: 0 };
   const parts = combo.split("+").map((p) => p.trim()).filter(Boolean);
   const last = parts.pop();
   if (!last) return null;
@@ -44,13 +47,24 @@ export function parseKey(combo: string): { def: KeyDef; modifiers: number; comma
   const named = NAMED[last.toLowerCase()];
   if (named) return { def: named, modifiers };
   if (last.length !== 1) return null;
-  const upper = last.toUpperCase();
-  const isLetter = /[A-Z]/.test(upper);
-  const punct = PUNCTUATION[last];
-  const text = modifiers & 6 ? undefined : last;
-  const def: KeyDef = punct
-    ? { key: last, code: punct[0], keyCode: punct[1], text }
-    : { key: last, code: isLetter ? `Key${upper}` : /\d/.test(last) ? `Digit${last}` : "", keyCode: upper.charCodeAt(0), text };
+  const def = charDef(last, modifiers);
   const command = modifiers & META ? (last.toLowerCase() === "z" && modifiers & SHIFT ? "redo" : META_COMMANDS[last.toLowerCase()]) : undefined;
   return command ? { def, modifiers, commands: [command] } : { def, modifiers };
+}
+
+/** The key for one printable character; with Control or Meta held it types no text. */
+function charDef(ch: string, modifiers: number): KeyDef {
+  const upper = ch.toUpperCase();
+  const isLetter = /[A-Z]/.test(upper);
+  const punct = PUNCTUATION[ch];
+  const text = modifiers & 6 ? undefined : ch;
+  return punct
+    ? { key: ch, code: punct[0], keyCode: punct[1], text }
+    : { key: ch, code: isLetter ? `Key${upper}` : /\d/.test(ch) ? `Digit${ch}` : "", keyCode: upper.charCodeAt(0), text };
+}
+
+/** The key that types one character, or null when it has no key on a US keyboard (it is inserted instead). A newline is inserted too: Enter would submit a form.. */
+export function keyForChar(ch: string): KeyDef | null {
+  if (ch === " ") return NAMED.space!;
+  return /^[\x21-\x7e]$/.test(ch) ? charDef(ch, 0) : null;
 }

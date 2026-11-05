@@ -33,11 +33,13 @@ const PASSWORD = /\b(change|update|reset|save|set) (your |the )?password\b/i;
 /** Buttons that move a checkout or a password form forward. */
 const ADVANCES = /\b(continue|next|confirm|complete|submit|save|update|done|apply|finish|proceed|place|order|pay|book|reserve|change|set|verify)\b/i;
 const SEARCHY = /search|find|filter|lookup/i;
+/** Roles whose drag moves a value along a track rather than dropping something somewhere. */
+const ALONG_TRACK = new Set(["slider", "scrollbar", "separator"]);
 
 /**
  * `drop` is where a drag ends (its `to` element). A drag is judged as a click on its source and,
  * when it has one, a click on what it is dropped on; the stricter of the two wins. A drop target
- * that could not be identified counts as risky.
+ * that could not be identified counts as risky, and so does a drag by pixels, except along a slider.
  */
 export function classify(call: ToolCall, target?: Target, page: PageContext = {}, drop?: Target): Kind {
   const name = target?.name ?? "";
@@ -52,8 +54,11 @@ export function classify(call: ToolCall, target?: Target, page: PageContext = {}
   if (call.name === "select" || (call.name === "type" && !call.args.submit)) return "change";
   if (call.name === "drag") {
     const source = clickKind(target, guarded);
-    if (call.args.to === undefined) return source;
-    return stricter(source, drop ? clickKind(drop, guarded) : "risky");
+    if (call.args.to !== undefined) return stricter(source, drop ? clickKind(drop, guarded) : "risky");
+    // A drag by pixels lands on whatever is there (a Trash or Delete zone, say), which nobody
+    // identified. Only a slider-like source moves along its own track with nothing to drop on.
+    const still = !Number(call.args.dx ?? 0) && !Number(call.args.dy ?? 0);
+    return still || ALONG_TRACK.has(target?.role ?? "") ? source : stricter(source, "risky");
   }
   if (call.name === "press" && !isEnter(call)) return "change";
   if (call.name === "press" || call.name === "type") {

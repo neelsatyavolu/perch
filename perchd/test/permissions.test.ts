@@ -60,6 +60,18 @@ test("a drag is judged by its source and by what it is dropped on", () => {
   expect(classify(call("drag", { ref: "e5", dx: 0 }), undefined)).toBe("risky");
 });
 
+test("a drag by pixels lands on an element nobody identified, so it asks unless it moves a slider", () => {
+  // A message dragged by an offset onto a Trash or Delete zone must not run unasked in Guard mode.
+  const message = { role: "row", name: "Invoice from Acme" };
+  expect(classify(call("drag", { ref: "e5", dx: -600, dy: 120 }), message)).toBe("risky");
+  expect(needsApproval("guard", classify(call("drag", { ref: "e5", dx: -600, dy: 120 }), message))).toBe("ask");
+  expect(classify(call("drag", { ref: "e5", dy: 80 }), { role: "button", name: "Buy now" })).toBe("payment");
+  // Sliders, scrollbars and splitters move along a track: there is nothing to drop onto.
+  expect(classify(call("drag", { ref: "e5", dx: 40 }), { role: "slider", name: "Max price" })).toBe("change");
+  expect(classify(call("drag", { ref: "e5", dy: 200 }), { role: "scrollbar", name: "" })).toBe("change");
+  expect(classify(call("drag", { ref: "e5", dx: -80 }), { role: "separator", name: "Resize panel" })).toBe("change");
+});
+
 test.each([
   [call("click", { ref: "e1" }), { role: "button", name: "Continue" }, { payment: true }, "payment"],
   [call("click", { ref: "e1" }), { role: "button", name: "Next" }, { payment: true }, "payment"],

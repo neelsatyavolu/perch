@@ -1,8 +1,9 @@
 /** Shapes shared by the agent loop and the model adapters. Every model sees the same tools. */
 
-export type ToolCall = { id: string; name: string; args: Record<string, unknown> };
+/** `meta` carries provider data that must go back with the call, such as Gemini's thought signatures. */
+export type ToolCall = { id: string; name: string; args: Record<string, unknown>; meta?: Record<string, unknown> };
 export type ToolSpec = { name: string; description: string; parameters: object };
-export type Effort = "low" | "medium" | "high";
+export type Effort = "low" | "medium" | "high" | "xhigh";
 
 export type Message =
   | { role: "user"; text: string; image?: string }

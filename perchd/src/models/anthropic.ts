@@ -32,7 +32,7 @@ export function toAnthropicMessages(messages: Message[]): { role: "user" | "assi
   return out;
 }
 
-export function anthropicModel(opts: { model: string; apiKey: () => Promise<string> }, fetchImpl: typeof fetch = fetch): Model {
+export function anthropicModel(opts: { model: string; apiKey: () => Promise<string>; url?: string }, fetchImpl: typeof fetch = fetch): Model {
   return {
     id: `anthropic:${opts.model}`,
     async *turn(req: TurnRequest, signal: AbortSignal): AsyncIterable<TurnEvent> {
@@ -49,7 +49,7 @@ export function anthropicModel(opts: { model: string; apiKey: () => Promise<stri
       };
       const stream = await openStream(
         () => ({
-          url: ANTHROPIC_URL,
+          url: opts.url ?? ANTHROPIC_URL,
           init: {
             method: "POST",
             headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json", accept: "text/event-stream" },

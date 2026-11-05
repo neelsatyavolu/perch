@@ -2,7 +2,9 @@
  * Dreaming (spec 8): a nightly consolidation pass. A rule pass removes duplicates, moves expired
  * facts to History and applies episodic retention. An optional model pass may merge facts,
  * retire superseded ones and merge two pages of one category, but only by pointing at facts that
- * exist; it can never invent a page or a fact that is not a merge. Every change goes to a dated log.
+ * exist; it can never invent a page or a fact that is not a merge. A merged fact may only use words
+ * from the facts it replaces. Standing rules (MEMORY.md) are only saved with the user's approval, so
+ * the model never sees or changes them. Every change goes to a dated log.
  */
 
 import type { Model, ToolSpec } from "../models/types";
@@ -30,6 +32,8 @@ export type DreamOptions = { store: MemoryStore; model?: Model; now: Date; signa
 const HISTORY_CAP = 100;
 const PROMPT_BUDGET = 30_000;
 const DAY = 86_400_000;
+/** Joining words a merged fact may add; every other word must come from the facts it merges. */
+const JOINERS = new Set(["a", "an", "and", "also", "as", "at", "both", "for", "in", "is", "of", "on", "the", "to", "with"]);
 
 export const CONSOLIDATE_TOOL: ToolSpec = {
   name: "consolidate",
@@ -151,12 +155,23 @@ function indexes(value: unknown, length: number): number[] | null {
   return list.every((i) => Number.isInteger(i) && i >= 0 && i < length) ? (list as number[]).sort((a, b) => a - b) : null;
 }
 
-async function modelPass(model: Model, drafts: Map<string, Draft>, report: DreamReport, now: string, signal?: AbortSignal): Promise<void> {
+function words(text: string): string[] {
+  return text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+}
+
+/** True when the merged text adds no word beyond the merged facts and a few joining words. */
+function usesOnlySourceWords(text: string, sources: readonly Fact[]): boolean {
+  const known = new Set(sources.flatMap((f) => words(f.text)));
+  return words(text).every((w) => known.has(w) || JOINERS.has(w));
+}
+
+async function modelPass(model: Model, allDrafts: Map<string, Draft>, report: DreamReport, now: string, signal?: AbortSignal): Promise<void> {
+  const drafts = new Map([...allDrafts].filter(([, d]) => d.page.category !== "rules"));
   const shown = renderForModel(drafts);
   if (!shown) return;
   const system = [
     "You tidy a private memory of facts about the user. Facts are numbered per page.",
-    "merge_facts: combine facts on one page that say the same thing into one sentence.",
+    "merge_facts: combine facts on one page that say the same thing into one sentence, using only words from those facts.",
     "retire: move facts that a newer fact on the same page replaces (an old job, an old address) to History.",
     "merge_pages: two pages of the same kind about the same subject; facts move into the second.",
     "Change only what is clearly redundant or out of date. Never add new information.",
@@ -177,7 +192,8 @@ async function modelPass(model: Model, drafts: Map<string, Draft>, report: Dream
     const draft = drafts.get(str(raw.path));
     const list = draft && indexes(raw.indexes, draft.page.current.length);
     const text = cleanText(str(raw.text));
-    if (!draft || !list || list.length < 2 || !text || looksSecret(text) || !take(draft.page.path, list)) report.ignored++;
+    const sources = draft && list ? list.map((i) => draft.page.current[i]!) : [];
+    if (!draft || !list || list.length < 2 || !text || looksSecret(text) || !usesOnlySourceWords(text, sources) || !take(draft.page.path, list)) report.ignored++;
     else merges.push({ path: draft.page.path, list, text });
   }
   for (const raw of arrayOf(answer.args.retire)) {

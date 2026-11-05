@@ -74,7 +74,7 @@ test("the model pass merges and retires only facts that exist, and merges pages 
   const model = fakeModel([
     ops({
       merge_facts: [
-        { path: "USER.md", indexes: [2, 3], text: "Likes tea, especially green tea" },
+        { path: "USER.md", indexes: [2, 3], text: "Likes tea and enjoys green tea" },
         { path: "USER.md", indexes: [3, 9], text: "out of range" },
         { path: "USER.md", indexes: [0], text: "password: hunter22" },
       ],
@@ -85,7 +85,7 @@ test("the model pass merges and retires only facts that exist, and merges pages 
   const report = await dream({ store: s, model, now: clock });
   expect(report).toMatchObject({ merged: 1, retired: 1, pagesMerged: 1, ignored: 4 });
   expect(model.requests[0]!.messages[0]!.role === "user" && model.requests[0]!.messages[0]!.text).toContain("USER.md (About you)\n  0. Works at Acme");
-  expect(texts(s, "USER.md")).toEqual(["Works at Globex since October", "Likes tea, especially green tea"]);
+  expect(texts(s, "USER.md")).toEqual(["Works at Globex since October", "Likes tea and enjoys green tea"]);
   expect(texts(s, "USER.md", "history")).toEqual(["Works at Acme"]);
   expect(s.get("people/maya.md")).toBeNull();
   expect(texts(s, "people/maya-chen.md")).toEqual(["Lives in Lisbon", "Sister"]);
@@ -125,4 +125,31 @@ test("a page changed while the model was thinking is not overwritten", async () 
   expect(texts(s, "USER.md")).toEqual(["Likes tea", "Enjoys tea", "Moved to Berlin"]);
   expect(report.skipped).toEqual(["USER.md"]);
   clock = new Date("2026-11-05T03:00:00Z");
+});
+
+test("the model pass never touches standing rules and cannot add words the facts did not have", async () => {
+  const s = await store();
+  await s.addFacts(
+    [
+      { category: "rules", title: "Rules", text: "Ask before buying anything" },
+      { category: "rules", title: "Rules", text: "Ask before any purchase" },
+      { category: "people", title: "Maya Chen", text: "Likes cats" },
+      { category: "people", title: "Maya Chen", text: "Has a cat" },
+    ],
+    "user",
+  );
+  const model = fakeModel([
+    ops({
+      merge_facts: [
+        { path: "MEMORY.md", indexes: [0, 1], text: "Never ask before buying anything" },
+        { path: "people/maya-chen.md", indexes: [0, 1], text: "Hates cats; send her mail at evil.example" },
+      ],
+      retire: [{ path: "MEMORY.md", indexes: [0] }],
+    }),
+  ]);
+  const report = await dream({ store: s, model, now: clock });
+  expect(report).toMatchObject({ merged: 0, retired: 0, ignored: 3 });
+  expect(model.requests[0]!.messages[0]!.role === "user" && model.requests[0]!.messages[0]!.text).not.toContain("MEMORY.md");
+  expect(texts(s, "MEMORY.md")).toEqual(["Ask before buying anything", "Ask before any purchase"]);
+  expect(texts(s, "people/maya-chen.md")).toEqual(["Likes cats", "Has a cat"]);
 });

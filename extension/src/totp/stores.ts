@@ -1,5 +1,8 @@
 /** Browser-side storage for the vault: the key in IndexedDB, the encrypted records in chrome.storage.local. */
 
+/** Set by the build: true only for development and test builds (`bun run build -- --profile-key`). */
+declare const PERCH_PROFILE_KEY: boolean | undefined;
+
 import { Vault, type KeyStore, type RecordStore, type StoredEntry } from "./vault";
 
 const DB = "perch-vault";
@@ -47,6 +50,14 @@ function isStoredEntry(value: unknown): value is StoredEntry {
   return !!v && typeof v.id === "string" && typeof v.iv === "string" && typeof v.data === "string";
 }
 
-export function browserVault(): Vault {
-  return new Vault(idbKeyStore, storageRecords);
+/**
+ * The vault, or null when this build has no safe place for its key. A key in IndexedDB sits in the
+ * same profile folder as the records, which breaks the rule that secrets live in the Keychain, so
+ * release builds turn the authenticator off until the Keychain wrap (spec 11.1) exists.
+ */
+export function browserVault(): Vault | null {
+  const profileKey = typeof PERCH_PROFILE_KEY !== "undefined" && PERCH_PROFILE_KEY === true;
+  return profileKey ? new Vault(idbKeyStore, storageRecords) : null;
 }
+
+export const AUTHENTICATOR_OFF = "The authenticator turns on once Perch can keep its key in the macOS Keychain. This build cannot yet, so it saves no codes.";

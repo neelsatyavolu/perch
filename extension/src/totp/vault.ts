@@ -2,8 +2,9 @@
  * The authenticator's store. Each account record (issuer, account, site, secret) is encrypted whole
  * with AES-256-GCM under one non-extractable key, with the record id as associated data so records
  * cannot be swapped. The key lives in IndexedDB as a CryptoKey that script cannot export; records
- * live in chrome.storage.local, which Chromium never syncs. In the Perch build the key moves behind
- * the Keychain-wrapped profile key (spec 11.1).
+ * live in chrome.storage.local, which Chromium never syncs. Both sit in the profile folder, so this
+ * alone does not protect codes from someone who can read that folder: release builds keep the
+ * authenticator off (see stores.ts) until the key moves behind the Keychain wrap in spec 11.1.
  */
 
 import { base32Decode } from "./base32";
@@ -69,6 +70,9 @@ export class Vault {
   private async key(): Promise<CryptoKey> {
     const existing = await this.keys.get();
     if (existing) return existing;
+    // Records without a key mean the key was lost. A new key would make every later record
+    // unreadable too, so stop and say so instead.
+    if ((await this.records.read()).length > 0) throw new Error(UNREADABLE);
     const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
     await this.keys.put(key);
     return key;

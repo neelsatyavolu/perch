@@ -2,12 +2,15 @@
 
 import { normalizeHost } from "../shared/settings";
 import { checkSecret } from "../totp/otpauth";
-import { browserVault } from "../totp/stores";
+import { AUTHENTICATOR_OFF, browserVault } from "../totp/stores";
 import type { VaultEntry } from "../totp/vault";
 import { errorText, h } from "./dom";
 
 export async function codesPanel(): Promise<HTMLElement> {
   const vault = browserVault();
+  if (!vault) {
+    return h("section", { class: "panel", attrs: { id: "codes" } }, [h("h2", { text: "Authenticator" }), h("p", { class: "intro", text: AUTHENTICATOR_OFF })]);
+  }
   const list = h("div");
   const status = h("p", { class: "caption", attrs: { role: "status" } });
 
@@ -90,7 +93,7 @@ export async function codesPanel(): Promise<HTMLElement> {
   await draw();
   return h("section", { class: "panel", attrs: { id: "codes" } }, [
     h("h2", { text: "Authenticator" }),
-    h("p", { class: "intro", text: "Codes are encrypted on this Mac and never synced. A code fills only on its own site." }),
+    h("p", { class: "intro", text: "Codes are encrypted and never synced. In this development build the key is kept in the browser profile, not the Keychain. A code fills only on its own site." }),
     list,
     h("div", { class: "form" }, [h("div", { class: "fields" }, [issuer, account]), key, site, h("div", { class: "actions" }, [add, status])]),
   ]);

@@ -18,7 +18,7 @@ No remote code, no telemetry. The only network requests it makes are the link pr
 | Video | Picture in picture when a playing video with sound is hidden; `[` and `]` change speed; speed menu on videos; ⌃⇧P. |
 | Link preview | Hold Shift over a link: title, description, image and the cleaned address, with "Open in new tab". |
 | Full-page screenshot | Scroll-and-stitch capture, then a markup page (pen, box, undo, copy, save). ⇧⌘2. |
-| Authenticator | TOTP codes (RFC 6238). Each account is encrypted whole with AES-256-GCM under a non-extractable key; stored in `storage.local`, never `storage.sync`. QR import from the visible page; fill only on the site the code was added from. |
+| Authenticator | TOTP codes (RFC 6238). Each account is encrypted whole with AES-256-GCM under a non-extractable key; stored in `storage.local`, never `storage.sync`. QR import from the visible page; fill only on the site the code was added from. Off in release builds until the key can live in the Keychain (see Limits). |
 | Site panel | Blocked counts, cookie-banner result, protections switch, permissions, cookie count and "Forget this site". |
 
 ## Commands
@@ -27,6 +27,7 @@ No remote code, no telemetry. The only network requests it makes are the link pr
 bun install
 bun run lists        # download EasyList and EasyPrivacy into .cache/lists (gitignored)
 bun run build        # bundle, copy static files and icons, compile rules into dist/
+bun run build -- --profile-key   # development build with the authenticator on
 bun test             # unit tests, then integration tests in headless Chrome for Testing
 bun run typecheck
 ```
@@ -45,8 +46,11 @@ have been downloaded. Integration tests need Chrome for Testing (see `perchd`).
   on Chromium's browser-initiated automatic picture in picture to cover the rest.
 - Screenshots scroll the page. The Perch build can use `Page.captureScreenshot` with
   `captureBeyondViewport` instead.
-- The authenticator key lives in IndexedDB. In the Perch build it moves behind the Keychain and
-  Secure Enclave wrap in spec 11.1. `otpauth-migration://` (Google Authenticator export) and HOTP
+- The authenticator's key can only live in IndexedDB today, in the same profile folder as the
+  encrypted records, so anyone who can read the folder could read the codes. Release builds
+  therefore turn the authenticator off; `--profile-key` builds (development and tests) turn it on.
+  It ships once the key moves behind the Keychain and Secure Enclave wrap in spec 11.1, for
+  example handed to the extension by perchd over native messaging. `otpauth-migration://` (Google Authenticator export) and HOTP
   are not supported.
 
 ## Needs native code (Chromium plan)

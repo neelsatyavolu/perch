@@ -1,7 +1,7 @@
 /** "Codes": one-time codes with copy and fill, and QR import from the page. */
 
 import { parseOtpauth } from "../totp/otpauth";
-import { browserVault } from "../totp/stores";
+import { AUTHENTICATOR_OFF, browserVault } from "../totp/stores";
 import { secondsLeft } from "../totp/totp";
 import { codeFor, type VaultEntry } from "../totp/vault";
 import { errorText, h } from "./dom";
@@ -9,6 +9,10 @@ import { fillCode, scanTabForSetupCode, siteMatches } from "./codes";
 
 export async function renderCodes(root: HTMLElement, tab: chrome.tabs.Tab | undefined, url: URL | null): Promise<void> {
   const vault = browserVault();
+  if (!vault) {
+    root.append(h("div", { class: "section" }, [h("p", { class: "empty", text: AUTHENTICATOR_OFF })]));
+    return;
+  }
   const list = h("div", { attrs: { "data-codes": "" } });
   const status = h("p", { class: "caption", attrs: { role: "status" } });
   const scan = h("button", { text: "Scan QR code on this page" });

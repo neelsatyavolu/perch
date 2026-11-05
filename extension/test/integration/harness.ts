@@ -19,7 +19,7 @@ let built: Promise<string> | null = null;
 export function buildOnce(): Promise<string> {
   built ??= (async () => {
     const outDir = mkdtempSync(join(tmpdir(), "perch-ext-"));
-    await build({ outDir, lists: { easylist: join(LISTS, "easylist.txt"), easyprivacy: join(LISTS, "easyprivacy.txt") } });
+    await build({ outDir, profileKey: true, lists: { easylist: join(LISTS, "easylist.txt"), easyprivacy: join(LISTS, "easyprivacy.txt") } });
     process.once("exit", () => rmSync(outDir, { recursive: true, force: true }));
     return outDir;
   })();

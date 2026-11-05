@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { AUTHENTICATOR_OFF, browserVault } from "../../src/totp/stores";
 import { Vault, type KeyStore, type RecordStore, type StoredEntry } from "../../src/totp/vault";
 
 function memory(): { keys: KeyStore; records: RecordStore; stored: () => readonly StoredEntry[] } {
@@ -69,5 +70,27 @@ describe("Vault", () => {
     const vault = new Vault(m.keys, m.records);
     const entry = await vault.add({ ...account, secret: "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ" }, null);
     expect(await vault.code(entry.id, 59)).toBe("287082");
+  });
+
+  test("a lost key is reported, never replaced while encrypted records remain", async () => {
+    let key: CryptoKey | null = null;
+    let puts = 0;
+    let entries: readonly StoredEntry[] = [];
+    const keys: KeyStore = { get: async () => key, put: async (k) => void ((key = k), puts++) };
+    const records: RecordStore = { read: async () => entries, write: async (e) => void (entries = e) };
+    const vault = new Vault(keys, records);
+    await vault.add(account, null);
+    key = null;
+    await expect(vault.add({ ...account, account: "bob" }, null)).rejects.toThrow("could not be read");
+    expect(puts).toBe(1);
+    expect(key).toBeNull();
+    expect(entries).toHaveLength(1);
+  });
+});
+
+describe("browserVault", () => {
+  test("release builds have no vault: the key would sit in the profile next to the records", () => {
+    expect(browserVault()).toBeNull();
+    expect(AUTHENTICATOR_OFF).toContain("Keychain");
   });
 });

@@ -23,3 +23,22 @@ def test_version_set_latest(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "fetch_json", lambda url: [{"version": "142.0.7444.70"}])
     assert cli.main(["version", "--set-latest"]) == 0
     assert json.loads((tmp_path / "version.json").read_text())["chromium"] == "142.0.7444.70"
+
+
+
+def test_doctor_exit_code_reflects_checks(monkeypatch, capsys, fake_probe_ok, paths):
+    monkeypatch.setattr(cli, "SystemProbe", lambda: fake_probe_ok)
+    monkeypatch.setattr(cli, "current_paths", lambda: paths)
+    assert cli.main(["doctor"]) == 0
+    fake_probe_ok.machine_name = "x86_64"
+    assert cli.main(["doctor"]) == 1
+    assert "FAIL arm64" in capsys.readouterr().out
+
+
+def test_checkout_refuses_when_doctor_fails(monkeypatch, fake_probe_ok, paths, recorder):
+    fake_probe_ok.machine_name = "x86_64"
+    monkeypatch.setattr(cli, "SystemProbe", lambda: fake_probe_ok)
+    monkeypatch.setattr(cli, "current_paths", lambda: paths)
+    monkeypatch.setattr(cli, "run", recorder)
+    assert cli.main(["checkout"]) == 1
+    assert recorder.calls == []

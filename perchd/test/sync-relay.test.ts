@@ -10,14 +10,23 @@ type Dev = { id: string; keys: DeviceKeys };
 const dev = async (id: string): Promise<Dev> => ({ id, keys: await generateDeviceKeys() });
 const peer = (d: Dev) => ({ id: d.id, publicKey: d.keys.publicKey });
 
+/** Runs the hello exchange between two channels, as the relay client does on first contact. */
+async function introduce(a: PeerChannel, b: PeerChannel) {
+  const answer = await b.open(await a.hello());
+  expect(answer).toEqual({ message: false, answer: true });
+  expect(await a.open(await b.hello())).toEqual({ message: false, answer: false });
+}
+
 describe("peer channel", () => {
-  test("opens what the peer sealed, in both directions", async () => {
+  test("opens what the peer sealed, in both directions, after the hello exchange", async () => {
     const mac = await dev("dev_mac");
     const bot = await dev("dev_bot");
     const a = await PeerChannel.open(mac, peer(bot));
     const b = await PeerChannel.open(bot, peer(mac));
-    expect(await b.open(await a.seal({ kind: "exec", body: "Find flights" }))).toEqual({ kind: "exec", body: "Find flights" });
-    expect(await a.open(await b.seal({ kind: "result", body: 42 }))).toEqual({ kind: "result", body: 42 });
+    await expect(a.seal("too early")).rejects.toThrow("hello");
+    await introduce(a, b);
+    expect(await b.open(await a.seal({ kind: "exec", body: "Find flights" }))).toEqual({ message: true, value: { kind: "exec", body: "Find flights" } });
+    expect(await a.open(await b.seal({ kind: "result", body: 42 }))).toEqual({ message: true, value: { kind: "result", body: 42 } });
   });
 
   test("refuses replays, reflections and frames for someone else", async () => {
@@ -26,24 +35,45 @@ describe("peer channel", () => {
     const other = await dev("dev_other");
     const a = await PeerChannel.open(mac, peer(bot));
     const b = await PeerChannel.open(bot, peer(mac));
+    await introduce(a, b);
     const frame = await a.seal("hello");
-    expect(await b.open(frame)).toBe("hello");
+    expect(await b.open(frame)).toEqual({ message: true, value: "hello" });
     await expect(b.open(frame)).rejects.toThrow("replayed");
     // Sent back to its sender: the direction keys differ, so it does not open.
     await expect(a.open(await a.seal("echo"))).rejects.toThrow();
     const toOther = await PeerChannel.open(mac, peer(other));
-    await expect(b.open(await toOther.seal("not for bot"))).rejects.toThrow();
+    await expect(b.open(await toOther.hello())).rejects.toThrow();
   });
 
-  test("accepts a newer channel after the sender restarts, but not an older one", async () => {
+  test("refuses a frame recorded before the receiver restarted", async () => {
+    const mac = await dev("dev_mac");
+    const bot = await dev("dev_bot");
+    const sender = await PeerChannel.open(bot, peer(mac));
+    const receiver = await PeerChannel.open(mac, peer(bot));
+    await introduce(sender, receiver);
+    const recorded = await sender.seal({ kind: "mcp", body: { method: "tools/call", params: { name: "click" } } });
+    expect((await receiver.open(recorded)).message).toBe(true);
+    // perchd restarts: a new channel, with empty memory.
+    const restarted = await PeerChannel.open(mac, peer(bot));
+    const replay = await restarted.open(recorded);
+    expect(replay).toEqual({ message: false, answer: true });
+    // The answer tells the sender the new session; frames sealed after that open.
+    expect(await sender.open(await restarted.hello())).toEqual({ message: false, answer: false });
+    expect(await restarted.open(await sender.seal("fresh"))).toEqual({ message: true, value: "fresh" });
+    await expect(restarted.open(recorded)).rejects.toThrow();
+  });
+
+  test("accepts a restarted sender's new session and refuses frames from its old one", async () => {
     const mac = await dev("dev_mac");
     const bot = await dev("dev_bot");
     const receiver = await PeerChannel.open(bot, peer(mac));
-    const old = await PeerChannel.open(mac, peer(bot), 1000);
-    const restarted = await PeerChannel.open(mac, peer(bot), 2000);
+    const old = await PeerChannel.open(mac, peer(bot));
+    await introduce(old, receiver);
     const stale = await old.seal("old");
-    expect(await receiver.open(await restarted.seal("new"))).toBe("new");
-    await expect(receiver.open(stale)).rejects.toThrow("out of date");
+    const restarted = await PeerChannel.open(mac, peer(bot));
+    await introduce(restarted, receiver);
+    expect(await receiver.open(await restarted.seal("new"))).toEqual({ message: true, value: "new" });
+    await expect(receiver.open(stale)).rejects.toThrow("replayed");
   });
 });
 
@@ -66,7 +96,8 @@ function fakeRelay() {
     queueMicrotask(() => listeners.open?.forEach((l) => l({})));
     return socket;
   };
-  return { connect, inject: (to: string, from: string, d: string) => sockets.get(to)?.deliver(JSON.stringify({ t: "msg", from, d })) };
+  const drop = (deviceId: string) => sockets.delete(deviceId);
+  return { connect, drop, inject: (to: string, from: string, d: string) => sockets.get(to)?.deliver(JSON.stringify({ t: "msg", from, d })) };
 }
 
 describe("relay client", () => {
@@ -88,6 +119,40 @@ describe("relay client", () => {
     expect(seenFrom).toEqual([bot.id]);
   });
 
+  test("keeps working when the receiving device restarts, and a recorded command is not replayed", async () => {
+    const relay = fakeRelay();
+    const mac = await dev("dev_mac");
+    const bot = await dev("dev_bot");
+    const recorded: string[] = [];
+    const tap = relay.connect(bot.id);
+    const botClient = new RelayClient({ token: "t", me: bot, trusted: [peer(mac)], connect: () => {
+      const socket = tap();
+      return { ...socket, send: (data: string) => (recorded.push(data), socket.send(data)) };
+    } });
+    const first = new RelayClient({ token: "t", me: mac, trusted: [peer(bot)], connect: relay.connect(mac.id) });
+    await Promise.all([first.connect(), botClient.connect()]);
+    const got: unknown[] = [];
+    first.on("message", (_f, m) => got.push(m));
+    await botClient.send(mac.id, { kind: "mcp", body: { method: "tools/call", params: { name: "click" } } });
+    await Bun.sleep(5);
+    expect(got).toHaveLength(1);
+
+    // The Mac's perchd restarts; the relay replays the recorded command into the new process.
+    relay.drop(mac.id);
+    const second = new RelayClient({ token: "t", me: mac, trusted: [peer(bot)], connect: relay.connect(mac.id) });
+    await second.connect();
+    const after: unknown[] = [];
+    second.on("message", (_f, m) => after.push(m));
+    const command = JSON.parse(recorded.at(-1)!);
+    relay.inject(mac.id, bot.id, command.d);
+    await Bun.sleep(5);
+    expect(after).toEqual([]);
+    // The bot learned the new session from the answer, so its next message arrives.
+    await botClient.send(mac.id, { kind: "mcp", body: { method: "tools/list" } });
+    await Bun.sleep(5);
+    expect(after).toEqual([{ kind: "mcp", body: { method: "tools/list" } }]);
+  });
+
   test("drops messages from devices it has not paired with", async () => {
     const relay = fakeRelay();
     const mac = await dev("dev_mac");
@@ -97,7 +162,7 @@ describe("relay client", () => {
     const got: unknown[] = [];
     macClient.on("message", (_f, m) => got.push(m));
     const channel = await PeerChannel.open(intruder, peer(mac));
-    relay.inject(mac.id, intruder.id, await channel.seal({ kind: "exec", body: "rm -rf" }));
+    relay.inject(mac.id, intruder.id, await channel.hello());
     await Bun.sleep(10);
     expect(got).toEqual([]);
     await expect(macClient.send(intruder.id, { kind: "x", body: 1 })).rejects.toThrow("not paired");

@@ -2,7 +2,10 @@
  * The relay client: one WebSocket to the account's relay room, an encrypted channel per trusted
  * peer, and typed messages on top. Remote control (`perch exec --host`) and remote MCP both use
  * it: MCP messages travel as `{ kind: "mcp", body: <JSON-RPC message> }`. Messages from devices
- * this device has not paired with are dropped, whatever the server says.
+ * this device has not paired with are dropped, whatever the server says. Before the first message
+ * to a peer the two sides exchange hellos (channel.ts), so every message names the receiver's
+ * current session. A message sent at the moment the other side restarts is dropped there; the
+ * sender learns the new session from the answer, and callers such as remote MCP retry.
  */
 import { PeerChannel, type Me, type Peer } from "./channel";
 
@@ -27,14 +30,19 @@ type Handlers = {
   close: (code: number) => void;
 };
 
+type Waiter = { resolve: () => void; reject: (error: Error) => void };
+const HANDSHAKE_MS = 10_000;
+
 export class RelayClient {
   private socket: SocketLike | undefined;
   private readonly channels = new Map<string, Promise<PeerChannel>>();
   private handlers: Partial<Handlers> = {};
   /** Frames are opened one at a time, in arrival order, so the replay check sees them in order. */
   private inbox: Promise<void> = Promise.resolve();
+  /** Sends waiting for a peer's hello, by peer id. */
+  private waiting = new Map<string, Waiter[]>();
 
-  constructor(private readonly options: { url?: string; token: string; me: Me; trusted: Peer[]; connect?: Connect }) {}
+  constructor(private readonly options: { url?: string; token: string; me: Me; trusted: Peer[]; connect?: Connect; handshakeMs?: number }) {}
 
   on<K extends keyof Handlers>(event: K, handler: Handlers[K]): void {
     this.handlers = { ...this.handlers, [event]: handler };
@@ -66,8 +74,36 @@ export class RelayClient {
 
   async send(peerId: string, message: RelayMessage): Promise<void> {
     if (!this.socket) throw new Error("Not connected to the relay.");
-    const d = await (await this.channel(peerId)).seal(message);
+    const channel = await this.channel(peerId);
+    if (!channel.ready) await this.handshake(peerId, channel);
+    this.frame(peerId, await channel.seal(message));
+  }
+
+  private frame(peerId: string, d: string): void {
+    if (!this.socket) throw new Error("Not connected to the relay.");
     this.socket.send(JSON.stringify({ t: "msg", to: peerId, d }));
+  }
+
+  /** Sends a hello and waits for the peer's, so the first message is bound to its current session. */
+  private handshake(peerId: string, channel: PeerChannel): Promise<void> {
+    const answered = new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => this.settle(peerId, new Error("That device did not answer. Check that Perch is running on it.")), this.options.handshakeMs ?? HANDSHAKE_MS);
+      const waiter: Waiter = {
+        resolve: () => (clearTimeout(timer), resolve()),
+        reject: (error) => (clearTimeout(timer), reject(error)),
+      };
+      this.waiting = new Map(this.waiting).set(peerId, [...(this.waiting.get(peerId) ?? []), waiter]);
+    });
+    return channel.hello().then((d) => this.frame(peerId, d)).then(() => answered);
+  }
+
+  /** Resolves (or, with an error, rejects) every send waiting on a peer. */
+  private settle(peerId: string, error?: Error): void {
+    const waiters = this.waiting.get(peerId) ?? [];
+    const next = new Map(this.waiting);
+    next.delete(peerId);
+    this.waiting = next;
+    for (const waiter of waiters) (error ? waiter.reject(error) : waiter.resolve());
   }
 
   private async receive(raw: string): Promise<void> {
@@ -78,11 +114,19 @@ export class RelayClient {
       return;
     }
     if (frame?.t === "presence" && Array.isArray(frame.online)) return this.handlers.presence?.(frame.online.filter((id: unknown) => typeof id === "string"));
-    if (frame?.t === "error") return this.handlers.error?.(String(frame.code), String(frame.message));
+    if (frame?.t === "error") {
+      if (frame.code === "offline" && typeof frame.to === "string") this.settle(frame.to, new Error("That device is not connected to the relay."));
+      return this.handlers.error?.(String(frame.code), String(frame.message));
+    }
     if (frame?.t !== "msg" || typeof frame.from !== "string" || typeof frame.d !== "string") return;
     if (!this.options.trusted.some((p) => p.id === frame.from)) return;
     try {
-      const value = (await (await this.channel(frame.from)).open(frame.d)) as RelayMessage;
+      const channel = await this.channel(frame.from);
+      const opened = await channel.open(frame.d);
+      this.settle(frame.from);
+      // The peer does not know this session yet (first contact, or this device restarted): tell it.
+      if (!opened.message) return opened.answer ? this.frame(frame.from, await channel.hello()) : undefined;
+      const value = opened.value as RelayMessage;
       if (value && typeof value.kind === "string") this.handlers.message?.(frame.from, value);
     } catch {
       this.handlers.error?.("bad_frame", "A relay message could not be opened and was dropped.");

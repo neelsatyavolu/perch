@@ -10,6 +10,8 @@ import { sanitizeArticle } from "../reader/sanitize";
 const TAG = "perch-reader";
 const SIZES = [16, 18, 20, 22, 24] as const;
 const PREFS_KEY = "reader";
+/** Readability returns its best guess even on pages with no article; below this much text, say so instead. */
+const MIN_ARTICLE_CHARS = 200;
 
 const CSS = `
 .reader { position: fixed; inset: 0; overflow-y: auto; background: var(--card); color: var(--body); }
@@ -70,7 +72,7 @@ async function open(): Promise<void> {
   larger.addEventListener("click", () => apply({ ...current, size: stepSize(current.size, 1) }));
   theme.addEventListener("click", () => apply({ ...current, theme: current.theme === "system" ? "ink" : current.theme === "ink" ? "paper" : "system" }));
 
-  const body = article?.content
+  const body = article?.content && article.length >= MIN_ARTICLE_CHARS
     ? el("article", {}, [
         el("h1", { class: "title", text: article.title || document.title }),
         ...(article.byline || article.siteName ? [el("div", { class: "byline", text: [article.byline, article.siteName].filter(Boolean).join(" · ") })] : []),

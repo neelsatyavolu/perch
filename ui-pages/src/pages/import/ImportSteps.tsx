@@ -1,4 +1,4 @@
-import type { DetectedBrowser, ImportKind, ImportNeed, SystemAccess } from "../../api";
+import type { DetectedBrowser, FileChoice, ImportKind, ImportNeed, SystemAccess } from "../../api";
 import { IMPORT_KINDS, IMPORT_NEEDS } from "../../lib/labels";
 
 export const ASIDE_KINDS: readonly ImportKind[] = ["aside-memory", "aside-skills", "aside-chats", "aside-preferences"];
@@ -70,17 +70,19 @@ const NEED_TEXT = (need: ImportNeed, browser: string): string => {
     case "keychain":
       return `macOS asks to unlock ${browser}'s Keychain item. Choose Allow to let Perch read it once.`;
     case "csv-export":
-      return "Safari doesn't share passwords with other apps. In the Passwords app choose File, then Export All Passwords, and Perch will offer to read the file.";
+      return "Safari doesn't share passwords with other apps. In the Passwords app choose File, then Export All Passwords, then choose that file here. Delete the file after the import; it isn't encrypted.";
     case "primary-password":
       return `If ${browser} has a primary password, Perch asks you to type it.`;
   }
 };
 
-export function PermissionStep({ browser, needs, access, onOpenSettings }: {
+export function PermissionStep({ browser, needs, access, csv, onOpenSettings, onChooseCsv }: {
   readonly browser: DetectedBrowser;
   readonly needs: readonly ImportNeed[];
   readonly access: SystemAccess | null;
+  readonly csv: FileChoice | null;
   readonly onOpenSettings: () => void;
+  readonly onChooseCsv: () => void;
 }) {
   return (
     <ul class="needs">
@@ -93,6 +95,12 @@ export function PermissionStep({ browser, needs, access, onOpenSettings }: {
             ) : (
               <button type="button" class="btn" onClick={onOpenSettings}>Open System Settings</button>
             )
+          )}
+          {n === "csv-export" && (
+            <span class="need-file">
+              {csv && <span class="status ok"><span class="dotc" />{csv.name}</span>}
+              <button type="button" class="btn" onClick={onChooseCsv}>{csv ? "Choose another file" : "Choose exported file"}</button>
+            </span>
           )}
         </li>
       ))}

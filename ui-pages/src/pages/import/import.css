@@ -34,3 +34,6 @@
 .summary { margin: 0; padding: 0 0 0 18px; display: grid; gap: 6px; color: var(--ink); }
 
 @media (max-width: 640px) { .imp-page { padding: 0 16px; } }
+.need-file { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.imp-embedded, .imp-embedded .imp { padding: 0; width: 100%; }
+.imp-embedded h2 { font-size: 15px; }

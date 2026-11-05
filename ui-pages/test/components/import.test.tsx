@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { cleanup, fireEvent, waitFor, within } from "@testing-library/preact";
+import { createFakeApi } from "../../src/api/fake";
 import { ImportWizard } from "../../src/pages/import/ImportWizard";
 import { renderWithApi } from "./render";
 
@@ -45,6 +46,45 @@ describe("Import wizard", () => {
     expect(await r.findByText(/Safari keeps open tabs, history and cookies where only apps with Full Disk Access can read them/)).toBeTruthy();
     fireEvent.click(r.getByRole("button", { name: "Open System Settings" }));
     await waitFor(() => expect(r.nav.some((n) => n.what === "system-settings")).toBe(true));
+  });
+
+  test("Safari passwords: the exported file is chosen before the import can start", async () => {
+    window.location.hash = "#safari";
+    const r = renderWithApi(<ImportWizard />, { access: { fullDiskAccess: true } });
+    const data = await r.findByRole("group", { name: "What to bring from Safari" });
+    for (const box of within(data).getAllByRole("checkbox")) if (!/Passwords/.test(box.parentElement!.textContent!)) fireEvent.click(box);
+    fireEvent.click(r.getByRole("button", { name: "Continue" }));
+    const start = (await r.findByRole("button", { name: "Start import" })) as HTMLButtonElement;
+    expect(start.disabled).toBe(true);
+    fireEvent.click(r.getByRole("button", { name: "Choose exported file" }));
+    expect(await r.findByText("Passwords.csv")).toBeTruthy();
+    expect(start.disabled).toBe(false);
+    fireEvent.click(start);
+    expect(await r.findByRole("heading", { name: "Import finished" })).toBeTruthy();
+  });
+
+  test("a failed import says why and offers Back and Try again", async () => {
+    window.location.hash = "#chrome";
+    const r = renderWithApi(<ImportWizard />, { failJobs: "Chrome is open and has its files locked. Quit Chrome and try again." });
+    const data = await r.findByRole("group", { name: "What to bring from Chrome" });
+    for (const box of within(data).getAllByRole("checkbox")) if (!/Bookmarks/.test(box.parentElement!.textContent!)) fireEvent.click(box);
+    fireEvent.click(r.getByRole("button", { name: "Continue" }));
+    expect(await r.findByRole("heading", { name: "Import stopped" })).toBeTruthy();
+    expect(r.getByRole("alert").textContent).toContain("Quit Chrome and try again.");
+    fireEvent.click(r.getByRole("button", { name: "Try again" }));
+    expect(await r.findByRole("heading", { name: "Import stopped" })).toBeTruthy();
+    fireEvent.click(r.getByRole("button", { name: "Back" }));
+    expect(await r.findByRole("group", { name: "What to bring from Chrome" })).toBeTruthy();
+  });
+
+  test("before the first progress event the import step says it is starting", async () => {
+    window.location.hash = "#chrome";
+    const silent = { ...createFakeApi({ stepMs: 0 }), watchJob: () => () => undefined };
+    const r = renderWithApi(<ImportWizard />, { api: silent });
+    const data = await r.findByRole("group", { name: "What to bring from Chrome" });
+    for (const box of within(data).getAllByRole("checkbox")) if (!/Bookmarks/.test(box.parentElement!.textContent!)) fireEvent.click(box);
+    fireEvent.click(r.getByRole("button", { name: "Continue" }));
+    expect(await r.findByText("Starting the import")).toBeTruthy();
   });
 
   test("nothing picked means no import", async () => {

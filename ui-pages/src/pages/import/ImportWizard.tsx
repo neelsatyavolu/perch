@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { DetectedBrowser, ImportKind, ImportNeed, JobId, SystemAccess } from "../../api";
+import type { DetectedBrowser, FileChoice, ImportKind, ImportNeed, JobId, SystemAccess } from "../../api";
 import { useAction, useApi, useLoad } from "../../ui/frame";
 import { Progress } from "../../ui/Progress";
 import { useJob } from "../../ui/useJob";
@@ -13,8 +13,15 @@ const STEPS: readonly { id: Step; label: string }[] = [
 
 const defaultKinds = (b: DetectedBrowser): readonly ImportKind[] => b.options.filter((o) => o.available).map((o) => o.kind);
 
+type Props = {
+  /** Called by Done. Without it, Done opens a new tab. */
+  readonly onFinished?: () => void;
+  /** Inside another page (the welcome flow): no <main>, an h2 title, and the URL hash is ignored. */
+  readonly embedded?: boolean;
+};
+
 /** The import wizard (spec 10), also the first-run import step. */
-export function ImportWizard({ onFinished }: { readonly onFinished?: () => void }) {
+export function ImportWizard({ onFinished, embedded = false }: Props) {
   const api = useApi();
   const act = useAction();
   const browsers = useLoad((a) => a.detectBrowsers());
@@ -23,6 +30,7 @@ export function ImportWizard({ onFinished }: { readonly onFinished?: () => void 
   const [profile, setProfile] = useState("");
   const [kinds, setKinds] = useState<readonly ImportKind[]>([]);
   const [access, setAccess] = useState<SystemAccess | null>(null);
+  const [csv, setCsv] = useState<FileChoice | null>(null);
   const [jobId, setJobId] = useState<JobId | null>(null);
   const progress = useJob(jobId);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -31,9 +39,11 @@ export function ImportWizard({ onFinished }: { readonly onFinished?: () => void 
     setBrowser(b);
     setProfile(b.profiles[0]?.id ?? "");
     setKinds(defaultKinds(b));
+    setCsv(null);
   };
 
   useEffect(() => {
+    if (embedded) return;
     const id = window.location.hash.slice(1);
     const found = browsers.data?.find((b) => b.id === id);
     if (found) {
@@ -51,7 +61,8 @@ export function ImportWizard({ onFinished }: { readonly onFinished?: () => void 
     : [];
   const start = async () => {
     if (!browser) return;
-    const id = await act(() => api.startImport({ browser: browser.id, profile, kinds }));
+    setJobId(null);
+    const id = await act(() => api.startImport({ browser: browser.id, profile, kinds, passwordsCsv: csv?.id }));
     if (id) {
       setJobId(id);
       go("run");
@@ -66,14 +77,29 @@ export function ImportWizard({ onFinished }: { readonly onFinished?: () => void 
     }
     if (step === "access") return start();
   };
-  const back = () => go(step === "access" ? "data" : "browser");
+  const back = () => {
+    if (step === "run") {
+      setJobId(null);
+      return go("data");
+    }
+    go(step === "access" ? "data" : "browser");
+  };
+  const restart = () => {
+    setJobId(null);
+    setBrowser(null);
+    go("browser");
+  };
   const at = STEPS.findIndex((s) => s.id === step);
   const done = progress?.state === "done";
+  const failed = progress?.state === "failed";
+  const csvMissing = needs.includes("csv-export") && !csv;
+  const Wrap = embedded ? "div" : "main";
+  const Title = embedded ? "h2" : "h1";
 
   return (
-    <main class="imp-page">
+    <Wrap class={embedded ? "imp imp-embedded" : "imp-page"}>
       <div class="imp">
-        <h1 ref={heading} tabIndex={-1}>{done ? "Import finished" : "Import from another browser"}</h1>
+        <Title ref={heading} tabIndex={-1}>{done ? "Import finished" : failed ? "Import stopped" : "Import from another browser"}</Title>
         <ol class="steps-ol" aria-label="Steps">
           {STEPS.map((s, i) => (
             <li key={s.id} aria-current={i === at ? "step" : undefined} class={i < at ? "past" : ""}>{s.label}</li>
@@ -94,13 +120,18 @@ export function ImportWizard({ onFinished }: { readonly onFinished?: () => void 
             </>
           )}
           {step === "access" && browser && (
-            <PermissionStep browser={browser} needs={needs} access={access} onOpenSettings={async () => {
-              await act(() => api.openFullDiskAccess());
-              setAccess(await act(() => api.getSystemAccess()) ?? access);
-            }} />
+            <PermissionStep browser={browser} needs={needs} access={access} csv={csv}
+              onChooseCsv={async () => setCsv(await act(() => api.chooseFile("passwords-csv")) ?? csv)}
+              onOpenSettings={async () => {
+                await act(() => api.openFullDiskAccess());
+                setAccess(await act(() => api.getSystemAccess()) ?? access);
+              }} />
           )}
-          {step === "run" && progress && !done && <Progress progress={progress} label={`Importing from ${browser?.name ?? ""}`} />}
-          {step === "run" && progress?.state === "failed" && <p class="err-note" role="alert">{progress.error ?? "The import stopped. Nothing after the last step was imported."}</p>}
+          {step === "run" && !progress && <p class="mute" role="status">Starting the import</p>}
+          {step === "run" && progress?.state === "running" && <Progress progress={progress} label={`Importing from ${browser?.name ?? ""}`} />}
+          {step === "run" && failed && (
+            <p class="err-note" role="alert">{progress.error ?? "The import stopped."} Anything imported before that point was kept.</p>
+          )}
           {done && (
             <ul class="summary" aria-label="Imported">
               {(progress.summary ?? []).map((line) => <li key={line}>{line}</li>)}
@@ -108,19 +139,20 @@ export function ImportWizard({ onFinished }: { readonly onFinished?: () => void 
           )}
         </section>
         <div class="imp-foot">
-          {(step === "data" || step === "access") && <button type="button" class="btn" onClick={back}>Back</button>}
+          {(step === "data" || step === "access" || failed) && <button type="button" class="btn" onClick={back}>Back</button>}
           <span class="grow" />
           {step === "browser" && <button type="button" class="btn primary" disabled={!browser} onClick={next}>Continue</button>}
           {step === "data" && <button type="button" class="btn primary" disabled={kinds.length === 0} onClick={next}>Continue</button>}
-          {step === "access" && <button type="button" class="btn primary" onClick={next}>Start import</button>}
+          {step === "access" && <button type="button" class="btn primary" disabled={csvMissing} onClick={next}>Start import</button>}
+          {failed && <button type="button" class="btn primary" onClick={start}>Try again</button>}
           {done && (
             <>
-              <button type="button" class="btn" onClick={() => { setJobId(null); setBrowser(null); go("browser"); }}>Import from another browser</button>
+              <button type="button" class="btn" onClick={restart}>Import from another browser</button>
               <button type="button" class="btn primary" onClick={() => (onFinished ? onFinished() : act(() => api.openPage("newtab")))}>Done</button>
             </>
           )}
         </div>
       </div>
-    </main>
+    </Wrap>
   );
 }

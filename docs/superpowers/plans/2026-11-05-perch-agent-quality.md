@@ -71,7 +71,7 @@ Shared files touched minimally: `agent/tool-specs.ts` (drag, wait_for seconds, e
 2. Typing with key events, suggestions note, space key. Fixture: `autocomplete.html`.
 3. Click fallbacks: hidden native controls, clipped elements. Fixture: `controls.html`.
 4. Navigate returns slow pages. Fixture server route that never finishes loading.
-5. Change notes and scroll growth. Fixtures: `filters.html`, `lazy.html`.
+5. Change notes and scroll growth. Fixture: `lazy.html` (its Apply button that does nothing stands in for a filter that silently does not apply), tested in `changes.test.ts`.
 6. Sliders and drag. Fixture: `drag.html`.
 7. Gone refs carry a fresh snapshot.
 8. Progress notes (budget and repeats) in `runTask` and MCP; final answer guarantee and time limit in `runTask`.
@@ -83,4 +83,16 @@ Shared files touched minimally: `agent/tool-specs.ts` (drag, wait_for seconds, e
 - Chart reading beyond screenshots: the prompt points the model at the data behind a chart; a chart-data extractor needs more evidence.
 - Recovering a gone ref by matching role and name: plan 3a requires a stale ref never to act on another element, so it stays an error (now with the fresh snapshot).
 - Passing Claude thinking blocks back between turns: the loop collapses old snapshots, which edits history, and edited history makes the API reject replayed thinking blocks. The loop keeps dropping them.
-- Live benchmark runs: at most a few single tasks to confirm a fix.
+- Live benchmark runs: at most a few single tasks to confirm a fix. None was run on this branch, so every fix is proven on fixture pages only.
+- Multi-tab research: the tab tools from plan 3a are unchanged; no trajectory showed a tab-specific failure that a general fix would address.
+- Hover menus: `hover` exists (plan 3a), but menus that open only on hover and close when the pointer leaves are not handled beyond it.
+- Canvas apps: `screenshot` and `click_at` are the only way in; no canvas-specific work.
+- Dialogs and iframes: beyond the "close it first" hint on a "covered by" error and the existing iframe and shadow DOM snapshot support, nothing new.
+- Live check of the Anthropic adapter on current Claude models: they think by default, and the adapter drops thinking blocks between turns. Dropping every block (never replaying any) should not trip the conversation check, but this has only been run against a fake fetch, never the real API.
+
+## Review fixes
+
+- A drag by pixels lands on an element nobody identified, so outside a slider, scrollbar or splitter it counts as risky (`permissions.test.ts`).
+- A checkbox or radio under a dialog or banner is no longer toggled through it; only the page's own drawing of the control (inside its label or parent) is clicked past (`pointing.test.ts`).
+- Shifted symbols are typed as their real key with Shift. Their char codes were the key codes of Home, End, PageUp/Down and the arrows, which moved the caret mid-typing ("$5 (a&b)" came out scrambled) and drove suggestion lists (`typing.test.ts`, `keys.html`).
+- Time spent waiting for an approval does not count against the task's time budget; a `done` after the time is up is the answer, and a draft answer sent back for checking is kept if the final turn fails (`loop.test.ts`, `progress.test.ts`).

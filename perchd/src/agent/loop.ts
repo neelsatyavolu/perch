@@ -3,11 +3,12 @@
 import type { Browser } from "../browser/browser";
 import type { Effort, Message, Model, ToolCall, TurnRequest } from "../models/types";
 import type { AuditLog } from "./audit";
-import { classify, needsApproval, type Kind, type Mode, type SiteRule, type Target } from "./permissions";
+import type { Mode, SiteRule } from "./permissions";
 import { systemPrompt } from "./prompt";
-import { approvalDetail, checkCall, describeTarget, focusedTarget, liveTarget, newToolContext, pageContext, runTool, TOOL_SPECS, type ToolContext } from "./tools";
+import { finishCall, label, prepareCall, type ApprovalRequest } from "./session";
+import { newToolContext, TOOL_SPECS, type ToolContext } from "./tools";
 
-export type ApprovalRequest = { call: ToolCall; target?: Target; kind: Kind; site: string; summary: string };
+export type { ApprovalRequest } from "./session";
 
 export type StepEvent =
   | { type: "step"; label: string }
@@ -31,7 +32,6 @@ export type TaskOptions = {
 };
 
 const DEFAULT_MAX_STEPS = 40;
-const DECLINED = "The user declined this action. Do not try it again; ask or finish.";
 
 export async function* runTask(opts: TaskOptions): AsyncIterable<StepEvent> {
   const ctx = await newToolContext(opts.browser);
@@ -85,99 +85,19 @@ export async function* runTask(opts: TaskOptions): AsyncIterable<StepEvent> {
 
 type Outcome = { final?: string; message: Extract<Message, { role: "tool" }> };
 
-const READS = new Set(["navigate", "snapshot", "screenshot", "scroll", "hover", "wait_for", "back", "tabs", "open_tab", "switch_tab", "done", "repl"]);
-
 async function* act(ctx: ToolContext, opts: TaskOptions, call: ToolCall): AsyncGenerator<StepEvent, Outcome> {
   const reply = (content: string, image?: string): Outcome => ({ message: { role: "tool", callId: call.id, name: call.name, content, image } });
-  // A call that cannot run is answered at once: no approval prompt for something that would fail.
-  const problem = checkCall(call);
-  if (problem) return reply(problem);
-
-  const target = call.name === "press" ? await focusedTarget(ctx) : describeTarget(ctx, call) ?? (await liveTarget(ctx, call));
-  const page = READS.has(call.name) ? {} : await pageContext(ctx);
-  const kind = classify(call, target, page);
-  const destination = call.name === "navigate" || call.name === "open_tab" ? String(call.args.url) : undefined;
-  const site = destination ? hostOf(destination) : await currentHost(ctx);
-  const decision = needsApproval(opts.mode, kind, opts.siteRule?.(site));
-  const what = target ? `${target.role} "${target.name}"` : summarizeArgs(call);
-  const detail = kind === "read" ? what : [what, await approvalDetail(ctx, call)].filter(Boolean).join(" ");
-  const entry = { time: new Date().toISOString(), tab: ctx.tab?.id ?? "", site, url: destination, action: call.name, detail, client: opts.client ?? "sidebar" };
-
-  if (decision === "block") {
-    await opts.audit.append({ ...entry, approved: null, result: "blocked" });
-    return reply(`Blocked: the user does not allow the agent to act on ${site}.`);
-  }
+  const prepared = await prepareCall(ctx, opts, call);
+  if (prepared.kind === "answer") return reply(prepared.result.content);
   let approved: boolean | null = null;
-  if (decision === "ask") {
-    const request: ApprovalRequest = { call, target, kind, site, summary: `${verb(call)} ${detail} on ${site}` };
-    yield { type: "approval", request };
-    approved = await opts.approve(request);
-    if (!approved) {
-      await opts.audit.append({ ...entry, approved: false, result: "declined" });
-      return reply(DECLINED);
-    }
+  if (prepared.decision === "ask") {
+    yield { type: "approval", request: prepared.request };
+    approved = await opts.approve(prepared.request);
   }
-  const result = await runTool(ctx, call);
-  await opts.audit.append({ ...entry, approved, result: result.isError ? "error" : "ok" });
+  const result = await finishCall(ctx, opts, prepared, approved);
   if (result.done) return { final: result.content, message: reply(result.content).message };
-  if (!result.isError) yield { type: "step", label: label(call, target, site) };
+  if (!result.isError && approved !== false) yield { type: "step", label: label(call, prepared.target, prepared.site) };
   return reply(result.content, result.image);
-}
-
-function hostOf(url: string): string {
-  try {
-    return new URL(/^[a-z]+:/i.test(url) ? url : `https://${url}`).hostname;
-  } catch {
-    return url;
-  }
-}
-
-async function currentHost(ctx: ToolContext): Promise<string> {
-  const url = ctx.tab ? await ctx.tab.url().catch(() => "") : "";
-  try {
-    return new URL(url).hostname || "a new tab";
-  } catch {
-    return "a new tab";
-  }
-}
-
-function verb(call: ToolCall): string {
-  return ({ click: "Click", type: "Type into", select: "Choose in", press: `Press ${call.args.key} in`, upload: "Upload to", click_at: "Click", repl: "Run a script" } as Record<string, string>)[call.name] ?? call.name;
-}
-
-function summarizeArgs(call: ToolCall): string {
-  if (call.name === "click_at") return `the point ${call.args.x}, ${call.args.y}`;
-  if (call.name === "repl") return `(${String(call.args.code ?? "").length} characters of code)`;
-  return "";
-}
-
-function label(call: ToolCall, target: Target | undefined, site: string): string {
-  const what = target ? `${target.role} "${target.name}"` : "";
-  switch (call.name) {
-    case "navigate":
-    case "open_tab":
-      try {
-        return `Opened ${new URL(/^[a-z]+:\/\//i.test(String(call.args.url)) ? String(call.args.url) : `https://${call.args.url}`).hostname}`;
-      } catch {
-        return `Opened ${call.args.url}`;
-      }
-    case "click": return `Clicked ${what}`;
-    case "type": return `Typed into ${what}`;
-    case "select": return `Chose "${call.args.value}" in ${what}`;
-    case "press": return `Pressed ${call.args.key}`;
-    case "scroll": return "Scrolled";
-    case "hover": return `Pointed at ${what}`;
-    case "upload": return `Attached ${(call.args.paths as string[]).length} file(s)`;
-    case "back": return "Went back";
-    case "snapshot": return `Read ${site}`;
-    case "screenshot": return `Looked at ${site}`;
-    case "click_at": return `Clicked at ${call.args.x}, ${call.args.y}`;
-    case "repl": return `Ran a script on ${site}`;
-    case "wait_for": return `Waited for "${call.args.text}"`;
-    case "tabs": return "Listed tabs";
-    case "switch_tab": return "Switched tabs";
-    default: return call.name;
-  }
 }
 
 /** Keeps only the newest page snapshot and screenshot in full; older ones become one line. */

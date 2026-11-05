@@ -1,0 +1,74 @@
+/* Settings: 220px nav on canvas, sections on card, 32px page edges (spec 6.4). */
+
+.settings { display: flex; min-height: 100vh; background: var(--card); }
+.snav {
+  width: 220px; flex: none; padding: 16px 8px; display: flex; flex-direction: column; gap: 2px; background: var(--canvas);
+  border-right: 1px solid var(--hair); position: sticky; top: 0; height: 100vh; overflow-y: auto;
+}
+.snav a.row { text-decoration: none; display: flex; }
+.snav-search {
+  display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; margin-bottom: 10px; border-radius: 8px;
+  background: var(--raised); color: var(--mute);
+}
+.snav-search:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.snav-search input { flex: 1; min-width: 0; border: 0; background: none; color: var(--ink); outline: none; font-size: 13px; }
+.snav-search input::placeholder { color: var(--mute); }
+.snav-search input::-webkit-search-cancel-button { display: none; }
+
+.spage { flex: 1; min-width: 0; padding: 32px; display: grid; gap: 28px; align-content: start; }
+.spage > * { max-width: 720px; width: 100%; }
+.spage h1 { font-size: 22px; letter-spacing: -0.01em; }
+.spage h1:focus-visible { outline-offset: 4px; }
+.sec { display: grid; gap: 28px; }
+
+.results { list-style: none; margin: 0; padding: 0; }
+.result {
+  width: 100%; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; min-height: 48px; padding: 8px 16px;
+  background: none; border: 0; border-bottom: 1px solid var(--hair); text-align: left; cursor: pointer;
+}
+.results li:last-child .result { border-bottom: 0; }
+.result:hover { background: var(--hover); }
+.result .n { color: var(--ink); }
+
+.swatches { display: flex; flex-wrap: wrap; gap: 12px; }
+.sw { display: grid; justify-items: center; gap: 6px; background: none; border: 0; padding: 0; cursor: pointer; color: var(--mute); font-size: 12px; }
+.sw-box { width: 44px; height: 32px; border-radius: 8px; border: 1px solid var(--hair-strong); display: grid; place-items: center; }
+.sw-box i { width: 14px; height: 14px; border-radius: 4px; display: block; }
+.sw[aria-checked="true"] { color: var(--ink); }
+.sw[aria-checked="true"] .sw-box { outline: 2px solid var(--ink); outline-offset: 2px; }
+.sw:focus-visible { outline: none; }
+.sw:focus-visible .sw-box { outline: 2px solid var(--accent); outline-offset: 2px; }
+.srow.stack { grid-template-columns: 1fr; gap: 12px; }
+
+.mode-list { display: grid; }
+.mode-opt {
+  display: grid; grid-template-columns: 20px 1fr; gap: 10px; align-items: start; padding: 12px 16px; border: 0; border-bottom: 1px solid var(--hair);
+  background: none; text-align: left; cursor: pointer; width: 100%;
+}
+.mode-opt:last-child { border-bottom: 0; }
+.mode-opt .n { color: var(--ink); }
+.mode-opt .d { color: var(--mute); font-size: 12px; }
+.mode-opt .radio { width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--hair-strong); margin-top: 1px; display: grid; place-items: center; }
+.mode-opt[aria-checked="true"] { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+.mode-opt[aria-checked="true"] .radio { border-color: var(--accent); }
+.mode-opt[aria-checked="true"] .radio::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.mode-opt:disabled { cursor: default; }
+.mode-opt:disabled .n, .mode-opt:disabled .d { color: var(--mute); }
+
+.add-rule { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--hair); align-items: start; }
+.add-rule .field-error { grid-column: 1 / -1; }
+.cand { display: grid; grid-template-columns: auto 1fr; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--hair); align-items: start; }
+.cand:last-child { border-bottom: 0; }
+.cand .meta { display: grid; gap: 2px; min-width: 0; }
+.cand .mono { font-size: 12px; color: var(--mute); overflow-wrap: anywhere; }
+.cand-src { color: var(--ink); font-weight: 500; padding-top: 6px; }
+.secret-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: center; }
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; font-size: 13px; }
+.kv dt { color: var(--mute); }
+.kv dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+
+@media (max-width: 760px) {
+  .settings { flex-direction: column; }
+  .snav { width: auto; height: auto; position: static; border-right: 0; border-bottom: 1px solid var(--hair); }
+  .spage { padding: 24px 16px; }
+}

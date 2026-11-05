@@ -49,7 +49,26 @@ function pick(tasks: Task[]): Task[] {
   return limit ? chosen.slice(0, Number(limit)) : chosen;
 }
 
+/**
+ * Waits until the Mac is safe to load: on the charger, no heat or slowdown warning from macOS, and
+ * the load average under 80% of the cores. A full-core build once shut this MacBook down.
+ */
+async function waitUntilSafe(): Promise<void> {
+  const { cpus, loadavg } = await import("node:os");
+  for (let waited = 0; ; waited++) {
+    const batt = Bun.spawnSync(["pmset", "-g", "batt"]).stdout.toString();
+    const therm = Bun.spawnSync(["pmset", "-g", "therm"]).stdout.toString();
+    const onAC = batt.includes("AC Power");
+    const hot = /(thermal|performance) warning level[^0-9]*[1-9]/i.test(therm) || /CPU_Speed_Limit\s*=\s*([0-7]?\d)\b/.test(therm);
+    const busy = loadavg()[0]! > cpus().length * 0.8;
+    if (onAC && !hot && !busy) return;
+    if (waited % 5 === 0) process.stderr.write(`waiting: ${!onAC ? "on battery " : ""}${hot ? "heat warning " : ""}${busy ? `load ${loadavg()[0]!.toFixed(1)}` : ""}\n`);
+    await Bun.sleep(60_000);
+  }
+}
+
 async function runOne(task: Task, out: string, model: string, judgeModel: string): Promise<Result> {
+  await waitUntilSafe();
   const dir = join(out, task.id.replace(/[^\w.-]/g, "_"));
   mkdirSync(dir, { recursive: true });
   const started = Date.now();

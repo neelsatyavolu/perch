@@ -72,7 +72,10 @@ export function combineExtraTools(...list: (ExtraTools | undefined)[]): ExtraToo
     specs: () => all.flatMap((t) => t.specs()),
     prompt: () => all.map((t) => t.prompt()).filter(Boolean).join("\n\n"),
     handles: (name) => Boolean(owner(name)),
-    check: (call) => owner(call.name)?.check(call) ?? `unknown tool "${call.name}"`,
+    check: (call) => {
+      const tools = owner(call.name);
+      return tools ? tools.check(call) : `unknown tool "${call.name}"`;
+    },
     describe: (call) => owner(call.name)!.describe(call),
     run: (call, signal) => owner(call.name)!.run(call, signal),
   };

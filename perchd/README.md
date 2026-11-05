@@ -58,6 +58,7 @@ bun run src/cli.ts run --model role:deep "…"      # or --model codex, --model 
 | `src/config/` | Keychain access and the encrypted settings store |
 | `src/memory/` | Encrypted memory pages (key in the Keychain), in-RAM FTS5 search, extraction, dreaming, "Set up your memory", memory tools, Memory page API |
 | `src/routines/` | Cron schedules, encrypted routines and runs, the unattended runner, the scheduler, Routines API, and `openPerchData` that wires it all |
+| `src/sync/` | End-to-end encrypted sync client for `server/`: item encryption, key wrapping and recovery, the sync engine and merge rules, pairing, the encrypted relay channel, Keychain storage |
 
 ## Rules this code keeps
 
@@ -67,3 +68,4 @@ bun run src/cli.ts run --model role:deep "…"      # or --model codex, --model 
 - Every action is written to the audit log.
 - Memory, routines and run chats are AES-256-GCM encrypted per record; the search index lives only in RAM. Passwords, keys, card numbers and codes are never saved as memories.
 - Scheduled routines decline anything that needs approval, so they never pay unattended; in Ask and Guard they also never send, post or delete.
+- Sync data and relay messages are encrypted on the Mac before they leave it; sync secrets live in the Keychain (`src/sync/keychain.ts`).

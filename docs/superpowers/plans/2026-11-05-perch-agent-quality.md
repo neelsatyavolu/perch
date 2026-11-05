@@ -51,11 +51,17 @@ Counted across all four runs (about 3,000 tool calls), the general weaknesses ar
 
 New files keep shared files small:
 
-- `perchd/src/page/typing.ts`: key-by-key typing, suggestion detection, slider values
+- `perchd/src/page/typing.ts`: key-by-key typing and suggestion detection
+- `perchd/src/page/slider.ts`: native range inputs and ARIA sliders
 - `perchd/src/page/drag.ts`: drag from a ref to a ref or by an offset
-- `perchd/src/page/changes.ts`: what changed after an action, page growth after a scroll
+- `perchd/src/page/pointing.ts`: scrolling into view, hit-testing and hidden-control fallbacks for clicks
+- `perchd/src/page/node.ts`: live nodes behind refs, shared by the page actions
+- `perchd/src/page/scrolling.ts`: wheel scrolling, lazy-load growth and end of page
+- `perchd/src/page/navigation.ts`: returning slow pages once parsed
 - `perchd/src/agent/progress.ts`: budget notes and repeated-action notes, shared by `runTask` and the MCP server
 - `perchd/src/agent/finish.ts`: the final best-effort answer turn
+
+The note for an action that changed nothing lives in `agent/tools.ts`, next to the dispatch that compares the page before and after.
 
 Shared files touched minimally: `agent/tool-specs.ts` (drag, wait_for seconds, error text), `agent/tools.ts` (dispatch), `mcp.ts` (progress notes), `external.ts` (time budget for MCP, reply prompt).
 

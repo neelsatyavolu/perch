@@ -28,7 +28,7 @@ export function parseExecArgs(argv: string[]): ExecArgs {
   return { provider, model: rest.join("/") || (provider === "codex" ? "gpt-6-astra" : "claude-sonnet-5-5"), ...(thinking ? { thinking } : {}), ...(logDump ? { logDump } : {}), task };
 }
 
-async function main(argv: string[]): Promise<number> {
+export async function main(argv: string[]): Promise<number> {
   let args: ExecArgs;
   try {
     args = parseExecArgs(argv);

@@ -84,8 +84,9 @@ export class SessionManager {
     return this.sessions.get(`${client}/${session}`);
   }
 
+  /** Sessions worth showing: persistent ones, and terminal sessions that have tabs. */
   list(): SessionSummary[] {
-    return [...this.sessions.values()].map((s) => ({
+    return [...this.sessions.values()].filter((s) => s.info.persistent || s.tabIds().length > 0).map((s) => ({
       client: s.info.client,
       session: s.info.session,
       agent: s.info.agent,

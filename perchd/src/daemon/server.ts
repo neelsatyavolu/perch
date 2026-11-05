@@ -175,7 +175,10 @@ export async function startServer(opts: ServerOptions): Promise<{ stop(): void }
         if (!conn) return;
         conn.declineAll();
         conn.session.connections--;
-        if (conn.hello.persistent && conn.session.connections <= 0) opts.manager.scheduleEnd(conn.session, opts.graceMs ?? 10_000);
+        if (conn.session.connections > 0) return;
+        if (conn.hello.persistent) opts.manager.scheduleEnd(conn.session, opts.graceMs ?? 10_000);
+        // A terminal command that opened nothing leaves nothing behind.
+        else if (!conn.session.tabIds().length && !conn.session.asleep) void opts.manager.end(conn.session, "close");
       },
     },
   });

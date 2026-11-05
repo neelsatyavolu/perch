@@ -10,13 +10,13 @@ Design and decisions: `docs/superpowers/plans/2026-11-05-perch-sync-server.md`. 
 
 | Area | Routes | Notes |
 |---|---|---|
-| Email sign-in | `POST /v1/auth/email/start`, `verify`, `poll`, `confirm/info`, `confirm`; `GET /v1/auth/email/confirm` | The email has a link and an 8-character code. The link page asks the person to pick the number their device shows (one of three), so a stray click cannot sign in someone else's device. The link token sits in the URL fragment and never reaches server logs. Sessions go only to the device that holds the poll secret. |
+| Email sign-in | `POST /v1/auth/email/start`, `verify`, `poll`, `confirm/info`, `confirm`; `GET /v1/auth/email/confirm` | The email has a link and an 8-character code. The link page asks the person to type the number their device shows (a wrong number cancels), so a stray click cannot sign in someone else's device. The link token sits in the URL fragment and never reaches server logs. Sessions go only to the device that holds the poll secret. |
 | Passkeys | `POST /v1/auth/passkey/register/options`, `register/verify`, `login/options`, `login/verify`; `GET`, `DELETE /v1/auth/passkey[/:id]` | WebAuthn with user verification required, through `@simplewebauthn/server`. Relying party `perchbrowser.com`. |
-| Account | `GET`, `DELETE /v1/account` | Deleting removes every row and R2 object and closes relay sockets. |
+| Account | `GET`, `DELETE /v1/account`, `POST /v1/account/confirm` | Deleting removes every row and R2 object and closes relay sockets. Deleting the account and adding a passkey need a fresh code emailed to the account address (`/confirm`), not just a session. |
 | Devices | `GET /v1/devices`, `PATCH`, `DELETE /v1/devices/:id` | Revoking deletes the device's sessions and key copy and closes its relay socket. |
 | Keys | `GET /v1/keys`, `PUT /v1/keys/devices/:id`, `PUT /v1/keys/recovery`, `POST /v1/keys/rotate` | Wrapped copies of the sync key, one per device plus a recovery copy. Versions only go up. |
 | Sync | `POST /v1/sync/:collection/commit`, `GET /v1/sync/:collection/changes`, `GET /v1/sync/:collection/items/:id/blob`, `GET /v1/sync/usage` | Collections: bookmarks, history, settings, memory, skills, tabs, chats, artifacts. Per-item versions; a write applies only on the version it was based on. Items over 64 KB go to R2. |
-| Pairing | `POST /v1/pair/start`, `GET /v1/pair/lookup`, `POST /v1/pair/:id/approve`, `/deny`, `POST /v1/pair/poll` | The new device's code is the first 40 bits of SHA-256 of its public key, so the approving device can check the key it is handed. |
+| Pairing | `POST /v1/pair/start`, `GET /v1/pair/lookup`, `POST /v1/pair/:id/approve`, `/deny`, `POST /v1/pair/poll` | The new device shows a 16-character code; the server sees only the first half, a commitment to the device's key and to the second half (a secret). The approving device checks the key against the whole code and leaves a grant sealed with the secret, which the server passes along but cannot read or forge. A request that is still waiting is never replaced. |
 | Relay | `GET /v1/relay` (WebSocket) | One `RelayRoom` Durable Object per account forwards `{t:"msg", to, d}` frames between online devices, with presence updates. |
 
 Only Perch browsers can change the account. A paired remote CLI (Grok Bot's computer, `perch login` elsewhere) can use the relay, read the account and device list, and remove itself.
@@ -28,7 +28,7 @@ Only Perch browsers can change the account. A paired remote CLI (Grok Bot's comp
 - Every endpoint has a rate limit: a token bucket per hashed IP, email, account or device, in the `RateLimiter` Durable Object (see `RULES` in `src/ratelimit.ts`). The relay also caps each socket at 200 frames per 10 seconds and 256 KB per frame.
 - Input is checked with zod at every route.
 - Logs carry the event name, route pattern, method, status and timing only (`src/log.ts`). Workers invocation logs are off.
-- Limits: 100 MB per account (`QUOTA_BYTES`), 4 MB per item, 100 items per commit. A full account gets a 413-style `quota` result per item with a plain message.
+- Limits: 100 MB per account (`QUOTA_BYTES`), 4 MB per item, 100 items per commit. A commit answers 200 with a result per item; an item that does not fit gets `status: "quota"`, so one full item never fails the rest of the commit. The client reports these items as not synced.
 - A daily cron deletes expired sign-in requests, challenges, pairings and sessions, and deletion markers older than 90 days. A device that was away longer than that is told to sync from the start.
 
 ## Develop and test

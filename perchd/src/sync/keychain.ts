@@ -2,6 +2,10 @@
  * Where sync secrets live (spec 11.1): the session token, this device's private key, the sync key
  * versions and the pinned recovery public key go in the macOS Keychain, never in files or logs.
  * Values are written through `security -i` on stdin, so they never appear in a process list.
+ *
+ * Known gap: items written by `/usr/bin/security` trust that tool, so any process running as the
+ * same user can read them with `security find-generic-password` without a prompt. Limiting them to
+ * Perch's code signature needs a signed Perch binary (Chromium track); see plan 7, Deferred.
  */
 
 export type SecretStore = {

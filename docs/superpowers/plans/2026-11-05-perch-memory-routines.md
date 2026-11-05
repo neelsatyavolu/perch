@@ -85,3 +85,10 @@ Shared files touched: `perchd/src/agent/loop.ts` (optional `memory` option: extr
 - **Mail, calendar, Messages, AI-service exports, Aside import and web search as setup sources.** They need the site skills (plan 4) and import readers (plan 6). The source list has their switches reserved; web search stays off by default.
 - **The Memory and Routines pages themselves.** WebUI belongs to plan 3b; this plan ships the typed functions they call.
 - **MCP `memory_search` for outside agents.** The function is ready; wiring it into `mcp.ts` belongs to the MCP track.
+- **Scheduled browsing-history extraction** (spec 8, opt-in). Setup reads history once with the user's review; a background job that files facts from history without review needs its own consent design, so there is no setting for it yet.
+- **`perch memory search|read` CLI.** Belongs to the CLI track; it can call `createMemoryApi`.
+- **Encrypting the shared audit log.** The audit log belongs to the agent core. Memory calls write only the action and category to it, never the query or the fact.
+
+## Notes from review (Codex, 2026-11-05), all fixed
+
+Memory contents in the plaintext audit log; a lost key replaced when only routines existed; extraction filing standing rules or facts the user declined; concurrent routine saves sharing a temp file; dreaming overwriting edits made while the model answered; merge cycles deleting both pages; queued runs using stale settings. Skip-mode routines can still send and delete unattended by design (the user chose Skip); payments never run unattended in any mode, proved on a real page in `test/routines-browser.test.ts`.

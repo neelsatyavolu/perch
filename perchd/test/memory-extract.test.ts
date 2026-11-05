@@ -27,8 +27,9 @@ const chat: Message[] = [
 
 const file = (facts: unknown): TurnEvent[] => [{ type: "tool_call", call: { id: "x", name: "file_memories", args: { facts } } }, { type: "done" }];
 
-test("the transcript keeps what the user said and the answer, and trims page dumps", () => {
+test("the transcript keeps what the user said and the answer, and leaves out page text (it may carry injected instructions)", () => {
   const text = renderTranscript(chat);
+  expect(text).not.toContain("TheFork (https");
   expect(text).toContain("User: Book a table for me and my sister Maya");
   expect(text).toContain("Perch used navigate");
   expect(text).toContain("Perch finished: Booked Ao 26 for Friday 8pm");

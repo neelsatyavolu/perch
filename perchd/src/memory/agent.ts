@@ -1,7 +1,8 @@
 /**
  * Memory inside a chat: what the agent knows at the start (USER.md, MEMORY.md and the pages that
  * match the task), the memory_search and memory_save tools, and extraction when the chat ends.
- * memory_save is a "change": it waits for approval in Ask mode and runs in Guard and Skip.
+ * memory_save is a "change": it waits for approval in Ask mode and runs in Guard and Skip, except
+ * saving a standing rule (MEMORY.md), which always asks.
  * Incognito chats get no memory at all.
  */
 
@@ -122,7 +123,8 @@ export function chatMemory(store: MemoryStore, opts: { incognito?: boolean; extr
 /** One memory tool call under the chat's permission mode: approval if needed, run, audit. */
 export async function* memoryCall(memory: MemoryAccess, policy: MemoryPolicy, call: ToolCall): AsyncGenerator<{ type: "approval"; request: ApprovalRequest } | { type: "step"; label: string }, MemoryToolResult> {
   const kind = memory.kind(call);
-  const decision = needsApproval(policy.mode, kind);
+  // A standing rule changes how the agent behaves in every later chat, so it always asks.
+  const decision = call.name === "memory_save" && call.args.category === "rules" ? "ask" : needsApproval(policy.mode, kind);
   const entry = { time: new Date().toISOString(), tab: "", site: "memory", action: call.name, detail: memory.summary(call), client: policy.client ?? "sidebar" };
   let approved: boolean | null = null;
   if (decision === "ask") {

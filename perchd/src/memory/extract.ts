@@ -13,7 +13,6 @@ export type ExtractOptions = { model: Model; store: MemoryStore; transcript: rea
 
 const MAX_FACTS = 30;
 const TRANSCRIPT_LIMIT = 24_000;
-const TOOL_RESULT_LIMIT = 300;
 const KNOWN_PAGES = 200;
 const NONE: AddResult = { added: 0, duplicates: 0, rejected: [], paths: [] };
 
@@ -56,7 +55,7 @@ export const FILE_TOOL: ToolSpec = {
   },
 };
 
-/** The chat as plain lines for the model: user words and answers in full, tool output trimmed. */
+/** The chat as plain lines for the model: the user's words, Perch's replies and which tools it used. */
 export function renderTranscript(messages: readonly Message[]): string {
   const lines: string[] = [];
   for (const m of messages) {
@@ -67,7 +66,8 @@ export function renderTranscript(messages: readonly Message[]): string {
         if (call.name === "done") lines.push(`Perch finished: ${str(call.args.answer)}`);
         else lines.push(`Perch used ${call.name}${call.args.url ? ` on ${str(call.args.url)}` : ""}`);
       }
-    } else if (m.name !== "done") lines.push(`  result: ${m.content.slice(0, TOOL_RESULT_LIMIT).replace(/\s+/g, " ")}`);
+    }
+    // Tool results (page text) are left out: a page could carry instructions meant to become memories.
   }
   const text = lines.join("\n");
   return text.length > TRANSCRIPT_LIMIT ? `…${text.slice(-TRANSCRIPT_LIMIT)}` : text;

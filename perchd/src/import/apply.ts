@@ -9,7 +9,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { CdpConnection } from "../cdp/connection";
-import { sealBundle } from "./bundle";
+import { sealReplacingBundle } from "./bundle";
 import { applyCookies } from "./cookies-cdp";
 import type { Keychain } from "./keychain";
 import { countBookmarks, ImportError, type DataType, type ImportData } from "./types";
@@ -108,7 +108,7 @@ export async function applyImport(input: ApplyInput): Promise<{ results: TypeRes
   if (toBundle.length === 0) return { results: sorted(results) };
   try {
     const data = Object.assign({}, ...toBundle.map((p) => p.data)) as ImportData;
-    const bundle = await sealBundle(input.target.userDataDir, input.keychain, input.source, data, input.now);
+    const bundle = await sealReplacingBundle(input.target.userDataDir, input.keychain, input.source, data, input.now);
     const bundled = toBundle.map((p): TypeResult => ({ type: p.type, status: "bundled", count: itemCount(p.type, p.data), ...(p.skipped ? { skipped: p.skipped } : {}), message: BUNDLED_MESSAGE }));
     return { results: sorted([...results, ...bundled]), bundle };
   } catch (error) {

@@ -7,6 +7,9 @@
  * File: "PRCHIMP1" | 12-byte IV | 16-byte tag | ciphertext of the JSON. The bundle id is the
  * additional authenticated data, so a file cannot be swapped for another bundle's.
  * The browser opens it, applies each part, then calls `discardBundle`.
+ *
+ * One pending bundle per source: importing the same browser profile again replaces the parts it
+ * re-imports and keeps the rest, so repeated imports never pile up copies of the same secrets.
  */
 
 import { createCipheriv, createDecipheriv, randomBytes, randomUUID } from "node:crypto";
@@ -60,7 +63,12 @@ export function pendingBundles(userDataDir: string): string[] {
 
 export async function openBundle(userDataDir: string, keychain: Keychain, id: string): Promise<Bundle> {
   if (!/^[0-9a-f-]{36}$/.test(id)) throw new ImportError("Not an import bundle id.", "invalid");
-  const raw = Buffer.from(readFileSync(join(bundleDir(userDataDir), `${id}${SUFFIX}`), "utf8"), "base64");
+  let raw: Buffer;
+  try {
+    raw = Buffer.from(readFileSync(join(bundleDir(userDataDir), `${id}${SUFFIX}`), "utf8"), "base64");
+  } catch {
+    throw new ImportError("This import bundle no longer exists.", "not-found");
+  }
   const keyText = await keychain.find(BUNDLE_SERVICE, id);
   if (!keyText) throw new ImportError("The key for this import is missing from the Keychain, so it cannot be opened.", "not-found");
   if (raw.length < 36 || !raw.subarray(0, 8).equals(MAGIC)) throw new ImportError("This import bundle is damaged.", "unreadable");
@@ -81,4 +89,24 @@ export async function discardBundle(userDataDir: string, keychain: Keychain, id:
   if (!/^[0-9a-f-]{36}$/.test(id)) throw new ImportError("Not an import bundle id.", "invalid");
   rmSync(join(bundleDir(userDataDir), `${id}${SUFFIX}`), { force: true });
   await keychain.remove(BUNDLE_SERVICE, id);
+}
+
+const sameSource = (a: Bundle["source"], b: Bundle["source"]) => a.browser === b.browser && a.profile === b.profile;
+
+/** Seal `data` together with what an older pending bundle from the same source holds, then discard that bundle and its key. */
+export async function sealReplacingBundle(userDataDir: string, keychain: Keychain, source: Bundle["source"], data: ImportData, now = Date.now()): Promise<{ id: string; path: string }> {
+  const older: Bundle[] = [];
+  for (const id of pendingBundles(userDataDir)) {
+    try {
+      const bundle = await openBundle(userDataDir, keychain, id);
+      if (sameSource(bundle.source, source)) older.push(bundle);
+    } catch {
+      // A damaged bundle, or one whose key is gone, is left alone; it cannot be merged.
+    }
+  }
+  const byAge = [...older].sort((a, b) => a.created - b.created);
+  const merged = Object.assign({}, ...byAge.map((b) => b.data), data) as ImportData;
+  const sealed = await sealBundle(userDataDir, keychain, source, merged, now);
+  for (const bundle of older) await discardBundle(userDataDir, keychain, bundle.id);
+  return sealed;
 }

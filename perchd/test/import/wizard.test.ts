@@ -165,6 +165,25 @@ test("importing from Chrome: bookmarks and history written, the rest sealed in o
   ]);
 });
 
+test("importing the same profile again replaces its pending bundle instead of adding a second copy", async () => {
+  chromeProfile(env.home);
+  const keychain = memoryKeychain({ "Chrome Safe Storage": FAKE_SAFE_STORAGE });
+  const run = (types: string[]) => importSource({ home: env.home, source: { browser: "chrome", profile: "Default" }, types, target: { userDataDir: perch }, keychain });
+  const first = await run(["passwords", "extensions"]);
+  const second = await run(["passwords", "addresses"]);
+  expect(pendingBundles(perch)).toEqual([second.bundle!.id]);
+  await expect(openBundle(perch, keychain, first.bundle!.id)).rejects.toMatchObject({ reason: "not-found" });
+  const bundle = await openBundle(perch, keychain, second.bundle!.id);
+  expect(bundle.data.passwords).toHaveLength(1);
+  expect(bundle.data.extensions).toHaveLength(1);
+  expect(bundle.data.addresses).toHaveLength(1);
+  // Another source keeps its own bundle.
+  const csv = join(env.home, "Passwords.csv");
+  write(csv, "url,username,password\nhttps://a.example.com,u,p\n");
+  await importFile({ path: csv, target: { userDataDir: perch }, keychain });
+  expect(pendingBundles(perch)).toHaveLength(2);
+});
+
 test("a denied Keychain prompt fails passwords only, and Perch being open sends everything to the bundle", async () => {
   chromeProfile(env.home);
   symlinkSync(`${hostname()}-${process.pid}`, join(perch, "SingletonLock"));

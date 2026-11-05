@@ -1,0 +1,137 @@
+/**
+ * Artifacts (spec 7.7): pages, documents, code, data and images a chat produces, kept per chat
+ * with every version, encrypted per record like chats.
+ *
+ * The agent makes one by putting a fenced block in its reply:
+ *
+ *   ```artifact html "Subscriptions, last 12 months"
+ *   <!doctype html>...
+ *   ```
+ *
+ * `code:<language>` names the language of a code artifact. A longer fence (````) lets the content
+ * hold ``` itself. Replies keep a `[[artifact:<id>]]` marker where the block was.
+ */
+
+import { readdir, readFile, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { ensurePrivateDir, KeyedQueue, UUID, writePrivate } from "./files";
+import type { ArtifactKind } from "./protocol";
+import type { Vault } from "./vault";
+
+export const ARTIFACT_KINDS: readonly ArtifactKind[] = ["html", "markdown", "code", "svg", "csv", "json", "image"];
+export const IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"] as const;
+const MAX_TEXT = 2_000_000;
+const MAX_IMAGE_BASE64 = 11_000_000;
+const EXT = ".art";
+
+export type ArtifactVersion = { content: string; mime?: string; time: string };
+export type ArtifactRecord = { id: string; chatId: string; title: string; kind: ArtifactKind; language?: string; versions: ArtifactVersion[] };
+export type NewArtifact = { chatId: string; title: string; kind: ArtifactKind; language?: string; content: string; mime?: string };
+
+export class ArtifactStore {
+  private records = new Map<string, ArtifactRecord>();
+  private queue = new KeyedQueue();
+
+  private constructor(private readonly dir: string, private readonly vault: Vault) {}
+
+  static async load(dir: string, vault: Vault): Promise<ArtifactStore> {
+    const store = new ArtifactStore(dir, vault);
+    await ensurePrivateDir(dir);
+    for (const name of await readdir(dir)) {
+      if (!name.endsWith(EXT)) continue;
+      const id = name.slice(0, -EXT.length);
+      try {
+        store.records.set(id, await vault.openJson<ArtifactRecord>(id, new Uint8Array(await readFile(join(dir, name)))));
+      } catch {
+        // Left on disk; a damaged artifact must not stop the chats from loading.
+      }
+    }
+    return store;
+  }
+
+  get(id: string): ArtifactRecord | undefined {
+    return this.records.get(id);
+  }
+
+  /** A version's content; the newest when version is left out. Versions count from 1. */
+  content(id: string, version?: number): ArtifactVersion | undefined {
+    const record = this.records.get(id);
+    if (!record) return undefined;
+    return record.versions[(version ?? record.versions.length) - 1];
+  }
+
+  forChat(chatId: string): ArtifactRecord[] {
+    return [...this.records.values()].filter((r) => r.chatId === chatId);
+  }
+
+  /** Saves a new artifact, or a new version of the chat's artifact with the same title. */
+  async save(input: NewArtifact): Promise<ArtifactRecord> {
+    checkArtifact(input);
+    const existing = this.forChat(input.chatId).find((r) => r.title === input.title.trim() && r.kind === input.kind);
+    const id = existing?.id ?? crypto.randomUUID();
+    return this.queue.run(id, async () => {
+      const current = this.records.get(id);
+      const version: ArtifactVersion = { content: input.content, ...(input.mime ? { mime: input.mime } : {}), time: new Date().toISOString() };
+      const next: ArtifactRecord = current
+        ? { ...current, versions: [...current.versions, version] }
+        : { id, chatId: input.chatId, title: input.title.trim(), kind: input.kind, ...(input.language ? { language: input.language } : {}), versions: [version] };
+      await writePrivate(this.dir, `${id}${EXT}`, await this.vault.sealJson(id, next));
+      this.records.set(id, next);
+      return next;
+    });
+  }
+
+  async removeForChat(chatId: string): Promise<void> {
+    await Promise.all(
+      this.forChat(chatId).map((r) =>
+        this.queue.run(r.id, async () => {
+          this.records.delete(r.id);
+          await rm(join(this.dir, `${r.id}${EXT}`), { force: true });
+        }),
+      ),
+    );
+  }
+}
+
+function checkArtifact(input: NewArtifact): void {
+  if (!ARTIFACT_KINDS.includes(input.kind)) throw new Error(`artifact kind must be one of ${ARTIFACT_KINDS.join(", ")}`);
+  if (!UUID.test(input.chatId)) throw new Error("artifacts belong to a chat id");
+  if (typeof input.title !== "string" || !input.title.trim() || input.title.length > 200) throw new Error("an artifact needs a title of up to 200 characters");
+  if (typeof input.content !== "string") throw new Error("artifact content must be text");
+  if (input.kind === "image") {
+    if (!IMAGE_TYPES.includes(input.mime as (typeof IMAGE_TYPES)[number])) throw new Error("images must be PNG, JPEG, WebP or GIF");
+    if (input.content.length > MAX_IMAGE_BASE64) throw new Error("the image is too large (8 MB at most)");
+    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(input.content)) throw new Error("images are sent as base64");
+  } else if (input.content.length > MAX_TEXT) {
+    throw new Error("the artifact is too large (2 MB of text at most)");
+  }
+  if (input.language !== undefined && !/^[\w+#.-]{1,32}$/.test(input.language)) throw new Error("the language name is not valid");
+}
+
+export type ArtifactBlock = { kind: ArtifactKind; language?: string; title: string; content: string };
+
+const OPEN = /^(`{3,})artifact\s+([a-z]+)(?::([\w+#.-]{1,32}))?(?:\s+"([^"\n]{1,200})")?\s*$/;
+
+/** Finds finished artifact blocks; each becomes `[[artifact:#<index>]]` in the returned text. */
+export function parseArtifactBlocks(text: string): { text: string; blocks: ArtifactBlock[] } {
+  const lines = text.split("\n");
+  const out: string[] = [];
+  const blocks: ArtifactBlock[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const open = lines[i]!.match(OPEN);
+    const kind = open?.[2] as ArtifactKind | undefined;
+    const close = open ? lines.findIndex((l, j) => j > i && l.trim() === open[1]) : -1;
+    if (!open || !kind || !ARTIFACT_KINDS.includes(kind) || kind === "image" || close < 0) {
+      out.push(lines[i]!);
+      continue;
+    }
+    blocks.push({ kind, ...(open[3] ? { language: open[3] } : {}), title: open[4] ?? defaultTitle(kind), content: lines.slice(i + 1, close).join("\n") });
+    out.push(`[[artifact:#${blocks.length - 1}]]`);
+    i = close;
+  }
+  return { text: out.join("\n"), blocks };
+}
+
+function defaultTitle(kind: ArtifactKind): string {
+  return { html: "Page", markdown: "Document", code: "Code", svg: "Drawing", csv: "Table", json: "Data", image: "Image" }[kind];
+}

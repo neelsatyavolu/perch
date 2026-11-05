@@ -4,7 +4,7 @@ import type { AppEnv, HonoEnv } from "./env";
 import { quotaBytes } from "./env";
 import { fromBase64Url } from "./crypto";
 import { base64url, check, HttpError, readJson } from "./http";
-import { requireAuth } from "./auth/session";
+import { requireBrowser } from "./auth/session";
 import { limit, RULES } from "./ratelimit";
 import { keyVersion } from "./keys";
 
@@ -15,7 +15,7 @@ import { keyVersion } from "./keys";
  * cannot roll an item back unnoticed). Small items live in D1, large ones in R2.
  */
 export const syncRoutes = new Hono<HonoEnv>();
-syncRoutes.use(requireAuth);
+syncRoutes.use(requireBrowser);
 
 export const COLLECTIONS = ["bookmarks", "history", "settings", "memory", "skills", "tabs", "chats", "artifacts"] as const;
 const collectionSchema = z.enum(COLLECTIONS);

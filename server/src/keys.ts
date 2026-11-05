@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { AppEnv, HonoEnv } from "./env";
 import { randomToken } from "./crypto";
 import { base64url, check, HttpError, idSchema, readJson } from "./http";
-import { requireAuth } from "./auth/session";
+import { requireBrowser } from "./auth/session";
 
 /**
  * Wrapped copies of the account's sync key. The server never sees the key: each copy is encrypted
@@ -11,7 +11,7 @@ import { requireAuth } from "./auth/session";
  * an older version is refused, so a revoked device cannot be handed the new key by mistake.
  */
 export const keyRoutes = new Hono<HonoEnv>();
-keyRoutes.use(requireAuth);
+keyRoutes.use(requireBrowser);
 
 const blobSchema = base64url(4096);
 const versionSchema = z.number().int().min(1).max(1_000_000);

@@ -47,7 +47,7 @@ export async function accountForEmail(env: AppEnv, email: string, now: number): 
   return { id: row.id, created: row.id === id };
 }
 
-type SessionRow = { account_id: string; device_id: string; expires_at: number; last_seen_at: number };
+type SessionRow = { account_id: string; device_id: string; expires_at: number; last_seen_at: number; kind: string };
 
 /** Resolves a bearer token to its account and device, or null if it is unknown, expired or revoked. */
 export async function authenticate(env: AppEnv, header: string | undefined, now: number): Promise<Auth | null> {
@@ -55,7 +55,7 @@ export async function authenticate(env: AppEnv, header: string | undefined, now:
   if (!match?.[1]) return null;
   const hash = await sha256Hex(match[1]);
   const row = await env.DB.prepare(
-    `SELECT s.account_id, s.device_id, s.expires_at, d.last_seen_at FROM sessions s
+    `SELECT s.account_id, s.device_id, s.expires_at, d.last_seen_at, d.kind FROM sessions s
      JOIN devices d ON d.id = s.device_id
      WHERE s.token_hash = ? AND s.expires_at > ? AND d.revoked_at IS NULL`,
   ).bind(hash, now).first<SessionRow>();
@@ -68,7 +68,7 @@ export async function authenticate(env: AppEnv, header: string | undefined, now:
     updates.push(env.DB.prepare("UPDATE devices SET last_seen_at = ? WHERE id = ?").bind(now, row.device_id));
   }
   if (updates.length) await env.DB.batch(updates);
-  return { accountId: row.account_id, deviceId: row.device_id };
+  return { accountId: row.account_id, deviceId: row.device_id, kind: row.kind };
 }
 
 /** Requires a valid session, then applies the per-account rate limit. */
@@ -78,4 +78,19 @@ export const requireAuth: MiddlewareHandler<HonoEnv> = async (c, next) => {
   await consume(c.env, RULES.account, auth.accountId);
   c.set("auth", auth);
   await next();
+};
+
+/**
+ * Only Perch browsers may change the account: sync, keys, pairing, passkeys, other devices.
+ * A paired remote CLI (kind cli or assistant, such as Grok Bot's computer) can use the relay,
+ * read the account and device list, and remove itself, and nothing else.
+ */
+export const requireBrowser: MiddlewareHandler<HonoEnv> = async (c, next) => {
+  const onlyBrowsers = async () => {
+    if (c.var.auth.kind !== "browser") throw new HttpError(403, "browser_only", "Only a Perch browser signed in to this account can do that.");
+    await next();
+  };
+  // Already authenticated by a router-level requireAuth: do not look the session up twice.
+  if (c.get("auth")) return onlyBrowsers();
+  await requireAuth(c, onlyBrowsers);
 };

@@ -4,7 +4,7 @@ import type { AppEnv, HonoEnv } from "./env";
 import { normalizeCode, pairingCode, randomToken, safeEqual, sha256Hex } from "./crypto";
 import { check, clientIp, deviceSchema, HttpError, idSchema, readJson } from "./http";
 import { limit, RULES } from "./ratelimit";
-import { requireAuth, sessionStatement } from "./auth/session";
+import { requireBrowser, sessionStatement } from "./auth/session";
 import { listDevices } from "./devices";
 
 /**
@@ -41,7 +41,7 @@ pairingRoutes.post("/start", limit(RULES.pairStartIp, (c) => clientIp(c)), async
   return c.json({ pairingId: id, code, pollSecret, expiresAt: now + LIFETIME });
 });
 
-pairingRoutes.get("/lookup", requireAuth, limit(RULES.pairLookup, (c) => c.var.auth.accountId), async (c) => {
+pairingRoutes.get("/lookup", requireBrowser, limit(RULES.pairLookup, (c) => c.var.auth.accountId), async (c) => {
   const code = normalizeCode(check(z.string().min(8).max(20), c.req.query("code")));
   const row = await c.env.DB.prepare("SELECT * FROM pairings WHERE code = ? AND status = 'pending' AND expires_at > ?")
     .bind(code, c.var.deps.now()).first<PairingRow>();
@@ -49,7 +49,7 @@ pairingRoutes.get("/lookup", requireAuth, limit(RULES.pairLookup, (c) => c.var.a
   return c.json({ pairingId: row.id, code: row.code, publicKey: row.public_key, name: row.name, kind: row.kind, expiresAt: row.expires_at });
 });
 
-pairingRoutes.post("/:id/approve", requireAuth, async (c) => {
+pairingRoutes.post("/:id/approve", requireBrowser, async (c) => {
   const id = check(pairingId, c.req.param("id"));
   await readJson(c, z.object({}).strict());
   const { accountId, deviceId } = c.var.auth;
@@ -71,7 +71,7 @@ pairingRoutes.post("/:id/approve", requireAuth, async (c) => {
   return c.json({ deviceId: newDevice });
 });
 
-pairingRoutes.post("/:id/deny", requireAuth, async (c) => {
+pairingRoutes.post("/:id/deny", requireBrowser, async (c) => {
   const id = check(pairingId, c.req.param("id"));
   const result = await c.env.DB.prepare("UPDATE pairings SET status = 'denied' WHERE id = ? AND status = 'pending'").bind(id).run();
   if (result.meta.changes !== 1) throw gone();

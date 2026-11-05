@@ -25,6 +25,7 @@ deviceRoutes.get("/", async (c) => {
 
 deviceRoutes.patch("/:id", async (c) => {
   const id = check(idSchema, c.req.param("id"));
+  if (id !== c.var.auth.deviceId) browserOnly(c.var.auth.kind);
   const { name } = await readJson(c, z.object({ name: deviceNameSchema }).strict());
   const result = await c.env.DB.prepare("UPDATE devices SET name = ? WHERE id = ? AND account_id = ? AND revoked_at IS NULL")
     .bind(name, id, c.var.auth.accountId).run();
@@ -40,6 +41,7 @@ deviceRoutes.patch("/:id", async (c) => {
 deviceRoutes.delete("/:id", async (c) => {
   const id = check(idSchema, c.req.param("id"));
   const { accountId } = c.var.auth;
+  if (id !== c.var.auth.deviceId) browserOnly(c.var.auth.kind);
   const [revoked] = await c.env.DB.batch([
     c.env.DB.prepare("UPDATE devices SET revoked_at = ? WHERE id = ? AND account_id = ? AND revoked_at IS NULL").bind(c.var.deps.now(), id, accountId),
     c.env.DB.prepare("DELETE FROM sessions WHERE device_id = ? AND account_id = ?").bind(id, accountId),
@@ -49,5 +51,9 @@ deviceRoutes.delete("/:id", async (c) => {
   await c.env.RELAY.get(c.env.RELAY.idFromName(accountId)).disconnect(id);
   return c.json({ ok: true });
 });
+
+function browserOnly(kind: string): void {
+  if (kind !== "browser") throw new HttpError(403, "browser_only", "Only a Perch browser signed in to this account can change other devices.");
+}
 
 const noDevice = () => new HttpError(404, "no_device", "That device is not on this account.");

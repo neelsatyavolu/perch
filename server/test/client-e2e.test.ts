@@ -92,8 +92,8 @@ describe("sync client against the server", () => {
     const polled = await anonymous.pollPairing(start);
     if (polled.status !== "approved") throw new Error("not approved");
     expect(polled.deviceId).toBe(approved.deviceId);
-    // A remote CLI gets no sync key.
-    expect((await anonymous.withToken(polled.sessionToken).keys()).device).toBeNull();
+    // A remote CLI gets no sync key and cannot read sync data.
+    await expect(anonymous.withToken(polled.sessionToken).keys()).rejects.toMatchObject({ status: 403 });
     const macPeer = polled.peers.find((p) => p.id === polled.approverDeviceId)!;
     expect(macPeer.publicKey).toBe(mac.device.keys.publicKey);
 

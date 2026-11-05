@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { AppEnv, HonoEnv } from "./env";
 import { quotaBytes } from "./env";
 import { HttpError, readJson } from "./http";
-import { requireAuth } from "./auth/session";
+import { requireAuth, requireBrowser } from "./auth/session";
 
 /** The signed-in account: what it holds, and deleting all of it. */
 export const accountRoutes = new Hono<HonoEnv>();
@@ -22,7 +22,7 @@ accountRoutes.get("/", async (c) => {
 });
 
 /** Deletes the account, every device, session, key copy and synced item, and closes relay sockets. */
-accountRoutes.delete("/", async (c) => {
+accountRoutes.delete("/", requireBrowser, async (c) => {
   await readJson(c, z.object({ confirm: z.literal("delete my account") }).strict());
   const { accountId } = c.var.auth;
   await deleteAccount(c.env, accountId);

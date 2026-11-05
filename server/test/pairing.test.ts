@@ -18,15 +18,15 @@ describe("pairing", () => {
     expect(await pairingCode(p.publicKey)).toBe(p.code);
   });
 
-  it("pairs: lookup by code, approve with a wrapped key, poll once for the session and peers", async () => {
+  it("pairs a new Mac: lookup by code, approve, grant the key, poll once for the session and peers", async () => {
     const h = harness();
     const mac = await signIn(h);
     await h.call("POST", "/v1/keys/rotate", { token: mac.sessionToken, body: { version: 1, devices: { [mac.deviceId]: `w${"A".repeat(30)}` } } });
-    const p = await startPairing(h);
+    const p = await startPairing(h, "New MacBook", "browser");
     expect((await h.call("POST", "/v1/pair/poll", { body: { pairingId: p.pairingId, pollSecret: p.pollSecret } })).data).toEqual({ status: "pending" });
 
     const lookup = await h.call("GET", `/v1/pair/lookup?code=${p.code.toLowerCase().replace("-", "")}`, { token: mac.sessionToken });
-    expect(lookup.data).toMatchObject({ pairingId: p.pairingId, publicKey: p.publicKey, name: "Grok Bot computer", kind: "cli" });
+    expect(lookup.data).toMatchObject({ pairingId: p.pairingId, publicKey: p.publicKey, name: "New MacBook", kind: "browser" });
     const approved = await h.call("POST", `/v1/pair/${p.pairingId}/approve`, { token: mac.sessionToken, body: {} });
     expect(approved.status).toBe(200);
     const granted = await h.call("PUT", `/v1/keys/devices/${approved.data.deviceId}`, { token: mac.sessionToken, body: { version: 1, blob: `w${"C".repeat(30)}` } });
@@ -74,5 +74,28 @@ describe("pairing", () => {
     const h = harness();
     const p = await startPairing(h);
     expect((await h.call("POST", "/v1/pair/poll", { body: { pairingId: p.pairingId, pollSecret: `pps_${"A".repeat(43)}` } })).status).toBe(404);
+  });
+
+  it("a paired remote CLI can use the relay and leave, but cannot change the account", async () => {
+    const h = harness();
+    const mac = await signIn(h);
+    const p = await startPairing(h, "Grok Bot computer", "cli");
+    await h.call("POST", `/v1/pair/${p.pairingId}/approve`, { token: mac.sessionToken, body: {} });
+    const cli = (await h.call("POST", "/v1/pair/poll", { body: { pairingId: p.pairingId, pollSecret: p.pollSecret } })).data;
+    const as = { token: cli.sessionToken };
+    expect((await h.call("GET", "/v1/devices", as)).status).toBe(200);
+    expect((await h.call("GET", "/v1/account", as)).status).toBe(200);
+    const forbidden = [
+      await h.call("GET", "/v1/keys", as),
+      await h.call("GET", "/v1/sync/bookmarks/changes", as),
+      await h.call("GET", "/v1/pair/lookup?code=ABCD-EFGH", as),
+      await h.call("POST", "/v1/auth/passkey/register/options", { ...as, body: {} }),
+      await h.call("DELETE", `/v1/devices/${mac.deviceId}`, as),
+      await h.call("PATCH", `/v1/devices/${mac.deviceId}`, { ...as, body: { name: "Mine now" } }),
+      await h.call("DELETE", "/v1/account", { ...as, body: { confirm: "delete my account" } }),
+    ];
+    expect(forbidden.map((r) => r.status)).toEqual([403, 403, 403, 403, 403, 403, 403]);
+    expect(forbidden[0]!.data.error.code).toBe("browser_only");
+    expect((await h.call("DELETE", `/v1/devices/${cli.deviceId}`, as)).status).toBe(200);
   });
 });

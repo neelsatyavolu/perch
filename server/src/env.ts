@@ -17,7 +17,7 @@ export type AppEnv = {
   RESEND_API_KEY?: string;
 };
 
-export type Auth = { accountId: string; deviceId: string };
+export type Auth = { accountId: string; deviceId: string; kind: string };
 
 /** Hono's environment type for this app. */
 export type HonoEnv = {

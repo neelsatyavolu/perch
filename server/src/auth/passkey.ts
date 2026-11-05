@@ -13,7 +13,7 @@ import { passkeyOrigins } from "../env";
 import { fromBase64Url, randomToken, toBase64Url } from "../crypto";
 import { clientIp, deviceSchema, HttpError, readJson } from "../http";
 import { limit, RULES } from "../ratelimit";
-import { createDeviceSession, requireAuth } from "./session";
+import { createDeviceSession, requireBrowser } from "./session";
 
 /**
  * Passkeys (WebAuthn). A signed-in device adds one; later any device signs in with it and no
@@ -46,7 +46,7 @@ async function takeChallenge(env: AppEnv, id: string, kind: string, now: number)
 
 const failed = () => new HttpError(400, "passkey_failed", "The passkey could not be checked. Try again, or sign in by email.");
 
-passkeyRoutes.post("/register/options", requireAuth, async (c) => {
+passkeyRoutes.post("/register/options", requireBrowser, async (c) => {
   const { accountId } = c.var.auth;
   const account = await c.env.DB.prepare("SELECT email FROM accounts WHERE id = ?").bind(accountId).first<{ email: string }>();
   const { results } = await c.env.DB.prepare("SELECT id, transports FROM passkeys WHERE account_id = ?").bind(accountId).all<PasskeyRow>();
@@ -63,7 +63,7 @@ passkeyRoutes.post("/register/options", requireAuth, async (c) => {
   return c.json({ challengeId: id, options });
 });
 
-passkeyRoutes.post("/register/verify", requireAuth, async (c) => {
+passkeyRoutes.post("/register/verify", requireBrowser, async (c) => {
   const body = await readJson(c, z.object({ challengeId, response: credentialJson }).strict(), 64 * 1024);
   const now = c.var.deps.now();
   const challenge = await takeChallenge(c.env, body.challengeId, "register", now);
@@ -108,13 +108,13 @@ passkeyRoutes.post("/login/verify", limit(RULES.passkeyIp, ipKey), async (c) => 
   return c.json({ status: "signed_in", ...session });
 });
 
-passkeyRoutes.get("/", requireAuth, async (c) => {
+passkeyRoutes.get("/", requireBrowser, async (c) => {
   const { results } = await c.env.DB.prepare("SELECT id, created_at, last_used_at FROM passkeys WHERE account_id = ? ORDER BY created_at")
     .bind(c.var.auth.accountId).all<{ id: string; created_at: number; last_used_at: number | null }>();
   return c.json({ passkeys: results.map((p) => ({ id: p.id, createdAt: p.created_at, lastUsedAt: p.last_used_at })) });
 });
 
-passkeyRoutes.delete("/:id", requireAuth, async (c) => {
+passkeyRoutes.delete("/:id", requireBrowser, async (c) => {
   const result = await c.env.DB.prepare("DELETE FROM passkeys WHERE id = ? AND account_id = ?").bind(c.req.param("id"), c.var.auth.accountId).run();
   if (result.meta.changes !== 1) throw new HttpError(404, "no_passkey", "That passkey is not on this account.");
   return c.json({ ok: true });

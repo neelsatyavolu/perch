@@ -4,7 +4,7 @@
  * Output events use the Aside CLI's log format, so Aside's published runners work unchanged.
  */
 
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { systemPrompt } from "./agent/prompt";
@@ -131,6 +131,110 @@ export async function runClaudeCode(opts: {
         events.push(event);
         opts.onEvent?.(event);
       }
+    }
+  }
+  const exitCode = await child.exited;
+  clearTimeout(timer);
+  const stderr = await new Response(child.stderr).text();
+  rmSync(work, { recursive: true, force: true });
+  return { answer, events, exitCode, timedOut, stderr };
+}
+
+/** One `codex exec --json` line to zero or more Aside-format events. */
+export function codexLineToEvents(line: any): AsideEvent[] {
+  if (line?.type !== "item.completed" || !line.item) return [];
+  const item = line.item;
+  if (item.type === "agent_message" && typeof item.text === "string" && item.text.trim()) {
+    return [{ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: item.text }] } }];
+  }
+  if (typeof item.type === "string" && item.type.includes("mcp")) {
+    const name = String(item.tool ?? item.name ?? "unknown").replace(/^mcp__perch__/, "");
+    let args: unknown = item.arguments ?? item.args ?? {};
+    if (typeof args === "string") {
+      try {
+        args = JSON.parse(args);
+      } catch {
+        /* keep the string */
+      }
+    }
+    const result = text(item.result?.content ?? item.result ?? item.output ?? item.error ?? "");
+    return [
+      { type: "tool_execution_start", toolName: name, args },
+      { type: "message_end", message: { role: "toolResult", content: [{ type: "text", text: result.slice(0, TOOL_RESULT_LIMIT) }] } },
+    ];
+  }
+  return [];
+}
+
+/** The installed Codex CLI itself, not a wrapper. */
+export function codexBinary(): string {
+  const candidates = [process.env.PERCH_CODEX_BIN, "/opt/homebrew/bin/codex", join(homedir(), ".local", "bin", "codex")];
+  const found = candidates.find((c): c is string => Boolean(c && existsSync(c)));
+  if (!found) throw new Error("Codex CLI is not installed; install it or set PERCH_CODEX_BIN");
+  return found;
+}
+
+/** MCP servers in the user's Codex config, to switch off for a browser task. */
+export function otherCodexServers(config = join(homedir(), ".codex", "config.toml")): string[] {
+  if (!existsSync(config)) return [];
+  const names = [...readFileSync(config, "utf8").matchAll(/^\[mcp_servers\.([A-Za-z0-9_-]+)\]/gm)].map((m: RegExpMatchArray) => m[1]!);
+  return [...new Set(names)].filter((n) => n !== "perch");
+}
+
+/** Runs a task with Codex CLI headless (the user's own ChatGPT sign-in) and Perch's MCP tools. */
+export async function runCodex(opts: { task: string; model?: string; timeoutMs: number; auditPath: string; userAgent?: string; onEvent?: (event: AsideEvent) => void }): Promise<ExternalResult> {
+  const work = mkdtempSync(join(tmpdir(), "perch-exec-"));
+  const mcpArgs = ["run", MCP_ENTRY, "--mode", "guard", "--client", "codex", "--audit", opts.auditPath, "--profile", join(work, "profile")];
+  if (opts.userAgent) mcpArgs.push("--user-agent", opts.userAgent);
+  const prompt = `${systemPrompt({ mode: "guard", now: new Date() })}\n\nYour tools for this task are Perch's browser tools from the "perch" MCP server. Do not run shell commands or read files. Do the task in the browser, then reply with the answer, including the specific facts the task asks for.\n\nTask:\n${opts.task}`;
+  const args = [
+    "exec", "--json", "--skip-git-repo-check", "-s", "read-only",
+    "-c", 'approval_policy="never"',
+    "-c", `mcp_servers.perch.command=${JSON.stringify(process.execPath)}`,
+    "-c", `mcp_servers.perch.args=${JSON.stringify(mcpArgs)}`,
+    "-c", "mcp_servers.perch.tool_timeout_sec=120",
+    // Perch applies its own approval rules to every call; Codex's prompt would only block them.
+    "-c", 'mcp_servers.perch.default_tools_approval_mode="approve"',
+    // Only the browser: the user's other MCP servers and Codex's web search are off for the task.
+    ...otherCodexServers().flatMap((name) => ["-c", `mcp_servers.${name}.enabled=false`]),
+    "-c", 'web_search="disabled"',
+    "-c", "tools.web_search=false",
+    ...(opts.model ? ["-m", opts.model] : []),
+    prompt,
+  ];
+  const child = Bun.spawn([codexBinary(), ...args], { cwd: work, stdout: "pipe", stderr: "pipe", stdin: "ignore" });
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    child.kill("SIGTERM");
+    setTimeout(() => child.kill("SIGKILL"), 10_000).unref();
+  }, opts.timeoutMs);
+  const events: AsideEvent[] = [];
+  let answer = "";
+  const reader = child.stdout.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let nl: number;
+    while ((nl = buffer.indexOf("\n")) !== -1) {
+      const raw = buffer.slice(0, nl).trim();
+      buffer = buffer.slice(nl + 1);
+      let line: any;
+      try {
+        line = JSON.parse(raw);
+      } catch {
+        continue;
+      }
+      if (process.env.PERCH_DEBUG_CODEX) process.stderr.write(`${raw.slice(0, 400)}\n`);
+      for (const event of codexLineToEvents(line)) {
+        if (event.type === "message_end" && event.message.role === "assistant") answer = event.message.content[0]?.text ?? answer;
+        events.push(event);
+        opts.onEvent?.(event);
+      }
+      if (line.type === "turn.completed") setTimeout(() => child.kill("SIGTERM"), 3000).unref();
     }
   }
   const exitCode = await child.exited;

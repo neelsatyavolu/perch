@@ -1,7 +1,7 @@
 /**
  * Perch benchmark runner.
  *
- *   bun run bench/run.ts --suite bu|om2w [--limit N] [--per-category K] [--concurrency 2]
+ *   bun run bench/run.ts --suite bu|om2w [--agent claude-code|codex] [--limit N] [--per-category K] [--concurrency 2]
  *                        [--model claude-sonnet-5-5] [--judge claude-opus-5-5] [--out <dir>] [--resume]
  *
  * Suites: BU Bench V1 (bench/data/bu-bench-v1.json, from Aside's published runner) and
@@ -11,7 +11,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { runClaudeCode } from "../perchd/src/external";
+import { runClaudeCode, runCodex } from "../perchd/src/external";
 import { judge } from "./judge";
 
 type Task = { id: string; category: string; task: string; reference?: string; website?: string };
@@ -53,7 +53,8 @@ async function runOne(task: Task, out: string, model: string, judgeModel: string
   const dir = join(out, task.id.replace(/[^\w.-]/g, "_"));
   mkdirSync(dir, { recursive: true });
   const started = Date.now();
-  const run = await runClaudeCode({ task: task.task, model, timeoutMs: 15 * 60_000, auditPath: join(dir, "audit.jsonl"), userAgent: UA });
+  const runner = arg("--agent", "claude-code") === "codex" ? runCodex : runClaudeCode;
+  const run = await runner({ task: task.task, model, timeoutMs: 15 * 60_000, auditPath: join(dir, "audit.jsonl"), userAgent: UA });
   const seconds = Math.round((Date.now() - started) / 1000);
   writeFileSync(join(dir, "events.jsonl"), run.events.map((e) => JSON.stringify(e)).join("\n"));
   writeFileSync(join(dir, "answer.txt"), run.answer);

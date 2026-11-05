@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
-import { claudeArgs, claudeLineToEvents } from "../src/external";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { claudeArgs, claudeLineToEvents, codexLineToEvents, otherCodexServers } from "../src/external";
 
 test("Claude Code stream lines become Aside-style events", () => {
   const toolUse = { type: "assistant", message: { content: [{ type: "text", text: "Opening the site." }, { type: "tool_use", id: "t1", name: "mcp__perch__navigate", input: { url: "https://example.com" } }] } };
@@ -24,4 +27,21 @@ test("the Claude Code command only allows Perch's browser tools", () => {
   for (const tool of ["Bash", "WebFetch", "WebSearch", "Read", "Write", "Task"]) expect(disallowed).toContain(tool);
   expect(args[args.indexOf("--output-format") + 1]).toBe("stream-json");
   expect(args[args.indexOf("--system-prompt") + 1]).toBe("SYS");
+});
+
+
+test("Codex JSON items become Aside-style events (shapes recorded from codex-cli 0.166)", () => {
+  const call = { type: "item.completed", item: { id: "item_2", type: "mcp_tool_call", server: "perch", tool: "navigate", arguments: { url: "https://x.org" }, result: { content: [{ type: "text", text: "Page: X" }] }, status: "completed" } };
+  expect(codexLineToEvents(call)).toEqual([
+    { type: "tool_execution_start", toolName: "navigate", args: { url: "https://x.org" } },
+    { type: "message_end", message: { role: "toolResult", content: [{ type: "text", text: "Page: X" }] } },
+  ]);
+  expect(codexLineToEvents({ type: "item.completed", item: { type: "agent_message", text: "Done." } })).toEqual([{ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "Done." }] } }]);
+  expect(codexLineToEvents({ type: "turn.completed" })).toEqual([]);
+});
+
+test("other Codex MCP servers are found so they can be switched off", () => {
+  const dir = mkdtempSync(join(tmpdir(), "codex-cfg-"));
+  writeFileSync(join(dir, "config.toml"), '[mcp_servers.parallel]\ncommand = "x"\n[mcp_servers.parallel.env]\nA = "1"\n[mcp_servers.firecrawl]\n[mcp_servers.perch]\n');
+  expect(otherCodexServers(join(dir, "config.toml"))).toEqual(["parallel", "firecrawl"]);
 });

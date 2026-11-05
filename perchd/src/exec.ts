@@ -8,7 +8,7 @@
 import { writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { runClaudeCode } from "./external";
+import { runClaudeCode, runCodex } from "./external";
 
 export type ExecArgs = { provider: string; model: string; thinking?: string; logDump?: string; task: string };
 
@@ -23,9 +23,9 @@ export function parseExecArgs(argv: string[]): ExecArgs {
   const thinking = take("--thinking");
   const logDump = take("--log-dump");
   const task = args.join(" ").trim();
-  if (provider !== "claude-code") throw new Error(`provider "${provider}" needs Perch's ChatGPT sign-in, which is not built yet; use claude-code/<model>`);
+  if (provider !== "claude-code" && provider !== "codex") throw new Error(`provider "${provider}" needs Perch's own sign-in, which is not built yet; use claude-code/<model> or codex/<model>`);
   if (!task) throw new Error("give the task in quotes");
-  return { provider, model: rest.join("/") || "claude-sonnet-5-5", ...(thinking ? { thinking } : {}), ...(logDump ? { logDump } : {}), task };
+  return { provider, model: rest.join("/") || (provider === "codex" ? "gpt-6-astra" : "claude-sonnet-5-5"), ...(thinking ? { thinking } : {}), ...(logDump ? { logDump } : {}), task };
 }
 
 async function main(argv: string[]): Promise<number> {
@@ -36,7 +36,8 @@ async function main(argv: string[]): Promise<number> {
     process.stderr.write(`${(error as Error).message}\n`);
     return 64;
   }
-  const result = await runClaudeCode({
+  const run = args.provider === "codex" ? runCodex : runClaudeCode;
+  const result = await run({
     task: args.task,
     model: args.model,
     timeoutMs: 30 * 60_000,

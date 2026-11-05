@@ -18,7 +18,7 @@ function inputItems(provider: "codex" | "grok", messages: Message[]): object[] {
       items.push({
         role: "user",
         content: m.image
-          ? [{ type: "input_text", text: m.text }, { type: "input_image", image_url: `data:image/jpeg;base64,${m.image}` }]
+          ? [{ type: "input_text", text: m.text }, { type: "input_image", image_url: `data:image/jpeg;base64,${m.image}`, detail: "high" }]
           : text("user", m.text),
       });
     } else if (m.role === "assistant") {
@@ -29,7 +29,7 @@ function inputItems(provider: "codex" | "grok", messages: Message[]): object[] {
       if (m.image) {
         items.push({
           role: "user",
-          content: [{ type: "input_text", text: "Screenshot from the last step:" }, { type: "input_image", image_url: `data:image/jpeg;base64,${m.image}` }],
+          content: [{ type: "input_text", text: "Screenshot from the last step:" }, { type: "input_image", image_url: `data:image/jpeg;base64,${m.image}`, detail: "high" }],
         });
       }
     }
@@ -42,7 +42,8 @@ function tools(specs: ToolSpec[]): object[] {
 }
 
 function build(opts: ResponsesOptions, tokens: ResponsesTokens, req: TurnRequest, effort: Effort | undefined): Attempt {
-  const base = { model: opts.model, store: false, stream: true, tools: tools(req.tools), tool_choice: "auto", parallel_tool_calls: false };
+  // "none" is the final turn of a task: an answer in text, no more tool calls.
+  const base = { model: opts.model, store: false, stream: true, tools: tools(req.tools), tool_choice: req.toolChoice === "none" ? "none" : "auto", parallel_tool_calls: false };
   const headers: Record<string, string> = {
     Authorization: `Bearer ${tokens.accessToken}`,
     "Content-Type": "application/json",

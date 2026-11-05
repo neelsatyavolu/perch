@@ -69,7 +69,7 @@ test("Codex: text deltas, one tool call, usage", async () => {
     { role: "user", content: [{ type: "input_text", text: "Open mail" }] },
     { type: "function_call", call_id: "call_1", name: "navigate", arguments: '{"url":"https://mailroom.app"}' },
     { type: "function_call_output", call_id: "call_1", output: "opened mailroom.app" },
-    { role: "user", content: [{ type: "input_text", text: "Screenshot from the last step:" }, { type: "input_image", image_url: "data:image/jpeg;base64,AAAA" }] },
+    { role: "user", content: [{ type: "input_text", text: "Screenshot from the last step:" }, { type: "input_image", image_url: "data:image/jpeg;base64,AAAA", detail: "high" }] },
   ]);
 });
 
@@ -139,6 +139,50 @@ test("Anthropic: text, a streamed tool call, usage, and the request shape", asyn
     { role: "assistant", content: [{ type: "tool_use", id: "call_1", name: "navigate", input: { url: "https://mailroom.app" } }] },
     { role: "user", content: [{ type: "tool_result", tool_use_id: "call_1", content: [{ type: "text", text: "opened mailroom.app" }, { type: "image", source: { type: "base64", media_type: "image/jpeg", data: "AAAA" } }] }] },
   ]);
+});
+
+test("Anthropic: effort, prompt caching, room for thinking, one tool call at a time", async () => {
+  const seen: { url: string; init: RequestInit }[] = [];
+  const model = anthropicModel({ model: "claude-opus-5-5", apiKey: async () => "sk-ant-SECRET" }, fakeFetch([{ status: 200, body: ANTHROPIC_STREAM }], seen));
+  await collect(model);
+  const body = JSON.parse(String(seen[0]!.init.body));
+  expect(body.output_config).toEqual({ effort: "high" });
+  expect(body.cache_control).toEqual({ type: "ephemeral" });
+  expect(body.max_tokens).toBeGreaterThanOrEqual(32_000);
+  expect(body.tool_choice).toEqual({ type: "auto", disable_parallel_tool_use: true });
+  expect(body.thinking).toBeUndefined();
+});
+
+test("Anthropic: the final turn asks for text only, and a model without effort is retried without it", async () => {
+  const seen: { url: string; init: RequestInit }[] = [];
+  const model = anthropicModel({ model: "claude-haiku-4-5", apiKey: async () => "sk-ant-SECRET" },
+    fakeFetch([{ status: 400, body: '{"error":{"message":"output_config.effort: This model does not support the effort parameter."}}' }, { status: 200, body: ANTHROPIC_STREAM }], seen));
+  await collect(model, { ...REQ, toolChoice: "none" });
+  expect(seen).toHaveLength(2);
+  const retry = JSON.parse(String(seen[1]!.init.body));
+  expect(retry.output_config).toBeUndefined();
+  expect(retry.tool_choice).toEqual({ type: "none" });
+  await collect(model);
+  expect(JSON.parse(String(seen[2]!.init.body)).output_config).toBeUndefined();
+});
+
+test("Anthropic: a refusal ends the turn with a plain message", async () => {
+  const refusal = sse([
+    { type: "message_start", message: { usage: { input_tokens: 10, output_tokens: 1 } } },
+    { type: "message_delta", delta: { stop_reason: "refusal" }, usage: { output_tokens: 1 } },
+    { type: "message_stop" },
+  ]);
+  const model = anthropicModel({ model: "claude-opus-5-5", apiKey: async () => "k" }, fakeFetch([{ status: 200, body: refusal }]));
+  await expect(collect(model)).rejects.toThrow("Claude declined to continue this task");
+});
+
+test("Responses: the final turn asks for text only, and screenshots go at high detail", async () => {
+  const seen: { url: string; init: RequestInit }[] = [];
+  const model = responsesModel({ provider: "codex", model: "gpt-6-astra", getToken: async () => ({ accessToken: TOKEN }) }, fakeFetch([{ status: 200, body: RESPONSES_STREAM }], seen));
+  await collect(model, { ...REQ, toolChoice: "none" });
+  const body = JSON.parse(String(seen[0]!.init.body));
+  expect(body.tool_choice).toBe("none");
+  expect(body.input.at(-1).content[1]).toEqual({ type: "input_image", image_url: "data:image/jpeg;base64,AAAA", detail: "high" });
 });
 
 test("the fake model plays its script and records requests", async () => {

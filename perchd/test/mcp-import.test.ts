@@ -76,6 +76,7 @@ const byName = (name: string, source?: string) => found.candidates.find((c) => c
 
 test("JSONC: comments and trailing commas, but not inside strings", () => {
   expect(parseJsonc('{ "a": "http://x // y", /* c */ "b": [1, 2,], }')).toEqual({ a: "http://x // y", b: [1, 2] });
+  expect(parseJsonc('{"env":{"PW":"abc, }","Q":"x,]\\" ,}"}, "l": [1, // c\n /* d */ ], }')).toEqual({ env: { PW: "abc, }", Q: 'x,]" ,}' }, l: [1] });
 });
 
 test("finds servers in every app's config", () => {

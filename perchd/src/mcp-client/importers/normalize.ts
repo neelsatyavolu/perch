@@ -22,7 +22,21 @@ type Raw = Record<string, unknown>;
 
 const isObject = (v: unknown): v is Raw => Boolean(v) && typeof v === "object" && !Array.isArray(v);
 
-/** Comments and trailing commas, as VS Code and Cursor allow in their JSON files. */
+/** Index of the next character that is not white space or inside a comment. */
+function nextSignificant(text: string, from: number): number {
+  let i = from;
+  while (i < text.length) {
+    if (/\s/.test(text[i]!)) i++;
+    else if (text.startsWith("//", i)) while (i < text.length && text[i] !== "\n") i++;
+    else if (text.startsWith("/*", i)) {
+      const end = text.indexOf("*/", i + 2);
+      i = end === -1 ? text.length : end + 2;
+    } else return i;
+  }
+  return i;
+}
+
+/** Comments and trailing commas, as VS Code and Cursor allow in their JSON files. Strings are left as they are. */
 export function parseJsonc(text: string): unknown {
   let out = "";
   let i = 0;
@@ -33,17 +47,16 @@ export function parseJsonc(text: string): unknown {
       while (j < text.length && text[j] !== '"') j += text[j] === "\\" ? 2 : 1;
       out += text.slice(i, j + 1);
       i = j + 1;
-    } else if (c === "/" && text[i + 1] === "/") {
-      while (i < text.length && text[i] !== "\n") i++;
-    } else if (c === "/" && text[i + 1] === "*") {
-      const end = text.indexOf("*/", i + 2);
-      i = end === -1 ? text.length : end + 2;
+    } else if (c === "/" && (text[i + 1] === "/" || text[i + 1] === "*")) {
+      i = nextSignificant(text, i);
+    } else if (c === "," && (text[nextSignificant(text, i + 1)] === "}" || text[nextSignificant(text, i + 1)] === "]")) {
+      i++;
     } else {
       out += c;
       i++;
     }
   }
-  return JSON.parse(out.replace(/,(\s*[}\]])/g, "$1"));
+  return JSON.parse(out);
 }
 
 /** VS Code's ${env:X} becomes ${X}; ${input:x} cannot be read and is reported. */

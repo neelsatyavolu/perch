@@ -1,0 +1,43 @@
+// Perch account, sync and relay server. Nothing here is secret: the Resend key is a Worker
+// secret (`wrangler secret put RESEND_API_KEY`), and the D1 id below is a placeholder the owner
+// replaces after `wrangler d1 create perch` (see README.md). Never deployed by agents.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "perch-server",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "routes": [
+    { "pattern": "api.perchbrowser.com", "custom_domain": true },
+    { "pattern": "relay.perchbrowser.com", "custom_domain": true }
+  ],
+  "vars": {
+    "API_ORIGIN": "https://api.perchbrowser.com",
+    "RELAY_ORIGIN": "wss://relay.perchbrowser.com",
+    "RP_ID": "perchbrowser.com",
+    "RP_NAME": "Perch",
+    "PASSKEY_ORIGINS": "https://perchbrowser.com,https://api.perchbrowser.com",
+    "MAIL_FROM": "Perch <sign-in@perchbrowser.com>",
+    "QUOTA_BYTES": "104857600"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "perch",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [{ "binding": "BLOBS", "bucket_name": "perch-sync" }],
+  "durable_objects": {
+    "bindings": [
+      { "name": "RELAY", "class_name": "RelayRoom" },
+      { "name": "LIMITER", "class_name": "RateLimiter" }
+    ]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RelayRoom", "RateLimiter"] }],
+  "triggers": { "crons": ["17 3 * * *"] },
+  // Invocation logs would record request metadata; the Worker writes its own PII-free logs instead.
+  "observability": { "enabled": true, "logs": { "invocation_logs": false } }
+}

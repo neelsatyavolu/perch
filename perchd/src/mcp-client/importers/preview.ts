@@ -5,7 +5,7 @@
 
 import type { SecretStore } from "../../secure/keychain";
 import { addServer, freeName, type Registry, type RegistryStore } from "../registry";
-import { secretArgIndexes, storeSecrets } from "../secrets";
+import { secretArgIndexes, storeSecrets, varsIn } from "../secrets";
 import { parseConfig, sanitizeName, type ServerConfig, type Value } from "../types";
 import type { Candidate } from "./normalize";
 
@@ -25,8 +25,10 @@ export type PreviewItem = {
   /** Variables read from Perch's environment at launch. */
   fromEnv: string[];
   warnings: string[];
-  /** Picked by default: not a duplicate, not already in Perch, and on in its own app. */
+  /** Picked by default: not a duplicate, not already in Perch, on in its own app, and approved there if it comes from a project file. */
   selected: boolean;
+  /** From a config file inside a project folder (a repository may have put it there). */
+  projectFile: boolean;
   duplicateOf?: string;
   alreadyAdded: boolean;
 };
@@ -35,11 +37,14 @@ const SECRET_QUERY = /(key|token|secret|password|auth|sig|signature|code)/i;
 const PURE_VAR = /^\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?$/;
 const MASK = "••••";
 
-function describeValue(v: Value): { secret: boolean; env?: string } {
-  if (typeof v !== "string") return "env" in v ? { secret: false, env: v.env } : { secret: true };
-  const m = v.match(PURE_VAR);
-  return m && v.startsWith("$") ? { secret: false, env: m[1]! } : { secret: true };
+/** A value goes to the Keychain unless it only names a variable. */
+function isSecret(v: Value): boolean {
+  if (typeof v !== "string") return !("env" in v);
+  return !(PURE_VAR.test(v) && v.startsWith("$"));
 }
+
+/** Every variable a value reads from Perch's environment at launch. */
+const readsFrom = (v: Value): string[] => (typeof v === "string" ? varsIn(v) : "env" in v ? [v.env] : []);
 
 export function maskUrl(raw: string): { url: string; warnings: string[] } {
   try {
@@ -63,23 +68,17 @@ function sameTarget(a: ServerConfig, b: ServerConfig): boolean {
 }
 
 function describe(c: Candidate): Pick<PreviewItem, "target" | "secrets" | "fromEnv" | "warnings"> {
-  const secrets: string[] = [];
-  const fromEnv: string[] = [];
-  const note = (label: string, v: Value) => {
-    const d = describeValue(v);
-    if (d.env) fromEnv.push(d.env);
-    else if (d.secret) secrets.push(label);
-  };
+  const vars = (values: Value[]) => [...new Set(values.flatMap(readsFrom))];
+  const secretsOf = (kind: string, map: Record<string, Value>) => Object.entries(map).filter(([, v]) => isSecret(v)).map(([k]) => `${kind} ${k}`);
   if (c.config.transport === "stdio") {
-    const hidden = new Set(secretArgIndexes(c.config.args));
-    hidden.forEach((i) => secrets.push(`argument ${i + 1}`));
-    for (const [k, v] of Object.entries(c.config.env)) note(`env ${k}`, v);
-    const args = c.config.args.map((a, i) => (hidden.has(i) ? MASK : typeof a === "string" ? (/\s/.test(a) ? JSON.stringify(a) : a) : MASK));
-    return { target: [c.config.command, ...args].join(" "), secrets, fromEnv, warnings: [...c.warnings] };
+    const { command, args, env, cwd } = c.config;
+    const hidden = new Set(secretArgIndexes(args));
+    const secrets = [...[...hidden].map((i) => `argument ${i + 1}`), ...secretsOf("env", env)];
+    const shown = args.map((a, i) => (hidden.has(i) ? MASK : typeof a === "string" ? (/\s/.test(a) ? JSON.stringify(a) : a) : MASK));
+    return { target: [command, ...shown].join(" "), secrets, fromEnv: vars([command, ...args, ...Object.values(env), ...(cwd ? [cwd] : [])]), warnings: [...c.warnings] };
   }
-  for (const [k, v] of Object.entries(c.config.headers)) note(`header ${k}`, v);
   const masked = maskUrl(c.config.url);
-  return { target: masked.url, secrets, fromEnv, warnings: [...c.warnings, ...masked.warnings] };
+  return { target: masked.url, secrets: secretsOf("header", c.config.headers), fromEnv: vars([c.config.url, ...Object.values(c.config.headers)]), warnings: [...c.warnings, ...masked.warnings] };
 }
 
 export function preview(reg: Registry, candidates: readonly Candidate[]): PreviewItem[] {
@@ -103,7 +102,8 @@ export function preview(reg: Registry, candidates: readonly Candidate[]): Previe
       path: c.path,
       transport: c.config.transport,
       ...d,
-      selected: !alreadyAdded && !dup && c.enabled && !invalid,
+      selected: !alreadyAdded && !dup && c.enabled && !invalid && (!c.projectFile || c.approved === true),
+      projectFile: c.projectFile === true,
       ...(dup ? { duplicateOf: dup.name } : {}),
       alreadyAdded,
     };

@@ -39,7 +39,7 @@ function picked(save: string | undefined, items: { id: number; name: string; sel
 }
 
 function showServer(i: PreviewItem): string[] {
-  const state = i.alreadyAdded ? "already in Perch" : i.duplicateOf ? `same as ${i.duplicateOf} above` : i.selected ? "will import" : "off in its app";
+  const state = i.alreadyAdded ? "already in Perch" : i.duplicateOf ? `same as ${i.duplicateOf} above` : i.selected ? "will import" : i.projectFile ? "from a project file, not approved" : "off in its app";
   return [
     `${i.selected ? "[x]" : "[ ]"} ${i.name}  (${i.source}, ${state})`,
     `    ${i.transport === "stdio" ? "runs" : `${i.transport.toUpperCase()} at`} ${i.target}`,

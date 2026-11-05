@@ -63,19 +63,58 @@ function tomlServers(source: string): Reader {
   };
 }
 
+/** Claude Code's answers about a project's .mcp.json servers (set when the user approves or rejects them). */
+type McpjsonApproval = { all: boolean; enabled: ReadonlySet<string>; disabled: ReadonlySet<string> };
+
+const names = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+
+function approvalOf(...scopes: unknown[]): McpjsonApproval {
+  const objs = scopes.filter(isObject);
+  return {
+    all: objs.some((o) => o.enableAllProjectMcpServers === true),
+    enabled: new Set(objs.flatMap((o) => names(o.enabledMcpjsonServers))),
+    disabled: new Set(objs.flatMap((o) => names(o.disabledMcpjsonServers))),
+  };
+}
+
+const PROJECT_FILE_NOTE = "It comes from a file in the project folder, which anyone who can change that folder can edit; check it before importing.";
+
+/** Marks servers from a project folder's file, and applies Claude Code's approvals to .mcp.json servers. */
+function fromProjectFile(found: Found, approval?: McpjsonApproval): Found {
+  const candidates = found.candidates.map((c): Candidate => {
+    if (!approval) return { ...c, projectFile: true, approved: false, warnings: [...c.warnings, PROJECT_FILE_NOTE] };
+    if (approval.disabled.has(c.name)) return { ...c, projectFile: true, approved: false, enabled: false, warnings: [...c.warnings, "You turned this project server down in Claude Code."] };
+    if (approval.all || approval.enabled.has(c.name)) return { ...c, projectFile: true, approved: true };
+    return { ...c, projectFile: true, approved: false, warnings: [...c.warnings, `Claude Code has not approved this project server. ${PROJECT_FILE_NOTE}`] };
+  });
+  return { candidates, problems: found.problems };
+}
+
 /** ~/.claude.json: user servers, per-project servers, and the project folders to look in for .mcp.json. */
-function claudeJson(path: string, text: string): Found & { projects: string[] } {
+function claudeJson(path: string, text: string, userSettings: unknown): Found & { approvals: ReadonlyMap<string, McpjsonApproval> } {
   const data = JSON.parse(text) as Raw;
   const user = fromJsonMap("Claude Code (user)", path, data.mcpServers);
   const found: Found = { candidates: [...user.candidates], problems: [...user.problems] };
   const projects = isObject(data.projects) ? Object.keys(data.projects) : [];
+  const approvals = new Map<string, McpjsonApproval>();
   for (const dir of projects) {
     const entry = (data.projects as Raw)[dir];
+    const off = new Set(isObject(entry) ? names(entry.disabledMcpServers) : []);
     const p = fromJsonMap(`Claude Code (project ${basename(dir)})`, path, isObject(entry) ? entry.mcpServers : undefined);
-    found.candidates.push(...p.candidates);
+    found.candidates.push(...p.candidates.map((c) => ({ ...c, enabled: c.enabled && !off.has(c.name) })));
     found.problems.push(...p.problems);
+    approvals.set(dir, approvalOf(userSettings, entry));
   }
-  return { ...found, projects };
+  return { ...found, approvals };
+}
+
+async function readJson(path: string): Promise<unknown> {
+  const text = await readText(path);
+  try {
+    return text === null ? null : JSON.parse(text);
+  } catch {
+    return null;
+  }
 }
 
 async function readWith(path: string, reader: Reader): Promise<Found> {
@@ -97,13 +136,15 @@ export async function findImports(opts: FindOptions): Promise<Found> {
   const codexHome = env.CODEX_HOME || join(home, ".codex");
   const grokHome = env.GROK_HOME || join(home, ".grok");
 
-  let projects: string[] = [];
+  // Only the user's own settings count for approvals: a project's checked-in settings could approve itself.
+  const userSettings = await readJson(join(home, ".claude", "settings.json"));
+  let approvals: ReadonlyMap<string, McpjsonApproval> = new Map();
   const claude = await readWith(join(home, ".claude.json"), (path, text) => {
-    const r = claudeJson(path, text);
-    projects = r.projects;
+    const r = claudeJson(path, text, userSettings);
+    approvals = r.approvals;
     return r;
   });
-  const dirs = [...new Set([...projects, ...(opts.projectDirs ?? [])])];
+  const dirs = [...new Set([...approvals.keys(), ...(opts.projectDirs ?? [])])];
   const fixed: [string, Reader][] = [
     [join(codexHome, "config.toml"), tomlServers("Codex")],
     [join(grokHome, "config.toml"), tomlServers("Grok")],
@@ -112,10 +153,11 @@ export async function findImports(opts: FindOptions): Promise<Found> {
     [join(appSupport, "Code", "User", "mcp.json"), jsonServers("VS Code", "servers", { vscode: true })],
     [join(appSupport, "Code - Insiders", "User", "mcp.json"), jsonServers("VS Code Insiders", "servers", { vscode: true })],
   ];
+  const inProject = (reader: Reader, approval?: McpjsonApproval): Reader => (path, text) => fromProjectFile(reader(path, text), approval);
   const perProject: [string, Reader][] = dirs.flatMap((dir): [string, Reader][] => [
-    [join(dir, ".mcp.json"), jsonServers(`Claude Code (.mcp.json in ${basename(dir)})`, "mcpServers")],
-    [join(dir, ".cursor", "mcp.json"), jsonServers(`Cursor (project ${basename(dir)})`, "mcpServers")],
-    [join(dir, ".vscode", "mcp.json"), jsonServers(`VS Code (project ${basename(dir)})`, "servers", { vscode: true, workspace: dir })],
+    [join(dir, ".mcp.json"), inProject(jsonServers(`Claude Code (.mcp.json in ${basename(dir)})`, "mcpServers"), approvals.get(dir) ?? approvalOf(userSettings))],
+    [join(dir, ".cursor", "mcp.json"), inProject(jsonServers(`Cursor (project ${basename(dir)})`, "mcpServers"))],
+    [join(dir, ".vscode", "mcp.json"), inProject(jsonServers(`VS Code (project ${basename(dir)})`, "servers", { vscode: true, workspace: dir }))],
   ]);
   const rest = await Promise.all([...fixed, ...perProject].map(([path, reader]) => readWith(path, reader)));
   return {

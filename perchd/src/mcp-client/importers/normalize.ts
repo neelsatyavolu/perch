@@ -14,6 +14,10 @@ export type Candidate = {
   config: ServerConfig;
   enabled: boolean;
   warnings: string[];
+  /** From a config file inside a project folder, which whoever can change the folder can edit. */
+  projectFile?: boolean;
+  /** For a project-file server: whether the user approved it in its own app. */
+  approved?: boolean;
 };
 
 export type Problem = { path: string; message: string };

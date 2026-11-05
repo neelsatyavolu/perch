@@ -1,5 +1,8 @@
 /** Runs the model's tool calls against the browser. Errors come back as text; nothing throws. */
 
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, join } from "node:path";
 import type { Browser } from "../browser/browser";
 import { Tab } from "../browser/tab";
 import type { ToolCall } from "../models/types";
@@ -20,6 +23,8 @@ export type ToolContext = {
   owned: Tab[];
   lastSnapshot: WeakMap<Tab, string>;
   shotScale: number;
+  /** The chat's own folder: write_file saves here, and it is removed when the chat ends. */
+  workDir: string;
   close(): Promise<void>;
 };
 
@@ -33,8 +38,10 @@ export async function newToolContext(browser: Browser): Promise<ToolContext> {
     owned: [],
     lastSnapshot: new WeakMap(),
     shotScale: 1,
+    workDir: mkdtempSync(join(tmpdir(), "perch-chat-")),
     close: async () => {
       await Promise.all(ctx.owned.map((t) => t.close()));
+      rmSync(ctx.workDir, { recursive: true, force: true });
     },
   };
   return ctx;
@@ -173,6 +180,13 @@ async function dispatch(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
   const a = call.args as Record<string, any>;
   if (call.name === "done") return { content: String(a.answer), done: true };
   if (call.name === "tabs") return { content: await listTabs(ctx) };
+  if (call.name === "write_file") {
+    // Only a plain file name: no folders, so nothing can be written outside the chat's folder.
+    const name = basename(String(a.name)).replace(/[^\w.-]/g, "_").replace(/^\.+/, "") || "file.txt";
+    const path = join(ctx.workDir, name);
+    writeFileSync(path, String(a.content));
+    return { content: `saved ${path} (${String(a.content).length} characters)` };
+  }
   if (call.name === "switch_tab") return switchTab(ctx, String(a.id));
   if (call.name === "open_tab") {
     ctx.tab = await ctx.browser.newTab();
@@ -214,8 +228,10 @@ async function dispatch(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
       ctx.shotScale = shot.width / width;
       return { content: `screenshot ${shot.width}×${shot.height}`, image: shot.jpegBase64 };
     }
-    case "click_at":
-      return withPage(ctx, tab, await clickAt(tab, a.x / ctx.shotScale, a.y / ctx.shotScale));
+    case "click_at": {
+      const r = await clickAt(tab, a.x / ctx.shotScale, a.y / ctx.shotScale);
+      return withPage(ctx, tab, r.ok ? { ok: true, note: `clicked at ${a.x}, ${a.y} in the screenshot` } : r);
+    }
     case "repl": {
       const r = await repl(tab, a.code);
       if (r.error) return { content: r.error, isError: true };

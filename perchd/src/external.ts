@@ -15,7 +15,8 @@ export type AsideEvent =
 
 export type ExternalResult = { answer: string; events: AsideEvent[]; exitCode: number | null; timedOut: boolean; stderr: string };
 
-const TOOL_RESULT_LIMIT = 6000;
+/** Tool output kept in the event log; graders and people reading a run need the evidence. */
+const TOOL_RESULT_LIMIT = 20_000;
 const BLOCKED_TOOLS = [
   "Bash", "BashOutput", "KillShell", "Edit", "MultiEdit", "Write", "Read", "Glob", "Grep", "LS", "NotebookEdit",
   "WebFetch", "WebSearch", "Task", "Agent", "TodoWrite", "Skill", "SlashCommand", "ExitPlanMode",
@@ -82,8 +83,15 @@ export type RunOptions = {
   /** Permission mode for the MCP server; delegated whole tasks use "skip" (payments still ask). */
   mode?: "ask" | "guard" | "skip";
   userAgent?: string;
+  /** A browser to drive instead of Chrome for Testing, such as a Perch build, with a visible window. */
+  executable?: string;
   onEvent?: (event: AsideEvent) => void;
 };
+
+function browserArgs(opts: RunOptions): string[] {
+  if (opts.executable) return ["--executable", opts.executable, "--show", "--mock-keychain"];
+  return opts.userAgent ? ["--user-agent", opts.userAgent] : [];
+}
 
 export async function runClaudeCode(opts: RunOptions): Promise<ExternalResult> {
   // A scratch folder outside the home folder, so no project instructions are picked up.
@@ -91,7 +99,7 @@ export async function runClaudeCode(opts: RunOptions): Promise<ExternalResult> {
   const mcpConfig = join(work, "mcp.json");
   const mode = opts.mode ?? "guard";
   const mcpArgs = ["run", MCP_ENTRY, "--mode", mode, "--client", "claude-code", "--audit", opts.auditPath, "--profile", join(work, "profile")];
-  if (opts.userAgent) mcpArgs.push("--user-agent", opts.userAgent);
+  mcpArgs.push(...browserArgs(opts));
   writeFileSync(mcpConfig, JSON.stringify({ mcpServers: { perch: { command: process.execPath, args: mcpArgs } } }));
   const prompt = `${systemPrompt({ mode, now: new Date() })}\n\nYour tools are Perch's browser tools (mcp__perch__*). Do the task in the browser. When you finish, reply with the answer or the result in your final message, including the specific facts the task asks for.`;
   const child = Bun.spawn([claudeBinary(), ...claudeArgs({ model: opts.model ?? "claude-sonnet-5-5", mcpConfig, systemPrompt: prompt, task: opts.task })], {
@@ -191,7 +199,7 @@ export async function runCodex(opts: RunOptions): Promise<ExternalResult> {
   const work = mkdtempSync(join(tmpdir(), "perch-exec-"));
   const mode = opts.mode ?? "guard";
   const mcpArgs = ["run", MCP_ENTRY, "--mode", mode, "--client", "codex", "--audit", opts.auditPath, "--profile", join(work, "profile")];
-  if (opts.userAgent) mcpArgs.push("--user-agent", opts.userAgent);
+  mcpArgs.push(...browserArgs(opts));
   const prompt = `${systemPrompt({ mode, now: new Date() })}\n\nYour tools for this task are Perch's browser tools from the "perch" MCP server. Do not run shell commands or read files. Do the task in the browser, then reply with the answer, including the specific facts the task asks for.\n\nTask:\n${opts.task}`;
   const args = [
     "exec", "--json", "--skip-git-repo-check", "-s", "read-only",

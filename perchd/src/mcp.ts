@@ -21,7 +21,7 @@ const SERVER = { name: "perch", version: "0.1.0" };
 
 type Request = { jsonrpc: "2.0"; id?: number | string; method: string; params?: any };
 
-export type ServerOptions = { profileDir: string; policy: CallPolicy; headless: boolean; userAgent?: string };
+export type ServerOptions = { profileDir: string; policy: CallPolicy; headless: boolean; userAgent?: string; executable?: string; extraArgs?: string[] };
 
 export function createServer(opts: ServerOptions) {
   let ctx: Promise<ToolContext> | null = null;
@@ -30,7 +30,8 @@ export function createServer(opts: ServerOptions) {
     (ctx ??= Browser.launch({
       userDataDir: opts.profileDir,
       headless: opts.headless,
-      args: opts.userAgent ? [`--user-agent=${opts.userAgent}`] : [],
+      executable: opts.executable,
+      args: [...(opts.userAgent ? [`--user-agent=${opts.userAgent}`] : []), ...(opts.extraArgs ?? [])],
     }).then((browser) => newToolContext(browser)));
 
   async function handle(req: Request): Promise<object | null> {
@@ -90,6 +91,9 @@ async function main(argv: string[]): Promise<void> {
     profileDir: arg(argv, "--profile") ?? mkdtempSync(join(tmpdir(), "perch-mcp-")),
     headless: !argv.includes("--show"),
     userAgent: arg(argv, "--user-agent"),
+    executable: arg(argv, "--executable"),
+    // A throwaway profile needs no Keychain item; this keeps macOS from asking for one.
+    extraArgs: argv.includes("--mock-keychain") ? ["--use-mock-keychain", "--password-store=basic"] : [],
     policy: {
       mode: (arg(argv, "--mode") ?? "guard") as Mode,
       audit,

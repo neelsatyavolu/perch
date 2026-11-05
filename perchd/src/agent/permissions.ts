@@ -38,6 +38,8 @@ export function classify(call: ToolCall, target?: Target, page: PageContext = {}
   // The REPL runs in a read-only sandbox (src/page/repl.ts); writes go through the other tools.
   if (call.name === "repl") return "read";
   if (call.name === "upload") return "risky";
+  // A file in the chat's own folder touches nothing outside it (spec 7.4).
+  if (call.name === "write_file") return "change";
   if (call.name === "click_at" || call.name === "type_text") return guarded ? "payment" : "risky";
   if (call.name === "select" || (call.name === "type" && !call.args.submit)) return "change";
   if (call.name === "press" && !isEnter(call)) return "change";

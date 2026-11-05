@@ -3,6 +3,7 @@
  *
  *   bun run bench/run.ts --suite bu|om2w [--agent claude-code|codex] [--limit N] [--per-category K] [--concurrency 2]
  *                        [--model claude-sonnet-5-5] [--judge claude-opus-5-5] [--out <dir>] [--resume]
+ *                        [--executable <Perch.app/Contents/MacOS/Perch>]   drive a real Perch build in a window
  *
  * Suites: BU Bench V1 (bench/data/bu-bench-v1.json, from Aside's published runner) and
  * Online-Mind2Web (bench/data/Online_Mind2Web.json, gated on Hugging Face). Each task writes
@@ -74,7 +75,8 @@ async function runOne(task: Task, out: string, model: string, judgeModel: string
   const started = Date.now();
   const runner = arg("--agent", "claude-code") === "codex" ? runCodex : runClaudeCode;
   const mode = (arg("--mode", "skip") ?? "skip") as "ask" | "guard" | "skip";
-  const run = await runner({ task: task.task, model, timeoutMs: 15 * 60_000, auditPath: join(dir, "audit.jsonl"), userAgent: UA, mode });
+  const executable = arg("--executable");
+  const run = await runner({ task: task.task, model, timeoutMs: 15 * 60_000, auditPath: join(dir, "audit.jsonl"), mode, ...(executable ? { executable } : { userAgent: UA }) });
   const seconds = Math.round((Date.now() - started) / 1000);
   writeFileSync(join(dir, "events.jsonl"), run.events.map((e) => JSON.stringify(e)).join("\n"));
   writeFileSync(join(dir, "answer.txt"), run.answer);

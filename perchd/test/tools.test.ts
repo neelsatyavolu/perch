@@ -10,7 +10,7 @@ const call = (name: string, args: Record<string, unknown> = {}) => ({ id: "c", n
 
 test("every tool spec is a strict JSON Schema object", () => {
   const names = TOOL_SPECS.map((s) => s.name);
-  expect(names).toEqual(["navigate", "snapshot", "click", "type", "select", "press", "scroll", "hover", "upload", "wait_for", "back", "screenshot", "click_at", "repl", "tabs", "open_tab", "switch_tab", "done"]);
+  expect(names).toEqual(["navigate", "snapshot", "click", "type", "select", "press", "scroll", "hover", "upload", "write_file", "wait_for", "back", "screenshot", "click_at", "repl", "tabs", "open_tab", "switch_tab", "done"]);
   for (const spec of TOOL_SPECS) {
     const p = spec.parameters as { type: string; properties: Record<string, unknown>; required?: string[]; additionalProperties: boolean };
     expect(p.type).toBe("object");
@@ -70,4 +70,19 @@ test("done returns the final answer", async () => {
   const ctx = await newToolContext(env.browser);
   expect(await runTool(ctx, call("done", { answer: "Sent the reply." }))).toEqual({ content: "Sent the reply.", done: true });
   await ctx.close();
+});
+
+test("write_file saves into the chat's own folder and nowhere else", async () => {
+  const { existsSync, readFileSync } = await import("node:fs");
+  const ctx = await newToolContext(env.browser);
+  const made = await runTool(ctx, call("write_file", { name: "resume.txt", content: "Maya Chen, designer" }));
+  const path = made.content.match(/saved (\S+)/)![1]!;
+  expect(path.startsWith(ctx.workDir)).toBe(true);
+  expect(readFileSync(path, "utf8")).toBe("Maya Chen, designer");
+  const escaped = await runTool(ctx, call("write_file", { name: "../../etc/evil", content: "x" }));
+  expect(escaped.content).toMatch(/saved (\S+)/);
+  expect(escaped.content.match(/saved (\S+)/)![1]!.startsWith(ctx.workDir)).toBe(true);
+  expect(existsSync("/etc/evil")).toBe(false);
+  await ctx.close();
+  expect(existsSync(ctx.workDir)).toBe(false);
 });

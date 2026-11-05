@@ -20,6 +20,7 @@ export const TOOL_SPECS: ToolSpec[] = [
   spec("scroll", "Scroll by pixels (positive is down), or bring a ref into view.", { dy: { type: "number" }, ref }),
   spec("hover", "Move the mouse over an element by ref, for menus and tooltips.", { ref }, ["ref"]),
   spec("upload", "Attach local files to a file input by ref.", { ref, paths: { type: "array", items: { type: "string" } } }, ["ref", "paths"]),
+  spec("write_file", "Save a text file in this chat's own folder, for example to upload it to a form. Returns its path.", { name: { type: "string" }, content: { type: "string" } }, ["name", "content"]),
   spec("wait_for", "Wait until text appears on the page.", { text: { type: "string" }, timeout_s: { type: "number" } }, ["text"]),
   spec("back", "Go back one page in the current tab.", {}),
   spec("screenshot", "See the visible page as an image. Use when the snapshot cannot describe it, as on canvas, maps and charts.", {}),

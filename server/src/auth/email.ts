@@ -53,7 +53,12 @@ emailRoutes.post("/start", limit(RULES.emailStartIp, ipKey), async (c) => {
      device_public_key, status, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
   ).bind(requestId, body.email, await sha256Hex(token), await sha256Hex(code), await sha256Hex(pollSecret), matchNumber,
     body.device.name, body.device.kind, body.device.publicKey, now, now + LIFETIME).run();
-  await c.var.deps.mailer.send(signInEmail(c.env, body.email, body.device.name, token, code));
+  try {
+    await c.var.deps.mailer.send(signInEmail(c.env, body.email, body.device.name, token, code));
+  } catch (error) {
+    await c.env.DB.prepare("DELETE FROM email_requests WHERE id = ?").bind(requestId).run();
+    throw error;
+  }
   // The same answer whether or not the address has an account, so this cannot be used to probe.
   return c.json({ requestId, pollSecret, matchNumber, expiresAt: now + LIFETIME });
 });

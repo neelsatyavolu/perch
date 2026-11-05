@@ -48,7 +48,8 @@ export function createClient(api: string, token: string, deps: Deps = {}) {
     decide: (approvalId: string, approved: boolean) => call<{ ok: true }>("POST", `/api/approvals/${encodeURIComponent(approvalId)}`, { approved }),
     windowState: (windowId: string) => call<WindowState>("GET", `/api/windows/${encodeURIComponent(windowId)}`),
     tabChat: (tabId: string) => call<ChatPayload>("GET", `/api/tabs/${encodeURIComponent(tabId)}/chat`),
-    openSideChat: (tabId: string, windowId: string, chatId?: string) => call<Chat>("POST", `/api/tabs/${encodeURIComponent(tabId)}/chat`, chatId ? { windowId, chatId } : { windowId }),
+    openSideChat: (tabId: string, windowId: string, chatId?: string, settings?: Partial<ChatSettings>) =>
+      call<Chat>("POST", `/api/tabs/${encodeURIComponent(tabId)}/chat`, chatId ? { windowId, chatId } : { windowId, ...(settings && Object.keys(settings).length ? { settings } : {}) }),
 
     /** Calls onEvent for every app event; reconnects after a drop. Returns a function that closes it. */
     connect(onEvent: (event: AppEvent) => void, onStatus?: (connected: boolean) => void): () => void {

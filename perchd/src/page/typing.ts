@@ -13,6 +13,7 @@ const KEY_BY_KEY_LIMIT = 80;
 const SUGGEST_WAIT_MS = { announced: 1500, plain: 300 };
 const POLL_MS = 100;
 const LISTED = 5;
+const SHIFT = 8;
 
 export async function typeKeys(tab: Tab, text: string): Promise<void> {
   const keyed = text.length > KEY_BY_KEY_LIMIT ? text.slice(-1) : text;
@@ -23,7 +24,7 @@ export async function typeKeys(tab: Tab, text: string): Promise<void> {
       await tab.send("Input.insertText", { text: ch });
       continue;
     }
-    const base = { key: def.key, code: def.code, windowsVirtualKeyCode: def.keyCode };
+    const base = { key: def.key, code: def.code, windowsVirtualKeyCode: def.keyCode, modifiers: def.shift ? SHIFT : 0 };
     await tab.send("Input.dispatchKeyEvent", { type: "keyDown", ...base, text: def.text, unmodifiedText: def.text });
     await tab.send("Input.dispatchKeyEvent", { type: "keyUp", ...base });
   }

@@ -44,5 +44,24 @@ test("type into a plain field adds no suggestion note and keeps non-ASCII text",
 
 test("press accepts a literal space and a plus sign", () => {
   expect(parseKey(" ")).toMatchObject({ def: { key: " ", code: "Space" }, modifiers: 0 });
-  expect(parseKey("+")).toMatchObject({ def: { key: "+" }, modifiers: 0 });
+  expect(parseKey("+")).toMatchObject({ def: { key: "+", code: "Equal" }, modifiers: 8 });
+});
+
+test("symbols are typed with their own key and Shift, never as arrow, Home or Page keys", async () => {
+  const tab = await env.browser.newTab(env.site.url("/keys.html"));
+  const snap = await snapshot(tab);
+  const text = "$5 (a&b) 50% #1! \"Q\"";
+  expect(await type(tab, snap.refs, refOf(snap, 'textbox "Note"'), text)).toMatchObject({ ok: true });
+  expect(await tab.evaluate<string>("document.getElementById('note').value")).toBe(text);
+  expect(await tab.evaluate<string[]>("window.navKeys")).toEqual([]);
+  expect(await tab.evaluate<string[]>("window.shifted")).toEqual(["$", "(", "&", ")", "%", "#", "!", "\"", "Q", "\""]);
+  await tab.close();
+});
+
+test("press maps shifted symbols to their base key", () => {
+  expect(parseKey("!")).toMatchObject({ def: { key: "!", code: "Digit1", keyCode: 49 }, modifiers: 8 });
+  expect(parseKey("(")).toMatchObject({ def: { key: "(", code: "Digit9", keyCode: 57 }, modifiers: 8 });
+  expect(parseKey("?")).toMatchObject({ def: { key: "?", code: "Slash", keyCode: 191 }, modifiers: 8 });
+  // A letter named with Control stays Control+A: models write it in capitals.
+  expect(parseKey("Control+A")).toMatchObject({ def: { code: "KeyA", keyCode: 65 }, modifiers: 2 });
 });

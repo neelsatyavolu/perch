@@ -6,7 +6,7 @@
  */
 
 import type { Tab } from "../browser/tab";
-import { aim, mouse, type Point } from "./pointing";
+import { aim, mouse, onScreen, type Point } from "./pointing";
 import { liveNode } from "./node";
 import type { RefTable } from "./refs";
 
@@ -19,8 +19,13 @@ export type DragTarget = { ref: string } | { dx: number; dy: number };
 
 export async function drag(tab: Tab, refs: RefTable, from: string, to: DragTarget): Promise<string> {
   const source = await liveNode(tab, refs, from);
+  const target = "ref" in to ? await liveNode(tab, refs, to.ref) : null;
+  // Bring the drop target into view first, then the source, and check the target is still on
+  // screen: points taken before a scroll would press on the wrong element.
+  if (target) await aim(tab, target, { hitTest: false });
   const start = await aim(tab, source);
-  const end = "ref" in to ? await aim(tab, await liveNode(tab, refs, to.ref), { hitTest: false }) : { x: start.x + to.dx, y: start.y + to.dy };
+  const end = "ref" in to ? await onScreen(tab, target!) : { x: start.x + to.dx, y: start.y + to.dy };
+  if (!end) throw new Error(`${from} and ${"ref" in to ? to.ref : "the target"} are not on screen together; scroll so both show, or drag by dx and dy`);
   let data: DragData | null = null;
   const stop = tab.conn.on("Input.dragIntercepted", (p: { data: DragData }, sid) => {
     if (sid === tab.session) data = p.data;

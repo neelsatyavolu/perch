@@ -54,3 +54,14 @@ test("drag onto a drop zone delivers an HTML5 drop with the drag's data", async 
   expect(await runTool(ctx, call("drag", { ref: refIn(page, 'button "Card one"') }))).toMatchObject({ isError: true, content: "give to (a ref to drop on) or dx and dy (pixels to move)" });
   await ctx.close();
 });
+
+test("a drop target too far from the source to show with it is an error, not a drag to the wrong place", async () => {
+  const ctx = await newToolContext(env.browser);
+  await runTool(ctx, call("navigate", { url: env.site.url("/drag-far.html") }));
+  const page = (await runTool(ctx, call("snapshot", { full: true }))).content;
+  const r = await runTool(ctx, call("drag", { ref: refIn(page, 'button "Card one"'), to: refIn(page, 'button "Archive column"') }));
+  expect(r.isError).toBe(true);
+  expect(r.content).toContain("are not on screen together");
+  expect(await ctx.tab!.evaluate<string>("document.getElementById('out').textContent")).toBe("");
+  await ctx.close();
+});

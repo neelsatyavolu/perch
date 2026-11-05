@@ -56,6 +56,12 @@ async function settledCentre(tab: Tab, node: Node): Promise<Point | null> {
   return { x: offset.x + last.x, y: offset.y + last.y };
 }
 
+/** The element's centre if it is on screen now, without scrolling; otherwise null. */
+export async function onScreen(tab: Tab, node: Node): Promise<Point | null> {
+  const point = await settledCentre(tab, node);
+  return point && (await inViewport(tab, point)) ? point : null;
+}
+
 async function inViewport(tab: Tab, point: Point): Promise<boolean> {
   const [w, h] = await tab.evaluate<[number, number]>("[innerWidth, innerHeight]");
   return point.x >= 0 && point.y >= 0 && point.x < w && point.y < h;

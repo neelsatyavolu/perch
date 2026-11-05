@@ -70,11 +70,13 @@ test("bookmarks and history written while closed show up in Chrome", async () =>
   try {
     expect(profileInUse(dir)).toBe(true);
     const tab = await browser.newTab();
-    // The history backend loads after startup and WebUI pages fill in after load: reload and
-    // read the page until the text shows, for up to 20 s.
+    // The history backend loads after startup and WebUI pages fill in after load: reopen and
+    // read the page until the text shows, for up to 20 s. Going to the same chrome://history/
+    // URL again shows an empty list in headless Chrome, so each try goes through about:blank.
     const pageText = async (url: string, wanted: string) => {
       let text = "";
       for (let i = 0; i < 20 && !text.includes(wanted); i++) {
+        await tab.navigate("about:blank");
         await tab.navigate(url);
         await Bun.sleep(i === 0 ? 500 : 1000);
         text = (await snapshot(tab, { full: true })).text;

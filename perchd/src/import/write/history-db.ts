@@ -20,13 +20,19 @@ const MAX_URL = 2 * 1024 * 1024;
 export function addHistory(path: string, entries: readonly HistoryEntry[]): number {
   if (!existsSync(path)) throw new ImportError("Perch's History database does not exist yet. Open Perch once, quit it, and import again.", "not-found");
   const db = new Database(path);
+  const statements: { finalize(): void }[] = [];
+  const prepare = (sql: string) => {
+    const statement = db.prepare(sql);
+    statements.push(statement);
+    return statement;
+  };
   try {
     if (!hasTable(db, "urls") || !hasTable(db, "visits")) throw new ImportError("Perch's History database is not in the expected format.", "unreadable");
-    const find = db.prepare("SELECT id, title, visit_count, typed_count, last_visit_time FROM urls WHERE url = ? LIMIT 1");
-    const insertUrl = db.prepare("INSERT INTO urls (url, title, visit_count, typed_count, last_visit_time, hidden) VALUES (?, ?, ?, ?, ?, 0)");
-    const updateUrl = db.prepare("UPDATE urls SET title = ?, visit_count = ?, typed_count = ?, last_visit_time = ? WHERE id = ?");
-    const hasVisit = db.prepare("SELECT 1 FROM visits WHERE url = ? AND visit_time = ? LIMIT 1");
-    const insertVisit = db.prepare("INSERT INTO visits (url, visit_time, from_visit, transition, segment_id) VALUES (?, ?, 0, ?, 0)");
+    const find = prepare("SELECT id, title, visit_count, typed_count, last_visit_time FROM urls WHERE url = ? LIMIT 1");
+    const insertUrl = prepare("INSERT INTO urls (url, title, visit_count, typed_count, last_visit_time, hidden) VALUES (?, ?, ?, ?, ?, 0)");
+    const updateUrl = prepare("UPDATE urls SET title = ?, visit_count = ?, typed_count = ?, last_visit_time = ? WHERE id = ?");
+    const hasVisit = prepare("SELECT 1 FROM visits WHERE url = ? AND visit_time = ? LIMIT 1");
+    const insertVisit = prepare("INSERT INTO visits (url, visit_time, from_visit, transition, segment_id) VALUES (?, ?, 0, ?, 0)");
     let added = 0;
     db.transaction(() => {
       for (const e of entries) {
@@ -54,6 +60,9 @@ export function addHistory(path: string, entries: readonly HistoryEntry[]): numb
     } catch {
       // The rows are committed; Chromium replays any WAL frames itself on open.
     }
+    // Open statements keep the connection (and its locks) alive past close(); Chrome then
+    // fails to load History and shows an empty list. Finalize them first.
+    for (const statement of statements) statement.finalize();
     db.close();
   }
 }

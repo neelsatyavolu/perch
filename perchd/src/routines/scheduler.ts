@@ -1,8 +1,10 @@
 /**
  * Starts routines when they are due. Runs go one at a time and a routine never overlaps itself.
- * A run that could not start on time (the Mac slept, Perch was closed, another run was going)
- * follows the routine's missed-run policy: run once now, or skip and record it. Either way the
- * next run is computed from now, so a long sleep never causes a burst of runs.
+ * A run that could not start on time (the Mac slept, Perch was closed) follows the routine's
+ * missed-run policy: run once now, or skip and record it. A routine whose previous run is still
+ * going when its next time comes skips that time and records it. Either way the next run is
+ * computed from now, so a long sleep never causes a burst of runs. Routines are always changed
+ * through store.update, so a pause or edit made while the scheduler works is never lost.
  */
 
 import { newId } from "../memory/page";
@@ -63,21 +65,24 @@ export class Scheduler {
     this.ticking = true;
     const started: Promise<RunRecord>[] = [];
     try {
-      for (const routine of this.opts.store.list()) {
-        if (!routine.enabled || routine.schedule.kind !== "cron") continue;
+      for (const { id } of this.opts.store.list()) {
         const now = this.now();
-        const next = nextRun(routine.schedule, now);
-        const due = routine.nextRunAt ? new Date(routine.nextRunAt) : null;
-        if (!due) {
-          await this.opts.store.save({ ...routine, nextRunAt: next?.toISOString() ?? null });
-          continue;
-        }
-        if (due.getTime() > now.getTime()) continue;
-        const current = await this.opts.store.save({ ...routine, nextRunAt: next?.toISOString() ?? null });
+        const found: { due: Date | null } = { due: null };
+        // Decided on the latest copy inside the store's write queue, never on a stale list.
+        const current = await this.opts.store.update(id, (routine) => {
+          found.due = null;
+          if (!routine.enabled || routine.schedule.kind !== "cron") return routine;
+          const due = routine.nextRunAt ? new Date(routine.nextRunAt) : null;
+          if (due && due.getTime() > now.getTime()) return routine;
+          found.due = due;
+          return { ...routine, nextRunAt: nextRun(routine.schedule, now)?.toISOString() ?? null };
+        });
+        const due = found.due;
+        if (!current || !due) continue;
         const late = now.getTime() - due.getTime();
-        if (this.active.has(routine.id)) continue;
-        if (late <= this.grace) started.push(this.enqueue(current, "schedule", due));
-        else if (routine.missed === "run_once") started.push(this.enqueue(current, "catch_up", due));
+        if (this.active.has(id)) started.push(this.recordSkip(current, due, now, "Skipped: the previous run was still going."));
+        else if (late <= this.grace) started.push(this.enqueue(current, "schedule", due));
+        else if (current.missed === "run_once") started.push(this.enqueue(current, "catch_up", due));
         else await this.recordSkip(current, due, now, `Missed at ${due.toISOString()} while the Mac was asleep or Perch was closed.`);
       }
     } finally {

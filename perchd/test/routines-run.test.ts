@@ -249,10 +249,70 @@ test("a queued run uses the routine as it is when its turn comes, and a paused o
     return { id: "d".repeat(32), routineId: r.id, trigger, scheduledFor: null, startedAt: "", finishedAt: "", status: "ok", answer: "", declined: [], chatId: null };
   });
   const ticked = s.tick();
-  await store.save({ ...store.get(third)!, enabled: false });
+  // Pause it after the tick has queued it behind the blocker.
+  while (!s.busy().includes(third)) await new Promise((resolve) => setTimeout(resolve, 1));
+  await store.update(third, (r) => ({ ...r, enabled: false }));
   releaseAgain();
   await blocker;
   const [skipped] = await ticked;
   expect(skipped).toMatchObject({ routineId: third, status: "skipped", note: "Paused before it started." });
   expect(seen.map((x) => x.name)).not.toContain("Scheduled");
+});
+
+test("a pause or mode change made while the scheduler is saving another routine is kept", async () => {
+  const { store } = await openStore();
+  const due = "2026-11-05T08:00:00.000Z";
+  const [a, b, c] = ["0000000000000000000000000000000a", "0000000000000000000000000000000b", "0000000000000000000000000000000c"];
+  for (const [i, id] of [a, b, c].entries()) await store.save(routine({ id, name: id.slice(-1), nextRunAt: due, createdAt: `2026-11-01T00:00:0${i}.000Z` }));
+  const ran: { name: string; mode: string }[] = [];
+  const s = new Scheduler({
+    store,
+    now: () => clock,
+    run: async (r, trigger) => {
+      ran.push({ name: r.name, mode: r.mode });
+      return { id: "e".repeat(32), routineId: r.id, trigger, scheduledFor: null, startedAt: "", finishedAt: "", status: "ok", answer: "", declined: [], chatId: null };
+    },
+  });
+  clock = new Date("2026-11-05T08:00:30Z");
+  const ticked = s.tick();
+  // The Routines page pauses B and switches C to Ask while the scheduler is writing A.
+  await Promise.all([store.save({ ...store.get(b)!, enabled: false, nextRunAt: null }), store.save({ ...store.get(c)!, mode: "ask" })]);
+  await ticked;
+  expect(store.get(b)).toMatchObject({ enabled: false, nextRunAt: null });
+  expect(store.get(c)).toMatchObject({ mode: "ask", nextRunAt: "2026-11-06T08:00:00.000Z" });
+  expect(ran).toEqual([{ name: "a", mode: "guard" }, { name: "c", mode: "ask" }]);
+});
+
+test("store.update applies a change to the latest copy and skips the write when nothing changed", async () => {
+  const { store } = await openStore();
+  await store.save(routine());
+  const [renamed, paused] = await Promise.all([store.update(routine().id, (r) => ({ ...r, name: "Renamed" })), store.update(routine().id, (r) => ({ ...r, enabled: false }))]);
+  expect(renamed).toMatchObject({ name: "Renamed", enabled: true });
+  expect(paused).toMatchObject({ name: "Renamed", enabled: false });
+  expect(await store.update(routine().id, (r) => r)).toBe(store.get(routine().id));
+  expect(await store.update("0".repeat(32), (r) => r)).toBeNull();
+});
+
+test("a routine still running when its next time comes is skipped and the skip is recorded", async () => {
+  const { store } = await openStore();
+  await store.save(routine({ nextRunAt: "2026-11-05T08:00:00.000Z" }));
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  const s = new Scheduler({
+    store,
+    now: () => clock,
+    run: async (r, trigger) => {
+      await gate;
+      return { id: "e".repeat(32), routineId: r.id, trigger, scheduledFor: null, startedAt: "", finishedAt: "", status: "ok", answer: "", declined: [], chatId: null };
+    },
+  });
+  clock = new Date("2026-11-05T07:59:00Z");
+  const running = s.runNow(routine().id);
+  clock = new Date("2026-11-05T08:00:30Z");
+  const [skipped] = await s.tick();
+  expect(skipped).toMatchObject({ status: "skipped", scheduledFor: "2026-11-05T08:00:00.000Z", note: "Skipped: the previous run was still going." });
+  expect(store.runs(routine().id)[0]).toMatchObject({ status: "skipped" });
+  expect(store.get(routine().id)!.nextRunAt).toBe("2026-11-06T08:00:00.000Z");
+  release();
+  await running;
 });

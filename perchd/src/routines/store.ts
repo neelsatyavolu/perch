@@ -102,6 +102,23 @@ export class RoutineStore {
     });
   }
 
+  /**
+   * Changes a routine by applying `change` to its latest copy inside the write queue, so a change
+   * made elsewhere in the meantime (a pause, a new mode) is never written over. Returns the routine
+   * as saved, or null when it no longer exists. Nothing is written when `change` returns it as is.
+   */
+  update(id: string, change: (routine: Routine) => Routine): Promise<Routine | null> {
+    return this.exclusive(async () => {
+      const latest = this.routines.get(id);
+      if (!latest) return null;
+      const next = change(latest);
+      if (next === latest) return latest;
+      await this.folder.put(ROUTINES, id, JSON.stringify(next));
+      this.routines.set(id, next);
+      return next;
+    });
+  }
+
   /** Deletes a routine with its runs and their chats. */
   remove(id: string): Promise<void> {
     return this.exclusive(async () => {

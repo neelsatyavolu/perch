@@ -40,11 +40,11 @@ function view(r: Routine): RoutineView {
 export function createRoutinesApi(deps: RoutinesApiDeps) {
   const { store } = deps;
   const now = deps.now ?? (() => new Date());
-  const existing = (input: Record<string, unknown>) => {
-    const routine = store.get(id(input));
+  const found = (routine: Routine | null) => {
     if (!routine) throw new Error("There is no such routine.");
     return routine;
   };
+  const existing = (input: Record<string, unknown>) => found(store.get(id(input)));
   const nextAt = (r: Pick<Routine, "schedule" | "enabled">) => (r.enabled ? nextRun(r.schedule, now())?.toISOString() ?? null : null);
 
   return {
@@ -84,32 +84,35 @@ export function createRoutinesApi(deps: RoutinesApiDeps) {
     update: (input: unknown): Promise<ApiResult<RoutineView>> =>
       attempt(async () => {
         const i = record(input);
-        const old = existing(i);
-        const model = i.model === undefined ? old.model : text(i, "model", { max: 100, optional: true });
+        const { id: routineId } = existing(i);
+        const model = i.model === undefined ? undefined : text(i, "model", { max: 100, optional: true });
         if (model && !MODEL_ID.test(model)) throw new Error("model is not a valid model id.");
-        const next = {
-          ...old,
-          name: i.name === undefined ? old.name : text(i, "name", { max: 80, label: "Name" }),
-          task: i.task === undefined ? old.task : text(i, "task", { max: 4000, label: "Instructions" }),
-          schedule: i.schedule === undefined ? old.schedule : scheduleFrom(i.schedule, now()),
-          mode: i.mode === undefined ? old.mode : oneOf(i, "mode", MODES),
-          missed: i.missed === undefined ? old.missed : oneOf(i, "missed", MISSED),
-          model: model || undefined,
+        const patch: Partial<Routine> = {
+          ...(i.name === undefined ? {} : { name: text(i, "name", { max: 80, label: "Name" }) }),
+          ...(i.task === undefined ? {} : { task: text(i, "task", { max: 4000, label: "Instructions" }) }),
+          ...(i.schedule === undefined ? {} : { schedule: scheduleFrom(i.schedule, now()) }),
+          ...(i.mode === undefined ? {} : { mode: oneOf(i, "mode", MODES) }),
+          ...(i.missed === undefined ? {} : { missed: oneOf(i, "missed", MISSED) }),
+          ...(i.model === undefined ? {} : { model: model || undefined }),
           updatedAt: now().toISOString(),
         };
-        const changedTiming = i.schedule !== undefined;
-        return view(await store.save({ ...next, nextRunAt: changedTiming ? nextAt(next) : old.nextRunAt }));
+        const saved = await store.update(routineId, (latest) => {
+          const next = { ...latest, ...patch };
+          return { ...next, nextRunAt: patch.schedule ? nextAt(next) : latest.nextRunAt };
+        });
+        return view(found(saved));
       }),
 
     /** Pause or resume. Resuming starts from now, so runs missed while paused do not catch up. */
     setEnabled: (input: unknown): Promise<ApiResult<RoutineView>> =>
       attempt(async () => {
         const i = record(input);
-        const old = existing(i);
+        const { id: routineId } = existing(i);
         const enabled = flag(i, "enabled");
         if (enabled === undefined) throw new Error("enabled is required.");
-        const next = { ...old, enabled, updatedAt: now().toISOString() };
-        return view(await store.save({ ...next, nextRunAt: nextAt(next) }));
+        const updatedAt = now().toISOString();
+        const saved = await store.update(routineId, (latest) => ({ ...latest, enabled, updatedAt, nextRunAt: nextAt({ ...latest, enabled }) }));
+        return view(found(saved));
       }),
 
     remove: (input: unknown): Promise<ApiResult<null>> =>

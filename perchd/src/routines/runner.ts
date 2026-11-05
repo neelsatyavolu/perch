@@ -91,7 +91,6 @@ export async function runRoutine(routine: Routine, trigger: RunTrigger, deps: Ru
   };
   if (chatId) await deps.store.saveChat({ id: chatId, title: routine.name, createdAt: startedAt, routineId: routine.id, runId: record.id, task: routine.task, events });
   await deps.store.addRun(record);
-  const latest = deps.store.get(routine.id);
-  if (latest) await deps.store.save({ ...latest, lastRunAt: startedAt });
+  await deps.store.update(routine.id, (latest) => ({ ...latest, lastRunAt: startedAt }));
   return record;
 }

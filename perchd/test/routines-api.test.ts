@@ -85,3 +85,12 @@ test("previewSchedule shows the next five runs", async () => {
   expect(preview.description).toBe("Every weekday at 08:00");
   expect(preview.next).toEqual(["2026-11-05T08:00:00.000Z", "2026-11-06T08:00:00.000Z", "2026-11-09T08:00:00.000Z", "2026-11-10T08:00:00.000Z", "2026-11-11T08:00:00.000Z"]);
 });
+
+test("an edit and a pause sent at the same time both land", async () => {
+  const { api, store } = await setup();
+  const r = ok(await api.create({ name: "Teacher mail", task: "Summarise new mail", schedule: weekdays8 }));
+  const [edited, paused] = await Promise.all([api.update({ id: r.id, mode: "ask", name: "Teachers" }), api.setEnabled({ id: r.id, enabled: false })]);
+  expect(ok(edited)).toMatchObject({ mode: "ask", name: "Teachers" });
+  expect(ok(paused)).toMatchObject({ enabled: false, nextRunAt: null });
+  expect(store.get(r.id)).toMatchObject({ mode: "ask", name: "Teachers", enabled: false, nextRunAt: null });
+});

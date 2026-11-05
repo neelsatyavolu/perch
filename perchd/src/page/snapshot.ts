@@ -261,7 +261,33 @@ function renderNode(ctx: Ctx, tree: Tree, node: AXNode, depth: number): string[]
     if (NAME_ONLY_CONTAINERS.has(role) && !name) return renderChildren(ctx, tree, node, depth);
     return [`${pad}- ${role}${name ? ` "${name}"` : ""}`, ...body];
   }
-  return renderChildren(ctx, tree, node, depth);
+  return renderClickable(ctx, tree, node, depth) ?? renderChildren(ctx, tree, node, depth);
+}
+
+/**
+ * A plain element styled as clickable (cursor: pointer) with text and nothing interactive inside,
+ * such as a custom suggestion or menu item, becomes one line with a ref.
+ */
+function renderClickable(ctx: Ctx, tree: Tree, node: AXNode, depth: number): string[] | null {
+  const id = node.backendDOMNodeId;
+  if (id === undefined || tree.session || !ctx.layout.clickable.has(id)) return null;
+  const inner = renderChildren(ctx, tree, node, depth + 1);
+  if (inner.length === 0 || inner.some((line) => line.includes("[ref="))) return null;
+  const full = textOf(tree, node).join(" ").replace(/\s+/g, " ").trim();
+  if (!full) return null;
+  const ref = ctx.refs.refFor(id, tree.frameId, tree.session, tree.owner);
+  const pad = "  ".repeat(depth);
+  // Short items read as one line; a long clickable block keeps its text so nothing is lost.
+  if (full.length <= SHORT_CLICKABLE && inner.length <= 3) return [`${pad}- clickable "${clean(full)}" [ref=${ref}]`];
+  return [`${pad}- clickable [ref=${ref}]`, ...inner];
+}
+
+const SHORT_CLICKABLE = 120;
+
+function textOf(tree: Tree, node: AXNode): string[] {
+  const role = str(node.role);
+  if (role === "StaticText" || role === "img") return [str(node.name)].filter(Boolean);
+  return children(tree, node).flatMap((child) => textOf(tree, child));
 }
 
 /** Only the lines with refs from a node's subtree: links in headings, nested tree items. */

@@ -1,0 +1,16 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Price notes</title></head>
+<body>
+<label>Note <input id="note" value="old text here"></label>
+<ul id="hints" role="listbox"></ul>
+<script>
+// Like jQuery UI autocomplete or Awesomplete: keyCode 33-40 move through the list.
+const NAV = { 33: 'PageUp', 34: 'PageDown', 35: 'End', 36: 'Home', 37: 'Left', 38: 'Up', 39: 'Right', 40: 'Down' };
+window.navKeys = [];
+window.shifted = [];
+document.getElementById('note').addEventListener('keydown', (e) => {
+  if (NAV[e.keyCode]) window.navKeys.push(e.key + ':' + NAV[e.keyCode]);
+  if (e.shiftKey) window.shifted.push(e.key);
+});
+</script>
+</body></html>

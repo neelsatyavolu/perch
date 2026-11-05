@@ -27,13 +27,13 @@ const refIn = (req: TurnRequest, label: string) => {
 
 async function run(
   script: Parameters<typeof fakeModel>[0],
-  opts: { approve?: boolean | ((req: ApprovalRequest) => boolean); maxSteps?: number; mode?: Mode; signal?: AbortSignal } = {},
+  opts: { approve?: boolean | ((req: ApprovalRequest) => boolean); maxSteps?: number; maxMs?: number; mode?: Mode; signal?: AbortSignal } = {},
 ) {
   const model = fakeModel(script);
   const audit = new AuditLog(join(dir, `audit-${++n}.jsonl`));
   const events: StepEvent[] = [];
   const approve = async (req: ApprovalRequest) => (typeof opts.approve === "function" ? opts.approve(req) : opts.approve ?? false);
-  for await (const event of runTask({ model, browser: env.browser, task: "Email Maya", mode: opts.mode ?? "guard", approve, audit, maxSteps: opts.maxSteps, signal: opts.signal })) {
+  for await (const event of runTask({ model, browser: env.browser, task: "Email Maya", mode: opts.mode ?? "guard", approve, audit, maxSteps: opts.maxSteps, maxMs: opts.maxMs, signal: opts.signal })) {
     events.push(event);
   }
   return { events, model, audit };
@@ -74,12 +74,12 @@ test("approving runs the action", async () => {
 test("a bad tool call is reported back and the loop goes on", async () => {
   const { events, model } = await run([() => tool("click", {}), (req) => say(lastTool(req).content)]);
   expect(model.requests).toHaveLength(2);
-  expect(events.at(-1)).toEqual({ type: "final", text: 'missing argument "ref"' });
+  expect(events.at(-1)).toEqual({ type: "final", text: 'missing argument "ref"; click takes ref' });
 });
 
 test("the loop stops at maxSteps with a clear message", async () => {
   const { events } = await run(() => tool("snapshot"), { maxSteps: 3 });
-  expect(events.at(-1)).toEqual({ type: "error", message: "Stopped after 3 steps without finishing. Ask again with more detail, or raise the step limit." });
+  expect(events.at(-1)).toEqual({ type: "error", message: "Stopped after 3 steps without finishing. Ask again with more detail, or raise the limit." });
 });
 
 test("older snapshots are collapsed in what the model sees", async () => {
@@ -194,3 +194,89 @@ test("the system prompt tells every model to browse, handle dialogs and finish t
   const prompt = systemPrompt({ mode: "skip", now: new Date("2026-11-05T09:00:00Z") });
   for (const phrase of ["never fill gaps from memory", "Never try to solve a CAPTCHA", "cookie", "search.brave.com", "YYYY-MM-DD", "every part of the task", "list what the task requires", "detail pages", "the site the task names", "write_file", "duckduckgo", "pick the matching suggestion", "every filter the task asks for"]) expect(prompt).toContain(phrase);
 });
+
+test("outside agents are told to reply, since they have no done tool", async () => {
+  const { systemPrompt } = await import("../src/agent/prompt");
+  const native = systemPrompt({ mode: "guard", now: new Date("2026-11-05T09:00:00Z") });
+  const outside = systemPrompt({ mode: "guard", now: new Date("2026-11-05T09:00:00Z"), finish: "reply" });
+  expect(native).toContain("call done");
+  expect(outside).not.toContain("done");
+  expect(outside).toContain("reply with");
+  for (const phrase of ["no network access", "result count", "Load more", "numbers behind the chart", "running low"]) expect(native).toContain(phrase);
+});
+
+test("out of steps, the model gets one turn without tools and its answer is the result", async () => {
+  const { events, model } = await run((req, turn) => (req.toolChoice === "none" ? say("Partial: found 2 of 3 prices.") : tool("snapshot")), { maxSteps: 3 });
+  expect(events.at(-1)).toEqual({ type: "final", text: "Partial: found 2 of 3 prices." });
+  const last = model.requests.at(-1)!;
+  expect(last.toolChoice).toBe("none");
+  expect(last.messages.at(-1)).toMatchObject({ role: "user", text: expect.stringContaining("run out of steps") });
+});
+
+test("when time runs out the loop stops calling tools and asks for the best answer", async () => {
+  const { events, model } = await run((req) => (req.toolChoice === "none" ? say("Here is what I found so far.") : tool("wait_for", { seconds: 0.4 })), { maxMs: 300 });
+  expect(events.at(-1)).toEqual({ type: "final", text: "Here is what I found so far." });
+  expect(model.requests.at(-1)!.messages.at(-1)).toMatchObject({ role: "user", text: expect.stringContaining("run out of time") });
+  expect(model.requests).toHaveLength(2);
+});
+
+test("calls left in a turn when time runs out are not run, but each still gets a result", async () => {
+  const two: TurnEvent[] = [
+    { type: "tool_call", call: { id: "slow_1", name: "wait_for", args: { seconds: 0.4 } } },
+    { type: "tool_call", call: { id: "slow_2", name: "wait_for", args: { seconds: 0.4 } } },
+    { type: "done" },
+  ];
+  const started = Date.now();
+  const { events, model } = await run((req) => (req.toolChoice === "none" ? say("Best answer so far.") : two), { maxMs: 300 });
+  expect(Date.now() - started).toBeLessThan(800);
+  expect(events.at(-1)).toEqual({ type: "final", text: "Best answer so far." });
+  const results = model.requests.at(-1)!.messages.filter((m) => m.role === "tool");
+  expect(results.map((m) => m.role === "tool" && m.callId)).toEqual(["slow_1", "slow_2"]);
+  expect(results[1]).toMatchObject({ content: "Not run: the time for this task is up." });
+});
+
+test("time the user spends deciding on an approval does not use up the task's time", async () => {
+  const slowApprove = async () => { await Bun.sleep(4_500); return false; };
+  const model = fakeModel(sendScript((req) => say(lastTool(req).content.includes("declined") ? "Okay, I did not send it." : "Other")));
+  const audit = new AuditLog(join(dir, `audit-${++n}.jsonl`));
+  const events: StepEvent[] = [];
+  for await (const event of runTask({ model, browser: env.browser, task: "Email Maya", mode: "guard", approve: slowApprove, audit, maxMs: 4_000 })) events.push(event);
+  expect(events.at(-1)).toEqual({ type: "final", text: "Okay, I did not send it." });
+  expect(model.requests.every((r) => r.toolChoice !== "none")).toBe(true);
+  expect(model.requests.flatMap((r) => r.messages).some((m) => m.role === "tool" && /Budget:|time for this task is up/.test(m.content))).toBe(false);
+}, 15_000);
+
+test("a done that arrives once time is up is the answer, not thrown away", async () => {
+  const late: TurnEvent[] = [
+    { type: "tool_call", call: { id: "slow", name: "wait_for", args: { seconds: 0.4 } } },
+    { type: "tool_call", call: { id: "fin", name: "done", args: { answer: "The answer is 42." } } },
+    { type: "done" },
+  ];
+  const { events, model } = await run([() => tool("tabs"), () => late], { maxMs: 300 });
+  expect(events.at(-1)).toEqual({ type: "final", text: "The answer is 42." });
+  expect(model.requests).toHaveLength(2);
+});
+
+test("if the final turn after the time limit fails, the checked draft answer is kept", async () => {
+  const { events } = await run([
+    () => tool("tabs"),
+    () => tool("done", { answer: "Draft: 3 flights under $300." }),
+    () => tool("wait_for", { seconds: 0.4 }),
+    // No fourth step: the fake model throws on the final turn, as an overloaded API would.
+  ], { maxMs: 300 });
+  expect(events.at(-1)).toEqual({ type: "final", text: "Draft: 3 flights under $300." });
+});
+
+test("budget and repeated-call notes reach the model in tool results", async () => {
+  let seen = "";
+  const { model } = await run([
+    () => tool("navigate", { url: env.site.url("/lazy.html") }),
+    (req) => tool("click", { ref: refIn(req, 'button "Apply"') }),
+    (req) => tool("click", lastCallArgs(req)),
+    (req) => tool("click", lastCallArgs(req)),
+    (req) => { seen = lastTool(req).content; return say("stopped"); },
+  ], { maxSteps: 5 });
+  expect(seen).toContain("same call with the same result");
+  expect(seen).toContain("Budget: 1 of 5 steps left");
+}, 15_000);
+const lastCallArgs = (req: TurnRequest) => (([...req.messages].reverse().find((m) => m.role === "assistant") as { toolCalls: { args: Record<string, unknown> }[] }).toolCalls[0]!.args);

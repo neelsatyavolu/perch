@@ -1,0 +1,53 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Board</title>
+<style>
+  body { font: 14px system-ui; padding: 16px; }
+  #track { position: relative; width: 300px; height: 24px; background: #ddd; margin: 16px 0; }
+  #handle { position: absolute; left: 0; top: 0; width: 24px; height: 24px; background: #4c8dff; }
+  #card { width: 120px; padding: 8px; border: 1px solid #888; margin: 8px 0; }
+  #zone { width: 200px; height: 80px; border: 2px dashed #888; margin: 8px 0; }
+  #stars { display: inline-block; padding: 4px 8px; border: 1px solid #888; }
+</style></head>
+<body>
+<label>Max price <input id="price" type="range" min="0" max="1000" step="50" value="1000"></label>
+<div id="stars" role="slider" tabindex="0" aria-label="Minimum rating" aria-valuemin="0" aria-valuemax="10" aria-valuenow="3">3</div>
+<div id="track"><div id="handle" role="button" aria-label="Distance handle"></div></div>
+<div id="card" draggable="true" role="button" aria-label="Card one">Card one</div>
+<div id="zone" role="region" aria-label="Done column"><button>Done column</button></div>
+<p id="out" role="status"></p>
+<div id="budget" role="slider" tabindex="0" aria-label="Budget" aria-valuemin="0" aria-valuemax="5000" aria-valuenow="0">0</div>
+<script>
+const say = (t) => { document.getElementById('out').textContent = t; };
+document.getElementById('price').addEventListener('change', (e) => say('Price: ' + e.target.value));
+// An ARIA slider that moves with the arrow keys only.
+const stars = document.getElementById('stars');
+stars.addEventListener('keydown', (e) => {
+  let v = Number(stars.getAttribute('aria-valuenow'));
+  if (e.key === 'ArrowRight' || e.key === 'ArrowUp') v = Math.min(10, v + 1);
+  else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') v = Math.max(0, v - 1);
+  else return;
+  stars.setAttribute('aria-valuenow', v);
+  stars.textContent = v;
+  say('Rating: ' + v);
+});
+// A fine-grained ARIA slider: one unit per key press.
+const budget = document.getElementById('budget');
+budget.addEventListener('keydown', (e) => {
+  if (e.key !== 'ArrowRight') return;
+  const v = Number(budget.getAttribute('aria-valuenow')) + 1;
+  budget.setAttribute('aria-valuenow', v);
+  budget.textContent = v;
+});
+// A handle moved by mouse events, as in many custom sliders and maps.
+const handle = document.getElementById('handle');
+let grab = null;
+handle.addEventListener('mousedown', (e) => { grab = e.clientX - handle.offsetLeft; e.preventDefault(); });
+addEventListener('mousemove', (e) => { if (grab !== null) handle.style.left = Math.max(0, Math.min(276, e.clientX - grab)) + 'px'; });
+addEventListener('mouseup', () => { if (grab !== null) say('Handle at ' + handle.offsetLeft); grab = null; });
+// HTML5 drag and drop.
+document.getElementById('card').addEventListener('dragstart', (e) => e.dataTransfer.setData('text/plain', 'card-1'));
+const zone = document.getElementById('zone');
+zone.addEventListener('dragover', (e) => e.preventDefault());
+zone.addEventListener('drop', (e) => { e.preventDefault(); say('Dropped: ' + e.dataTransfer.getData('text/plain')); });
+</script>
+</body></html>

@@ -6,7 +6,8 @@ import { basename, join } from "node:path";
 import type { Browser } from "../browser/browser";
 import { Tab } from "../browser/tab";
 import type { ToolCall } from "../models/types";
-import { back, click, describeRef, hover, press, scroll, select, type, upload, waitFor, type ActionResult } from "../page/actions";
+import { back, click, describeRef, drag, hover, press, scroll, select, type, upload, waitFor, type ActionResult } from "../page/actions";
+import { openPage } from "../page/navigation";
 import { refsFor } from "../page/refs";
 import { repl } from "../page/repl";
 import { clickAt, screenshot } from "../page/screenshot";
@@ -30,6 +31,7 @@ export type ToolContext = {
 
 const SCREENSHOT_WIDTH = 1280;
 const REPL_LIMIT = 20_000;
+const MAX_WAIT_S = 60;
 
 export async function newToolContext(browser: Browser): Promise<ToolContext> {
   const ctx: ToolContext = {
@@ -73,6 +75,11 @@ export function checkCall(call: ToolCall): string | null {
   if (problem) return problem;
   const ref = call.args.ref;
   if (typeof ref === "string" && !REF.test(ref)) return `ref "${ref}" is not a valid ref; refs look like e12`;
+  if (call.name === "drag") {
+    const { to, dx, dy } = call.args;
+    if (typeof to === "string" && !REF.test(to)) return `ref "${to}" is not a valid ref; refs look like e12`;
+    if (to === undefined && dx === undefined && dy === undefined) return "give to (a ref to drop on) or dx and dy (pixels to move)";
+  }
   if (call.name === "navigate" || call.name === "open_tab") {
     const url = normalizeUrl(String(call.args.url));
     if (url !== "about:blank" && !WEB_URL.test(url)) return "Perch's agent only opens http and https pages";
@@ -87,11 +94,31 @@ async function page(ctx: ToolContext, tab: Tab, full = false): Promise<string> {
   return `Page: ${title} (${url})\n${snap.text}`;
 }
 
-async function withPage(ctx: ToolContext, tab: Tab, result: ActionResult): Promise<ToolResult> {
-  if (!result.ok) return { content: [result.error, ...tab.takeDialogNotes()].join("\n"), isError: true };
+/** Actions after which an unchanged page is worth pointing out: the click or choice did nothing visible. */
+const EXPECT_CHANGE = new Set(["click", "select", "press", "click_at", "drag"]);
+const RECHECK_MS = 700;
+export const UNCHANGED =
+  "The page looks the same as before this action. If you expected a change (a filter, a menu, a new page), it did not take effect: check, or try another way.";
+
+async function withPage(ctx: ToolContext, tab: Tab, result: ActionResult, action = ""): Promise<ToolResult> {
+  if (!result.ok) {
+    const notes = [result.error, ...tab.takeDialogNotes()].join("\n");
+    // A gone ref means the page changed under the model: show it the page now, saving a step.
+    if (/^ref e\d+ is gone/.test(result.error)) return { content: `${notes}. The page now:\n\n${await page(ctx, tab)}`, isError: true };
+    return { content: notes, isError: true };
+  }
   await tab.settle();
+  const before = ctx.lastSnapshot.get(tab);
+  let view = await page(ctx, tab);
+  let same = EXPECT_CHANGE.has(action) && before !== undefined && ctx.lastSnapshot.get(tab) === before;
+  if (same) {
+    // Results often arrive a moment after the click; look once more before saying nothing happened.
+    await Bun.sleep(RECHECK_MS);
+    view = await page(ctx, tab);
+    same = ctx.lastSnapshot.get(tab) === before;
+  }
   const notes = tab.takeDialogNotes();
-  return { content: `${[result.note, ...notes].join("\n")}\n\n${await page(ctx, tab)}` };
+  return { content: `${[result.note, ...(same ? [UNCHANGED] : []), ...notes].join("\n")}\n\n${view}` };
 }
 
 /** Role and name of the element a ref-based call targets, from the last snapshot of the tab. */
@@ -191,35 +218,44 @@ async function dispatch(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
   if (call.name === "open_tab") {
     ctx.tab = await ctx.browser.newTab();
     ctx.owned.push(ctx.tab);
-    await ctx.tab.navigate(normalizeUrl(a.url));
-    return { content: `opened ${a.url} in a new tab\n\n${await page(ctx, ctx.tab)}` };
+    const note = await openPage(ctx.tab, normalizeUrl(a.url));
+    return { content: `opened ${a.url} in a new tab${note ? `\n${note}` : ""}\n\n${await page(ctx, ctx.tab)}` };
   }
   const tab = await currentTab(ctx);
   const refs = refsFor(tab);
   switch (call.name) {
-    case "navigate":
-      await tab.navigate(normalizeUrl(a.url));
-      return { content: await page(ctx, tab) };
+    case "navigate": {
+      const note = await openPage(tab, normalizeUrl(a.url));
+      return { content: `${note ? `${note}\n\n` : ""}${await page(ctx, tab)}` };
+    }
     case "snapshot":
       return { content: await page(ctx, tab, Boolean(a.full)) };
     case "click":
-      return withPage(ctx, tab, await click(tab, refs, a.ref));
+      return withPage(ctx, tab, await click(tab, refs, a.ref), "click");
     case "type":
       return withPage(ctx, tab, await type(tab, refs, a.ref, a.text, { submit: Boolean(a.submit) }));
     case "select":
-      return withPage(ctx, tab, await select(tab, refs, a.ref, a.value));
+      return withPage(ctx, tab, await select(tab, refs, a.ref, a.value), "select");
     case "press":
-      return withPage(ctx, tab, await press(tab, a.key));
+      return withPage(ctx, tab, await press(tab, a.key), "press");
     case "scroll":
       return withPage(ctx, tab, await scroll(tab, { refs, ref: a.ref, dy: a.dy }));
     case "hover":
       return withPage(ctx, tab, await hover(tab, refs, a.ref));
+    case "drag":
+      return withPage(ctx, tab, await drag(tab, refs, a.ref, a.to !== undefined ? { ref: a.to } : { dx: Number(a.dx ?? 0), dy: Number(a.dy ?? 0) }), "drag");
     case "upload":
       return withPage(ctx, tab, await upload(tab, refs, a.ref, a.paths));
     case "back":
       return withPage(ctx, tab, await back(tab));
     case "wait_for": {
-      const r = await waitFor(tab, { text: a.text, timeoutMs: Math.min(60, Number(a.timeout_s ?? 10)) * 1000 });
+      if (a.text === undefined) {
+        if (a.seconds === undefined) return { content: "give text to wait for, or seconds to wait", isError: true };
+        const seconds = Math.max(0, Math.min(MAX_WAIT_S, Number(a.seconds)));
+        await Bun.sleep(seconds * 1000);
+        return { content: `waited ${seconds} s\n\n${await page(ctx, tab)}` };
+      }
+      const r = await waitFor(tab, { text: a.text, timeoutMs: Math.min(MAX_WAIT_S, Number(a.timeout_s ?? a.seconds ?? 10)) * 1000 });
       return r.ok ? { content: r.note } : { content: r.error, isError: true };
     }
     case "screenshot": {
@@ -230,7 +266,7 @@ async function dispatch(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
     }
     case "click_at": {
       const r = await clickAt(tab, a.x / ctx.shotScale, a.y / ctx.shotScale);
-      return withPage(ctx, tab, r.ok ? { ok: true, note: `clicked at ${a.x}, ${a.y} in the screenshot` } : r);
+      return withPage(ctx, tab, r.ok ? { ok: true, note: `clicked at ${a.x}, ${a.y} in the screenshot` } : r, "click_at");
     }
     case "repl": {
       const r = await repl(tab, a.code);

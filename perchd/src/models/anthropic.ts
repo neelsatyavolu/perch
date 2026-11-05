@@ -4,7 +4,8 @@ import { openStream, sseJson, upstreamMessage } from "./http";
 import { ModelError, parseArgs, type Message, type Model, type TurnEvent, type TurnRequest } from "./types";
 
 export const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
-const MAX_TOKENS = 8192;
+/** Room for adaptive thinking before the answer or tool call; streaming keeps a large value safe. */
+const MAX_TOKENS = 32_000;
 
 type Block = Record<string, unknown>;
 
@@ -33,65 +34,91 @@ export function toAnthropicMessages(messages: Message[]): { role: "user" | "assi
 }
 
 export function anthropicModel(opts: { model: string; apiKey: () => Promise<string> }, fetchImpl: typeof fetch = fetch): Model {
+  // Once the API rejects effort for this model (older models have none), stop sending it.
+  let effortRejected = false;
   return {
     id: `anthropic:${opts.model}`,
     async *turn(req: TurnRequest, signal: AbortSignal): AsyncIterable<TurnEvent> {
       const key = await opts.apiKey();
-      const body = {
+      let effort = effortRejected ? undefined : req.effort;
+      const body = () => ({
         model: opts.model,
         max_tokens: MAX_TOKENS,
         system: req.system,
         messages: toAnthropicMessages(req.messages),
         tools: req.tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.parameters })),
-        // One action at a time, as with the Responses adapter: each result is checked before the next.
-        ...(req.tools.length ? { tool_choice: { type: "auto", disable_parallel_tool_use: true } } : {}),
+        ...toolChoice(req),
+        ...(effort ? { output_config: { effort } } : {}),
+        // Caches the conversation up to the newest block, so each step re-reads the prefix cheaply.
+        cache_control: { type: "ephemeral" },
         stream: true,
-      };
+      });
       const stream = await openStream(
         () => ({
           url: ANTHROPIC_URL,
           init: {
             method: "POST",
             headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json", accept: "text/event-stream" },
-            body: JSON.stringify(body),
+            body: JSON.stringify(body()),
           },
         }),
-        { fetch: fetchImpl, signal, describe: (status, text) => upstreamMessage(status, text, "Check the Claude API key in Perch's settings.") },
+        {
+          fetch: fetchImpl,
+          signal,
+          describe: (status, text) => upstreamMessage(status, text, "Check the Claude API key in Perch's settings."),
+          adjust: (text) => {
+            if (!effort || !/effort|output_config/i.test(text)) return false;
+            effort = undefined;
+            effortRejected = true;
+            return true;
+          },
+        },
       );
-      const tools = new Map<number, { id: string; name: string; json: string }>();
-      let input = 0;
-      let output = 0;
-      for await (const event of sseJson(stream, signal)) {
-        switch (event.type) {
-          case "message_start":
-            input = event.message?.usage?.input_tokens ?? 0;
-            break;
-          case "content_block_start":
-            if (event.content_block?.type === "tool_use") tools.set(event.index, { id: event.content_block.id, name: event.content_block.name, json: "" });
-            break;
-          case "content_block_delta":
-            if (event.delta?.type === "text_delta" && event.delta.text) yield { type: "text", delta: event.delta.text };
-            if (event.delta?.type === "input_json_delta") {
-              const tool = tools.get(event.index);
-              if (tool) tool.json += event.delta.partial_json ?? "";
-            }
-            break;
-          case "content_block_stop": {
-            const tool = tools.get(event.index);
-            if (tool) yield { type: "tool_call", call: { id: tool.id, name: tool.name, args: parseArgs(tool.json) } };
-            break;
-          }
-          case "message_delta":
-            output = event.usage?.output_tokens ?? output;
-            break;
-          case "message_stop":
-            yield { type: "done", usage: { input, output } };
-            return;
-          case "error":
-            throw new ModelError(event.error?.message ?? "The model failed.");
-        }
-      }
-      throw new ModelError("The model stopped before finishing. Try again.");
+      yield* readStream(stream, signal);
     },
   };
+}
+
+/** One action at a time, as with the Responses adapter: each result is checked before the next. */
+function toolChoice(req: TurnRequest): object {
+  if (!req.tools.length) return {};
+  return req.toolChoice === "none" ? { tool_choice: { type: "none" } } : { tool_choice: { type: "auto", disable_parallel_tool_use: true } };
+}
+
+async function* readStream(stream: ReadableStream<Uint8Array>, signal: AbortSignal): AsyncIterable<TurnEvent> {
+  const tools = new Map<number, { id: string; name: string; json: string }>();
+  let input = 0;
+  let output = 0;
+  for await (const event of sseJson(stream, signal)) {
+    switch (event.type) {
+      case "message_start":
+        input = event.message?.usage?.input_tokens ?? 0;
+        break;
+      case "content_block_start":
+        if (event.content_block?.type === "tool_use") tools.set(event.index, { id: event.content_block.id, name: event.content_block.name, json: "" });
+        break;
+      case "content_block_delta":
+        if (event.delta?.type === "text_delta" && event.delta.text) yield { type: "text", delta: event.delta.text };
+        if (event.delta?.type === "input_json_delta") {
+          const tool = tools.get(event.index);
+          if (tool) tool.json += event.delta.partial_json ?? "";
+        }
+        break;
+      case "content_block_stop": {
+        const tool = tools.get(event.index);
+        if (tool) yield { type: "tool_call", call: { id: tool.id, name: tool.name, args: parseArgs(tool.json) } };
+        break;
+      }
+      case "message_delta":
+        output = event.usage?.output_tokens ?? output;
+        if (event.delta?.stop_reason === "refusal") throw new ModelError("Claude declined to continue this task. Try rewording it, or use another model.");
+        break;
+      case "message_stop":
+        yield { type: "done", usage: { input, output } };
+        return;
+      case "error":
+        throw new ModelError(event.error?.message ?? "The model failed.");
+    }
+  }
+  throw new ModelError("The model stopped before finishing. Try again.");
 }

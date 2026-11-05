@@ -1,0 +1,39 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Doctors</title>
+<style>
+  body { font: 14px system-ui; margin: 0; }
+  .doc { height: 120px; border-bottom: 1px solid #ddd; padding: 8px; }
+  #end { padding: 16px; }
+</style></head>
+<body>
+<h1>43 results</h1>
+<label><input type="checkbox" id="rating"> Rating 4 and up</label>
+<button id="apply-broken">Apply</button>
+<div id="list"></div>
+<p id="end" hidden>End of results</p>
+<script>
+// Results arrive 10 at a time as the reader nears the end, as on many directory sites.
+const list = document.getElementById('list');
+let shown = 0;
+function more() {
+  if (shown >= 43) { document.getElementById('end').hidden = false; return; }
+  const next = Math.min(43, shown + 10);
+  for (let i = shown + 1; i <= next; i++) {
+    const d = document.createElement('div');
+    d.className = 'doc';
+    d.textContent = 'Dr. Provider ' + i;
+    list.appendChild(d);
+  }
+  shown = next;
+}
+more();
+let loading = false;
+addEventListener('scroll', () => {
+  if (loading || innerHeight + scrollY < document.documentElement.scrollHeight - 50) return;
+  loading = true;
+  setTimeout(() => { more(); loading = false; }, 300);
+});
+// A filter button that does nothing, like a filter that silently fails to apply.
+document.getElementById('apply-broken').addEventListener('click', () => {});
+</script>
+</body></html>

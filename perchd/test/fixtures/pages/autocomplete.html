@@ -1,0 +1,50 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Find a job</title>
+<style>
+  body { font: 14px system-ui; }
+  .suggestions { list-style: none; padding: 0; margin: 0; border: 1px solid #ccc; width: 240px; }
+  .suggestions li { padding: 4px 8px; cursor: pointer; }
+  .suggestions:empty { display: none; }
+</style></head>
+<body>
+<h1>Find a job</h1>
+<!-- Like many older widgets: suggestions follow keyup only, so text inserted without key events shows nothing. -->
+<label for="city">City or zip code</label>
+<input id="city" autocomplete="off">
+<ul class="suggestions" id="city-list"></ul>
+<!-- An ARIA combobox whose suggestions arrive after a short delay, as from a server. -->
+<label for="airport">From</label>
+<input id="airport" role="combobox" aria-expanded="false" aria-controls="airport-list" aria-autocomplete="list">
+<ul class="suggestions" id="airport-list" role="listbox"></ul>
+<p id="out" role="status"></p>
+<div style="cursor:pointer" onclick="location.hash='long'"><p>Senior HR partner, Miami. Lead hiring for three stores, run onboarding, and keep the team's training plans current across the whole region this year.</p></div>
+<div style="cursor:pointer" onclick="location.hash='card'">Card with a <a href="#job">job link</a></div>
+<script>
+const cities = ['Miami, FL', 'Miami Beach, FL', 'Miami Gardens, FL', 'Milwaukee, WI'];
+const airports = ['SFO San Francisco', 'SJC San Jose', 'SAN San Diego'];
+function fill(list, items, input, onPick) {
+  list.innerHTML = '';
+  for (const item of items) {
+    const li = document.createElement('li');
+    li.textContent = item;
+    li.setAttribute('role', 'option');
+    li.onclick = () => { input.value = item; list.innerHTML = ''; onPick(item); };
+    list.appendChild(li);
+  }
+}
+const city = document.getElementById('city');
+city.addEventListener('keyup', () => {
+  const q = city.value.trim().toLowerCase();
+  fill(document.getElementById('city-list'), q ? cities.filter((c) => c.toLowerCase().startsWith(q)) : [], city, (c) => { document.getElementById('out').textContent = 'Location: ' + c; });
+});
+const airport = document.getElementById('airport');
+airport.addEventListener('keydown', () => {
+  setTimeout(() => {
+    const q = airport.value.trim().toLowerCase();
+    const hits = q ? airports.filter((a) => a.toLowerCase().includes(q)) : [];
+    fill(document.getElementById('airport-list'), hits, airport, (a) => { document.getElementById('out').textContent = 'From: ' + a; airport.setAttribute('aria-expanded', 'false'); });
+    airport.setAttribute('aria-expanded', String(hits.length > 0));
+  }, 300);
+});
+</script>
+</body></html>

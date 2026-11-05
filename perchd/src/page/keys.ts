@@ -1,6 +1,7 @@
 /** Key definitions for Input.dispatchKeyEvent. */
 
-export type KeyDef = { key: string; code: string; keyCode: number; text?: string };
+/** `shift` marks a character typed with Shift held on a US keyboard ("!", "(", "A"). */
+export type KeyDef = { key: string; code: string; keyCode: number; text?: string; shift?: boolean };
 
 const NAMED: Record<string, KeyDef> = {
   enter: { key: "Enter", code: "Enter", keyCode: 13, text: "\r" },
@@ -30,8 +31,23 @@ const PUNCTUATION: Record<string, [string, number]> = {
   "[": ["BracketLeft", 219], "]": ["BracketRight", 221], "\\": ["Backslash", 220], "-": ["Minus", 189], "=": ["Equal", 187], "`": ["Backquote", 192],
 };
 
-/** Parses "Enter", "a" or "Meta+Shift+K" into a key, a CDP modifier bitmask and any macOS editing command. */
+/**
+ * Shifted symbols share their key with an unshifted one. Their own char codes are the key codes
+ * of PageUp, End, Home and the arrows ("$" is 36, Home; "(" is 40, ArrowDown), which move the
+ * caret and drive suggestion lists, so they must be sent as their real key with Shift.
+ */
+const SHIFTED: Record<string, [string, number]> = {
+  "!": ["Digit1", 49], "@": ["Digit2", 50], "#": ["Digit3", 51], "$": ["Digit4", 52], "%": ["Digit5", 53], "^": ["Digit6", 54],
+  "&": ["Digit7", 55], "*": ["Digit8", 56], "(": ["Digit9", 57], ")": ["Digit0", 48], "_": ["Minus", 189], "+": ["Equal", 187],
+  "{": ["BracketLeft", 219], "}": ["BracketRight", 221], "|": ["Backslash", 220], ":": ["Semicolon", 186], '"': ["Quote", 222],
+  "<": ["Comma", 188], ">": ["Period", 190], "?": ["Slash", 191], "~": ["Backquote", 192],
+};
+
+/** Parses "Enter", "a", " " or "Meta+Shift+K" into a key, a CDP modifier bitmask and any macOS editing command. */
 export function parseKey(combo: string): { def: KeyDef; modifiers: number; commands?: string[] } | null {
+  // A literal space or plus sign is the key itself, not a separator.
+  if (combo === " ") return { def: NAMED.space!, modifiers: 0 };
+  if (combo === "+") return { def: charDef("+", 0), modifiers: SHIFT };
   const parts = combo.split("+").map((p) => p.trim()).filter(Boolean);
   const last = parts.pop();
   if (!last) return null;
@@ -44,13 +60,31 @@ export function parseKey(combo: string): { def: KeyDef; modifiers: number; comma
   const named = NAMED[last.toLowerCase()];
   if (named) return { def: named, modifiers };
   if (last.length !== 1) return null;
-  const upper = last.toUpperCase();
-  const isLetter = /[A-Z]/.test(upper);
-  const punct = PUNCTUATION[last];
-  const text = modifiers & 6 ? undefined : last;
-  const def: KeyDef = punct
-    ? { key: last, code: punct[0], keyCode: punct[1], text }
-    : { key: last, code: isLetter ? `Key${upper}` : /\d/.test(last) ? `Digit${last}` : "", keyCode: upper.charCodeAt(0), text };
+  const def = charDef(last, modifiers);
+  if (def.shift) modifiers |= SHIFT;
   const command = modifiers & META ? (last.toLowerCase() === "z" && modifiers & SHIFT ? "redo" : META_COMMANDS[last.toLowerCase()]) : undefined;
   return command ? { def, modifiers, commands: [command] } : { def, modifiers };
+}
+
+/** The key for one printable character; with Control or Meta held it types no text. */
+function charDef(ch: string, modifiers: number): KeyDef {
+  const upper = ch.toUpperCase();
+  const isLetter = /[A-Z]/.test(upper);
+  const punct = PUNCTUATION[ch];
+  const shifted = SHIFTED[ch];
+  const text = modifiers & 6 ? undefined : ch;
+  if (punct) return { key: ch, code: punct[0], keyCode: punct[1], text };
+  if (shifted) return { key: ch, code: shifted[0], keyCode: shifted[1], text, shift: true };
+  if (isLetter || /\d/.test(ch)) return { key: ch, code: isLetter ? `Key${upper}` : `Digit${ch}`, keyCode: upper.charCodeAt(0), text };
+  // Not on a US keyboard: no key code a page could mistake for a navigation key.
+  return { key: ch, code: "", keyCode: 0, text };
+}
+
+/** The key that types one character, or null when it has no key on a US keyboard (it is inserted instead). A newline is inserted too: Enter would submit a form.. */
+export function keyForChar(ch: string): KeyDef | null {
+  if (ch === " ") return NAMED.space!;
+  if (!/^[\x21-\x7e]$/.test(ch)) return null;
+  const def = charDef(ch, 0);
+  // Capitals are typed with Shift held; parseKey leaves them alone, since "Control+A" means Control+a.
+  return /[A-Z]/.test(ch) ? { ...def, shift: true } : def;
 }

@@ -14,14 +14,15 @@ export const TOOL_SPECS: ToolSpec[] = [
   spec("navigate", "Open a URL in the current agent tab. Returns the page snapshot.", { url: { type: "string" } }, ["url"]),
   spec("snapshot", "Read the page as text. Interactive elements have refs like e12. Set full to include content far from the viewport.", { full: { type: "boolean" } }),
   spec("click", "Click an element by ref.", { ref }, ["ref"]),
-  spec("type", "Replace the text in a field by ref. Set submit to press Enter after.", { ref, text: { type: "string" }, submit: { type: "boolean" } }, ["ref", "text"]),
+  spec("type", "Replace the text in a field by ref, typing key by key. Also sets dates, colours and sliders. Set submit to press Enter after.", { ref, text: { type: "string" }, submit: { type: "boolean" } }, ["ref", "text"]),
   spec("select", "Choose a dropdown option by its label or value.", { ref, value: { type: "string" } }, ["ref", "value"]),
   spec("press", "Press a key in the focused element, such as Enter, Escape, Tab or Meta+A.", { key: { type: "string" } }, ["key"]),
   spec("scroll", "Scroll by pixels (positive is down), or bring a ref into view.", { dy: { type: "number" }, ref }),
+  spec("drag", "Drag an element by ref onto another element (to), or by dx, dy pixels. For sliders, sortable lists, maps and drop zones.", { ref, to: { type: "string", description: "Ref of the element to drop on" }, dx: { type: "number" }, dy: { type: "number" } }, ["ref"]),
   spec("hover", "Move the mouse over an element by ref, for menus and tooltips.", { ref }, ["ref"]),
   spec("upload", "Attach local files to a file input by ref.", { ref, paths: { type: "array", items: { type: "string" } } }, ["ref", "paths"]),
   spec("write_file", "Save a text file in this chat's own folder, for example to upload it to a form. Returns its path.", { name: { type: "string" }, content: { type: "string" } }, ["name", "content"]),
-  spec("wait_for", "Wait until text appears on the page.", { text: { type: "string" }, timeout_s: { type: "number" } }, ["text"]),
+  spec("wait_for", "Wait until text appears on the page, or wait a number of seconds and return the page.", { text: { type: "string" }, timeout_s: { type: "number" }, seconds: { type: "number" } }),
   spec("back", "Go back one page in the current tab.", {}),
   spec("screenshot", "See the visible page as an image. Use when the snapshot cannot describe it, as on canvas, maps and charts.", {}),
   spec("click_at", "Click at x, y in the last screenshot's pixels.", { x: { type: "number" }, y: { type: "number" } }, ["x", "y"]),
@@ -34,16 +35,25 @@ export const TOOL_SPECS: ToolSpec[] = [
 
 const BY_NAME = new Map(TOOL_SPECS.map((s) => [s.name, s]));
 
+/** Short notes on arguments whose meaning is not obvious from the name, for argument errors. */
+const HINTS: Record<string, string> = { "scroll.dy": "pixels, negative is up" };
+
+/** "scroll takes dy (pixels, negative is up), ref": so a model that guessed wrong can fix the call. */
+function takes(name: string, schema: { properties: Record<string, Prop> }): string {
+  const keys = Object.keys(schema.properties).map((k) => (HINTS[`${name}.${k}`] ? `${k} (${HINTS[`${name}.${k}`]})` : k));
+  return keys.length ? `; ${name} takes ${keys.join(", ")}` : `; ${name} takes no arguments`;
+}
+
 /** Returns a plain error for the model, or null when the arguments fit the tool's schema. */
 export function validate(name: string, args: Record<string, unknown>): string | null {
   const tool = BY_NAME.get(name);
   if (!tool) return `unknown tool "${name}"`;
   if ("__unparsed" in args) return `the arguments for "${name}" were not valid JSON`;
   const schema = tool.parameters as { properties: Record<string, Prop>; required: string[] };
-  for (const key of schema.required) if (args[key] === undefined || args[key] === null) return `missing argument "${key}"`;
+  for (const key of schema.required) if (args[key] === undefined || args[key] === null) return `missing argument "${key}"${takes(name, schema)}`;
   for (const [key, value] of Object.entries(args)) {
     const prop = schema.properties[key];
-    if (!prop) return `unexpected argument "${key}"`;
+    if (!prop) return `unexpected argument "${key}"${takes(name, schema)}`;
     if (value === undefined || value === null) continue;
     const ok =
       prop.type === "array"

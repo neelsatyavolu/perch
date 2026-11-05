@@ -34,11 +34,12 @@ export async function prepareCall(ctx: ToolContext, opts: CallPolicy, call: Tool
 
   const target = call.name === "press" ? await focusedTarget(ctx) : describeTarget(ctx, call) ?? (await liveTarget(ctx, call));
   const page = READS.has(call.name) ? {} : await pageContext(ctx);
-  const kind = classify(call, target, page);
+  const drop = await dropTarget(ctx, call);
+  const kind = classify(call, target, page, drop);
   const destination = call.name === "navigate" || call.name === "open_tab" ? String(call.args.url) : undefined;
   const site = destination ? hostOf(destination) : await currentHost(ctx);
   const decision = needsApproval(opts.mode, kind, opts.siteRule?.(site));
-  const what = target ? `${target.role} "${target.name}"` : summarizeArgs(call);
+  const what = [target ? `${target.role} "${target.name}"` : summarizeArgs(call), drop ? `onto ${drop.role} "${drop.name}"` : ""].filter(Boolean).join(" ");
   const detail = kind === "read" ? what : [what, await approvalDetail(ctx, call)].filter(Boolean).join(" ");
   const entry = { time: new Date().toISOString(), tab: ctx.tab?.id ?? "", site, url: destination, action: call.name, detail, client: opts.client ?? "sidebar" };
 
@@ -69,6 +70,13 @@ export async function callTool(ctx: ToolContext, opts: CallPolicy, call: ToolCal
   return finishCall(ctx, opts, prepared, approved);
 }
 
+/** For a drag onto an element: that element, from the last snapshot or read live. */
+async function dropTarget(ctx: ToolContext, call: ToolCall): Promise<Target | undefined> {
+  if (call.name !== "drag" || typeof call.args.to !== "string") return undefined;
+  const onto = { ...call, args: { ref: call.args.to } };
+  return describeTarget(ctx, onto) ?? (await liveTarget(ctx, onto));
+}
+
 function hostOf(url: string): string {
   try {
     return new URL(/^[a-z]+:/i.test(url) ? url : `https://${url}`).hostname;
@@ -87,7 +95,7 @@ export async function currentHost(ctx: ToolContext): Promise<string> {
 }
 
 function verb(call: ToolCall): string {
-  return ({ click: "Click", type: "Type into", select: "Choose in", press: `Press ${call.args.key} in`, upload: "Upload to", click_at: "Click", repl: "Run a script" } as Record<string, string>)[call.name] ?? call.name;
+  return ({ click: "Click", type: "Type into", select: "Choose in", press: `Press ${call.args.key} in`, upload: "Upload to", drag: "Drag", click_at: "Click", repl: "Run a script" } as Record<string, string>)[call.name] ?? call.name;
 }
 
 function summarizeArgs(call: ToolCall): string {
@@ -112,6 +120,7 @@ export function label(call: ToolCall, target: Target | undefined, site: string):
     case "press": return `Pressed ${call.args.key}`;
     case "scroll": return "Scrolled";
     case "hover": return `Pointed at ${what}`;
+    case "drag": return `Dragged ${what}`;
     case "upload": return `Attached ${(call.args.paths as string[]).length} file(s)`;
     case "back": return "Went back";
     case "snapshot": return `Read ${site}`;

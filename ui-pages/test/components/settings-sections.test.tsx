@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { cleanup, fireEvent, waitFor, within } from "@testing-library/preact";
 import { Settings } from "../../src/pages/settings/Settings";
+import { createFakeApi } from "../../src/api/fake";
 import { renderWithApi } from "./render";
 
 afterEach(cleanup);
@@ -36,6 +37,26 @@ describe("Skills and MCP", () => {
     expect(names).toContain("github");
     expect(names).toContain("postgres");
     expect(names).not.toContain("linear");
+  });
+
+  test("tokens inside MCP command lines and URLs never reach the page", async () => {
+    const base = createFakeApi({ stepMs: 0 });
+    const leaky = {
+      ...base,
+      listMcpServers: async () => [{ ...(await base.listMcpServers())[0]!, name: "leaky", target: "leaky-mcp --api-key raw-0000-secret" }],
+    };
+    window.location.hash = "#skills";
+    const r = renderWithApi(<Settings />, { api: leaky });
+    fireEvent.click(await r.findByRole("button", { name: "leaky options" }));
+    const server = await r.findByRole("dialog", { name: "leaky" });
+    expect(within(server).getByText("leaky-mcp --api-key ${API_KEY}")).toBeTruthy();
+    fireEvent.click(within(server).getByRole("button", { name: "Done" }));
+
+    fireEvent.click(r.getByRole("button", { name: "Import from Claude Code, Codex, Claude Desktop, Cursor and Grok" }));
+    const dlg = await r.findByRole("dialog", { name: "Import MCP servers" });
+    expect(await within(dlg).findByText(/sse\?api_key=\$\{API_KEY\}/)).toBeTruthy();
+    expect(document.body.innerHTML).not.toContain("raw-0000-secret");
+    expect(document.body.innerHTML).not.toContain("lin_api_");
   });
 
   test("adding a server checks the address and keeps secret values out of the page", async () => {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import type { McpImportCandidate, McpServer } from "../../api";
 import { MCP_SOURCES } from "../../lib/labels";
+import { redactTarget } from "../../lib/redact";
 import { errorText, useApi } from "../../ui/frame";
 import { Dialog } from "../../ui/Dialog";
 
@@ -82,7 +83,7 @@ export function McpImportDialog({ open, onClose, onImported }: Props) {
               <span class="meta">
                 <span class="ink">{c.name}{c.alreadyAdded && <span class="mute"> · already added</span>}</span>
                 <span class="mono" id={`cand-${c.key.replace(/\W/g, "-")}`}>
-                  {c.transport} · {c.target} · from {c.configPath}
+                  {c.transport} · {redactTarget(c.target).target} · from {c.configPath}
                   {c.secretNames.length > 0 && ` · to Keychain: ${c.secretNames.join(", ")}`}
                 </span>
               </span>

@@ -1,6 +1,7 @@
 import { useState } from "preact/hooks";
 import type { McpServer } from "../../api";
 import { MCP_SOURCES } from "../../lib/labels";
+import { redactTarget } from "../../lib/redact";
 import { useAction, useAnnounce, useApi, useLoad } from "../../ui/frame";
 import { Dialog } from "../../ui/Dialog";
 import { Download, Icon, MoreHorizontal, Plus } from "../../ui/icons";
@@ -42,7 +43,7 @@ function ServerDialog({ server, onClose, onChange, onRemove }: {
       {server && (
         <>
           <dl class="kv">
-            <dt>Runs</dt><dd class="mono">{server.target}</dd>
+            <dt>Runs</dt><dd class="mono">{redactTarget(server.target).target}</dd>
             <dt>From</dt><dd>{MCP_SOURCES[server.source]}</dd>
             <dt>In the Keychain</dt><dd class="mono">{server.secretNames.length ? server.secretNames.join(", ") : "Nothing"}</dd>
           </dl>

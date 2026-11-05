@@ -47,7 +47,8 @@ async function moveWithKeys(tab: Tab, node: Node, state: SliderState, want: numb
   await tab.sendIn(node.session, "DOM.focus", { backendNodeId: node.backendNodeId }).catch(() => undefined);
   const target = Math.min(state.max, Math.max(state.min, want));
   let now = state.now;
-  for (let i = 0; i < MAX_PRESSES && now !== target; i++) {
+  let presses = 0;
+  for (; presses < MAX_PRESSES && now !== target; presses++) {
     const key = now < target ? "ArrowRight" : "ArrowLeft";
     await pressKey(tab, key);
     const next = (await call<SliderState>(tab, node, STATE)).now;
@@ -59,6 +60,10 @@ async function moveWithKeys(tab: Tab, node: Node, state: SliderState, want: numb
       break;
     }
     now = next;
+  }
+  // Out of presses while still short of the target: say where it stopped, not that it is done.
+  if (presses === MAX_PRESSES && now !== target) {
+    return { ok: false, error: `the slider stopped at ${now} after ${MAX_PRESSES} key presses; drag its handle the rest of the way` };
   }
   return { ok: true, note: `set the slider to ${now}${now !== want ? ` (the nearest value it allows to ${want})` : ""}` };
 }

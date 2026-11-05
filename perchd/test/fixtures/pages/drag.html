@@ -15,6 +15,7 @@
 <div id="card" draggable="true" role="button" aria-label="Card one">Card one</div>
 <div id="zone" role="region" aria-label="Done column"><button>Done column</button></div>
 <p id="out" role="status"></p>
+<div id="budget" role="slider" tabindex="0" aria-label="Budget" aria-valuemin="0" aria-valuemax="5000" aria-valuenow="0">0</div>
 <script>
 const say = (t) => { document.getElementById('out').textContent = t; };
 document.getElementById('price').addEventListener('change', (e) => say('Price: ' + e.target.value));
@@ -28,6 +29,14 @@ stars.addEventListener('keydown', (e) => {
   stars.setAttribute('aria-valuenow', v);
   stars.textContent = v;
   say('Rating: ' + v);
+});
+// A fine-grained ARIA slider: one unit per key press.
+const budget = document.getElementById('budget');
+budget.addEventListener('keydown', (e) => {
+  if (e.key !== 'ArrowRight') return;
+  const v = Number(budget.getAttribute('aria-valuenow')) + 1;
+  budget.setAttribute('aria-valuenow', v);
+  budget.textContent = v;
 });
 // A handle moved by mouse events, as in many custom sliders and maps.
 const handle = document.getElementById('handle');

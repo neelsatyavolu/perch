@@ -38,6 +38,14 @@ test("type moves an ARIA slider with the arrow keys", async () => {
   await ctx.close();
 });
 
+test("an ARIA slider too fine to reach with the keys reports where it stopped", async () => {
+  const { ctx, page } = await board();
+  const r = await runTool(ctx, call("type", { ref: refIn(page, 'slider "Budget"'), text: "4000" }));
+  expect(r.isError).toBe(true);
+  expect(r.content).toBe("the slider stopped at 400 after 400 key presses; drag its handle the rest of the way");
+  await ctx.close();
+}, 30_000);
+
 test("drag by an offset moves a mouse-driven handle", async () => {
   const { ctx, page, out } = await board();
   const r = await runTool(ctx, call("drag", { ref: refIn(page, 'button "Distance handle"'), dx: 120, dy: 0 }));

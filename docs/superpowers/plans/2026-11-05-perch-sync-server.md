@@ -30,11 +30,13 @@ Aside (aside.com) syncs nothing across devices in its own account; its remote co
 
 ## Security design
 
-- **Keys.** The first device creates a random 256-bit sync key. Item encryption and item-id keys are derived from it with HKDF. Each device has a P-256 ECDH key pair; the sync key is wrapped for each device with ECIES (ephemeral ECDH, HKDF, AES-256-GCM). A recovery copy is wrapped with a key from the recovery key or passphrase (PBKDF2-SHA256, 600,000 iterations). The server stores wrapped keys only.
+- **Keys.** The first device creates a random 256-bit sync key. Item encryption and item-id keys are derived from it with HKDF. Each device has a P-256 ECDH key pair; the sync key is wrapped for each device with ECIES (ephemeral ECDH, HKDF, AES-256-GCM). Recovery uses a recovery key pair: its private half is sealed with the recovery key or passphrase (PBKDF2-SHA256, 600,000 iterations) and the sync key is wrapped to its public half, so a rotation re-wraps for recovery without asking for the recovery key. Devices pin the recovery public key. The server stores wrapped keys only.
 - **Items.** AES-256-GCM with additional data `perch-sync-v1|collection|itemId|version|keyVersion`, so the server cannot move a ciphertext to another item, collection or version. Item ids are HMACs of the real id (a URL hash never reaches the server).
 - **Conflicts.** Each item has a version. A write names the version it was based on; the server applies it only when that is still current and sets version = base + 1, otherwise returns the current ciphertext. The client merges (last writer wins by time for settings, bookmarks, tabs; union for history; newer wins with the older kept as a conflict copy for memory and skills) and writes again.
 - **Revocation.** Revoking a device deletes its sessions and wrapped key and closes its relay socket. The client then rotates the sync key (new version wrapped for the remaining devices) and re-encrypts in the background; the server refuses wraps for stale versions.
-- **Pairing.** The new device's 8-character code is the first 40 bits of SHA-256 of its public key. The approving device checks the code against the key the server returns, so a dishonest server cannot swap in its own key. The sync key is wrapped only to a key checked this way.
+- **Pairing.** The new device's 8-character code is the first 40 bits of SHA-256 of its public key. The approving device checks the code against the key the server returns, so a dishonest server cannot swap in its own key. After approval it wraps the sync key to that checked key and the new device id (browsers only; a remote CLI gets no sync key).
+- **Email sign-in.** The link opens a page that asks the person to pick, from three, the number the asking device shows; a wrong pick cancels the request. The token rides in the URL fragment. The code path is typed into the asking device. Either way only the device holding the poll secret gets the session.
+- **Least privilege.** Only Perch browsers can sync, handle keys, pair, add passkeys, change other devices or delete the account. A paired remote CLI can use the relay, read the device list and remove itself.
 - **Relay.** Messages are AES-256-GCM under a key derived from the two devices' static ECDH keys, with sender, recipient and a counter in the additional data; receivers reject repeated or old counters.
 - **Server.** Bearer tokens only, no cookies, so there is no ambient credential for CSRF to use. JSON bodies must be `application/json`. The one HTML form (magic link confirm) takes the token in the body and changes only the sign-in request it names. Every endpoint has a rate limit (a Durable Object token bucket keyed by a hash of IP, account or email). All input is checked with zod. Logs carry route, status and event names only, never emails, IPs, tokens or ids. Secrets (Resend key) are Worker secrets; tokens are stored as SHA-256 hashes.
 - **Limits** (spec 11.4): 100 MB per account by default (`QUOTA_BYTES`), 4 MB per item, 256 KB per relay frame. A full account gets a plain 413 message, never a silent drop.
@@ -67,7 +69,8 @@ server/
     cleanup.ts          expired rows, old tombstones
   test/                 vitest with @cloudflare/vitest-pool-workers
 perchd/src/sync/
-  encoding.ts  crypto.ts  keys.ts  api.ts  engine.ts  merge.ts  channel.ts  keychain.ts  types.ts
+  encoding.ts  crypto.ts  keys.ts  recovery.ts  keyring.ts  api.ts  types.ts
+  engine.ts  merge.ts  channel.ts  relay-client.ts  keychain.ts
 perchd/test/sync-*.test.ts
 ```
 

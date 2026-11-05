@@ -32,6 +32,9 @@ const storage = (): Storage | null => {
   }
 };
 
+/** The one download location the project controls. perchbrowser.com is not registered yet (spec, line 9). */
+export const RELEASES_URL = "https://github.com/neelsatyavolu/perch/releases";
+
 type FrameProps = { readonly children: ComponentChildren; readonly api?: PerchApi | null; readonly title?: string };
 
 export function PageFrame({ children, api: injected, title }: FrameProps) {
@@ -97,7 +100,7 @@ export function PageFrame({ children, api: injected, title }: FrameProps) {
     return (
       <main class="frame-msg">
         <h1>Perch's background service isn't running</h1>
-        <p>This page needs it to load your settings. Quit Perch and open it again. If that doesn't help, reinstall Perch from perchbrowser.com.</p>
+        <p>This page needs it to load your settings. Quit Perch and open it again. If that doesn't help, download Perch again from its releases page, <span class="mono">{RELEASES_URL}</span>, and reinstall it.</p>
       </main>
     );
   }

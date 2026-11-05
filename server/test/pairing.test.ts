@@ -1,21 +1,33 @@
 import { describe, expect, it } from "vitest";
-import { device, harness, signIn, type Harness } from "./helpers";
-import { fromBase64Url, pairingCode, sha256, base32, formatCode } from "../src/crypto";
+import { appEnv, device, harness, signIn, type Harness } from "./helpers";
+import { randomCode } from "../src/crypto";
 
-async function startPairing(h: Harness, name = "Grok Bot computer", kind = "cli") {
+const GRANT = `g${"G".repeat(40)}`;
+
+async function startPairing(h: Harness, name = "Grok Bot computer", kind = "cli", code = randomCode()) {
   const dev = await device(name, kind);
-  const res = await h.call("POST", "/v1/pair/start", { body: dev });
+  const res = await h.call("POST", "/v1/pair/start", { body: { ...dev, code } });
   expect(res.status).toBe(200);
   return { ...res.data, publicKey: dev.publicKey };
 }
 
+const approve = (h: Harness, token: string | undefined, pairingId: string, grant: string = GRANT) =>
+  h.call("POST", `/v1/pair/${pairingId}/approve`, { token, body: { grant } });
+const poll = (h: Harness, p: { pairingId: string; pollSecret: string }) =>
+  h.call("POST", "/v1/pair/poll", { body: { pairingId: p.pairingId, pollSecret: p.pollSecret } });
+const deviceCount = async (accountId: string) =>
+  (await appEnv.DB.prepare("SELECT COUNT(*) AS n FROM devices WHERE account_id = ?").bind(accountId).first<number>("n")) ?? 0;
+
 describe("pairing", () => {
-  it("derives the code from the new device's public key", async () => {
+  it("keeps the code the device sent (the server cannot derive it) and finds the request by it", async () => {
     const h = harness();
-    const p = await startPairing(h);
-    expect(p.code).toMatch(/^[0-9A-Z]{4}-[0-9A-Z]{4}$/);
-    expect(p.code).toBe(formatCode(base32(await sha256(fromBase64Url(p.publicKey)), 8)));
-    expect(await pairingCode(p.publicKey)).toBe(p.code);
+    const mac = await signIn(h);
+    const p = await startPairing(h, "New MacBook", "browser", "ABCD-EFGH");
+    expect(p.code).toBe("ABCD-EFGH");
+    const lookup = await h.call("GET", "/v1/pair/lookup?code=abcdefgh", { token: mac.sessionToken });
+    expect(lookup.data).toMatchObject({ pairingId: p.pairingId, publicKey: p.publicKey });
+    const bad = await h.call("POST", "/v1/pair/start", { body: { ...(await device()), code: "ABCD-EFGI" } });
+    expect(bad.status).toBe(400);
   });
 
   it("pairs a new Mac: lookup by code, approve, grant the key, poll once for the session and peers", async () => {
@@ -27,17 +39,19 @@ describe("pairing", () => {
 
     const lookup = await h.call("GET", `/v1/pair/lookup?code=${p.code.toLowerCase().replace("-", "")}`, { token: mac.sessionToken });
     expect(lookup.data).toMatchObject({ pairingId: p.pairingId, publicKey: p.publicKey, name: "New MacBook", kind: "browser" });
-    const approved = await h.call("POST", `/v1/pair/${p.pairingId}/approve`, { token: mac.sessionToken, body: {} });
+    expect((await h.call("POST", `/v1/pair/${p.pairingId}/approve`, { token: mac.sessionToken, body: {} })).status).toBe(400);
+    const approved = await approve(h, mac.sessionToken, p.pairingId);
     expect(approved.status).toBe(200);
-    const granted = await h.call("PUT", `/v1/keys/devices/${approved.data.deviceId}`, { token: mac.sessionToken, body: { version: 1, blob: `w${"C".repeat(30)}` } });
-    expect(granted.status).toBe(200);
-
-    const polled = await h.call("POST", "/v1/pair/poll", { body: { pairingId: p.pairingId, pollSecret: p.pollSecret } });
-    expect(polled.data).toMatchObject({ status: "approved", accountId: mac.accountId, deviceId: approved.data.deviceId, approverDeviceId: mac.deviceId });
+    // The device and the claim land together: the very next poll has the session.
+    const polled = await poll(h, p);
+    expect(polled.data).toMatchObject({ status: "approved", accountId: mac.accountId, deviceId: approved.data.deviceId, approverDeviceId: mac.deviceId, grant: GRANT });
     expect(polled.data.peers.map((d: any) => d.id)).toEqual([mac.deviceId]);
-    const keys = await h.call("GET", "/v1/keys", { token: polled.data.sessionToken });
-    expect(keys.data.device).toEqual({ version: 1, blob: `w${"C".repeat(30)}` });
-    expect((await h.call("POST", "/v1/pair/poll", { body: { pairingId: p.pairingId, pollSecret: p.pollSecret } })).status).toBe(410);
+    // The new device writes its own key copy from the grant.
+    const granted = await h.call("PUT", `/v1/keys/devices/${approved.data.deviceId}`, { token: polled.data.sessionToken, body: { version: 1, blob: `w${"C".repeat(30)}` } });
+    expect(granted.status).toBe(200);
+    expect((await poll(h, p)).status).toBe(410);
+    const row = await appEnv.DB.prepare("SELECT grant_blob FROM pairings WHERE id = ?").bind(p.pairingId).first<{ grant_blob: string | null }>();
+    expect(row?.grant_blob).toBeNull();
   });
 
   it("denied and expired pairings cannot be approved or polled", async () => {
@@ -45,20 +59,45 @@ describe("pairing", () => {
     const mac = await signIn(h);
     const denied = await startPairing(h);
     expect((await h.call("POST", `/v1/pair/${denied.pairingId}/deny`, { token: mac.sessionToken, body: {} })).status).toBe(200);
-    expect((await h.call("POST", `/v1/pair/${denied.pairingId}/approve`, { token: mac.sessionToken, body: {} })).status).toBe(410);
-    expect((await h.call("POST", "/v1/pair/poll", { body: { pairingId: denied.pairingId, pollSecret: denied.pollSecret } })).status).toBe(410);
+    expect((await approve(h, mac.sessionToken, denied.pairingId)).status).toBe(410);
+    expect((await poll(h, denied)).status).toBe(410);
 
     const late = await startPairing(h);
     h.clock.now += 10 * 60 * 1000 + 1;
     expect((await h.call("GET", `/v1/pair/lookup?code=${late.code}`, { token: mac.sessionToken })).status).toBe(404);
-    expect((await h.call("POST", `/v1/pair/${late.pairingId}/approve`, { token: mac.sessionToken, body: {} })).status).toBe(410);
+    expect((await approve(h, mac.sessionToken, late.pairingId)).status).toBe(410);
+    // A refused approval adds no device.
+    expect(await deviceCount(mac.accountId)).toBe(1);
+  });
+
+  it("lets a device start again with the same code after a deny or once a request is used", async () => {
+    const h = harness();
+    const mac = await signIn(h);
+    const first = await startPairing(h, "Grok Bot computer", "cli", "QRST-VWXY");
+    await h.call("POST", `/v1/pair/${first.pairingId}/deny`, { token: mac.sessionToken, body: {} });
+    const again = await startPairing(h, "Grok Bot computer", "cli", "QRST-VWXY");
+    await approve(h, mac.sessionToken, again.pairingId);
+    expect((await poll(h, again)).status).toBe(200);
+    const third = await startPairing(h, "Grok Bot computer", "cli", "QRST-VWXY");
+    expect(third.pairingId).not.toBe(again.pairingId);
+  });
+
+  it("never lets a second device take over a request that is still waiting", async () => {
+    const h = harness();
+    const mac = await signIn(h);
+    const victim = await startPairing(h, "New MacBook", "browser", "MNPQ-RSTV");
+    const attacker = await h.call("POST", "/v1/pair/start", { body: { ...(await device("New MacBook", "browser")), code: "MNPQ-RSTV" } });
+    expect(attacker.status).toBe(409);
+    expect(attacker.data.error.code).toBe("code_in_use");
+    const lookup = await h.call("GET", "/v1/pair/lookup?code=MNPQ-RSTV", { token: mac.sessionToken });
+    expect(lookup.data).toMatchObject({ pairingId: victim.pairingId, publicKey: victim.publicKey });
   });
 
   it("needs a signed-in device to look up or approve", async () => {
     const h = harness();
     const p = await startPairing(h);
     expect((await h.call("GET", `/v1/pair/lookup?code=${p.code}`)).status).toBe(401);
-    expect((await h.call("POST", `/v1/pair/${p.pairingId}/approve`, { body: {} })).status).toBe(401);
+    expect((await approve(h, undefined, p.pairingId)).status).toBe(401);
   });
 
   it("limits code lookups per account, so codes cannot be guessed", async () => {
@@ -80,8 +119,8 @@ describe("pairing", () => {
     const h = harness();
     const mac = await signIn(h);
     const p = await startPairing(h, "Grok Bot computer", "cli");
-    await h.call("POST", `/v1/pair/${p.pairingId}/approve`, { token: mac.sessionToken, body: {} });
-    const cli = (await h.call("POST", "/v1/pair/poll", { body: { pairingId: p.pairingId, pollSecret: p.pollSecret } })).data;
+    await approve(h, mac.sessionToken, p.pairingId);
+    const cli = (await poll(h, p)).data;
     const as = { token: cli.sessionToken };
     expect((await h.call("GET", "/v1/devices", as)).status).toBe(200);
     expect((await h.call("GET", "/v1/account", as)).status).toBe(200);

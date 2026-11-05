@@ -19,7 +19,7 @@ export type EmailStart = { requestId: string; pollSecret: string; matchNumber: n
 export type SignInPoll = ({ status: "signed_in"; newAccount?: boolean } & SessionGrant) | { status: "pending" };
 export type PairingStart = { pairingId: string; code: string; pollSecret: string; expiresAt: number };
 export type PairingLookup = { pairingId: string; code: string; publicKey: string; name: string; kind: string; expiresAt: number };
-export type PairingPoll = { status: "pending" } | ({ status: "approved"; approverDeviceId: string; peers: Device[] } & SessionGrant);
+export type PairingPoll = { status: "pending" } | ({ status: "approved"; approverDeviceId: string; grant: string; peers: Device[] } & SessionGrant);
 
 export class SyncApi {
   readonly baseUrl: string;
@@ -84,9 +84,10 @@ export class SyncApi {
   usage = () => this.request<{ bytesUsed: number; quotaBytes: number; keyVersion: number }>("GET", "/v1/sync/usage");
 
   // Pairing
-  startPairing = (device: DeviceInfo) => this.request<PairingStart>("POST", "/v1/pair/start", device);
+  /** `code` is the commitment half of the pairing code (pairing.ts); the secret half never leaves the device. */
+  startPairing = (device: DeviceInfo, code: string) => this.request<PairingStart>("POST", "/v1/pair/start", { ...device, code });
   lookupPairing = (code: string) => this.request<PairingLookup>("GET", `/v1/pair/lookup?code=${encodeURIComponent(code)}`);
-  approvePairing = (pairingId: string) => this.request<{ deviceId: string }>("POST", `/v1/pair/${encodeURIComponent(pairingId)}/approve`, {});
+  approvePairing = (pairingId: string, grant: string) => this.request<{ deviceId: string }>("POST", `/v1/pair/${encodeURIComponent(pairingId)}/approve`, { grant });
   denyPairing = (pairingId: string) => this.request<{ ok: true }>("POST", `/v1/pair/${encodeURIComponent(pairingId)}/deny`, {});
   pollPairing = (start: PairingStart) => this.request<PairingPoll>("POST", "/v1/pair/poll", { pairingId: start.pairingId, pollSecret: start.pollSecret });
 }

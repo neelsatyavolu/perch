@@ -54,18 +54,10 @@ export function base32(bytes: Uint8Array, chars: number): string {
   return out;
 }
 
-const formatCode = (raw: string) => `${raw.slice(0, 4)}-${raw.slice(4, 8)}`;
-
-/**
- * The pairing code for a device public key: the first 40 bits of its SHA-256 in base32. The
- * server derives the same code; the approving device recomputes it from the key the server returns.
- */
-export const pairingCode = async (publicKey: string): Promise<string> => formatCode(base32(await sha256(fromBase64Url(publicKey)), 8));
-
-/** Accepts codes as people type them: any case, spaces or dashes, O/I/L for 0/1. */
+/** Accepts codes as people type them: any case, spaces or dashes, O/I/L for 0/1; groups of four. */
 export function normalizeCode(input: string): string {
   const raw = input.toUpperCase().replace(/[\s-]/g, "").replace(/O/g, "0").replace(/[IL]/g, "1");
-  return raw.length === 8 ? formatCode(raw) : raw;
+  return raw.length % 4 === 0 && raw.length > 0 ? raw.match(/.{4}/g)!.join("-") : raw;
 }
 
 /** Compares in time that does not depend on where the strings differ. */

@@ -42,7 +42,44 @@ export const pack = (value: object) => toBase64Url(utf8(JSON.stringify(value)));
 export const unpack = <T>(blob: string): T => JSON.parse(fromUtf8(fromBase64Url(blob))) as T;
 const wrapAad = (slot: string, version: number) => utf8(`perch-key-wrap-v1|${slot}|${version}`);
 
-/** Wraps the sync key so only the device holding `recipientPublicKey` can open it. */
+/** A sync key and the version the server knows it by. */
+export type VersionedKey = { version: number; raw: Bytes };
+
+const KEY_BYTES = 32;
+const ENTRY_BYTES = 4 + KEY_BYTES;
+const MAX_KEYS = 64;
+
+/**
+ * Every key version a device needs, as one payload to wrap: items written before a rotation stay
+ * readable on a device that joins or recovers after it. Each entry is a 4-byte version and the key.
+ */
+export function encodeKeys(keys: readonly VersionedKey[]): Bytes {
+  if (!keys.length || keys.length > MAX_KEYS) throw new Error("A key payload holds 1 to 64 keys");
+  const out = new Uint8Array(keys.length * ENTRY_BYTES);
+  const view = new DataView(out.buffer);
+  keys.forEach((key, i) => {
+    if (key.raw.length !== KEY_BYTES) throw new Error("A sync key is 32 bytes");
+    view.setUint32(i * ENTRY_BYTES, key.version);
+    out.set(key.raw, i * ENTRY_BYTES + 4);
+  });
+  return out;
+}
+
+/** Reads a key payload; the wrap's own version must be in it, and it must be the newest. */
+export function decodeKeys(payload: Uint8Array, version: number): VersionedKey[] {
+  if (!payload.length || payload.length % ENTRY_BYTES !== 0 || payload.length / ENTRY_BYTES > MAX_KEYS) throw new Error("Unknown key payload format");
+  const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+  const keys = Array.from({ length: payload.length / ENTRY_BYTES }, (_, i) => ({
+    version: view.getUint32(i * ENTRY_BYTES),
+    raw: new Uint8Array(payload.slice(i * ENTRY_BYTES + 4, (i + 1) * ENTRY_BYTES)),
+  }));
+  if (Math.max(...keys.map((k) => k.version)) !== version || new Set(keys.map((k) => k.version)).size !== keys.length) {
+    throw new Error("The key payload does not match its version");
+  }
+  return keys;
+}
+
+/** Wraps a key payload (encodeKeys) so only the device holding `recipientPublicKey` can open it. */
 export async function wrapForDevice(syncKey: Uint8Array, recipientPublicKey: string, deviceId: string, version: number): Promise<string> {
   const ephemeral = await generateDeviceKeys();
   const key = await agreeKey(ephemeral.privateKey, recipientPublicKey, fromBase64Url(ephemeral.publicKey), "perch-key-wrap-v1");

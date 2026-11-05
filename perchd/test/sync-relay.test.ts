@@ -139,11 +139,13 @@ describe("pairing approval", () => {
   test("refuses when the server's key does not match the typed code", async () => {
     const real = await dev("new");
     const swapped = await dev("attacker");
-    const { pairingCode } = await import("../src/sync/encoding");
+    const mac = await dev("dev_mac");
+    const { newPairingCode } = await import("../src/sync/pairing");
     let approved = false;
     const api = { approvePairing: async () => ((approved = true), { deviceId: "dev_x" }) } as unknown as SyncApi;
-    const lookup = { pairingId: "pair_x", code: "", publicKey: swapped.keys.publicKey, name: "Grok", kind: "cli", expiresAt: 0 };
-    await expect(approvePairing(api, lookup, await pairingCode(real.keys.publicKey))).rejects.toThrow("does not match");
+    const code = await newPairingCode(real.keys.publicKey);
+    const lookup = { pairingId: "pair_x", code: code.lookup, publicKey: swapped.keys.publicKey, name: "Grok", kind: "cli", expiresAt: 0 };
+    await expect(approvePairing(api, lookup, code.display, { device: mac })).rejects.toThrow("does not match");
     expect(approved).toBe(false);
   });
 });

@@ -60,10 +60,6 @@ export function normalizeCode(input: string): string {
   return raw.length === 8 ? formatCode(raw) : raw;
 }
 
-/** The pairing code for a public key: the first 40 bits of its SHA-256, as 8 base32 characters. */
-export const pairingCode = async (publicKey: string): Promise<string> =>
-  formatCode(base32(await sha256(fromBase64Url(publicKey)), 8));
-
 /** Compares two strings in time that does not depend on where they differ. */
 export function safeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;

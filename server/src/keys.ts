@@ -13,7 +13,10 @@ import { requireBrowser } from "./auth/session";
 export const keyRoutes = new Hono<HonoEnv>();
 keyRoutes.use(requireBrowser);
 
-const blobSchema = base64url(4096);
+/** A copy carries every key version still needed to read old items, so it grows a little per rotation. */
+const MAX_BLOB = 16 * 1024;
+const blobSchema = base64url(MAX_BLOB);
+const MAX_DEVICES = 100;
 const versionSchema = z.number().int().min(1).max(1_000_000);
 export const RECOVERY = "recovery";
 
@@ -50,14 +53,14 @@ const grantBody = z.object({ version: versionSchema, blob: blobSchema }).strict(
 
 keyRoutes.put("/devices/:id", async (c) => {
   const slot = check(idSchema, c.req.param("id"));
-  const body = await readJson(c, grantBody);
+  const body = await readJson(c, grantBody, MAX_BLOB + 1024);
   const result = await grantStatement(c.env, c.var.auth.accountId, slot, body.version, body.blob, c.var.deps.now()).run();
   if (result.meta.changes !== 1) throw staleOrMissing();
   return c.json({ ok: true });
 });
 
 keyRoutes.put("/recovery", async (c) => {
-  const body = await readJson(c, grantBody);
+  const body = await readJson(c, grantBody, MAX_BLOB + 1024);
   const result = await grantStatement(c.env, c.var.auth.accountId, RECOVERY, body.version, body.blob, c.var.deps.now()).run();
   if (result.meta.changes !== 1) throw staleOrMissing();
   return c.json({ ok: true });
@@ -71,10 +74,11 @@ keyRoutes.post("/rotate", async (c) => {
   const body = await readJson(
     c,
     z.object({ version: versionSchema, devices: z.record(idSchema, blobSchema), recovery: blobSchema.optional() }).strict(),
+    (MAX_DEVICES + 1) * (MAX_BLOB + 128),
   );
   const { accountId, deviceId } = c.var.auth;
   if (!body.devices[deviceId]) throw new HttpError(400, "missing_self", "Include a copy of the key for this device.");
-  if (Object.keys(body.devices).length > 100) throw new HttpError(400, "too_many", "Too many devices in one rotation.");
+  if (Object.keys(body.devices).length > MAX_DEVICES) throw new HttpError(400, "too_many", "Too many devices in one rotation.");
   const now = c.var.deps.now();
   const nonce = randomToken("rot", 16);
   const own = "(SELECT key_rotation FROM accounts WHERE id = ?1) = ?2";

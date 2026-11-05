@@ -5,8 +5,8 @@
  * recovery without asking for the recovery key, and only someone holding it can open the copy.
  * Devices pin the recovery public key, so a server cannot swap in its own.
  */
-import { base32, fromBase64Url, randomBytes, toBase64Url, utf8, type Bytes } from "./encoding";
-import { exportDeviceKeys, generateDeviceKeys, importDeviceKeys, pack, unpack, unwrapForDevice, wrapForDevice } from "./keys";
+import { base32, fromBase64Url, randomBytes, toBase64Url, utf8 } from "./encoding";
+import { decodeKeys, encodeKeys, exportDeviceKeys, generateDeviceKeys, importDeviceKeys, pack, unpack, unwrapForDevice, wrapForDevice, type VersionedKey } from "./keys";
 
 export const RECOVERY_ITERATIONS = 600_000;
 /** Cloudflare Workers cap PBKDF2 at 100,000; tests that run there pass this. */
@@ -49,9 +49,10 @@ export async function createRecoveryKit(secret: string, iterations = RECOVERY_IT
   return { publicKey: pair.publicKey, sealed: { salt: toBase64Url(salt), iter: iterations, iv: toBase64Url(iv), ct: toBase64Url(new Uint8Array(ct)) } };
 }
 
-/** The recovery copy of the sync key at a version, for the server's "recovery" slot. */
-export async function recoveryBlob(syncKey: Uint8Array, version: number, kit: RecoveryKit): Promise<string> {
-  const key = await wrapForDevice(syncKey, kit.publicKey, "recovery", version);
+/** The recovery copy of every sync key version, for the server's "recovery" slot. */
+export async function recoveryBlob(keys: readonly VersionedKey[], kit: RecoveryKit): Promise<string> {
+  const version = Math.max(...keys.map((k) => k.version));
+  const key = await wrapForDevice(encodeKeys(keys), kit.publicKey, "recovery", version);
   return pack({ v: 1, alg: "recovery-v1", pk: kit.publicKey, sk: kit.sealed, key } satisfies RecoveryBlob);
 }
 
@@ -68,8 +69,8 @@ function parse(blob: string): RecoveryBlob {
   return parsed;
 }
 
-/** Opens a recovery copy with the recovery key. Returns the sync key and the recovery public key to pin. */
-export async function openRecovery(blob: string, secret: string, version: number): Promise<{ syncKey: Bytes; publicKey: string }> {
+/** Opens a recovery copy with the recovery key. Returns the sync keys and the recovery public key to pin. */
+export async function openRecovery(blob: string, secret: string, version: number): Promise<{ keys: VersionedKey[]; publicKey: string }> {
   const parsed = parse(blob);
   const key = await secretKey(secret, fromBase64Url(parsed.sk.salt), parsed.sk.iter);
   let serialized: ArrayBuffer;
@@ -80,5 +81,5 @@ export async function openRecovery(blob: string, secret: string, version: number
   }
   const pair = await importDeviceKeys(new TextDecoder().decode(serialized));
   if (pair.publicKey !== parsed.pk) throw new Error("The recovery copy is damaged.");
-  return { syncKey: await unwrapForDevice(parsed.key, pair, "recovery", version), publicKey: parsed.pk };
+  return { keys: decodeKeys(await unwrapForDevice(parsed.key, pair, "recovery", version), version), publicKey: parsed.pk };
 }

@@ -3,6 +3,7 @@ import type { OnboardingStep, Provider } from "../../api";
 import { ACCENTS, ACCENT_NAMES, THEMES, THEME_NAMES } from "../../theme/tokens";
 import { useAction, useApi, useAppearance, useLoad } from "../../ui/frame";
 import { PerchMark } from "../../ui/PerchMark";
+import { ImportWizard } from "../import/ImportWizard";
 import { Swatches } from "../../ui/Swatches";
 import "./welcome.css";
 
@@ -45,25 +46,6 @@ function Models() {
         </div>
       ))}
       <p class="empty">API keys and models on this Mac are in Settings, under Models.</p>
-    </div>
-  );
-}
-
-function Browsers() {
-  const api = useApi();
-  const act = useAction();
-  const browsers = useLoad((a) => a.detectBrowsers());
-  const list = browsers.data ?? [];
-  return (
-    <div class="card">
-      {browsers.data && list.length === 0 && <p class="empty">No other browsers found on this Mac.</p>}
-      {list.map((b) => (
-        <div class="srow" key={b.id}>
-          <span class="tile" aria-hidden="true">{b.name.charAt(0)}</span>
-          <div><div class="n">{b.name}</div><div class="d">{b.profiles.map((p) => p.name).join(", ")}</div></div>
-          <div class="ctl"><button type="button" class="btn" aria-label={`Import from ${b.name}`} onClick={() => act(() => api.openPage("import", b.id))}>Import</button></div>
-        </div>
-      ))}
     </div>
   );
 }
@@ -120,7 +102,7 @@ export function Welcome() {
       <div class="wl-body">
         {step === "appearance" && <Look />}
         {step === "models" && <Models />}
-        {step === "import" && <Browsers />}
+        {step === "import" && <ImportWizard embedded onFinished={() => advance(true)} />}
       </div>
       <div class="wl-actions">
         {step === "memory" ? (
@@ -128,6 +110,8 @@ export function Welcome() {
             <button type="button" class="btn primary" onClick={async () => { await act(() => api.completeOnboardingStep("memory")); await finish("memory"); }}>Set up memory</button>
             <button type="button" class="btn quiet" onClick={() => advance(false)}>Not now</button>
           </>
+        ) : step === "import" ? (
+          <button type="button" class="btn quiet" onClick={() => advance(false)}>Skip import</button>
         ) : (
           <>
             <button type="button" class="btn primary" onClick={() => advance(true)}>Continue</button>

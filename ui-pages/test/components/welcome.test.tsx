@@ -23,15 +23,31 @@ describe("Welcome", () => {
     fireEvent.click(r.getByRole("button", { name: "Continue" }));
 
     expect(await r.findByRole("heading", { level: 1, name: "Bring your tabs and bookmarks" })).toBeTruthy();
-    fireEvent.click(await r.findByRole("button", { name: "Import from Chrome" }));
-    await waitFor(() => expect(r.nav.some((n) => n.what === "page" && (n.detail as { page: string }).page === "import")).toBe(true));
+    expect(r.getAllByRole("main").length).toBe(1);
+    fireEvent.click(await r.findByRole("radio", { name: /Chrome/ }));
     fireEvent.click(r.getByRole("button", { name: "Continue" }));
+    await r.findByRole("group", { name: "What to bring from Chrome" });
+    fireEvent.click(r.getByRole("button", { name: "Continue" }));
+    fireEvent.click(await r.findByRole("button", { name: "Start import" }));
+    expect(await r.findByRole("heading", { level: 2, name: "Import finished" })).toBeTruthy();
+    fireEvent.click(r.getByRole("button", { name: "Done" }));
 
     expect(await r.findByRole("heading", { level: 1, name: "Set up your memory" })).toBeTruthy();
+    expect(r.nav.some((n) => n.what === "page")).toBe(false);
     fireEvent.click(r.getByRole("button", { name: "Not now" }));
     await waitFor(async () => expect((await r.api.getOnboarding()).finished).toBe(true));
     expect((await r.api.getOnboarding()).done).toEqual(["appearance", "models", "import"]);
     expect(r.nav.at(-1)).toEqual({ what: "page", detail: { page: "newtab", section: undefined } });
+  });
+
+  test("the import step can be skipped", async () => {
+    const r = renderWithApi(<Welcome />);
+    fireEvent.click(await r.findByRole("button", { name: "Set up Perch" }));
+    fireEvent.click(await r.findByRole("button", { name: "Continue" }));
+    fireEvent.click(await r.findByRole("button", { name: "Skip" }));
+    fireEvent.click(await r.findByRole("button", { name: "Skip import" }));
+    expect(await r.findByRole("heading", { level: 1, name: "Set up your memory" })).toBeTruthy();
+    expect((await r.api.getOnboarding()).done).toEqual(["appearance"]);
   });
 
   test("Skip setup finishes at once", async () => {

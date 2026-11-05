@@ -4,7 +4,9 @@
  */
 
 import type { Message, Model, ToolSpec } from "../models/types";
+import { DECLINED } from "../agent/session";
 import { askForTool, message, str } from "./model-call";
+import { factKey } from "./page";
 import { FILEABLE } from "./sanitize";
 import type { AddResult, MemoryStore, NewFact } from "./store";
 
@@ -20,7 +22,7 @@ const NONE: AddResult = { added: 0, duplicates: 0, rejected: [], paths: [] };
 export const TAXONOMY = [
   "Where facts go:",
   "- user: stable facts about the user (name, work, home city, preferences, habits). Saved in USER.md.",
-  "- rules: standing instructions for the agent (\"never book Spirit\", \"reply in British English\"). Saved in MEMORY.md.",
+  "- rules: standing instructions for the agent (\"never book Spirit\", \"reply in British English\"). Saved in MEMORY.md, only with the user's approval.",
   "- people: one page per person the user knows, titled with their name.",
   "- companies, places, sites, projects, concepts: one page per company, place, website, project or topic.",
   "- writing: how the user writes (tone, sign-off, length), titled by context such as \"Email\".",
@@ -60,7 +62,9 @@ export function renderTranscript(messages: readonly Message[]): string {
   const lines: string[] = [];
   for (const m of messages) {
     if (m.role === "user") lines.push(`User: ${m.text}`);
-    else if (m.role === "assistant") {
+    else if (m.role === "tool" && m.name === "memory_save" && m.content === DECLINED) {
+      lines.push(`The user declined saving to memory: "${declinedText(messages, m.callId)}"`);
+    } else if (m.role === "assistant") {
       if (m.text.trim()) lines.push(`Perch: ${m.text.trim()}`);
       for (const call of m.toolCalls) {
         if (call.name === "done") lines.push(`Perch finished: ${str(call.args.answer)}`);
@@ -71,6 +75,18 @@ export function renderTranscript(messages: readonly Message[]): string {
   }
   const text = lines.join("\n");
   return text.length > TRANSCRIPT_LIMIT ? `…${text.slice(-TRANSCRIPT_LIMIT)}` : text;
+}
+
+function declinedText(messages: readonly Message[], callId: string): string {
+  for (const m of messages) if (m.role === "assistant") for (const c of m.toolCalls) if (c.id === callId) return str(c.args.text);
+  return "";
+}
+
+/** Facts the user said no to saving in this chat. */
+function declinedFacts(messages: readonly Message[]): Set<string> {
+  const keys = new Set<string>();
+  for (const m of messages) if (m.role === "tool" && m.name === "memory_save" && m.content === DECLINED) keys.add(factKey(declinedText(messages, m.callId)));
+  return keys;
 }
 
 /** Untrusted fact objects from a model, shaped for the store (which validates them again). */
@@ -104,7 +120,16 @@ export async function extractFromChat(opts: ExtractOptions): Promise<ExtractResu
     const answer = await askForTool(opts.model, { system, user, tool: FILE_TOOL }, opts.signal);
     if (answer.args === null) return { ...NONE };
     if (!Array.isArray(answer.args.facts)) return { ...NONE, error: "the model's answer was not a list of facts" };
-    return await opts.store.addFacts(toNewFacts(answer.args.facts), "chat");
+    // Standing rules change every later chat, so only the user (or an approved memory_save) adds them.
+    const declined = declinedFacts(opts.transcript);
+    const rejected: AddResult["rejected"] = [];
+    const facts = toNewFacts(answer.args.facts).filter((f) => {
+      const reason = f.category === "rules" ? "standing rules are saved only with your approval" : declined.has(factKey(f.text)) ? "the user declined saving this" : null;
+      if (reason) rejected.push({ text: f.text, reason });
+      return !reason;
+    });
+    const result = await opts.store.addFacts(facts, "chat");
+    return { ...result, rejected: [...rejected, ...result.rejected] };
   } catch (error) {
     return { ...NONE, error: message(error) };
   }

@@ -37,9 +37,17 @@ export class Scheduler {
   private enqueue(routine: Routine, trigger: RunTrigger, scheduledFor: Date | null, run: RunFn = this.opts.run): Promise<RunRecord> {
     if (this.active.has(routine.id)) return Promise.reject(new Error("This routine is already running."));
     this.active.add(routine.id);
-    const result = this.lane.then(() => run(routine, trigger, scheduledFor)).finally(() => this.active.delete(routine.id));
+    const result = this.lane.then(() => this.start_(routine.id, trigger, scheduledFor, run)).finally(() => this.active.delete(routine.id));
     this.lane = result.catch(() => undefined);
     return result;
+  }
+
+  /** When a run's turn comes: use the routine as it is now; a scheduled run of a paused or deleted routine does not start. */
+  private async start_(id: string, trigger: RunTrigger, scheduledFor: Date | null, run: RunFn): Promise<RunRecord> {
+    const latest = this.opts.store.get(id);
+    if (!latest) throw new Error("This routine was deleted before it started.");
+    if (trigger !== "manual" && !latest.enabled) return this.recordSkip(latest, scheduledFor ?? this.now(), this.now(), "Paused before it started.");
+    return run(latest, trigger, scheduledFor);
   }
 
   /** Runs a routine now, for example from "Run now"; `run` lets the caller attach its approval prompt. */
@@ -70,7 +78,7 @@ export class Scheduler {
         if (this.active.has(routine.id)) continue;
         if (late <= this.grace) started.push(this.enqueue(current, "schedule", due));
         else if (routine.missed === "run_once") started.push(this.enqueue(current, "catch_up", due));
-        else await this.recordSkip(current, due, now);
+        else await this.recordSkip(current, due, now, `Missed at ${due.toISOString()} while the Mac was asleep or Perch was closed.`);
       }
     } finally {
       this.ticking = false;
@@ -78,9 +86,9 @@ export class Scheduler {
     return Promise.all(started);
   }
 
-  private async recordSkip(routine: Routine, due: Date, now: Date): Promise<void> {
+  private async recordSkip(routine: Routine, due: Date, now: Date, note: string): Promise<RunRecord> {
     const at = now.toISOString();
-    await this.opts.store.addRun({
+    const record: RunRecord = {
       id: newId(),
       routineId: routine.id,
       trigger: "schedule",
@@ -91,8 +99,10 @@ export class Scheduler {
       answer: "",
       declined: [],
       chatId: null,
-      note: `Missed at ${due.toISOString()} while the Mac was asleep or Perch was closed.`,
-    });
+      note,
+    };
+    await this.opts.store.addRun(record);
+    return record;
   }
 
   /** Ticks now and then at least once a minute, so runs missed during sleep are caught on wake. */

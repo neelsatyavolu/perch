@@ -59,16 +59,22 @@ const RUNS_KEPT = 100;
 export class RoutineStore {
   private readonly routines = new Map<string, Routine>();
   private readonly runList: RunRecord[] = [];
+  private queue: Promise<unknown> = Promise.resolve();
+  /** Records that could not be decrypted at open; shown to the user, never silently dropped. */
+  damaged: string[] = [];
 
   private constructor(private readonly folder: RecordFolder) {}
 
-  static async open(dir: string, keys: KeyStore, profile: string): Promise<RoutineStore> {
-    const store = new RoutineStore(await RecordFolder.open(dir, keys, profile));
-    for (const r of (await store.folder.all(ROUTINES)).records) {
+  static async open(dir: string, keys: KeyStore, profile: string, opts: { createKey?: boolean } = {}): Promise<RoutineStore> {
+    const store = new RoutineStore(await RecordFolder.open(dir, keys, profile, opts));
+    const saved = await store.folder.all(ROUTINES);
+    for (const r of saved.records) {
       const routine = JSON.parse(r.text) as Routine;
       store.routines.set(routine.id, routine);
     }
-    const runs = (await store.folder.all(RUNS)).records.map((r) => JSON.parse(r.text) as RunRecord);
+    const runRecords = await store.folder.all(RUNS);
+    store.damaged = [...saved.damaged, ...runRecords.damaged];
+    const runs = runRecords.records.map((r) => JSON.parse(r.text) as RunRecord);
     store.runList.push(...runs.sort((a, b) => (a.startedAt < b.startedAt ? 1 : -1)));
     return store;
   }
@@ -81,17 +87,28 @@ export class RoutineStore {
     return this.routines.get(id) ?? null;
   }
 
-  async save(routine: Routine): Promise<Routine> {
-    await this.folder.put(ROUTINES, routine.id, JSON.stringify(routine));
-    this.routines.set(routine.id, routine);
-    return routine;
+  /** Runs writes one at a time, so the scheduler, the runner and the Routines page never interleave. */
+  private exclusive<T>(fn: () => Promise<T>): Promise<T> {
+    const run = this.queue.then(fn);
+    this.queue = run.catch(() => undefined);
+    return run;
+  }
+
+  save(routine: Routine): Promise<Routine> {
+    return this.exclusive(async () => {
+      await this.folder.put(ROUTINES, routine.id, JSON.stringify(routine));
+      this.routines.set(routine.id, routine);
+      return routine;
+    });
   }
 
   /** Deletes a routine with its runs and their chats. */
-  async remove(id: string): Promise<void> {
-    for (const run of this.runList.filter((r) => r.routineId === id)) await this.dropRun(run);
-    await this.folder.remove(ROUTINES, id);
-    this.routines.delete(id);
+  remove(id: string): Promise<void> {
+    return this.exclusive(async () => {
+      for (const run of this.runList.filter((r) => r.routineId === id)) await this.dropRun(run);
+      await this.folder.remove(ROUTINES, id);
+      this.routines.delete(id);
+    });
   }
 
   /** Newest first. */
@@ -99,11 +116,13 @@ export class RoutineStore {
     return this.runList.filter((r) => !routineId || r.routineId === routineId).slice(0, limit);
   }
 
-  async addRun(run: RunRecord): Promise<void> {
-    await this.folder.put(RUNS, run.id, JSON.stringify(run));
-    this.runList.unshift(run);
-    const old = this.runList.filter((r) => r.routineId === run.routineId).slice(RUNS_KEPT);
-    for (const r of old) await this.dropRun(r);
+  addRun(run: RunRecord): Promise<void> {
+    return this.exclusive(async () => {
+      await this.folder.put(RUNS, run.id, JSON.stringify(run));
+      this.runList.unshift(run);
+      const old = this.runList.filter((r) => r.routineId === run.routineId).slice(RUNS_KEPT);
+      for (const r of old) await this.dropRun(r);
+    });
   }
 
   private async dropRun(run: RunRecord): Promise<void> {

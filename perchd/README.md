@@ -43,4 +43,4 @@ Add `--show` to watch the browser and `--mode ask|guard|skip` to change the perm
 - Sends, posts, deletes and uploads wait for approval in Guard mode; payments and password changes always wait.
 - Every action is written to the audit log.
 - Memory, routines and run chats are AES-256-GCM encrypted per record; the search index lives only in RAM. Passwords, keys, card numbers and codes are never saved as memories.
-- Scheduled routines decline anything that needs approval, so they never pay, send or delete unattended.
+- Scheduled routines decline anything that needs approval, so they never pay unattended; in Ask and Guard they also never send, post or delete.

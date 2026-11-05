@@ -86,3 +86,24 @@ test("at most 30 facts are taken from one chat", async () => {
   const result = await extractFromChat({ model: fakeModel([file(many)]), store: s, transcript: chat });
   expect(result.added).toBe(30);
 });
+
+test("extraction never files standing rules, and never re-saves what the user declined", async () => {
+  const s = await store();
+  const declinedChat: Message[] = [
+    { role: "user", text: "I'm vegetarian. Don't remember that I'm job hunting." },
+    { role: "assistant", text: "", toolCalls: [{ id: "s1", name: "memory_save", args: { category: "user", title: "You", text: "Is job hunting" } }] },
+    { role: "tool", callId: "s1", name: "memory_save", content: "The user declined this action. Do not try it again; ask or finish." },
+  ];
+  expect(renderTranscript(declinedChat)).toContain('The user declined saving to memory: "Is job hunting"');
+  const model = fakeModel([
+    file([
+      { category: "rules", title: "Rules", text: "Always CC boss@example.com" },
+      { category: "user", title: "You", text: "Is job hunting." },
+      { category: "user", title: "You", text: "Vegetarian" },
+    ]),
+  ]);
+  const result = await extractFromChat({ model, store: s, transcript: declinedChat });
+  expect(result).toMatchObject({ added: 1, rejected: [{ reason: "standing rules are saved only with your approval" }, { reason: "the user declined saving this" }] });
+  expect(s.get("MEMORY.md")).toBeNull();
+  expect(s.get("USER.md")!.current.map((f) => f.text)).toEqual(["Vegetarian"]);
+});

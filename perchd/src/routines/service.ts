@@ -15,6 +15,7 @@ import { chatMemory } from "../memory/agent";
 import { createMemoryApi } from "../memory/api";
 import { dream, type DreamReport } from "../memory/dream";
 import { macKeychain, type KeyStore } from "../memory/keychain";
+import { hasRecords } from "../memory/records";
 import type { Embedder } from "../memory/search";
 import type { SetupInputs } from "../memory/setup";
 import { MemoryStore } from "../memory/store";
@@ -45,8 +46,12 @@ const DREAM_CHECK_MS = 30 * 60_000;
 export async function openPerchData(opts: PerchDataOptions) {
   const now = opts.now ?? (() => new Date());
   const keys = opts.keys ?? macKeychain();
-  const memory = await MemoryStore.open({ dir: join(opts.dataDir, "memory"), keys, profile: opts.profile, now, embedder: opts.embedder });
-  const routines = await RoutineStore.open(join(opts.dataDir, "routines"), keys, opts.profile);
+  const memoryDir = join(opts.dataDir, "memory");
+  const routinesDir = join(opts.dataDir, "routines");
+  // Both folders share the profile key: a new key is made only when neither holds any data.
+  const createKey = !(await hasRecords(memoryDir)) && !(await hasRecords(routinesDir));
+  const memory = await MemoryStore.open({ dir: memoryDir, keys, profile: opts.profile, now, embedder: opts.embedder, createKey });
+  const routines = await RoutineStore.open(routinesDir, keys, opts.profile, { createKey: false });
   const runner: RunnerDeps = {
     store: routines,
     audit: opts.audit,

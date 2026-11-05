@@ -28,7 +28,7 @@ const MAX_PAGES = 5000;
 const CONTEXT_LIMIT = 4000;
 const VECTOR_FLOOR = 0.3;
 
-export type StoreOptions = { dir: string; keys: KeyStore; profile: string; now?: () => Date; embedder?: Embedder };
+export type StoreOptions = { dir: string; keys: KeyStore; profile: string; now?: () => Date; embedder?: Embedder; createKey?: boolean };
 
 export class MemoryStore {
   private readonly pages = new Map<string, Page>();
@@ -46,7 +46,7 @@ export class MemoryStore {
   ) {}
 
   static async open(opts: StoreOptions): Promise<MemoryStore> {
-    const folder = await RecordFolder.open(opts.dir, opts.keys, opts.profile);
+    const folder = await RecordFolder.open(opts.dir, opts.keys, opts.profile, { createKey: opts.createKey });
     const store = new MemoryStore(folder, opts.now ?? (() => new Date()), opts.embedder);
     const { records, damaged } = await folder.all(PAGES);
     for (const r of records) {

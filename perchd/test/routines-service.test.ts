@@ -77,3 +77,24 @@ test("dreaming runs once a day after 03:00 and not while memory is paused", asyn
   data.start();
   data.stop();
 });
+
+test("a lost Keychain key is reported even when only routines exist; no new key is made", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "perch-service-"));
+  dirs.push(dir);
+  const options = (keys: ReturnType<typeof mockKeychain>) => ({
+    dataDir: dir,
+    profile: "default",
+    keys,
+    models: { fast: async () => fakeModel([]), forRoutine: async () => fakeModel([]) },
+    browser: async () => ({}) as Browser,
+    audit: new AuditLog(join(dir, "audit.jsonl")),
+    setupInputs: () => ({}),
+  });
+  const first = await openPerchData(options(mockKeychain()));
+  const created = await first.routinesApi.create({ name: "Prices", task: "Check prices", schedule: { kind: "manual" } });
+  expect(created.ok).toBe(true);
+  first.stop();
+  const emptyKeychain = mockKeychain();
+  await expect(openPerchData(options(emptyKeychain))).rejects.toThrow("missing from the Keychain");
+  expect([...emptyKeychain.accounts()]).toEqual([]);
+});

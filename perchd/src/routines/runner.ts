@@ -1,8 +1,10 @@
 /**
  * One routine run (spec 8). The routine's own permission mode applies. A run nobody is watching
- * (scheduled or catching up) declines everything that needs approval, so it never pays, sends or
- * deletes unattended; what it wanted to do is listed for the user. A manual run asks the person
- * who started it. Every run is audited as client "routine:<id>" and kept as a chat.
+ * (scheduled or catching up) declines everything that needs approval and lists it for the user.
+ * Payments and password changes always need approval, so an unattended run never pays; in Ask and
+ * Guard it also never sends, posts or deletes. Skip mode is the user's explicit choice to let
+ * those run. A manual run asks the person who started it. Every run is audited as client
+ * "routine:<id>" and kept as a chat.
  */
 
 import type { AuditLog } from "../agent/audit";

@@ -4,6 +4,7 @@
  */
 
 import { chmod, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
 import { join } from "node:path";
 import { decrypt, encrypt, loadDataKey } from "./crypto";
 import type { KeyStore } from "./keychain";
@@ -17,7 +18,8 @@ function check(kind: string, id?: string): void {
   if (id !== undefined && !ID.test(id)) throw new Error(`bad record id "${id.slice(0, 40)}"`);
 }
 
-async function hasRecords(dir: string): Promise<boolean> {
+/** Whether a folder holds any encrypted records. */
+export async function hasRecords(dir: string): Promise<boolean> {
   const kinds = await readdir(dir, { withFileTypes: true }).catch(() => []);
   for (const k of kinds) {
     if (!k.isDirectory()) continue;
@@ -33,10 +35,14 @@ export class RecordFolder {
     private readonly key: Uint8Array,
   ) {}
 
-  static async open(dir: string, keys: KeyStore, profile: string): Promise<RecordFolder> {
+  /**
+   * Opens a folder with the profile's data key. A new key is made only when no records exist;
+   * callers that share one key across folders pass `createKey` after checking all of them.
+   */
+  static async open(dir: string, keys: KeyStore, profile: string, opts: { createKey?: boolean } = {}): Promise<RecordFolder> {
     await mkdir(dir, { recursive: true, mode: 0o700 });
     await chmod(dir, 0o700);
-    const key = await loadDataKey(keys, profile, { create: !(await hasRecords(dir)) });
+    const key = await loadDataKey(keys, profile, { create: opts.createKey ?? !(await hasRecords(dir)) });
     return new RecordFolder(dir, key);
   }
 
@@ -48,7 +54,7 @@ export class RecordFolder {
     check(kind, id);
     const folder = join(this.dir, kind);
     await mkdir(folder, { recursive: true, mode: 0o700 });
-    const temp = join(folder, `.${id}.${process.pid}.tmp`);
+    const temp = join(folder, `.${id}.${randomBytes(6).toString("hex")}.tmp`);
     await writeFile(temp, encrypt(this.key, text, `${kind}/${id}`), { mode: 0o600 });
     await rename(temp, this.file(kind, id));
   }

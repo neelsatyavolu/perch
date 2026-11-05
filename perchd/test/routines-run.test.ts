@@ -208,3 +208,51 @@ test("start and stop leave no timer behind", async () => {
   s.stop();
   expect(s.started()).toBe(false);
 });
+
+test("concurrent saves of one routine all land, and the last one wins", async () => {
+  const { store, dir, keys } = await openStore();
+  await Promise.all(Array.from({ length: 20 }, (_, i) => store.save(routine({ name: `Name ${i}` }))));
+  expect(store.get(routine().id)!.name).toBe("Name 19");
+  expect((await RoutineStore.open(dir, keys, "default")).get(routine().id)!.name).toBe("Name 19");
+  expect(walk(dir).filter((f) => f.endsWith(".tmp"))).toEqual([]);
+});
+
+test("a queued run uses the routine as it is when its turn comes, and a paused one does not run", async () => {
+  const { store } = await openStore();
+  await store.save(routine({ schedule: { kind: "manual" } }));
+  await store.save(routine({ id: "fedcba9876543210fedcba9876543210", name: "Second", schedule: { kind: "manual" } }));
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  const seen: { name: string; mode: string }[] = [];
+  const s = new Scheduler({
+    store,
+    now: () => clock,
+    run: async (r, trigger) => {
+      seen.push({ name: r.name, mode: r.mode });
+      if (r.id === routine().id) await gate;
+      return { id: "e".repeat(32), routineId: r.id, trigger, scheduledFor: null, startedAt: "", finishedAt: "", status: "ok", answer: "", declined: [], chatId: null };
+    },
+  });
+  const first = s.runNow(routine().id);
+  const second = s.runNow("fedcba9876543210fedcba9876543210");
+  await store.save({ ...store.get("fedcba9876543210fedcba9876543210")!, mode: "ask" });
+  release();
+  await Promise.all([first, second]);
+  expect(seen).toEqual([{ name: "Teacher mail", mode: "guard" }, { name: "Second", mode: "ask" }]);
+
+  const third = "00000000000000000000000000000003";
+  await store.save(routine({ id: third, name: "Scheduled", schedule: { kind: "cron", expr: "0 8 * * *" }, nextRunAt: clock.toISOString() }));
+  let releaseAgain!: () => void;
+  const gateAgain = new Promise<void>((resolve) => (releaseAgain = resolve));
+  const blocker = s.runNow(routine().id, async (r, trigger) => {
+    await gateAgain;
+    return { id: "d".repeat(32), routineId: r.id, trigger, scheduledFor: null, startedAt: "", finishedAt: "", status: "ok", answer: "", declined: [], chatId: null };
+  });
+  const ticked = s.tick();
+  await store.save({ ...store.get(third)!, enabled: false });
+  releaseAgain();
+  await blocker;
+  const [skipped] = await ticked;
+  expect(skipped).toMatchObject({ routineId: third, status: "skipped", note: "Paused before it started." });
+  expect(seen.map((x) => x.name)).not.toContain("Scheduled");
+});

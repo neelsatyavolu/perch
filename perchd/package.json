@@ -12,5 +12,8 @@
   "devDependencies": {
     "@types/bun": "1.3.10",
     "typescript": "5.9.3"
+  },
+  "dependencies": {
+    "@neelsatyavolu/shared-ai-auth": "github:neelsatyavolu/shared-ai-auth#7290ee3"
   }
 }

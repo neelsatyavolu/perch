@@ -1,0 +1,137 @@
+/* Shared controls: buttons, switches, segmented controls, pickers, fields, cards and rows. */
+
+.btn {
+  height: 32px; padding: 0 14px; border-radius: 8px; font-weight: 500; font-size: 13px; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap;
+  border: 1px solid var(--hair-strong); background: var(--raised); color: var(--ink); cursor: pointer;
+  transition: opacity 120ms var(--ease), background 120ms var(--ease);
+}
+.btn:hover { opacity: 0.86; }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.btn.primary { background: var(--btn-bg); color: var(--btn-fg); border-color: transparent; }
+.btn.danger { color: var(--danger); }
+.btn.quiet { background: none; border-color: transparent; color: var(--mute); }
+.btn.quiet:hover { color: var(--ink); background: var(--hover); opacity: 1; }
+
+.ib {
+  width: 28px; height: 28px; display: inline-grid; place-items: center; border-radius: 8px; flex: none;
+  color: var(--mute); border: 0; background: none; cursor: pointer; padding: 0;
+  transition: background 120ms var(--ease), color 120ms var(--ease);
+}
+.ib:hover, .ib[aria-pressed="true"], .ib[aria-expanded="true"] { background: var(--hover); color: var(--ink); }
+.ib.sm { width: 24px; height: 24px; }
+.ib.sm svg.i { width: 14px; height: 14px; }
+
+/* Switch: knob is btn-fg on dark themes and white on Paper, so it shows on every accent. */
+.switch {
+  width: 32px; height: 20px; border-radius: 10px; background: var(--hair-strong); border: 0; padding: 0;
+  position: relative; cursor: pointer; flex: none; transition: background 120ms var(--ease);
+}
+.switch::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--ink); transition: transform 120ms var(--ease);
+}
+.switch[aria-checked="true"] { background: var(--accent); }
+.switch[aria-checked="true"]::after { transform: translateX(12px); background: var(--btn-fg); }
+:root[data-theme="paper"] .switch[aria-checked="true"]::after { background: #FFFFFF; }
+.switch:disabled { opacity: 0.5; cursor: default; }
+
+/* Segmented control (radio group). */
+.seg { display: inline-flex; padding: 2px; border-radius: 8px; background: var(--card); border: 1px solid var(--hair); gap: 2px; }
+.seg button {
+  height: 26px; padding: 0 10px; border: 0; border-radius: 6px; background: none; color: var(--mute);
+  font-weight: 500; font-size: 12px; cursor: pointer; transition: background 120ms var(--ease), color 120ms var(--ease);
+}
+.seg button[aria-checked="true"] { background: var(--raised); color: var(--ink); }
+.seg button:hover { color: var(--ink); }
+
+/* Tabs that switch a panel (Chats / Routines, Memory folders). */
+.tabs { display: inline-flex; gap: 4px; }
+.tabs button { font-weight: 500; font-size: 13px; background: none; border: 0; color: var(--mute); height: 28px; padding: 0 10px; border-radius: 8px; cursor: pointer; }
+.tabs button[aria-selected="true"] { background: var(--raised); color: var(--ink); }
+
+/* Pickers are native selects, so the keyboard and VoiceOver work as on any Mac pop-up menu. */
+.picker {
+  appearance: none; height: 32px; padding: 0 30px 0 10px; border-radius: 8px; border: 1px solid var(--hair-strong);
+  background: var(--card) no-repeat right 8px center / 14px; color: var(--ink); font-size: 13px; cursor: pointer; max-width: 260px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23A1A4A5' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+.picker.sm { height: 28px; font-size: 12px; }
+.picker option { background: var(--card); color: var(--ink); }
+
+.field {
+  height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--hair-strong); background: var(--card);
+  color: var(--ink); font-size: 13px; min-width: 0; width: 100%;
+}
+.field::placeholder { color: var(--mute); }
+textarea.field { height: auto; min-height: 88px; padding: 8px 10px; resize: vertical; line-height: 1.5; }
+.field[aria-invalid="true"] { border-color: var(--danger); }
+.field-error { color: var(--danger); font-size: 12px; }
+.label { display: grid; gap: 6px; font-size: 12px; color: var(--mute); }
+.label > span:first-child { color: var(--body); font-size: 13px; }
+
+.check { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.check input { width: 16px; height: 16px; accent-color: var(--accent); margin: 0; }
+
+/* Cards and rows (Settings, Memory, Routines, Import). */
+.group { display: grid; gap: 8px; }
+.group > .lbl { color: var(--mute); font-size: 12px; padding-left: 4px; }
+.card { border: 1px solid var(--hair-strong); border-radius: 12px; background: var(--canvas); overflow: hidden; }
+.srow {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center;
+  min-height: 56px; padding: 8px 12px 8px 16px; border-bottom: 1px solid var(--hair);
+}
+.srow:last-child { border-bottom: 0; }
+.srow.noicon { grid-template-columns: 1fr auto; }
+.srow .n { color: var(--ink); }
+.srow .d { color: var(--mute); font-size: 12px; }
+.srow .ctl { display: flex; align-items: center; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.srow.sub { min-height: 44px; }
+.srow.hit { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+.tile {
+  width: 28px; height: 28px; border-radius: 8px; background: var(--raised); color: var(--ink);
+  display: grid; place-items: center; font-weight: 500; font-size: 12px; flex: none;
+}
+.more-row {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 48px; padding: 0 16px; color: var(--mute);
+  background: none; border: 0; border-top: 1px solid var(--hair); cursor: pointer; text-align: left; font-size: 13px;
+}
+.more-row:first-child { border-top: 0; }
+.more-row:hover { color: var(--ink); }
+.status { display: inline-flex; align-items: center; gap: 6px; color: var(--mute); font-size: 12px; white-space: nowrap; }
+.status .dotc { width: 6px; height: 6px; border-radius: 50%; background: var(--mute); }
+.status.ok .dotc { background: var(--ok); }
+.status.warn .dotc { background: var(--warn); }
+.status.bad .dotc { background: var(--danger); }
+.chip2 { font: 12px var(--mono); color: var(--mute); padding: 2px 6px; border-radius: 6px; background: var(--raised); white-space: nowrap; }
+.row {
+  height: var(--row); display: flex; align-items: center; gap: 8px; padding: 0 10px; border-radius: 8px; color: var(--body);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: none; border: 0; width: 100%; text-align: left; cursor: pointer;
+}
+.row:hover { background: var(--hover); }
+.row[aria-current="page"], .row[aria-selected="true"] { background: var(--accent-soft); color: var(--ink); box-shadow: inset 2px 0 0 var(--accent); }
+.empty { padding: 20px 16px; color: var(--mute); font-size: 13px; }
+.note { color: var(--mute); font-size: 12px; }
+.err-note { color: var(--danger); font-size: 12px; }
+
+/* Panels (Memory setup, Import wizard). */
+.panel { border: 1px solid var(--hair-strong); border-radius: 12px; background: var(--canvas); }
+.panel-h {
+  min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 16px;
+  border-bottom: 1px solid var(--hair); color: var(--ink); font-weight: 500;
+}
+.panel-h .cap { font-weight: 400; }
+.panel-f { padding: 12px 16px 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.bar { height: 4px; border-radius: 2px; background: var(--hair-strong); overflow: hidden; }
+.bar > i { display: block; height: 100%; background: var(--accent); transform-origin: left; transition: transform 240ms var(--ease); }
+
+/* Dialogs: native <dialog> for focus trapping, Escape and an inert page behind it. */
+dialog.dlg {
+  border: 1px solid var(--hair-strong); border-radius: 12px; background: var(--card); color: var(--body);
+  padding: 0; width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 64px); box-shadow: var(--pop);
+}
+dialog.dlg::backdrop { background: rgba(0, 0, 0, 0.5); }
+.dlg-h { display: flex; align-items: center; gap: 8px; padding: 16px 12px 8px 20px; }
+.dlg-h h2 { font-size: 15px; flex: 1; }
+.dlg-b { padding: 4px 20px 16px; display: grid; gap: 14px; overflow-y: auto; max-height: calc(100vh - 200px); }
+.dlg-f { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px 16px; border-top: 1px solid var(--hair); }

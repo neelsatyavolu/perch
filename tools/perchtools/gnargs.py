@@ -12,6 +12,10 @@ from .run import run as default_run
 
 Config = Literal["dev", "release"]
 TARGETS: dict[str, list[str]] = {"dev": ["chrome"], "release": ["chrome", "chrome/installer/mac"]}
+# A full Chromium build at 18 parallel jobs overheated and shut down the owner's MacBook.
+# Default to 6 local jobs at low priority; raise with --jobs when the Mac is plugged in and idle.
+DEFAULT_JOBS = 6
+NICENESS = "15"
 
 
 def _strip_comment(line: str) -> str:
@@ -45,7 +49,7 @@ def compose_args(repo: Path, config: Config, overrides: Mapping[str, str] = {}) 
     return "".join(f"{name} = {value}\n" for name, value in merged.items())
 
 
-def build(paths: Paths, config: Config, run=default_run) -> Path:
+def build(paths: Paths, config: Config, run=default_run, jobs: int = DEFAULT_JOBS) -> Path:
     out = paths.out(config)
     out.mkdir(parents=True, exist_ok=True)
     args_gn = out / "args.gn"
@@ -54,5 +58,5 @@ def build(paths: Paths, config: Config, run=default_run) -> Path:
         args_gn.write_text(text)
     env = depot_env(paths)
     run(["gn", "gen", out], cwd=paths.src, env=env)
-    run(["autoninja", "-C", out, *TARGETS[config]], cwd=paths.src, env=env)
+    run(["nice", "-n", NICENESS, "autoninja", "-C", out, "-local_jobs", str(jobs), *TARGETS[config]], cwd=paths.src, env=env)
     return out

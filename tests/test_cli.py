@@ -138,3 +138,10 @@ def test_cli_release_needs_package_first(monkeypatch, tmp_path, paths, capsys):
     (tmp_path / "repo" / "dist" / "Perch-0.1.0.dmg").unlink()
     assert cli.main(["release"]) == 1
     assert "perch-build package" in capsys.readouterr().err
+
+
+def test_cli_build_jobs_flag(monkeypatch, paths, recorder):
+    monkeypatch.setattr(cli, "current_paths", lambda: paths)
+    monkeypatch.setattr(cli, "run", recorder)
+    assert cli.main(["build", "--jobs", "3"]) == 0
+    assert "3" == recorder.calls[-1][recorder.calls[-1].index("-local_jobs") + 1]

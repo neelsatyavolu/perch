@@ -84,7 +84,7 @@ def _cmd_export(args: argparse.Namespace) -> int:
 
 
 def _cmd_build(args: argparse.Namespace) -> int:
-    out = build_chromium(current_paths(), args.config, run=run)
+    out = build_chromium(current_paths(), args.config, run=run, jobs=args.jobs)
     print(f"Built {out}")
     return 0
 
@@ -198,6 +198,7 @@ def build_parser() -> argparse.ArgumentParser:
     apply.set_defaults(func=_cmd_apply)
     build = sub.add_parser("build", help="gn gen and autoninja")
     build.add_argument("--config", choices=["dev", "release"], default="dev")
+    build.add_argument("--jobs", type=int, default=6, help="parallel compile jobs (default 6, low priority)")
     build.set_defaults(func=_cmd_build)
     pkg = sub.add_parser("package", help="sign, package and notarize the release build")
     pkg.add_argument("--mode", choices=["release", "adhoc"], default="release")

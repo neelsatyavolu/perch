@@ -47,11 +47,16 @@ def test_build_skips_unchanged_args(paths, recorder):
     mtime = args_gn.stat().st_mtime_ns
     build(paths, "dev", run=recorder)
     assert args_gn.stat().st_mtime_ns == mtime
-    assert [c[0] for c in recorder.calls] == ["gn", "autoninja", "gn", "autoninja"]
-    assert recorder.calls[1] == ["autoninja", "-C", str(out), "chrome"]
+    assert [c[0] for c in recorder.calls] == ["gn", "nice", "gn", "nice"]
+    assert recorder.calls[1] == ["nice", "-n", "15", "autoninja", "-C", str(out), "-local_jobs", "6", "chrome"]
 
 
 def test_release_builds_installer(paths, recorder):
     out = build(paths, "release", run=recorder)
     assert recorder.calls[0] == ["gn", "gen", str(out)]
-    assert recorder.calls[1] == ["autoninja", "-C", str(out), "chrome", "chrome/installer/mac"]
+    assert recorder.calls[1][-2:] == ["chrome", "chrome/installer/mac"]
+
+
+def test_build_jobs_cap(paths, recorder):
+    build(paths, "dev", run=recorder, jobs=4)
+    assert recorder.calls[1][recorder.calls[1].index("-local_jobs") + 1] == "4"

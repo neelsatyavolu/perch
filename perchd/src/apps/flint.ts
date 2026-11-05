@@ -1,3 +1,4 @@
+/// <reference path="../text.d.ts" />
 /**
  * Flint, the owner's mail app, as a tool for Perch's agent. It runs the `flint` command, which
  * talks to the running Flint app. Reading runs freely; changing mail follows the permission

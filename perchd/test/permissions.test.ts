@@ -49,6 +49,17 @@ test.each([
   expect(classify(c, target)).toBe(kind as Kind);
 });
 
+test("a drag is judged by its source and by what it is dropped on", () => {
+  const card = { role: "button", name: "Card one" };
+  expect(classify(call("drag", { ref: "e5", to: "e6" }), card, {}, { role: "region", name: "Done column" })).toBe("change");
+  expect(classify(call("drag", { ref: "e5", to: "e6" }), card, {}, { role: "button", name: "Delete" })).toBe("risky");
+  expect(classify(call("drag", { ref: "e5", to: "e6" }), card, {}, undefined)).toBe("risky");
+  expect(classify(call("drag", { ref: "e5", to: "e6" }), card, {}, { role: "button", name: "Buy now" })).toBe("payment");
+  // A drag by zero pixels is a click, so the source gets the click rules.
+  expect(classify(call("drag", { ref: "e5", dx: 0, dy: 0 }), { role: "button", name: "Buy now" })).toBe("payment");
+  expect(classify(call("drag", { ref: "e5", dx: 0 }), undefined)).toBe("risky");
+});
+
 test.each([
   [call("click", { ref: "e1" }), { role: "button", name: "Continue" }, { payment: true }, "payment"],
   [call("click", { ref: "e1" }), { role: "button", name: "Next" }, { payment: true }, "payment"],

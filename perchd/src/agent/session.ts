@@ -34,11 +34,12 @@ export async function prepareCall(ctx: ToolContext, opts: CallPolicy, call: Tool
 
   const target = call.name === "press" ? await focusedTarget(ctx) : describeTarget(ctx, call) ?? (await liveTarget(ctx, call));
   const page = READS.has(call.name) ? {} : await pageContext(ctx);
-  const kind = classify(call, target, page);
+  const drop = await dropTarget(ctx, call);
+  const kind = classify(call, target, page, drop);
   const destination = call.name === "navigate" || call.name === "open_tab" ? String(call.args.url) : undefined;
   const site = destination ? hostOf(destination) : await currentHost(ctx);
   const decision = needsApproval(opts.mode, kind, opts.siteRule?.(site));
-  const what = target ? `${target.role} "${target.name}"` : summarizeArgs(call);
+  const what = [target ? `${target.role} "${target.name}"` : summarizeArgs(call), drop ? `onto ${drop.role} "${drop.name}"` : ""].filter(Boolean).join(" ");
   const detail = kind === "read" ? what : [what, await approvalDetail(ctx, call)].filter(Boolean).join(" ");
   const entry = { time: new Date().toISOString(), tab: ctx.tab?.id ?? "", site, url: destination, action: call.name, detail, client: opts.client ?? "sidebar" };
 
@@ -67,6 +68,13 @@ export async function callTool(ctx: ToolContext, opts: CallPolicy, call: ToolCal
   if (prepared.kind === "answer") return prepared.result;
   const approved = prepared.decision === "ask" ? await opts.approve(prepared.request) : null;
   return finishCall(ctx, opts, prepared, approved);
+}
+
+/** For a drag onto an element: that element, from the last snapshot or read live. */
+async function dropTarget(ctx: ToolContext, call: ToolCall): Promise<Target | undefined> {
+  if (call.name !== "drag" || typeof call.args.to !== "string") return undefined;
+  const onto = { ...call, args: { ref: call.args.to } };
+  return describeTarget(ctx, onto) ?? (await liveTarget(ctx, onto));
 }
 
 function hostOf(url: string): string {

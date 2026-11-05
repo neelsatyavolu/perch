@@ -55,6 +55,25 @@ test("buttons in closed shadow roots are clickable on a scrolled page", async ()
   await tab.close();
 });
 
+const COVER = "document.body.insertAdjacentHTML('beforeend', '<div style=\"position:fixed;inset:0;background:rgba(0,0,0,.3)\">Sign up for offers</div>')";
+
+test("an overlay in the parent page covers buttons in same-site and cross-site iframes", async () => {
+  tab = await env.browser.newTab(env.site.url("/iframe.html"));
+  await Bun.sleep(200);
+  let snap = await snapshot(tab);
+  await tab.evaluate(COVER);
+  const same = await click(tab, snap.refs, refOf(snap, 'button "Inside frame"'));
+  expect(!same.ok && same.error).toMatch(/^covered by div "Sign up for offers"/);
+  expect(await tab.evaluate<string>("document.getElementById('f').contentDocument.getElementById('out').textContent")).toBe("");
+  await tab.close();
+  tab = await env.browser.newTab(env.site.url("/xframe.html"));
+  for (let i = 0; i < 40 && !(snap = await snapshot(tab)).text.includes("Book table"); i++) await Bun.sleep(100);
+  await tab.evaluate(COVER);
+  const cross = await click(tab, snap.refs, refOf(snap, 'button "Book table"'));
+  expect(!cross.ok && cross.error).toMatch(/^covered by div "Sign up for offers"/);
+  await tab.close();
+});
+
 test("a button under a fixed header is scrolled clear of it, then clicked", async () => {
   const snap = await open();
   await tab.evaluate("window.scrollTo({ top: document.getElementById('under').getBoundingClientRect().top + scrollY - 40, behavior: 'instant' })");

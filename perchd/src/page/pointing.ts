@@ -75,37 +75,62 @@ export async function scrollToCentre(tab: Tab, node: Node): Promise<void> {
  * takes document coordinates, so it misses on any scrolled page; elementFromPoint does not.)
  */
 const ELEMENT_AT = `function (x, y) {
+  const deepest = (doc) => { let el = doc.elementFromPoint(x, y); while (el && el.shadowRoot) { const inner = el.shadowRoot.elementFromPoint(x, y); if (!inner || inner === el) break; el = inner; } return el; };
   const frames = [];
   for (let w = (this.ownerDocument || document).defaultView; w && w.frameElement; w = w.parent) frames.unshift(w.frameElement);
-  for (const f of frames) { const r = f.getBoundingClientRect(); x -= r.left + f.clientLeft; y -= r.top + f.clientTop; }
-  let el = (this.ownerDocument || document).elementFromPoint(x, y);
-  while (el && el.shadowRoot) { const inner = el.shadowRoot.elementFromPoint(x, y); if (!inner || inner === el) break; el = inner; }
-  return el;
+  for (const f of frames) {
+    // Each same-process iframe on the way down is hit-tested in its parent first, so an overlay
+    // in a parent page counts as a cover.
+    const hit = deepest(f.ownerDocument);
+    if (hit !== f) return hit;
+    const r = f.getBoundingClientRect(); x -= r.left + f.clientLeft; y -= r.top + f.clientTop;
+  }
+  return deepest(this.ownerDocument || document);
 }`;
 
-/** Throws "covered by …" when another element would receive a click at the point. */
-async function assertHittable(tab: Tab, target: Node, point: Point): Promise<void> {
-  // Inside a cross-site iframe, hit-test in the frame's own coordinates and session.
-  const offset = await frameOffset(tab, target.owner);
-  const hit = await callForObject(tab, target, ELEMENT_AT, [point.x - offset.x, point.y - offset.y]);
+/**
+ * Whether the hit is the target, inside it, inside a label for it (custom checkboxes), or the host
+ * of a closed shadow root the target is in (elementFromPoint stops at such hosts).
+ */
+const RECEIVES = `function (other) {
+  for (let n = other; n; n = n.parentNode || n.host) { if (n === this) return true; if (n.tagName === 'LABEL' && n.control === this) return true; }
+  for (let n = this; n; ) { if (n.parentNode) n = n.parentNode; else if (n.host) { n = n.host; if (n === other) return true; } else break; }
+  return false;
+}`;
+
+/** The element that would get a click at the point instead of the node, or undefined if the node gets it. */
+async function coverAt(tab: Tab, node: { objectId: string; session?: string }, point: Point): Promise<string | undefined> {
+  const hit = await callForObject(tab, node, ELEMENT_AT, [point.x, point.y]);
   if (!hit) throw new Error(CLIPPED);
-  const inside = await tab.sendIn<{ result: { value?: boolean } }>(target.session, "Runtime.callFunctionOn", {
-    objectId: target.objectId,
-    // The hit counts if it is the target, inside it, inside a label for it (custom checkboxes), or
-    // the host of a closed shadow root the target is in (elementFromPoint stops at such hosts).
-    functionDeclaration: `function (other) {
-      for (let n = other; n; n = n.parentNode || n.host) { if (n === this) return true; if (n.tagName === 'LABEL' && n.control === this) return true; }
-      for (let n = this; n; ) { if (n.parentNode) n = n.parentNode; else if (n.host) { n = n.host; if (n === other) return true; } else break; }
-      return false;
-    }`,
+  const { result } = await tab.sendIn<{ result: { value?: boolean } }>(node.session, "Runtime.callFunctionOn", {
+    objectId: node.objectId,
+    functionDeclaration: RECEIVES,
     arguments: [{ objectId: hit }],
     returnByValue: true,
   });
-  if (inside.result.value) return;
-  const cover = await describe(tab, { objectId: hit, session: target.session });
+  return result.value ? undefined : hit;
+}
+
+/** Throws "covered by …" when another element would receive a click at the point. */
+async function assertHittable(tab: Tab, target: Node, point: Point): Promise<void> {
+  let cover: { objectId: string; session?: string } | undefined;
+  if (target.owner !== undefined) {
+    // A cross-site iframe: its element in the page must get the click before anything inside it.
+    const { object } = await tab.send<{ object: { objectId?: string } }>("DOM.resolveNode", { backendNodeId: target.owner });
+    const ownerCover = object.objectId ? await coverAt(tab, { objectId: object.objectId }, point) : undefined;
+    if (ownerCover) cover = { objectId: ownerCover };
+  }
+  if (!cover) {
+    // Then hit-test in the frame's own coordinates and session.
+    const offset = await frameOffset(tab, target.owner);
+    const inner = await coverAt(tab, target, { x: point.x - offset.x, y: point.y - offset.y });
+    if (inner) cover = { objectId: inner, session: target.session };
+  }
+  if (!cover) return;
+  const what = await describe(tab, cover);
   // Dialogs and banners are the usual covers, and they can be closed.
-  const hint = /^(dialog|alertdialog|iframe|div|section|aside|element)( |$)/.test(cover) ? "; close it first (its Close, Reject or X button), or press Escape" : "";
-  throw new Error(`covered by ${cover}${hint}`);
+  const hint = /^(dialog|alertdialog|iframe|div|section|aside|element)( |$)/.test(what) ? "; close it first (its Close, Reject or X button), or press Escape" : "";
+  throw new Error(`covered by ${what}${hint}`);
 }
 
 /**

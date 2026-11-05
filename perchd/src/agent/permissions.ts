@@ -34,7 +34,12 @@ const PASSWORD = /\b(change|update|reset|save|set) (your |the )?password\b/i;
 const ADVANCES = /\b(continue|next|confirm|complete|submit|save|update|done|apply|finish|proceed|place|order|pay|book|reserve|change|set|verify)\b/i;
 const SEARCHY = /search|find|filter|lookup/i;
 
-export function classify(call: ToolCall, target?: Target, page: PageContext = {}): Kind {
+/**
+ * `drop` is where a drag ends (its `to` element). A drag is judged as a click on its source and,
+ * when it has one, a click on what it is dropped on; the stricter of the two wins. A drop target
+ * that could not be identified counts as risky.
+ */
+export function classify(call: ToolCall, target?: Target, page: PageContext = {}, drop?: Target): Kind {
   const name = target?.name ?? "";
   const guarded = Boolean(page.payment || page.passwordChange);
   if (READ_TOOLS.has(call.name)) return "read";
@@ -45,9 +50,11 @@ export function classify(call: ToolCall, target?: Target, page: PageContext = {}
   if (call.name === "write_file") return "change";
   if (call.name === "click_at" || call.name === "type_text") return guarded ? "payment" : "risky";
   if (call.name === "select" || (call.name === "type" && !call.args.submit)) return "change";
-  // Dragging moves things on the page (a slider, a card, a pin); dropping onto a delete or send
-  // target counts as risky, and on a checkout or password page as payment.
-  if (call.name === "drag") return guarded ? "payment" : RISKY.test(name) ? "risky" : "change";
+  if (call.name === "drag") {
+    const source = clickKind(target, guarded);
+    if (call.args.to === undefined) return source;
+    return stricter(source, drop ? clickKind(drop, guarded) : "risky");
+  }
   if (call.name === "press" && !isEnter(call)) return "change";
   if (call.name === "press" || call.name === "type") {
     // Enter, or typing with submit: it sends whatever form the field is in.
@@ -55,16 +62,22 @@ export function classify(call: ToolCall, target?: Target, page: PageContext = {}
     const searchField = target?.role === "searchbox" || target?.role === "combobox" || SEARCHY.test(name);
     return searchField ? "change" : "risky";
   }
-  if (call.name === "click" || call.name === "hover") {
-    if (call.name === "hover") return "read";
-    if (!target) return "risky";
-    if (PAYMENT.test(name) || PASSWORD.test(name) || charges(target, guarded)) return "payment";
-    if (guarded && ADVANCES.test(name)) return "payment";
-    if (RISKY.test(name)) return "risky";
-    return "change";
-  }
+  if (call.name === "hover") return "read";
+  if (call.name === "click") return clickKind(target, guarded);
   return "risky";
 }
+
+function clickKind(target: Target | undefined, guarded: boolean): Kind {
+  if (!target) return "risky";
+  const name = target.name;
+  if (PAYMENT.test(name) || PASSWORD.test(name) || charges(target, guarded)) return "payment";
+  if (guarded && ADVANCES.test(name)) return "payment";
+  if (RISKY.test(name)) return "risky";
+  return "change";
+}
+
+const ORDER: Kind[] = ["read", "change", "risky", "payment"];
+const stricter = (a: Kind, b: Kind): Kind => (ORDER.indexOf(a) >= ORDER.indexOf(b) ? a : b);
 
 /**
  * A money amount alone is not a payment: filters ("Under $25,000"), salary bands and price labels

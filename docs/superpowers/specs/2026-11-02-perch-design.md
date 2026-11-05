@@ -141,6 +141,27 @@ Backrow (`~/Documents/GitHub/backrow`, public, MIT) ships as a built-in componen
 - Profiles are Chromium profiles with Perch's menu. Each profile has its own agent memory, chats, skills, model logins and permission settings. Nothing is shared across profiles.
 - **True incognito**: everything in memory, no disk cache, no history, no memory extraction, no session restore, downloads only where the user saves them. The agent can be used in incognito but cannot read or write memory, and its chat is discarded when the window closes. Extensions are off in incognito unless allowed per extension (Chromium default).
 
+### 5.9 What Chrome is missing, built in
+
+Owner's request: the features people most often add to Chrome with extensions or wish it had, on by default. Each has an off switch in Settings, and none sends data anywhere. **[builder call]** on the list itself.
+
+- **Ad and tracker blocking**: a built-in content blocker using EasyList and EasyPrivacy rules (the `adblock-rust` engine Brave uses), so it keeps working under Manifest V3. Filter list updates join the allowed connections in 5.1. One click turns it off for a site.
+- **Cookie banners rejected automatically** where the site offers a reject option, using the same filter engine.
+- **Tracking parameters removed** (`utm_*`, `fbclid`, `gclid`, `mc_eid` and similar) from links you open and URLs you copy.
+- **HTTPS-only** and **encrypted DNS** (DNS over HTTPS, falling back to the system resolver) on by default.
+- **Fingerprinting protection**: Chromium's privacy budget features plus a reduced user-agent and no third-party cookies.
+- **Command bar** (⌘K): tabs, history, bookmarks, chats, commands and settings in one search.
+- **Copy URL** (⇧⌘C) and **copy as Markdown link** (⌥⇧⌘C), as in Arc.
+- **Tab tools**: close duplicates, close tabs older than a chosen age, mute a tab by clicking its speaker, and tab search.
+- **Spaces**: named sets of tabs per profile, like Arc spaces, built on saved tab groups.
+- **Reader view** from Chromium's distiller, set in Geist and Geist Serif, with the theme's colours.
+- **Picture in picture** on every video, starting automatically when you switch away from a playing video. **Playback speed** keys (`[` and `]`) and a speed menu on every video.
+- **Link preview**: ⇧-click opens a link in a floating card you can expand into a tab.
+- **Full-page screenshot** with simple markup, from the menu and ⇧⌘2.
+- **On-device translation** using Chromium's local translation models, never Google's servers.
+- **Per-site panel** in the address bar: permissions, the blocker switch, dark mode for this site, and "Forget this site", which clears its cookies and data.
+- **Built-in authenticator**: the password manager stores passkeys and generates one-time codes for sites that use TOTP, so codes fill without a phone (spec 7.2 rules apply: the model never sees them).
+
 ## 6. Look and feel
 
 Perch follows `~/DESIGN.md` and the unslop rules (unslop by Damir Sokolovsky, @heydamir, CC BY 4.0). People look at a browser for hours, and the pages they visit should carry the colour. So the chrome stays quiet, and the richness goes into one or two moments that belong to Perch alone.
@@ -244,6 +265,21 @@ The Claude choice is deliberate. Aside copies Claude Code's OAuth tokens into it
 
 Tokens are stored in the macOS Keychain, scoped to Perch's code signature. The model picker shows provider, model, effort (off → max) and a fast toggle, as in the screenshot.
 
+**More providers** (owner priority 2, most models): besides the subscriptions above, Settings → Models → Connect adds API keys for Anthropic, OpenAI, xAI, Google Gemini and OpenRouter, and any OpenAI-compatible endpoint such as Ollama or LM Studio running on the Mac.
+
+**Task models** (owner, 2026-11-05, modelled on Aside's Models page). Perch uses different models for different kinds of work. Each role has a picker and a `⋯` menu for effort and fast mode:
+
+| Role | Used for | Default when signed in **[builder call]** |
+|---|---|---|
+| Default model | New chats. The last model used becomes the default | the strongest signed-in model |
+| Fast | Side work, summaries, memory extraction and dreaming | the provider's fast tier (for example GPT-6 Luna) |
+| Standard | Subagents and memory reorganisation | the provider's mid tier (for example GPT-6.1 Sol) |
+| Deep | Hard reasoning, planning, judging and synthesis | the provider's flagship (for example Opus 5.5 or GPT-6 Astra) |
+| Visual | Screenshots and reading page images | a model with image input |
+| Image generation | Making and editing images in chat and artifacts | ChatGPT Images or Grok Imagine, if signed in |
+
+Perch does not solve CAPTCHAs; the agent stops and asks the user (7.2).
+
 ### 7.4 Permission modes
 
 Per chat, with a profile default. Shown at the bottom left of the composer.
@@ -265,7 +301,8 @@ On top of the mode:
 - **Built-in site skills** (read on demand, like Aside's): Google Account, Gmail, Google Docs, Sheets, Slides, Drive, Calendar, Search; Outlook and Microsoft 365; Slack; Discord; Notion; GitHub; Linear; Jira; Figma; X; Reddit; LinkedIn; YouTube; Instagram; WhatsApp Web; Amazon; Airbnb; Google Maps; Canvas LMS; Messages (iMessage, read and send through the local Messages database and AppleScript, with Full Disk Access the user grants); plus file skills: PDF, DOCX, XLSX, PPTX.
 - Where a site has a stable web API reachable with the user's logged-in session, the skill uses it so tasks run without opening a tab (Aside's Gmail and Docs skills work this way).
 - **My skills**: import from a folder, a URL or a git repo. Shown in a Skills / MCPs settings page like Aside's.
-- **MCP client**: users can add MCP servers that the Perch agent can call.
+- **MCP client**: users can add MCP servers (stdio, Streamable HTTP and SSE) that the Perch agent can call, in Settings → Skills and MCP. Tool annotations are honoured: tools marked read-only run freely; every other MCP tool counts as risky under 7.4 unless the user marks the server as trusted. Each server can be switched off per chat.
+- **Import MCP servers** (owner, 2026-11-05): one click imports the servers already set up in Claude Code (`~/.claude.json` and project `.mcp.json`), Codex (`~/.codex/config.toml`, `[mcp_servers.*]`), Claude Desktop, Cursor and Grok. Perch lists what it found and the user picks. Secrets in a server's `env` or headers move into the Keychain and never stay in plain files. Imported stdio servers run as the user with Perch's environment, and their first run asks for approval.
 
 ### 7.6 Chat UI
 
@@ -360,11 +397,17 @@ The wizard says which steps need Full Disk Access or a Keychain prompt before as
 
 ### 11.1 At rest on the Mac
 
+Security is a top priority (owner, 2026-11-05: "very high, highly encrypted"). The rules below are requirements, not goals, and each release's security review checks them.
+
 - Chromium's own stores (cookies, passwords, cards) use Chromium's encryption with a "Perch Safe Storage" Keychain key, as Chrome does.
 - Perch's own data (memory, chats, skills, artifacts, audit log, model tokens) is encrypted with AES-256-GCM using a per-profile key. That key is wrapped by a Secure Enclave key, so it cannot be copied off the Mac. **[builder call]**
 - Memory and skills are still markdown, just encrypted on disk. People and agents read and edit them through Perch: the Memory and Skills pages, `perch memory` / `perch skills`, and the MCP server (which is how the Claude Code path reads them). `perch skills export <dir>` writes plain `SKILL.md` folders for use in Claude Code or Codex, and `perch skills install` reads them back. **[builder call]**
 - Moving to a new Mac: a Secure Enclave key does not survive Migration Assistant or a Time Machine restore. At setup Perch creates a recovery key (the same one sync uses) and offers an encrypted export file. With sync on, a new Mac just pairs. Without sync, the export file plus the recovery key restores everything. Perch tells the user this at setup. **[builder call]**
 - Optional Touch ID lock for passwords, memory and chats, as a setting.
+- Every secret Perch holds (model tokens, API keys, MCP server secrets, the sync key, the relay keys) lives in the Keychain or behind the Secure Enclave key, never in a plain file, a log, an environment dump or a crash report.
+- `perchd` and imported MCP servers run with the least access they need: the daemon's socket is 0600, outside agents connect with per-client tokens, and the browser process keeps Chromium's sandbox for renderers.
+- Memory, chats and the audit log are encrypted per record, so a partial copy of the profile folder reveals nothing.
+- Release builds use the hardened runtime, are notarized, and are checked for dependencies with known vulnerabilities before each release.
 
 ### 11.2 Account
 

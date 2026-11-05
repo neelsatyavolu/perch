@@ -30,6 +30,10 @@ describe("cookie banners", () => {
     await tab.close();
   });
 
+  test("OneTrust on a page whose inline styles change every few milliseconds still gets rejected", async () => {
+    expect((await consentOn("/onetrust-animated.html")).consent).toBe("rejected");
+  });
+
   test("OneTrust without a reject button: opens settings, unchecks everything optional, saves", async () => {
     expect((await consentOn("/onetrust-settings.html")).consent).toBe("saved:");
   });

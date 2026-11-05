@@ -13,6 +13,11 @@ export type EngineOptions = {
 
 type Root = Document | ShadowRoot;
 
+/** Wait this long for the page to go quiet before looking... */
+const QUIET_MS = 100;
+/** ...but look at least this often while it keeps changing (animations, tickers, players). */
+const MAX_GAP_MS = 250;
+
 export function watchForBanners(doc: Document, onDone: (cmp: string) => void, opts: EngineOptions = {}): () => void {
   const windowMs = opts.windowMs ?? 10_000;
   const stepTimeoutMs = opts.stepTimeoutMs ?? 4_000;
@@ -20,6 +25,7 @@ export function watchForBanners(doc: Document, onDone: (cmp: string) => void, op
   let running = false;
   let finished = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let lastCheck = 0;
 
   const stop = () => {
     finished = true;
@@ -30,6 +36,7 @@ export function watchForBanners(doc: Document, onDone: (cmp: string) => void, op
 
   const check = async () => {
     if (running || finished) return;
+    lastCheck = Date.now();
     const match = findShowing(doc, shadowRootOf);
     if (!match) return;
     running = true;
@@ -42,7 +49,8 @@ export function watchForBanners(doc: Document, onDone: (cmp: string) => void, op
 
   const observer = new MutationObserver(() => {
     clearTimeout(timer);
-    timer = setTimeout(check, 100);
+    if (Date.now() - lastCheck >= MAX_GAP_MS) void check();
+    else timer = setTimeout(check, QUIET_MS);
   });
   observer.observe(doc.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style", "hidden"] });
   const deadline = setTimeout(stop, windowMs);

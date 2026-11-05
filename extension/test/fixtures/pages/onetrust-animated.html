@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>OneTrust on an animated page</title>
+<style>#onetrust-banner-sdk { position: fixed; bottom: 0; left: 0; right: 0; padding: 16px; background: #fff; border-top: 1px solid #ccc; }</style>
+</head>
+<body>
+  <h1>Live ticker</h1>
+  <div id="ticker" style="width: 200px; height: 20px; background: #def">0</div>
+  <script>
+    // A ticker changes an inline style every few milliseconds, as carousels and players do, so the
+    // page never goes quiet; the OneTrust banner appears a second later.
+    window.consent = null;
+    const ticker = document.getElementById("ticker");
+    let n = 0;
+    setInterval(() => { n++; ticker.style.transform = `translateX(${n % 50}px)`; }, 10);
+    setTimeout(() => {
+      const root = document.createElement("div");
+      root.id = "onetrust-consent-sdk";
+      root.innerHTML = `
+        <div id="onetrust-banner-sdk" role="region" aria-label="Cookie banner">
+          <p id="onetrust-policy-text">We use cookies to improve your experience.</p>
+          <div id="onetrust-button-group">
+            <button id="onetrust-reject-all-handler">Reject All</button>
+            <button id="onetrust-accept-btn-handler">Accept All Cookies</button>
+          </div>
+        </div>`;
+      document.body.append(root);
+      const close = (value) => { window.consent = value; document.getElementById("onetrust-banner-sdk").style.display = "none"; };
+      document.getElementById("onetrust-accept-btn-handler").onclick = () => close("accepted");
+      document.getElementById("onetrust-reject-all-handler").onclick = () => close("rejected");
+    }, 1000);
+  </script>
+</body>
+</html>

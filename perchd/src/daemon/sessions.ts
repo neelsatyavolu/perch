@@ -63,6 +63,8 @@ export class SessionManager {
     const idle = opts.idleSleepMs ?? 30 * 60_000;
     this.idleTimer = setInterval(() => void this.sleepIdle(idle), Math.min(idle, 60_000));
     this.idleTimer.unref?.();
+    // A file left by a perchd that crashed lists sessions that are gone; start from none.
+    this.writeFile();
   }
 
   /** Gets or starts a session; reopening one cancels a pending end and keeps its tabs. */
@@ -183,6 +185,11 @@ export class SessionManager {
     this.writeFile();
   }
 
+  /** Closes every session of a client, as after a revoke. */
+  async endClient(client: string): Promise<void> {
+    await Promise.all([...this.sessions.values()].filter((s) => s.info.client === client).map((s) => this.end(s, "close")));
+  }
+
   async closeAll(): Promise<void> {
     clearInterval(this.idleTimer);
     await Promise.all([...this.sessions.values()].map((s) => this.end(s, "close")));
@@ -222,14 +229,17 @@ export class SessionManager {
     }
   }
 
-  /** What agterm and agmux read for their browser marks: counts only, no pages. */
+  /**
+   * What agterm and agmux read for their browser marks: counts only, no pages. `pid` is this
+   * perchd, so a reader can ignore a file whose perchd is no longer running.
+   */
   private writeFile(): void {
     const file = this.opts.sessionsFile;
     try {
       mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
       const tmp = `${file}.tmp-${process.pid}`;
       const sessions = this.list().map(({ lastUsed: _, ...s }) => s);
-      writeFileSync(tmp, `${JSON.stringify({ version: 1, updated: new Date().toISOString(), sessions }, null, 2)}\n`, { mode: 0o600 });
+      writeFileSync(tmp, `${JSON.stringify({ version: 1, pid: process.pid, updated: new Date().toISOString(), sessions }, null, 2)}\n`, { mode: 0o600 });
       chmodSync(tmp, 0o600);
       renameSync(tmp, file);
     } catch {

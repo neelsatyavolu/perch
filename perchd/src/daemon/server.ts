@@ -76,7 +76,13 @@ export class Connection {
   }
 }
 
-type State = { reader: LineReader; writer: SocketWriter; conn: Connection | null; helloing: boolean; timer: ReturnType<typeof setTimeout> };
+type State = { reader: LineReader; writer: SocketWriter; conn: Connection | null; helloing: boolean; closed: boolean; timer: ReturnType<typeof setTimeout> };
+
+export type Server = {
+  stop(): void;
+  /** Closes every open connection of a client, as after a revoke. */
+  disconnect(client: string): void;
+};
 
 async function socketInUse(path: string): Promise<boolean> {
   try {
@@ -88,7 +94,8 @@ async function socketInUse(path: string): Promise<boolean> {
   }
 }
 
-export async function startServer(opts: ServerOptions): Promise<{ stop(): void }> {
+export async function startServer(opts: ServerOptions): Promise<Server> {
+  let live = new Set<State>();
   const dir = opts.socket.slice(0, opts.socket.lastIndexOf("/"));
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   chmodSync(dir, 0o700);
@@ -110,6 +117,8 @@ export async function startServer(opts: ServerOptions): Promise<{ stop(): void }
       await opts.audit.append({ time: new Date().toISOString(), tab: "", site: "", action: "connect", client: hello.client, approved: null, result: "blocked" });
       return fail(state, verified.error);
     }
+    // The client left while its token was being checked: open nothing it would never release.
+    if (state.closed) return;
     const session = opts.manager.open({ client: hello.client, session: hello.session, agent: hello.agent, title: hello.title, persistent: hello.persistent, onEnd: hello.onEnd });
     session.connections++;
     state.conn = new Connection(hello, verified, session, state.writer, opts);
@@ -138,7 +147,13 @@ export async function startServer(opts: ServerOptions): Promise<{ stop(): void }
     if (!state.conn) {
       if (state.helloing) return;
       state.helloing = true;
-      void onHello(state, value).finally(() => (state.helloing = false));
+      // A Keychain or disk error fails this hello only; it must never take perchd down.
+      void onHello(state, value)
+        .catch((error) => {
+          clearTimeout(state.timer);
+          fail(state, `Perch could not check this client: ${error instanceof Error ? error.message : String(error)}`);
+        })
+        .finally(() => (state.helloing = false));
       return;
     }
     const msg = parseClientMessage(value);
@@ -152,8 +167,9 @@ export async function startServer(opts: ServerOptions): Promise<{ stop(): void }
     socket: {
       open(socket) {
         const writer = new SocketWriter(socket);
-        const state: State = { reader: new LineReader(), writer, conn: null, helloing: false, timer: setTimeout(() => fail(state, "No hello in time."), opts.helloTimeoutMs ?? 5000) };
+        const state: State = { reader: new LineReader(), writer, conn: null, helloing: false, closed: false, timer: setTimeout(() => fail(state, "No hello in time."), opts.helloTimeoutMs ?? 5000) };
         socket.data = state;
+        live = new Set(live).add(state);
       },
       data(socket, chunk) {
         const state = socket.data;
@@ -170,6 +186,10 @@ export async function startServer(opts: ServerOptions): Promise<{ stop(): void }
       },
       close(socket) {
         const state = socket.data;
+        state.closed = true;
+        const rest = new Set(live);
+        rest.delete(state);
+        live = rest;
         clearTimeout(state.timer);
         const conn = state.conn;
         if (!conn) return;
@@ -187,6 +207,9 @@ export async function startServer(opts: ServerOptions): Promise<{ stop(): void }
     stop() {
       listener.stop(true);
       if (existsSync(opts.socket)) unlinkSync(opts.socket);
+    },
+    disconnect(client) {
+      for (const state of live) if (state.conn?.client.name === client) fail(state, `Client "${client}" was revoked.`);
     },
   };
 }

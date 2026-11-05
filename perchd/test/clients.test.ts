@@ -2,7 +2,9 @@ import { afterAll, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ClientRegistry, newToken } from "../src/daemon/clients";
+import { writeFileSync } from "node:fs";
+import { ClientRegistry, newToken, raisesMode } from "../src/daemon/clients";
+import { dialogScript, macConfirm } from "../src/daemon/confirm";
 import { MacKeychain, MemoryKeychain, type Runner } from "../src/daemon/keychain";
 import { perchPaths } from "../src/daemon/paths";
 
@@ -58,17 +60,64 @@ test("first use registers a client in Guard; verify is exact and revoke sticks",
   expect(await registry.verify("nobody", token)).toEqual({ error: "Perch did not accept this client's token." });
   expect(await registry.verify("Bad Name", token)).toEqual({ error: 'Client names use lowercase letters, digits and dashes, like "claude-code".' });
 
-  registry.setMode("claude-code", "ask");
+  await registry.setMode("claude-code", "ask");
   expect(registry.list().find((c) => c.name === "claude-code")?.mode).toBe("ask");
 
   await registry.revoke("claude-code");
   expect(await keychain.get("claude-code")).toBeNull();
   const again = await registry.token("claude-code");
   expect(await registry.verify("claude-code", again)).toEqual({ error: 'Client "claude-code" was revoked. Run: perch clients allow claude-code' });
-  registry.allow("claude-code");
+  await registry.allow("claude-code");
   expect(await registry.verify("claude-code", again)).toMatchObject({ name: "claude-code" });
 
   const file = join(dir, "clients.json");
   expect(statSync(file).mode & 0o777).toBe(0o600);
   expect(readFileSync(file, "utf8")).not.toContain(again);
+});
+
+test("a mode raised by editing clients.json is lowered to Guard, and a running perchd never rereads it", async () => {
+  const file = join(dir, "sealed.json");
+  const keychain = new MemoryKeychain();
+  const seal = new MemoryKeychain();
+  const daemonSide = new ClientRegistry(file, keychain, seal);
+  await daemonSide.load();
+  await daemonSide.verify("codex", await daemonSide.token("codex"));
+  await daemonSide.verify("grok", await daemonSide.token("grok"));
+  await daemonSide.setMode("grok", "skip");
+
+  // Another program writes the file while perchd runs: perchd keeps what it knows.
+  const edited = JSON.parse(readFileSync(file, "utf8"));
+  edited.clients = edited.clients.map((c: { name: string }) => ({ ...c, mode: "skip" }));
+  writeFileSync(file, JSON.stringify(edited));
+  expect(daemonSide.list().find((c) => c.name === "codex")?.mode).toBe("guard");
+
+  // The next perchd sees a broken seal: nothing above Guard survives, not even grok's real skip.
+  const restarted = new ClientRegistry(file, keychain, seal);
+  await restarted.load();
+  expect(restarted.list().map((c) => [c.name, c.mode])).toEqual([["codex", "guard"], ["grok", "guard"]]);
+
+  // A file perchd wrote itself loads as written.
+  await restarted.setMode("grok", "skip");
+  const again = new ClientRegistry(file, keychain, seal);
+  await again.load();
+  expect(again.find("grok").mode).toBe("skip");
+  expect(readFileSync(file, "utf8")).not.toContain((await seal.get("registry"))!);
+});
+
+test("raising a mode is ask → guard → skip", () => {
+  expect(raisesMode("guard", "skip")).toBe(true);
+  expect(raisesMode("ask", "guard")).toBe(true);
+  expect(raisesMode("skip", "guard")).toBe(false);
+  expect(raisesMode("guard", "guard")).toBe(false);
+});
+
+test("the confirm dialog defaults to Don't Allow and only an Allow click counts", async () => {
+  const script = dialogScript('Let "x\\" do more?\nreally');
+  expect(script).toContain('default button "Don\'t Allow"');
+  expect(script).toContain('"Let \\"x\\\\\\" do more? really"');
+  const answer = (code: number, stdout: string) => macConfirm(async () => ({ code, stdout }));
+  expect(await answer(0, "button returned:Allow, gave up:false")("?")).toBe(true);
+  expect(await answer(0, "button returned:, gave up:true")("?")).toBe(false);
+  expect(await answer(1, "")("?")).toBe(false);
+  expect(await macConfirm(async () => Promise.reject(new Error("no screen")))("?")).toBe(false);
 });

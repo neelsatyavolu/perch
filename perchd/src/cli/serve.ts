@@ -15,6 +15,7 @@ export async function serve(argv: string[], io: CliIO): Promise<number> {
   const daemon = await startDaemon({
     paths,
     keychain: io.keychain ?? new MacKeychain(),
+    sealKeychain: io.keychain ? undefined : new MacKeychain("Perch registry"),
     launch: () => Browser.launch({ userDataDir: paths.profileDir, executable, headless: a.flags.has("--headless") }),
   });
   io.stderr(`perchd ${process.pid} listening on ${paths.socket}\n`);

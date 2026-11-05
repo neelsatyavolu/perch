@@ -7,8 +7,10 @@ import { existsSync } from "node:fs";
 import { AuditLog } from "../agent/audit";
 import { TOOL_SPECS } from "../agent/tools";
 import { Browser } from "../browser/browser";
-import { ClientRegistry, isMode } from "./clients";
-import type { Keychain } from "./keychain";
+import type { Mode } from "../agent/permissions";
+import { ClientRegistry, isMode, raisesMode } from "./clients";
+import { macConfirm, type Confirm } from "./confirm";
+import { MemoryKeychain, type Keychain } from "./keychain";
 import type { PerchPaths } from "./paths";
 import { SESSION_ID, type OnEnd } from "./protocol";
 import { startServer, type Connection, type Handler } from "./server";
@@ -21,6 +23,10 @@ export const PERCH_BUNDLE_ID = "co.xanom.perch";
 export type DaemonOptions = {
   paths: PerchPaths;
   keychain: Keychain;
+  /** Holds the key that seals clients.json; a Keychain service of its own. */
+  sealKeychain?: Keychain;
+  /** Asks the person at the Mac before a client may do more (a macOS dialog by default). */
+  confirm?: Confirm;
   launch: () => Promise<Browser>;
   groups?: TabGroups;
   graceMs?: number;
@@ -41,9 +47,23 @@ function adminOnly(conn: Connection): void {
   if (conn.client.name !== "cli") throw new Error("Only the perch command can change clients.");
 }
 
+/** The tools an outside client may call: the browser tools. App tools are for Perch's own agent. */
+const CLIENT_TOOLS = TOOL_SPECS.filter((t) => t.name !== "done");
+const CLIENT_TOOL_NAMES = new Set(CLIENT_TOOLS.map((t) => t.name));
+
+const MODE_TEXT: Record<Mode, string> = {
+  ask: "ask before every change",
+  guard: "act without asking, except sends, posts, deletes, uploads and payments",
+  skip: "act without asking, except payments and password changes",
+};
+
+const DECLINED_HERE = "Not changed: it was not allowed in the Perch dialog.";
+
 export async function startDaemon(opts: DaemonOptions): Promise<Daemon> {
   let browser: Promise<Browser> | null = null;
-  const registry = new ClientRegistry(opts.paths.clientsFile, opts.keychain);
+  const registry = new ClientRegistry(opts.paths.clientsFile, opts.keychain, opts.sealKeychain ?? new MemoryKeychain());
+  await registry.load();
+  const confirm = opts.confirm ?? macConfirm();
   const audit = new AuditLog(opts.paths.auditFile);
   const getBrowser = (): Promise<Browser> =>
     (browser ??= opts
@@ -84,11 +104,12 @@ export async function startDaemon(opts: DaemonOptions): Promise<Daemon> {
       label: conn.session.label,
       sessions: manager.list(),
     }),
-    tools: async () => TOOL_SPECS.filter((t) => t.name !== "done").map((t) => ({ name: t.name, description: t.description, inputSchema: t.parameters })),
+    tools: async () => CLIENT_TOOLS.map((t) => ({ name: t.name, description: t.description, inputSchema: t.parameters })),
     call: async (conn, params) => {
       const name = str(params, "name");
       const args = params.args ?? {};
       if (!name) throw new Error("call needs a tool name.");
+      if (!CLIENT_TOOL_NAMES.has(name)) return { content: `Perch has no tool "${name}" for outside agents.`, isError: true };
       if (typeof args !== "object" || args === null || Array.isArray(args)) throw new Error("args must be an object.");
       return manager.call(conn.session, { id: `${Date.now()}`, name, args: args as Record<string, unknown> }, conn.policy());
     },
@@ -102,17 +123,30 @@ export async function startDaemon(opts: DaemonOptions): Promise<Daemon> {
       return { ended: true };
     },
     "clients.list": async (conn) => (adminOnly(conn), registry.list()),
+    // Revoking and lowering a mode take effect at once; letting a client do more needs the person.
     "clients.revoke": async (conn, params) => {
       adminOnly(conn);
-      await registry.revoke(str(params, "name") ?? "");
+      const name = str(params, "name") ?? "";
+      if (name === "cli") throw new Error("The perch command cannot revoke itself.");
+      await registry.revoke(name);
+      server.disconnect(name);
+      await manager.endClient(name);
       return registry.list();
     },
-    "clients.allow": async (conn, params) => (adminOnly(conn), registry.allow(str(params, "name") ?? ""), registry.list()),
+    "clients.allow": async (conn, params) => {
+      adminOnly(conn);
+      const name = str(params, "name") ?? "";
+      if (registry.find(name).revoked && !(await confirm(`Let "${name}" use Perch again?`))) throw new Error(DECLINED_HERE);
+      await registry.allow(name);
+      return registry.list();
+    },
     "clients.mode": async (conn, params) => {
       adminOnly(conn);
       const mode = params.mode;
       if (!isMode(mode)) throw new Error("The mode must be ask, guard or skip.");
-      registry.setMode(str(params, "name") ?? "", mode);
+      const name = str(params, "name") ?? "";
+      if (raisesMode(registry.find(name).mode, mode) && !(await confirm(`Let "${name}" ${MODE_TEXT[mode]} in Perch (${mode} mode)?`))) throw new Error(DECLINED_HERE);
+      await registry.setMode(name, mode);
       return registry.list();
     },
   };

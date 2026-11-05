@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { readFileSync, statSync } from "node:fs";
+import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { connect, DaemonNotRunning } from "../src/cli/client";
 import { Browser } from "../src/browser/browser";
@@ -14,12 +14,38 @@ const home = tempProfile();
 const profile = tempProfile();
 const site = startFixtures();
 const paths = perchPaths({ PERCH_HOME: home.dir });
-const keychain = new MemoryKeychain();
+/** A Keychain whose reads can fail or stall, as a locked or slow Keychain does. */
+class FlakyKeychain extends MemoryKeychain {
+  failNext = false;
+  stall: Promise<void> | null = null;
+  override async get(account: string): Promise<string | null> {
+    if (this.failNext) {
+      this.failNext = false;
+      throw new Error("The Keychain could not be read (security exited 36)");
+    }
+    if (this.stall) await this.stall;
+    return super.get(account);
+  }
+}
+
+const keychain = new FlakyKeychain();
 const registry = new ClientRegistry(paths.clientsFile, keychain);
+const confirms: string[] = [];
+let confirmAnswer = false;
 let daemon: Daemon;
 
 beforeAll(async () => {
-  daemon = await startDaemon({ paths, keychain, launch: () => Browser.launch({ userDataDir: profile.dir }), graceMs: 100, helloTimeoutMs: 300 });
+  // A perchd that died left sessions behind.
+  mkdirSync(paths.runDir, { recursive: true });
+  writeFileSync(paths.sessionsFile, JSON.stringify({ version: 1, pid: 1, sessions: [{ client: "agterm", session: "T9", tabs: 3 }] }));
+  daemon = await startDaemon({
+    paths,
+    keychain,
+    launch: () => Browser.launch({ userDataDir: profile.dir }),
+    graceMs: 100,
+    helloTimeoutMs: 300,
+    confirm: async (message) => (confirms.push(message), confirmAnswer),
+  });
 });
 afterAll(async () => {
   await daemon.stop();
@@ -49,7 +75,7 @@ test("the socket is private to the user and a second daemon refuses to start", a
 test("a wrong token, a revoked client and a silent client are turned away", async () => {
   await expect(connect({ socket: paths.socket, hello: { ...(await hello("cli", "x")), token: "A".repeat(43) } })).rejects.toThrow("Perch did not accept this client's token.");
   await registry.token("grok");
-  await registry.revoke("grok");
+  await daemon.registry.revoke("grok");
   await expect(connect({ socket: paths.socket, hello: await hello("grok", "x") })).rejects.toThrow('Client "grok" was revoked.');
 
   const silent = await new Promise<string>((resolve) => {
@@ -102,4 +128,81 @@ test("risky actions ask an interactive client and are declined for others", asyn
   expect(clients.find((x) => x.name === "claude-code")?.mode).toBe("ask");
   yes.close();
   no.close();
+}, 30_000);
+
+test("a fresh perchd clears the sessions a dead one left, and names itself in the file", () => {
+  const file = JSON.parse(readFileSync(paths.sessionsFile, "utf8"));
+  expect(file.pid).toBe(process.pid);
+  expect(file.sessions.find((x: { session: string }) => x.session === "T9")).toBeUndefined();
+});
+
+test("a Keychain error during hello fails that client only, and perchd keeps serving", async () => {
+  const h = await hello("cli", "k1");
+  keychain.failNext = true;
+  await expect(connect({ socket: paths.socket, hello: h })).rejects.toThrow("Perch could not check this client: The Keychain could not be read");
+  const c = await connect({ socket: paths.socket, hello: h });
+  expect(c.welcome.client).toBe("cli");
+  c.close();
+});
+
+test("a client that leaves while its token is checked leaves no session behind", async () => {
+  const h = await hello("codex", "race-1", { persistent: true });
+  let release!: () => void;
+  keychain.stall = new Promise<void>((r) => (release = r));
+  const socket = await Bun.connect({ unix: paths.socket, socket: { data() {} } });
+  socket.write(`${JSON.stringify({ type: "hello", ...h })}\n`);
+  await Bun.sleep(50);
+  socket.end();
+  await Bun.sleep(50);
+  keychain.stall = null;
+  release();
+  await Bun.sleep(100);
+  expect(daemon.manager.get("codex", "race-1")).toBeUndefined();
+});
+
+test("outside clients cannot call Perch's own app tools", async () => {
+  const c = await connect({ socket: paths.socket, hello: await hello("claude-code", "f1") });
+  const flint = await c.request<{ content: string; isError?: boolean }>("call", { name: "flint", args: { command: "list" } });
+  expect(flint).toEqual({ content: 'Perch has no tool "flint" for outside agents.', isError: true });
+  c.close();
+});
+
+test("letting a client do more needs a click in Perch's dialog; doing less does not", async () => {
+  const cli = await connect({ socket: paths.socket, hello: await hello("cli", "admin") });
+  await registry.token("codex");
+  confirms.length = 0;
+  confirmAnswer = false;
+  await expect(cli.request("clients.mode", { name: "codex", mode: "skip" })).rejects.toThrow("Not changed: it was not allowed in the Perch dialog.");
+  expect(confirms).toEqual(['Let "codex" act without asking, except payments and password changes in Perch (skip mode)?']);
+  expect(daemon.registry.find("codex").mode).toBe("guard");
+
+  await cli.request("clients.mode", { name: "codex", mode: "ask" });
+  expect(confirms).toHaveLength(1);
+  confirmAnswer = true;
+  await cli.request("clients.mode", { name: "codex", mode: "guard" });
+  expect(daemon.registry.find("codex").mode).toBe("guard");
+
+  await cli.request("clients.revoke", { name: "grok" });
+  confirmAnswer = false;
+  await expect(cli.request("clients.allow", { name: "grok" })).rejects.toThrow("Not changed");
+  expect(daemon.registry.find("grok").revoked).toBe(true);
+  await expect(cli.request("clients.revoke", { name: "cli" })).rejects.toThrow("The perch command cannot revoke itself.");
+  cli.close();
+});
+
+test("revoking a client closes its open connections and sessions", async () => {
+  await registry.token("claude-code");
+  const agent = await connect({ socket: paths.socket, hello: await hello("claude-code", "live", { persistent: true }) });
+  let closed = false;
+  const watch = await connect({ socket: paths.socket, hello: await hello("claude-code", "live"), onClose: () => (closed = true) });
+  await agent.request("call", { name: "navigate", args: { url: site.url("/mail.html") } });
+  expect(daemon.manager.get("claude-code", "live")?.tabIds()).toHaveLength(1);
+
+  const cli = await connect({ socket: paths.socket, hello: await hello("cli", "admin2") });
+  await cli.request("clients.revoke", { name: "claude-code" });
+  await Bun.sleep(100);
+  expect(closed).toBe(true);
+  await expect(agent.request("tabs")).rejects.toThrow();
+  expect(daemon.manager.get("claude-code", "live")).toBeUndefined();
+  cli.close();
 }, 30_000);

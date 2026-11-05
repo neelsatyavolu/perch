@@ -1,15 +1,25 @@
-/** The OpenAI Responses API, as served for Codex (ChatGPT sign-in) and Grok (xAI sign-in). */
+/** The OpenAI Responses API: Codex (ChatGPT sign-in), Grok (xAI sign-in or key) and the OpenAI API (key). */
 
-import { openStream, sseJson, upstreamMessage, type Attempt } from "./http";
+import { openStream, redactSecrets, sseJson, upstreamMessage, type Attempt } from "./http";
 import { ModelError, parseArgs, type Effort, type Message, type Model, type ToolSpec, type TurnEvent, type TurnRequest } from "./types";
 
 export const CODEX_URL = "https://chatgpt.com/backend-api/codex/responses";
 export const GROK_URL = "https://api.x.ai/v1/responses";
+export const OPENAI_URL = "https://api.openai.com/v1/responses";
 
 export type ResponsesTokens = { accessToken: string; accountId?: string };
-export type ResponsesOptions = { provider: "codex" | "grok"; model: string; getToken: () => Promise<ResponsesTokens> };
+export type ResponsesProvider = "codex" | "grok" | "openai";
+export type ResponsesOptions = {
+  provider: ResponsesProvider;
+  model: string;
+  getToken: () => Promise<ResponsesTokens>;
+  /** Overrides the provider's endpoint (tests, or a gateway). */
+  url?: string;
+  /** Names the provider in key errors, such as "xAI" for a Grok API key. */
+  label?: string;
+};
 
-function inputItems(provider: "codex" | "grok", messages: Message[]): object[] {
+function inputItems(provider: ResponsesProvider, messages: Message[]): object[] {
   const text = (role: "user" | "assistant", value: string) =>
     provider === "grok" ? value : [{ type: role === "user" ? "input_text" : "output_text", text: value }];
   const items: object[] = [];
@@ -49,21 +59,31 @@ function build(opts: ResponsesOptions, tokens: ResponsesTokens, req: TurnRequest
     "Content-Type": "application/json",
     Accept: "text/event-stream",
   };
-  if (opts.provider === "codex") {
-    headers.originator = "codex_cli_rs";
-    headers["OpenAI-Beta"] = "responses=v1";
-    if (tokens.accountId) headers["chatgpt-account-id"] = tokens.accountId;
-    const body = { ...base, instructions: req.system, input: inputItems("codex", req.messages), ...(effort ? { reasoning: { effort } } : {}) };
-    return { url: CODEX_URL, init: { method: "POST", headers, body: JSON.stringify(body) } };
+  if (opts.provider !== "grok") {
+    if (opts.provider === "codex") {
+      headers.originator = "codex_cli_rs";
+      headers["OpenAI-Beta"] = "responses=v1";
+      if (tokens.accountId) headers["chatgpt-account-id"] = tokens.accountId;
+    }
+    const openaiEffort = effort === "max" ? "xhigh" : effort;
+    const body = { ...base, instructions: req.system, input: inputItems(opts.provider, req.messages), ...(openaiEffort ? { reasoning: { effort: openaiEffort } } : {}) };
+    return { url: opts.url ?? (opts.provider === "codex" ? CODEX_URL : OPENAI_URL), init: { method: "POST", headers, body: JSON.stringify(body) } };
   }
   headers["User-Agent"] = "grok-cli/1.0";
   const input = [{ role: "system", content: req.system }, ...inputItems("grok", req.messages)];
-  const body = { ...base, input, ...(effort && /^grok-4/.test(opts.model) ? { reasoning: { effort } } : {}) };
-  return { url: GROK_URL, init: { method: "POST", headers, body: JSON.stringify(body) } };
+  // xAI takes low, medium or high.
+  const grokEffort = effort === "xhigh" || effort === "max" ? "high" : effort === "none" ? undefined : effort;
+  const body = { ...base, input, ...(grokEffort && /^grok-4/.test(opts.model) ? { reasoning: { effort: grokEffort } } : {}) };
+  return { url: opts.url ?? GROK_URL, init: { method: "POST", headers, body: JSON.stringify(body) } };
 }
 
 export function responsesModel(opts: ResponsesOptions, fetchImpl: typeof fetch = fetch): Model {
-  const signIn = opts.provider === "codex" ? "Sign in to ChatGPT again in Perch's settings." : "Sign in to Grok again in Perch's settings.";
+  const signIn =
+    opts.provider === "openai" || opts.label
+      ? `Check the ${opts.label ?? "OpenAI"} key in Perch's settings.`
+      : opts.provider === "codex"
+        ? "Sign in to ChatGPT again in Perch's settings."
+        : "Sign in to Grok again in Perch's settings.";
   // Once the provider rejects reasoning effort for this model, stop sending it.
   let effortRejected = false;
   return {
@@ -100,7 +120,7 @@ export function responsesModel(opts: ResponsesOptions, fetchImpl: typeof fetch =
           }
           case "response.failed":
           case "error":
-            throw new ModelError(event.response?.error?.message ?? event.error?.message ?? event.message ?? "The model failed.");
+            throw new ModelError(redactSecrets(String(event.response?.error?.message ?? event.error?.message ?? event.message ?? "The model failed.")).split(tokens.accessToken).join("[redacted]"));
         }
       }
       throw new ModelError("The model stopped before finishing. Try again.");

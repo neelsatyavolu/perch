@@ -185,6 +185,44 @@ test("Responses: the final turn asks for text only, and screenshots go at high d
   expect(body.input.at(-1).content[1]).toEqual({ type: "input_image", image_url: "data:image/jpeg;base64,AAAA", detail: "high" });
 });
 
+test("Anthropic: the effort goes in output_config; a 400 about it retries once without", async () => {
+  const seen: { url: string; init: RequestInit }[] = [];
+  const model = anthropicModel({ model: "claude-opus-5-5", apiKey: async () => "sk-ant-SECRET" },
+    fakeFetch([{ status: 200, body: ANTHROPIC_STREAM }, { status: 400, body: '{"type":"error","error":{"type":"invalid_request_error","message":"output_config.effort: unsupported value"}}' }, { status: 200, body: ANTHROPIC_STREAM }], seen));
+  await collect(model, { ...REQ, effort: "max" });
+  expect(JSON.parse(String(seen[0]!.init.body)).output_config).toEqual({ effort: "max" });
+  await collect(model, { ...REQ, effort: "low" });
+  expect(seen).toHaveLength(3);
+  expect(JSON.parse(String(seen[2]!.init.body)).output_config).toBeUndefined();
+  await collect(model, { ...REQ, effort: undefined });
+  expect(JSON.parse(String(seen[3]!.init.body)).output_config).toBeUndefined();
+});
+
+test("Anthropic fast mode: speed and its beta header; a 400 about it retries once at normal speed", async () => {
+  const seen: { url: string; init: RequestInit }[] = [];
+  const model = anthropicModel({ model: "claude-opus-5-5", apiKey: async () => "sk-ant-SECRET", fast: true },
+    fakeFetch([{ status: 200, body: ANTHROPIC_STREAM }, { status: 400, body: '{"type":"error","error":{"type":"invalid_request_error","message":"speed: fast mode is not available for this model"}}' }, { status: 200, body: ANTHROPIC_STREAM }], seen));
+  await collect(model);
+  expect(JSON.parse(String(seen[0]!.init.body)).speed).toBe("fast");
+  expect((seen[0]!.init.headers as Record<string, string>)["anthropic-beta"]).toBe("fast-mode-2026-02-01");
+  await collect(model);
+  expect(seen).toHaveLength(3);
+  expect(JSON.parse(String(seen[2]!.init.body)).speed).toBeUndefined();
+  expect((seen[2]!.init.headers as Record<string, string>)["anthropic-beta"]).toBeUndefined();
+});
+
+test("Responses: \"none\" reaches OpenAI as the lowest reasoning effort; Grok gets no effort it cannot take", async () => {
+  const seen: { url: string; init: RequestInit }[] = [];
+  const openai = responsesModel({ provider: "openai", model: "gpt-6-astra", getToken: async () => ({ accessToken: TOKEN }) }, fakeFetch([{ status: 200, body: RESPONSES_STREAM }], seen));
+  await collect(openai, { ...REQ, effort: "none" });
+  expect(JSON.parse(String(seen[0]!.init.body)).reasoning).toEqual({ effort: "none" });
+  const grok = responsesModel({ provider: "grok", model: "grok-4.7", getToken: async () => ({ accessToken: TOKEN }) }, fakeFetch([{ status: 200, body: RESPONSES_STREAM }], seen));
+  await collect(grok, { ...REQ, effort: "none" });
+  expect(JSON.parse(String(seen[1]!.init.body)).reasoning).toBeUndefined();
+  await collect(grok, { ...REQ, effort: "max" });
+  expect(JSON.parse(String(seen[2]!.init.body)).reasoning).toEqual({ effort: "high" });
+});
+
 test("the fake model plays its script and records requests", async () => {
   const model = fakeModel([[{ type: "text", delta: "hi" }, { type: "done" }]]);
   expect(await collect(model)).toEqual([{ type: "text", delta: "hi" }, { type: "done" }]);

@@ -75,6 +75,11 @@ export async function* sseJson(body: ReadableStream<Uint8Array>, signal: AbortSi
   if (signal.aborted) throw new ModelError("Cancelled.");
 }
 
+/** Hides anything shaped like an API key or token (OpenAI, Anthropic, OpenRouter, xAI, Google, JWTs). */
+export function redactSecrets(text: string): string {
+  return text.replace(/\b(sk|tok|eyJ|xai|AIza|ya29)[\w.-]{8,}/g, "[redacted]");
+}
+
 /** A provider's error message, without echoing anything that looks like a credential. */
 export function upstreamMessage(status: number, text: string, signInHint: string): string {
   if (status === 401 || status === 403) return signInHint;
@@ -82,7 +87,7 @@ export function upstreamMessage(status: number, text: string, signInHint: string
   try {
     const json = JSON.parse(text) as { error?: { message?: unknown }; detail?: unknown; message?: unknown };
     const message = json?.error?.message ?? json?.detail ?? json?.message;
-    if (typeof message === "string" && message) return message.replace(/\b(sk|tok|eyJ)[\w.-]{8,}/g, "[redacted]");
+    if (typeof message === "string" && message) return redactSecrets(message);
   } catch {
     /* not JSON */
   }

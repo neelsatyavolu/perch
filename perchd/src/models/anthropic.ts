@@ -1,11 +1,13 @@
 /** The Anthropic Messages API, for people who use a Claude API key (spec 7.3). */
 
-import { openStream, sseJson, upstreamMessage } from "./http";
+import { openStream, redactSecrets, sseJson, upstreamMessage } from "./http";
 import { ModelError, parseArgs, type Message, type Model, type TurnEvent, type TurnRequest } from "./types";
 
 export const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 /** Room for adaptive thinking before the answer or tool call; streaming keeps a large value safe. */
 const MAX_TOKENS = 32_000;
+/** Fast mode (research preview; Claude Opus 5.5, Opus 5 and Opus 4.8 on the Claude API, at a higher price). */
+const FAST_BETA = "fast-mode-2026-02-01";
 
 type Block = Record<string, unknown>;
 
@@ -33,14 +35,17 @@ export function toAnthropicMessages(messages: Message[]): { role: "user" | "assi
   return out;
 }
 
-export function anthropicModel(opts: { model: string; apiKey: () => Promise<string> }, fetchImpl: typeof fetch = fetch): Model {
-  // Once the API rejects effort for this model (older models have none), stop sending it.
+export function anthropicModel(opts: { model: string; apiKey: () => Promise<string>; url?: string; fast?: boolean }, fetchImpl: typeof fetch = fetch): Model {
+  // Once the API rejects the effort or fast setting for this model (older models have none), stop sending it.
   let effortRejected = false;
+  let fastRejected = false;
   return {
     id: `anthropic:${opts.model}`,
     async *turn(req: TurnRequest, signal: AbortSignal): AsyncIterable<TurnEvent> {
       const key = await opts.apiKey();
-      let effort = effortRejected ? undefined : req.effort;
+      // The Claude API takes low through max; "none" (a Responses API value) has no Claude equivalent.
+      let effort = effortRejected || req.effort === "none" ? undefined : req.effort;
+      let fast = Boolean(opts.fast) && !fastRejected;
       const body = () => ({
         model: opts.model,
         max_tokens: MAX_TOKENS,
@@ -49,16 +54,23 @@ export function anthropicModel(opts: { model: string; apiKey: () => Promise<stri
         tools: req.tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.parameters })),
         ...toolChoice(req),
         ...(effort ? { output_config: { effort } } : {}),
+        ...(fast ? { speed: "fast" } : {}),
         // Caches the conversation up to the newest block, so each step re-reads the prefix cheaply.
         cache_control: { type: "ephemeral" },
         stream: true,
       });
       const stream = await openStream(
         () => ({
-          url: ANTHROPIC_URL,
+          url: opts.url ?? ANTHROPIC_URL,
           init: {
             method: "POST",
-            headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json", accept: "text/event-stream" },
+            headers: {
+              "x-api-key": key,
+              "anthropic-version": "2023-06-01",
+              "content-type": "application/json",
+              accept: "text/event-stream",
+              ...(fast ? { "anthropic-beta": FAST_BETA } : {}),
+            },
             body: JSON.stringify(body()),
           },
         }),
@@ -67,6 +79,11 @@ export function anthropicModel(opts: { model: string; apiKey: () => Promise<stri
           signal,
           describe: (status, text) => upstreamMessage(status, text, "Check the Claude API key in Perch's settings."),
           adjust: (text) => {
+            if (fast && /speed|fast/i.test(text)) {
+              fast = false;
+              fastRejected = true;
+              return true;
+            }
             if (!effort || !/effort|output_config/i.test(text)) return false;
             effort = undefined;
             effortRejected = true;
@@ -74,7 +91,7 @@ export function anthropicModel(opts: { model: string; apiKey: () => Promise<stri
           },
         },
       );
-      yield* readStream(stream, signal);
+      yield* readStream(stream, signal, key);
     },
   };
 }
@@ -85,7 +102,7 @@ function toolChoice(req: TurnRequest): object {
   return req.toolChoice === "none" ? { tool_choice: { type: "none" } } : { tool_choice: { type: "auto", disable_parallel_tool_use: true } };
 }
 
-async function* readStream(stream: ReadableStream<Uint8Array>, signal: AbortSignal): AsyncIterable<TurnEvent> {
+async function* readStream(stream: ReadableStream<Uint8Array>, signal: AbortSignal, key: string): AsyncIterable<TurnEvent> {
   const tools = new Map<number, { id: string; name: string; json: string }>();
   let input = 0;
   let output = 0;
@@ -117,7 +134,7 @@ async function* readStream(stream: ReadableStream<Uint8Array>, signal: AbortSign
         yield { type: "done", usage: { input, output } };
         return;
       case "error":
-        throw new ModelError(event.error?.message ?? "The model failed.");
+        throw new ModelError(redactSecrets(String(event.error?.message ?? "The model failed.")).split(key).join("[redacted]"));
     }
   }
   throw new ModelError("The model stopped before finishing. Try again.");

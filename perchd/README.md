@@ -20,7 +20,26 @@ ANTHROPIC_API_KEY=… bun run src/cli.ts run --model anthropic:claude-sonnet-5-5
 bun run src/cli.ts run --model fake "anything"     # wiring check, no model
 ```
 
-Add `--show` to watch the browser and `--mode ask|guard|skip` to change the permission mode (Guard by default). Codex and Grok need the sign-in that Perch's settings add later.
+Add `--show` to watch the browser and `--mode ask|guard|skip` to change the permission mode (Guard by default).
+
+## Connect models
+
+Until the Settings → Models page exists, the same API runs from the terminal. Keys and sign-in tokens go to the login Keychain; choices go to an encrypted file in `~/Library/Application Support/Perch` (`PERCH_HOME` changes the folder).
+
+In this dev setup the Keychain items trust the `bun` binary that created them, so any other script run by bun on this Mac can read them without asking. Use keys you can revoke, with low spending limits, until perchd ships as a signed binary with its items bound to Perch's signature.
+
+```sh
+bun run src/cli.ts models sign-in codex          # ChatGPT; also: grok
+bun run src/cli.ts models key openai             # asks for the key without echoing it; also anthropic, xai, gemini, openrouter
+bun run src/cli.ts models endpoint ollama http://127.0.0.1:11434/v1   # asks for an optional key; Return keeps the saved one
+bun run src/cli.ts models endpoint custom https://gateway.example.com/v1 --no-key   # --no-key removes a saved key
+bun run src/cli.ts models claude-code            # uses the installed Claude Code CLI as the runner
+bun run src/cli.ts models providers              # what is connected
+bun run src/cli.ts models roles                  # Default, Fast, Standard, Deep, Visual, Image
+bun run src/cli.ts models role deep openai:gpt-6-astra high
+bun run src/cli.ts models image "A lighthouse at dawn" ~/Desktop
+bun run src/cli.ts run --model role:deep "…"      # or --model codex, --model ollama:qwen3:8b
+```
 
 ## Layout
 
@@ -35,7 +54,8 @@ Add `--show` to watch the browser and `--mode ask|guard|skip` to change the perm
 | `src/page/screenshot.ts`, `repl.ts` | Masked screenshots, coordinate clicks, guarded JavaScript |
 | `src/agent/` | Tools, permission modes, audit log, the task loop and system prompt |
 | `src/agent/progress.ts`, `finish.ts` | Step and time budget notes, repeated-call notes, the final best-effort answer |
-| `src/models/` | Responses API (Codex, Grok), Anthropic Messages API, a scripted fake |
+| `src/models/` | Adapters (Responses, Anthropic, Chat Completions), providers and sign-in, model capabilities, task roles, image generation, and `registry.ts`, the API Settings → Models calls |
+| `src/config/` | Keychain access and the encrypted settings store |
 
 ## Rules this code keeps
 

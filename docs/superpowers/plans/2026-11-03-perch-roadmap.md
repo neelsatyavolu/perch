@@ -33,9 +33,9 @@ Recommended next plan after this one: 3a, written and started while plan 1's fir
 
 These need the owner, not an agent:
 
-1. Buy `perchbrowser.com`.
-2. Approve creating the public GitHub repo `neelsatyavolu/perch` (plan 1, task 8 needs it to publish a release).
-3. Create the Sparkle EdDSA key and save it in 1Password (plan 1, task 7 gives the commands).
+1. ~~Buy `perchbrowser.com`.~~ Done (Cloudflare).
+2. ~~Approve the public GitHub repo.~~ Done: github.com/neelsatyavolu/perch, MIT.
+3. ~~Create the Sparkle EdDSA key.~~ Done 2026-11-05; in 1Password and the login Keychain.
 4. Apply to Google's Widevine programme for a VMP certificate (spec 5.2).
-5. Rotate the Aside provider tokens exposed earlier in the design session: sign out of and back in to Claude, Codex and Grok in Aside.
+5. ~~Rotate the Aside provider tokens.~~ Dropped by the owner.
 6. Launch the first signed build and the update test by hand (plan 1, task 9). Agents never drive the GUI while the owner is using the Mac.

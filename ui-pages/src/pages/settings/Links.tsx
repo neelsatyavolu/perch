@@ -8,12 +8,14 @@ import { useAction, useApi, useLoad } from "../../ui/frame";
 import { Dialog } from "../../ui/Dialog";
 import { Group, Row } from "../../ui/Row";
 import { Switch } from "../../ui/Switch";
+import { DreamLogDialog } from "./DreamLogDialog";
 
 export function MemorySection() {
   const api = useApi();
   const act = useAction();
   const settings = useLoad((a) => a.getMemorySettings());
   const [wiping, setWiping] = useState(false);
+  const [reading, setReading] = useState(false);
   const s = settings.data;
   const patch = async (x: Partial<MemorySettings>) => {
     const next = await act(() => api.setMemorySettings(x));
@@ -33,6 +35,9 @@ export function MemorySection() {
           <Row id="dreaming" title="Tidy memory overnight" detail={s.lastDream ? `Merges duplicates and moves old facts to history. Last ran ${relativeTime(s.lastDream).toLowerCase()}.` : "Merges duplicates and moves old facts to history"}>
             <Switch label="Tidy memory overnight" describedBy="dreaming-d" checked={s.dreaming} onChange={(dreaming) => patch({ dreaming })} />
           </Row>
+          <Row id="dream-log" sub title="Overnight tidy log" detail="What each pass merged, updated and moved, by date">
+            <button type="button" class="btn" onClick={() => setReading(true)}>Read the log</button>
+          </Row>
         </div>
         <p class="note">Memory stays on this Mac, encrypted. Incognito windows never read or write it.</p>
       </Group>
@@ -49,6 +54,7 @@ export function MemorySection() {
           </Row>
         </div>
       </Group>
+      <DreamLogDialog open={reading} onClose={() => setReading(false)} />
       <Dialog
         open={wiping}
         title="Delete all memory?"

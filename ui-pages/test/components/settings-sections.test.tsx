@@ -164,6 +164,15 @@ describe("Privacy and security", () => {
 });
 
 describe("Memory, Routines, Import and About", () => {
+  test("the overnight tidy log lists each pass by date with what it changed", async () => {
+    const r = at("#memory");
+    fireEvent.click(await r.findByRole("button", { name: "Read the log" }));
+    const dlg = await r.findByRole("dialog", { name: "Overnight tidy log" });
+    expect(await within(dlg).findByText("Merged two pages about Maya Chen")).toBeTruthy();
+    expect(within(dlg).getByText("2 merges · 5 facts updated · 1 moved to History")).toBeTruthy();
+    expect(within(dlg).getAllByRole("heading", { level: 3 }).length).toBe(2);
+  });
+
   test("memory switches and the delete-all confirmation", async () => {
     const r = at("#memory");
     fireEvent.click(await r.findByRole("switch", { name: "Learn from browsing history" }));

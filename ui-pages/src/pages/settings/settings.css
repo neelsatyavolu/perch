@@ -67,3 +67,8 @@
 .audit .o-declined td:last-child, .audit .o-blocked td:last-child { color: var(--ink); }
 .audit-foot { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 @media (max-width: 760px) { .audit thead { display: none; } .audit tr { display: grid; padding: 8px 0; border-bottom: 1px solid var(--hair); } .audit td { border: 0; padding: 2px 12px; } }
+
+/* Overnight tidy log */
+.dream-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; }
+.dream-list h3 { font-size: 12px; font-weight: 500; color: var(--ink); }
+.dream-list ul { margin: 6px 0 0; padding-left: 18px; color: var(--body); display: grid; gap: 4px; }

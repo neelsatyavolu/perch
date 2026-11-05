@@ -17,14 +17,20 @@ export type AdapterDeps = {
   fetch: typeof fetch;
 };
 
-/** Maps a role's effort to what the provider's API takes; undefined sends none. */
+/**
+ * Maps a role's effort to what the provider's API takes; undefined sends none. The catalog only
+ * offers a model the efforts that map to something here (see test/effort.test.ts).
+ */
 export function adapterEffort(provider: ProviderId, effort: RoleEffort | undefined): Effort | undefined {
-  if (!effort || effort === "off") return undefined;
+  if (!effort) return undefined;
   const chat = PROVIDERS[provider].chat;
-  if (chat === "anthropic" || chat === "runner") return undefined;
+  // The Claude Code runner has no effort setting.
+  if (chat === "runner") return undefined;
+  const openai = provider === "codex" || provider === "openai";
+  if (effort === "off") return openai ? "none" : undefined;
   if (effort !== "max") return effort;
-  // OpenAI's top level is xhigh; xAI and the Chat Completions servers stop at high.
-  return provider === "codex" || provider === "openai" ? "xhigh" : "high";
+  // The Claude API takes max; OpenAI's top level is xhigh; xAI and Chat Completions servers stop at high.
+  return chat === "anthropic" ? "max" : openai ? "xhigh" : "high";
 }
 
 const requireKey = (deps: AdapterDeps, label: string) => async (): Promise<string> => {

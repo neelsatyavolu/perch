@@ -62,7 +62,8 @@ const NO_TOOLS = /embed|whisper|tts|rerank|moderation/i;
 export function describeModel(provider: ProviderId, id: string): ModelInfo {
   const bare = provider === "openrouter" ? id.replace(/^[^/]+\//, "") : id;
   const known = KNOWN[id] ?? KNOWN[bare];
-  if (known) return { id, provider, ...known };
+  // The Claude Code runner takes no effort setting, so its models offer none.
+  if (known) return { id, provider, ...known, ...(provider === "claude-code" ? { efforts: [] } : {}) };
   const imageOutput = IMAGE_OUTPUT.test(id);
   return { id, provider, label: id, vision: imageOutput || VISION.test(id), tools: !imageOutput && !NO_TOOLS.test(id), imageOutput, context: null, efforts: [] };
 }

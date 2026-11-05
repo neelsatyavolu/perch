@@ -64,13 +64,14 @@ function build(opts: ResponsesOptions, tokens: ResponsesTokens, req: TurnRequest
       headers["OpenAI-Beta"] = "responses=v1";
       if (tokens.accountId) headers["chatgpt-account-id"] = tokens.accountId;
     }
-    const body = { ...base, instructions: req.system, input: inputItems(opts.provider, req.messages), ...(effort ? { reasoning: { effort } } : {}) };
+    const openaiEffort = effort === "max" ? "xhigh" : effort;
+    const body = { ...base, instructions: req.system, input: inputItems(opts.provider, req.messages), ...(openaiEffort ? { reasoning: { effort: openaiEffort } } : {}) };
     return { url: opts.url ?? (opts.provider === "codex" ? CODEX_URL : OPENAI_URL), init: { method: "POST", headers, body: JSON.stringify(body) } };
   }
   headers["User-Agent"] = "grok-cli/1.0";
   const input = [{ role: "system", content: req.system }, ...inputItems("grok", req.messages)];
   // xAI takes low, medium or high.
-  const grokEffort = effort === "xhigh" ? "high" : effort;
+  const grokEffort = effort === "xhigh" || effort === "max" ? "high" : effort === "none" ? undefined : effort;
   const body = { ...base, input, ...(grokEffort && /^grok-4/.test(opts.model) ? { reasoning: { effort: grokEffort } } : {}) };
   return { url: opts.url ?? GROK_URL, init: { method: "POST", headers, body: JSON.stringify(body) } };
 }

@@ -81,5 +81,5 @@ test("validateRoleChoice explains what is wrong", () => {
   expect(() => validateRoleChoice("visual", { provider: "claude-code", model: "claude-opus-5-5" }, a)).toThrow("Claude Code");
   expect(() => validateRoleChoice("deep", { provider: "ollama", model: "qwen3:8b", effort: "high" }, a)).toThrow("effort");
   expect(validateRoleChoice("image", { provider: "openai", model: "gpt-image-2.5-flare" }, a)).toEqual({ provider: "openai", model: "gpt-image-2.5-flare" });
-  expect(validateRoleChoice("deep", { provider: "claude-code", model: "claude-opus-5-5", effort: "max" }, a)).toMatchObject({ effort: "max" });
+  expect(validateRoleChoice("deep", { provider: "anthropic", model: "claude-opus-5-5", effort: "max" }, avail([["anthropic", ["claude-opus-5-5"]]]))).toMatchObject({ effort: "max" });
 });

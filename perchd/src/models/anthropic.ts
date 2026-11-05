@@ -33,11 +33,15 @@ export function toAnthropicMessages(messages: Message[]): { role: "user" | "assi
 }
 
 export function anthropicModel(opts: { model: string; apiKey: () => Promise<string>; url?: string }, fetchImpl: typeof fetch = fetch): Model {
+  // Once the API rejects the effort setting for this model, stop sending it.
+  let effortRejected = false;
   return {
     id: `anthropic:${opts.model}`,
     async *turn(req: TurnRequest, signal: AbortSignal): AsyncIterable<TurnEvent> {
       const key = await opts.apiKey();
-      const body = {
+      // The Claude API takes low through max; "none" (a Responses API value) has no Claude equivalent.
+      let effort = effortRejected || req.effort === "none" ? undefined : req.effort;
+      const request = () => ({
         model: opts.model,
         max_tokens: MAX_TOKENS,
         system: req.system,
@@ -45,18 +49,29 @@ export function anthropicModel(opts: { model: string; apiKey: () => Promise<stri
         tools: req.tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.parameters })),
         // One action at a time, as with the Responses adapter: each result is checked before the next.
         ...(req.tools.length ? { tool_choice: { type: "auto", disable_parallel_tool_use: true } } : {}),
+        ...(effort ? { output_config: { effort } } : {}),
         stream: true,
-      };
+      });
       const stream = await openStream(
         () => ({
           url: opts.url ?? ANTHROPIC_URL,
           init: {
             method: "POST",
             headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json", accept: "text/event-stream" },
-            body: JSON.stringify(body),
+            body: JSON.stringify(request()),
           },
         }),
-        { fetch: fetchImpl, signal, describe: (status, text) => upstreamMessage(status, text, "Check the Claude API key in Perch's settings.") },
+        {
+          fetch: fetchImpl,
+          signal,
+          describe: (status, text) => upstreamMessage(status, text, "Check the Claude API key in Perch's settings."),
+          adjust: (text) => {
+            if (!effort || !/effort|output_config/i.test(text)) return false;
+            effort = undefined;
+            effortRejected = true;
+            return true;
+          },
+        },
       );
       const tools = new Map<number, { id: string; name: string; json: string }>();
       let input = 0;

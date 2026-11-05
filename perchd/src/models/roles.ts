@@ -103,7 +103,7 @@ export function validateRoleChoice(role: Role, choice: RoleChoice, available: Av
   if (!info) throw new ProviderError(`${label} does not offer ${choice.model}.`);
   const problem = unfit(role, choice.provider, info);
   if (problem) throw new ProviderError(problem, "unsupported");
-  if (choice.effort && choice.effort !== "off" && !info.efforts.includes(choice.effort)) {
+  if (choice.effort && !info.efforts.includes(choice.effort)) {
     throw new ProviderError(`${info.label} does not take a "${choice.effort}" effort setting.`, "unsupported");
   }
   return { provider: choice.provider, model: choice.model, ...(choice.effort ? { effort: choice.effort } : {}), ...(choice.fast !== undefined ? { fast: choice.fast } : {}) };

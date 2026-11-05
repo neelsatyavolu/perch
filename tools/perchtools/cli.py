@@ -11,6 +11,7 @@ from typing import Any
 
 from .checkout import checkout
 from .doctor import SystemProbe, run_checks
+from .gnargs import build as build_chromium
 from .patching import Generator, PatchFailed, apply_series, continue_series, export_series
 from .paths import REPO, Paths, load_paths
 from .run import run
@@ -76,6 +77,12 @@ def _cmd_export(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_build(args: argparse.Namespace) -> int:
+    out = build_chromium(current_paths(), args.config, run=run)
+    print(f"Built {out}")
+    return 0
+
+
 def _cmd_version(args: argparse.Namespace) -> int:
     path = REPO / "version.json"
     info = read_version(path)
@@ -102,6 +109,9 @@ def build_parser() -> argparse.ArgumentParser:
     apply = sub.add_parser("apply", help="apply the overlay, patches and generated changes")
     apply.add_argument("--continue", dest="continue_", action="store_true", help="resume after fixing a failed patch")
     apply.set_defaults(func=_cmd_apply)
+    build = sub.add_parser("build", help="gn gen and autoninja")
+    build.add_argument("--config", choices=["dev", "release"], default="dev")
+    build.set_defaults(func=_cmd_build)
     sub.add_parser("export", help="write the perch branch's commits back to patches/").set_defaults(func=_cmd_export)
     return parser
 

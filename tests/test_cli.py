@@ -71,3 +71,10 @@ def test_cli_apply_failure_exits_2_with_next_step(monkeypatch, tmp_path, capsys,
     err = capsys.readouterr().err
     assert "perch/two.patch" in err and "perch-build apply --continue" in err
     assert cli.main(["apply", "--continue"]) == 2
+
+
+def test_cli_build_uses_config(monkeypatch, paths, recorder):
+    monkeypatch.setattr(cli, "current_paths", lambda: paths)
+    monkeypatch.setattr(cli, "run", recorder)
+    assert cli.main(["build", "--config", "release"]) == 0
+    assert recorder.calls[-1][-2:] == ["chrome", "chrome/installer/mac"]

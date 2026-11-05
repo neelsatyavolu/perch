@@ -33,6 +33,8 @@ Add `--show` to watch the browser and `--mode ask|guard|skip` to change the perm
 | `src/page/screenshot.ts`, `repl.ts` | Masked screenshots, coordinate clicks, guarded JavaScript |
 | `src/agent/` | Tools, permission modes, audit log, the task loop and system prompt |
 | `src/models/` | Responses API (Codex, Grok), Anthropic Messages API, a scripted fake |
+| `src/memory/` | Encrypted memory pages (key in the Keychain), in-RAM FTS5 search, extraction, dreaming, "Set up your memory", memory tools, Memory page API |
+| `src/routines/` | Cron schedules, encrypted routines and runs, the unattended runner, the scheduler, Routines API, and `openPerchData` that wires it all |
 
 ## Rules this code keeps
 
@@ -40,3 +42,5 @@ Add `--show` to watch the browser and `--mode ask|guard|skip` to change the perm
 - Saved secrets never reach a model: secret fields read as `••••` in snapshots, are covered in screenshots and cannot be read from the REPL.
 - Sends, posts, deletes and uploads wait for approval in Guard mode; payments and password changes always wait.
 - Every action is written to the audit log.
+- Memory, routines and run chats are AES-256-GCM encrypted per record; the search index lives only in RAM. Passwords, keys, card numbers and codes are never saved as memories.
+- Scheduled routines decline anything that needs approval, so they never pay, send or delete unattended.

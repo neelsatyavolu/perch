@@ -14,7 +14,7 @@ export type NewFact = { category: Category; title: string; text: string; expires
 export type AddResult = { added: number; duplicates: number; rejected: { text: string; reason: string }[]; paths: string[] };
 export type PageSummary = { id: string; path: string; title: string; category: Category; facts: number; updated: string };
 export type RetentionDays = 30 | 90 | null;
-export type MemorySettings = { extraction: boolean; paused: boolean; historyExtraction: boolean; episodicRetentionDays: RetentionDays };
+export type MemorySettings = { extraction: boolean; paused: boolean; episodicRetentionDays: RetentionDays };
 export type ChangeAction = "add" | "edit" | "delete" | "wipe" | "dream" | "setup";
 export type Change = { time: string; action: ChangeAction; path: string; detail: string; source: FactSource };
 
@@ -22,7 +22,7 @@ const PAGES = "pages";
 const SETTINGS_KIND = "settings";
 const SETTINGS_ID = "0000000000000001";
 const CHANGES = "changes";
-const DEFAULT_SETTINGS: MemorySettings = { extraction: true, paused: false, historyExtraction: false, episodicRetentionDays: null };
+const DEFAULT_SETTINGS: MemorySettings = { extraction: true, paused: false, episodicRetentionDays: null };
 const MAX_FACTS_PER_PAGE = 200;
 const MAX_PAGES = 5000;
 const CONTEXT_LIMIT = 4000;
@@ -101,7 +101,7 @@ export class MemoryStore {
   updateSettings(patch: Partial<MemorySettings>): Promise<MemorySettings> {
     return this.exclusive(async () => {
       const next = { ...this.config, ...patch };
-      for (const key of ["extraction", "paused", "historyExtraction"] as const) {
+      for (const key of ["extraction", "paused"] as const) {
         if (typeof next[key] !== "boolean") throw new Error(`${key} must be true or false`);
       }
       if (![30, 90, null].includes(next.episodicRetentionDays)) throw new Error("episodic retention must be 30, 90 or never (null)");

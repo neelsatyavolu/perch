@@ -146,7 +146,7 @@ test("episodic facts go into a page for the day", async () => {
 
 test("settings are validated", async () => {
   const { store } = await open();
-  expect(store.settings()).toEqual({ extraction: true, paused: false, historyExtraction: false, episodicRetentionDays: null });
+  expect(store.settings()).toEqual({ extraction: true, paused: false, episodicRetentionDays: null });
   await expect(store.updateSettings({ episodicRetentionDays: 12 as any })).rejects.toThrow("30, 90");
   await store.updateSettings({ episodicRetentionDays: 30 });
   expect(store.settings().episodicRetentionDays).toBe(30);

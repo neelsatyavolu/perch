@@ -10,6 +10,10 @@
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   #box { height: 100px; overflow: auto; border: 1px solid #ccc; width: 300px; }
   #box .spacer { height: 600px; }
+  .switch { position: relative; display: inline-block; width: 40px; height: 20px; }
+  .switch .knob { position: absolute; inset: 0; background: #4c8dff; border-radius: 10px; }
+  #consent { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.4); z-index: 20; }
+  #consent[hidden] { display: none; }
 </style></head>
 <body>
 <header>Site header</header>
@@ -19,6 +23,8 @@
     <input class="hidden-radio" type="radio" name="d" id="d10" value="10"><label class="pill" for="d10">10 miles</label>
   </fieldset>
   <label class="pill"><input class="sr-only" type="checkbox" id="pool"> Private pool</label>
+  <label><input type="checkbox" id="offers"> Email me offers</label>
+  <span class="switch"><input type="checkbox" id="dark" aria-label="Dark mode"><span class="knob"></span></span>
   <closed-panel></closed-panel>
   <div id="box"><div class="spacer"></div><button id="inner">Inside the box</button></div>
   <div style="height: 1000px"></div>
@@ -27,10 +33,13 @@
   <button id="far">Far below</button>
   <p id="out" role="status"></p>
 </main>
+<div id="consent" hidden><div role="dialog" aria-label="Cookies">We use cookies. <button>Reject all</button></div></div>
 <script>
 const out = document.getElementById('out');
 const say = (t) => { out.textContent = t; };
 document.querySelectorAll('input[name=d]').forEach((r) => r.addEventListener('change', () => say('Distance: ' + r.value)));
+document.getElementById('dark').addEventListener('change', (e) => say('Dark: ' + e.target.checked));
+document.getElementById('offers').addEventListener('change', (e) => say('Offers: ' + e.target.checked));
 document.getElementById('pool').addEventListener('change', (e) => say('Pool: ' + e.target.checked));
 customElements.define('closed-panel', class extends HTMLElement {
   connectedCallback() {

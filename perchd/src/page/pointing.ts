@@ -8,6 +8,14 @@ import type { Tab } from "../browser/tab";
 import { call, callForObject, describe, type Node } from "./node";
 
 export type Point = { x: number; y: number };
+type Live = { objectId: string; session?: string };
+
+/** Another element would get the click: a dialog, a banner, or the page's own drawing of a control. */
+export class CoveredError extends Error {
+  constructor(message: string, readonly cover: Live) {
+    super(message);
+  }
+}
 
 const STABLE_TRIES = 8;
 const STABLE_MS = 40;
@@ -119,7 +127,7 @@ async function coverAt(tab: Tab, node: { objectId: string; session?: string }, p
 
 /** Throws "covered by …" when another element would receive a click at the point. */
 async function assertHittable(tab: Tab, target: Node, point: Point): Promise<void> {
-  let cover: { objectId: string; session?: string } | undefined;
+  let cover: Live | undefined;
   if (target.owner !== undefined) {
     // A cross-site iframe: its element in the page must get the click before anything inside it.
     const { object } = await tab.send<{ object: { objectId?: string } }>("DOM.resolveNode", { backendNodeId: target.owner });
@@ -136,7 +144,7 @@ async function assertHittable(tab: Tab, target: Node, point: Point): Promise<voi
   const what = await describe(tab, cover);
   // Dialogs and banners are the usual covers, and they can be closed.
   const hint = /^(dialog|alertdialog|iframe|div|section|aside|element)( |$)/.test(what) ? "; close it first (its Close, Reject or X button), or press Escape" : "";
-  throw new Error(`covered by ${what}${hint}`);
+  throw new CoveredError(`covered by ${what}${hint}`, cover);
 }
 
 /**
@@ -175,21 +183,52 @@ const VISIBLE_LABEL = `function () {
 }`;
 
 /**
- * Sites hide native checkboxes and radios and draw their own. When the control itself cannot be
- * clicked, click its visible label as a person would, or toggle the control so the page gets its
- * normal click and change events. Returns false for anything that is not such a control.
+ * Whether a cover is part of the control's own widget: inside its label or its parent element (the
+ * styled box a site draws over a hidden input). A page-wide parent does not count.
  */
-export async function toggleHiddenControl(tab: Tab, node: Node): Promise<boolean> {
+const OWN_WIDGET = `function (cover) {
+  const inside = (root) => { for (let n = cover; n; n = n.parentNode || n.host) if (n === root) return true; return false; };
+  const doc = this.ownerDocument;
+  const parent = this.parentElement;
+  if (parent && parent !== doc.body && parent !== doc.documentElement && inside(parent)) return true;
+  return [...(this.labels || [])].some(inside);
+}`;
+
+/** A cover that is not the control's own drawing (a dialog, a banner) blocks the click: rethrown. */
+async function rethrowForeignCover(tab: Tab, node: Node, error: unknown): Promise<void> {
+  if (!(error instanceof CoveredError)) return;
+  const own = await tab
+    .sendIn<{ result: { value?: boolean } }>(node.session, "Runtime.callFunctionOn", {
+      objectId: node.objectId,
+      functionDeclaration: OWN_WIDGET,
+      arguments: [{ objectId: error.cover.objectId }],
+      returnByValue: true,
+    })
+    .then(({ result }) => result.value === true)
+    .catch(() => false);
+  if (!own) throw error;
+}
+
+/**
+ * Sites hide native checkboxes and radios and draw their own. When the control itself cannot be
+ * clicked (`why` is the error from aiming at it), click its visible label as a person would, or
+ * toggle the control so the page gets its normal click and change events. A dialog or banner over
+ * the control or its label is never clicked through: its "covered by" error is rethrown. Returns
+ * false for anything that is not such a control.
+ */
+export async function toggleHiddenControl(tab: Tab, node: Node, why: unknown): Promise<boolean> {
   const isControl = await call<boolean>(tab, node, "function () { return this.tagName === 'INPUT' && /^(checkbox|radio)$/.test(this.type) && !this.disabled; }");
   if (!isControl) return false;
+  await rethrowForeignCover(tab, node, why);
   const label = await callForObject(tab, node, VISIBLE_LABEL);
   if (label) {
     try {
       const point = await aim(tab, { ...node, objectId: label });
       await clickAtPoint(tab, point);
       return true;
-    } catch {
-      // Fall back to toggling the control itself.
+    } catch (error) {
+      await rethrowForeignCover(tab, node, error);
+      // Otherwise fall back to toggling the control itself.
     }
   }
   await call(tab, node, "function () { this.click(); }");

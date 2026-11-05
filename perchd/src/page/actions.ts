@@ -41,7 +41,7 @@ export function click(tab: Tab, refs: RefTable, ref: string): Promise<ActionResu
     try {
       point = await aim(tab, node);
     } catch (error) {
-      if (await toggleHiddenControl(tab, node)) return ok(`clicked ${label}${await checkedState(tab, node)}`);
+      if (await toggleHiddenControl(tab, node, error)) return ok(`clicked ${label}${await checkedState(tab, node)}`);
       throw error;
     }
     await clickAtPoint(tab, point);

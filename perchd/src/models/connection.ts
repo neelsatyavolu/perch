@@ -7,6 +7,7 @@ import { claudeBinary } from "../external";
 import { parseModelList, type ModelInfo } from "./catalog";
 import { redactSecrets } from "./http";
 import type { ProviderId } from "./ids";
+import { withLocalDetails } from "./local-details";
 import { PROVIDERS, ProviderError } from "./providers";
 
 const LIST_TIMEOUT_MS = 10_000;
@@ -61,11 +62,13 @@ export async function fetchModelList(ctx: ListContext): Promise<ModelInfo[]> {
     }
     throw new ProviderError(`${def.label} answered with an error (HTTP ${res.status}).${detail}`, "invalid");
   }
+  let models: ModelInfo[];
   try {
-    return parseModelList(ctx.provider, JSON.parse(text));
+    models = parseModelList(ctx.provider, JSON.parse(text));
   } catch {
     throw new ProviderError(`${def.label} sent a model list Perch could not read. Check the address.`, "invalid");
   }
+  return withLocalDetails(ctx, models);
 }
 
 export type ClaudeCodeProbe = () => Promise<{ installed: boolean; version?: string }>;

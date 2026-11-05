@@ -97,6 +97,12 @@ async function main(argv: string[]): Promise<void> {
       approve: async () => false,
     },
   });
+  const stop = async () => {
+    await server.close().catch(() => undefined);
+    process.exit(0);
+  };
+  process.once("SIGTERM", () => void stop());
+  process.once("SIGINT", () => void stop());
   const decoder = new TextDecoder();
   let buffer = "";
   const reader = Bun.stdin.stream().getReader();

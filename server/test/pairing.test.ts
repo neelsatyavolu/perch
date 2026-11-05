@@ -27,8 +27,10 @@ describe("pairing", () => {
 
     const lookup = await h.call("GET", `/v1/pair/lookup?code=${p.code.toLowerCase().replace("-", "")}`, { token: mac.sessionToken });
     expect(lookup.data).toMatchObject({ pairingId: p.pairingId, publicKey: p.publicKey, name: "Grok Bot computer", kind: "cli" });
-    const approved = await h.call("POST", `/v1/pair/${p.pairingId}/approve`, { token: mac.sessionToken, body: { wrappedKey: { version: 1, blob: `w${"C".repeat(30)}` } } });
-    expect(approved.data.keyGranted).toBe(true);
+    const approved = await h.call("POST", `/v1/pair/${p.pairingId}/approve`, { token: mac.sessionToken, body: {} });
+    expect(approved.status).toBe(200);
+    const granted = await h.call("PUT", `/v1/keys/devices/${approved.data.deviceId}`, { token: mac.sessionToken, body: { version: 1, blob: `w${"C".repeat(30)}` } });
+    expect(granted.status).toBe(200);
 
     const polled = await h.call("POST", "/v1/pair/poll", { body: { pairingId: p.pairingId, pollSecret: p.pollSecret } });
     expect(polled.data).toMatchObject({ status: "approved", accountId: mac.accountId, deviceId: approved.data.deviceId, approverDeviceId: mac.deviceId });

@@ -1,10 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { decryptItem, deriveSyncKeys, encryptItem, itemId, newSyncKey } from "../src/sync/crypto";
 import { base32, fromBase64Url, normalizeCode, pairingCode, toBase64Url } from "../src/sync/encoding";
-import {
-  exportDeviceKeys, generateDeviceKeys, importDeviceKeys, MIN_ITERATIONS, newRecoveryKey,
-  unwrapForDevice, unwrapWithRecovery, wrapForDevice, wrapWithRecovery,
-} from "../src/sync/keys";
+import { exportDeviceKeys, generateDeviceKeys, importDeviceKeys, unwrapForDevice, wrapForDevice } from "../src/sync/keys";
+import { createRecoveryKit, MIN_ITERATIONS, newRecoveryKey, openRecovery, recoveryBlob, recoveryKitFrom } from "../src/sync/recovery";
 
 describe("item encryption", () => {
   test("round-trips and never puts the plaintext or real id in what the server sees", async () => {
@@ -27,8 +25,8 @@ describe("item encryption", () => {
     await expect(decryptItem(keys, "bookmarks", "item-a", 2, sealed)).rejects.toThrow();
     await expect(decryptItem(await deriveSyncKeys(raw, 2), "bookmarks", "item-a", 3, sealed)).rejects.toThrow();
     await expect(decryptItem(await deriveSyncKeys(newSyncKey(), 1), "bookmarks", "item-a", 3, sealed)).rejects.toThrow();
-    const tampered = fromBase64Url(sealed);
-    tampered[tampered.length - 1] ^= 1;
+    const original = fromBase64Url(sealed);
+    const tampered = original.map((byte, i) => (i === original.length - 1 ? byte ^ 1 : byte));
     await expect(decryptItem(keys, "bookmarks", "item-a", 3, toBase64Url(tampered))).rejects.toThrow();
   });
 });
@@ -57,18 +55,35 @@ describe("key wrapping", () => {
     const syncKey = newSyncKey();
     const recovery = newRecoveryKey();
     expect(recovery).toMatch(/^([0-9A-Z]{5}-){4}[0-9A-Z]{5}$/);
-    const blob = await wrapWithRecovery(syncKey, recovery, 1, MIN_ITERATIONS);
-    expect(await unwrapWithRecovery(blob, recovery.toLowerCase().replace(/-/g, " "), 1)).toEqual(syncKey);
-    await expect(unwrapWithRecovery(blob, newRecoveryKey(), 1)).rejects.toThrow("does not open");
+    const kit = await createRecoveryKit(recovery, MIN_ITERATIONS);
+    const blob = await recoveryBlob(syncKey, 1, kit);
+    expect(blob.length).toBeLessThan(4096);
+    const opened = await openRecovery(blob, recovery.toLowerCase().replace(/-/g, " "), 1);
+    expect(opened.syncKey).toEqual(syncKey);
+    expect(opened.publicKey).toBe(kit.publicKey);
+    await expect(openRecovery(blob, newRecoveryKey(), 1)).rejects.toThrow("does not open");
   });
 
-  test("a chosen passphrase is case-sensitive", async () => {
-    const blob = await wrapWithRecovery(newSyncKey(), "Correct horse battery staple", 1, MIN_ITERATIONS);
-    await expect(unwrapWithRecovery(blob, "correct horse battery staple", 1)).rejects.toThrow();
+  test("a rotation re-wraps for recovery without the recovery key, against the pinned public key", async () => {
+    const recovery = newRecoveryKey();
+    const kit = await createRecoveryKit(recovery, MIN_ITERATIONS);
+    const first = await recoveryBlob(newSyncKey(), 1, kit);
+    const rotated = newSyncKey();
+    const second = await recoveryBlob(rotated, 2, recoveryKitFrom(first, kit.publicKey));
+    expect((await openRecovery(second, recovery, 2)).syncKey).toEqual(rotated);
+    const forged = await recoveryBlob(newSyncKey(), 1, await createRecoveryKit(newRecoveryKey(), MIN_ITERATIONS));
+    expect(() => recoveryKitFrom(forged, kit.publicKey)).toThrow("does not match");
+  });
+
+  test("a chosen passphrase is case-sensitive and must be long enough", async () => {
+    const kit = await createRecoveryKit("Correct horse battery staple", MIN_ITERATIONS);
+    const blob = await recoveryBlob(newSyncKey(), 1, kit);
+    await expect(openRecovery(blob, "correct horse battery staple", 1)).rejects.toThrow();
+    await expect(createRecoveryKit("short", MIN_ITERATIONS)).rejects.toThrow("at least 12");
   });
 
   test("refuses weak PBKDF2 settings", async () => {
-    await expect(wrapWithRecovery(newSyncKey(), "x".repeat(20), 1, 1000)).rejects.toThrow("at least");
+    await expect(createRecoveryKit("x".repeat(20), 1000)).rejects.toThrow("iterations");
   });
 });
 

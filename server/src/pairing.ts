@@ -2,10 +2,9 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { AppEnv, HonoEnv } from "./env";
 import { normalizeCode, pairingCode, randomToken, safeEqual, sha256Hex } from "./crypto";
-import { base64url, check, clientIp, deviceSchema, HttpError, idSchema, readJson } from "./http";
+import { check, clientIp, deviceSchema, HttpError, idSchema, readJson } from "./http";
 import { limit, RULES } from "./ratelimit";
 import { requireAuth, sessionStatement } from "./auth/session";
-import { grantStatement } from "./keys";
 import { listDevices } from "./devices";
 
 /**
@@ -52,7 +51,7 @@ pairingRoutes.get("/lookup", requireAuth, limit(RULES.pairLookup, (c) => c.var.a
 
 pairingRoutes.post("/:id/approve", requireAuth, async (c) => {
   const id = check(pairingId, c.req.param("id"));
-  const body = await readJson(c, z.object({ wrappedKey: z.object({ version: z.number().int().min(1), blob: base64url(4096) }).strict().optional() }).strict());
+  await readJson(c, z.object({}).strict());
   const { accountId, deviceId } = c.var.auth;
   const now = c.var.deps.now();
   const claimed = await c.env.DB.prepare(
@@ -68,12 +67,8 @@ pairingRoutes.post("/:id/approve", requireAuth, async (c) => {
     ).bind(newDevice, accountId, device.name, device.kind, device.publicKey, now, now),
     c.env.DB.prepare("UPDATE pairings SET device_id = ? WHERE id = ?").bind(newDevice, id),
   ]);
-  let keyGranted = false;
-  if (body.wrappedKey) {
-    const granted = await grantStatement(c.env, accountId, newDevice, body.wrappedKey.version, body.wrappedKey.blob, now).run();
-    keyGranted = granted.meta.changes === 1;
-  }
-  return c.json({ deviceId: newDevice, keyGranted });
+  // The approving device then grants the sync key with PUT /v1/keys/devices/:id, wrapped to this id.
+  return c.json({ deviceId: newDevice });
 });
 
 pairingRoutes.post("/:id/deny", requireAuth, async (c) => {

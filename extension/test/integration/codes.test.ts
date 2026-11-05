@@ -50,7 +50,7 @@ describe("authenticator", () => {
     const local = JSON.stringify(await h.sw("chrome.storage.local.get(null)"));
     expect(local).toContain('"totp"');
     for (const plain of [SECRET, "Field Notes", "ana@example.test", "site.localhost"]) expect(local).not.toContain(plain);
-    expect(await h.sw("chrome.storage.sync.get(null)")).toEqual({});
+    expect(await h.sw<Record<string, unknown>>("chrome.storage.sync.get(null)")).toEqual({});
   });
 
   test("Fill types the current code into the site's one-time-code field", async () => {

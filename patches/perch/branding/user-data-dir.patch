@@ -1,0 +1,14 @@
+# Perch: keep data in ~/Library/Application Support/Perch so Perch never shares Chromium's profile.
+diff --git a/chrome/common/chrome_paths_mac.mm b/chrome/common/chrome_paths_mac.mm
+index 6829c9cb92..df3ef7fe25 100644
+--- a/chrome/common/chrome_paths_mac.mm
++++ b/chrome/common/chrome_paths_mac.mm
+@@ -37,7 +37,7 @@ char* ProductDirNameForBundle(NSBundle* chrome_bundle) {
+ #elif BUILDFLAG(GOOGLE_CHROME_BRANDING)
+       product_dir_name = "Google/Chrome";
+ #else
+-      product_dir_name = "Chromium";
++      product_dir_name = "Perch";
+ #endif
+     }
+ 

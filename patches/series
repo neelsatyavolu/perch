@@ -1,2 +1,7 @@
 # Perch patch series. One path per line, relative to this folder, applied in order.
 # Each patch starts with a "# Perch: <why>" comment. Borrowed patches keep their licence and credit.
+perch/branding/branding-file.patch
+perch/branding/user-data-dir.patch
+perch/branding/safe-storage-name.patch
+perch/branding/no-api-keys-infobar.patch
+perch/updater/start-updater.patch

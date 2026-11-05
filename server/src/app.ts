@@ -4,6 +4,7 @@ import { clientIp, HttpError } from "./http";
 import { logEvent } from "./log";
 import { consume, RULES } from "./ratelimit";
 import { accountRoutes } from "./account";
+import { confirmRoutes } from "./auth/confirm-action";
 import { emailRoutes } from "./auth/email";
 import { passkeyRoutes } from "./auth/passkey";
 import { deviceRoutes } from "./devices";
@@ -47,6 +48,7 @@ export function createApp(deps: Deps): Hono<HonoEnv> {
   app.get("/health", (c) => c.json({ ok: true }));
   app.route("/v1/auth/email", emailRoutes);
   app.route("/v1/auth/passkey", passkeyRoutes);
+  app.route("/v1/account/confirm", confirmRoutes);
   app.route("/v1/account", accountRoutes);
   app.route("/v1/devices", deviceRoutes);
   app.route("/v1/keys", keyRoutes);

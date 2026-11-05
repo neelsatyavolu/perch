@@ -1,6 +1,6 @@
 /**
  * The page a sign-in link opens. The token is in the URL fragment, so it never reaches the server
- * until the person acts. The page asks them to pick the number their device shows. Blackletter
+ * until the person acts. The page asks them to type the number their device shows. Blackletter
  * styling (DESIGN.md): near-black canvas, one blue accent, hairlines, 8px radii, no web fonts.
  */
 export function confirmPage(nonce: string): string {
@@ -20,10 +20,12 @@ body { margin:0; min-height:100vh; display:grid; place-items:center; padding:16p
 main { width:100%; max-width:400px; background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:32px; }
 h1 { font:500 24px/1.25 "Geist Serif", Georgia, serif; margin:0 0 8px; }
 p { margin:0 0 16px; color:var(--muted); }
-.choices { display:flex; gap:8px; }
-button { flex:1; height:56px; border-radius:8px; border:1px solid var(--line); background:transparent; color:var(--text);
-  font:500 20px "Geist Mono", ui-monospace, Menlo, monospace; cursor:pointer; transition:border-color 160ms cubic-bezier(.2,0,0,1); }
-button:hover { border-color:var(--accent); }
+form { display:flex; gap:8px; }
+input { flex:1; min-width:0; height:56px; border-radius:8px; border:1px solid var(--line); background:transparent; color:var(--text);
+  padding:0 16px; font:500 20px "Geist Mono", ui-monospace, Menlo, monospace; letter-spacing:0.1em; }
+input:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+button { height:56px; padding:0 20px; border-radius:8px; border:1px solid var(--accent); background:var(--accent); color:#fff;
+  font:500 15px Geist, -apple-system, BlinkMacSystemFont, sans-serif; cursor:pointer; }
 button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 .error { color:var(--danger); }
 </style>
@@ -32,14 +34,18 @@ button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 <main>
   <h1>Sign in to Perch</h1>
   <p id="message">Checking the link…</p>
-  <div class="choices" id="choices" hidden></div>
+  <form id="form" hidden>
+    <input id="number" inputmode="numeric" pattern="[0-9]{2}" maxlength="2" autocomplete="off" aria-label="Number shown in Perch" required>
+    <button type="submit">Sign in</button>
+  </form>
 </main>
 <script nonce="${nonce}">
 (() => {
   const token = location.hash.slice(1);
   history.replaceState(null, "", location.pathname);
   const message = document.getElementById("message");
-  const choices = document.getElementById("choices");
+  const form = document.getElementById("form");
+  const input = document.getElementById("number");
   const say = (text, isError) => { message.textContent = text; message.className = isError ? "error" : ""; };
   const post = async (path, body) => {
     const response = await fetch("/v1/auth/email/" + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -47,8 +53,8 @@ button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
     if (!response.ok) throw new Error((data.error && data.error.message) || "Something went wrong. Start again in Perch.");
     return data;
   };
-  const pick = async (match) => {
-    choices.hidden = true;
+  const send = async (match) => {
+    form.hidden = true;
     try {
       const data = await post("confirm", { token, match });
       say("Signed in on " + data.deviceName + ". You can close this tab and go back to Perch.");
@@ -56,15 +62,15 @@ button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
   };
   if (!token) { say("This link is incomplete. Open the whole link from the email.", true); return; }
   post("confirm/info", { token }).then((data) => {
-    say("Pick the number Perch shows on " + data.deviceName + ". If you did not ask to sign in, close this tab.");
-    for (const n of data.choices) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.textContent = String(n);
-      button.addEventListener("click", () => pick(n));
-      choices.appendChild(button);
-    }
-    choices.hidden = false;
+    say("Type the number Perch shows on " + data.deviceName + ". A wrong number cancels this sign-in. If you did not ask to sign in, close this tab.");
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const match = Number(input.value.trim());
+      if (Number.isInteger(match) && match >= 10 && match <= 99) send(match);
+      else say("Type the two-digit number Perch shows.", true);
+    });
+    form.hidden = false;
+    input.focus();
   }).catch((error) => say(error.message, true));
 })();
 </script>

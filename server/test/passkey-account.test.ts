@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { appEnv, device, freshEmail, harness, signIn, type Harness, type Session } from "./helpers";
+import { appEnv, confirmation, device, freshEmail, harness, signIn, type Harness, type Session } from "./helpers";
 import { SoftPasskey } from "./webauthn";
 import { toBase64Url } from "../src/crypto";
 
 async function register(h: Harness, s: Session, key: SoftPasskey, origin?: string) {
-  const options = await h.call("POST", "/v1/auth/passkey/register/options", { token: s.sessionToken, body: {} });
+  const options = await h.call("POST", "/v1/auth/passkey/register/options", { token: s.sessionToken, body: await confirmation(h, s, "add_passkey") });
   expect(options.status).toBe(200);
   expect(options.data.options.rp.id).toBe("perchbrowser.com");
   return h.call("POST", "/v1/auth/passkey/register/verify", {
@@ -57,6 +57,20 @@ describe("passkeys", () => {
     expect((await login(h, stranger, s.accountId)).status).toBe(400);
   });
 
+  it("needs a fresh email confirmation before a passkey can be added", async () => {
+    const h = harness();
+    const s = await signIn(h);
+    const call = (body: unknown) => h.call("POST", "/v1/auth/passkey/register/options", { token: s.sessionToken, body });
+    expect((await call({})).status).toBe(400);
+    const forDeletion = await confirmation(h, s, "delete_account");
+    expect((await call(forDeletion)).data.error.code).toBe("confirmation_expired");
+    const ok = await confirmation(h, s, "add_passkey");
+    expect((await call({ ...ok, code: "AAAA-AAAA" })).data.error.code).toBe("wrong_code");
+    expect((await call(ok)).status).toBe(200);
+    // Used once.
+    expect((await call(ok)).status).toBe(403);
+  });
+
   it("deletes a passkey so it no longer signs in", async () => {
     const h = harness();
     const s = await signIn(h);
@@ -77,8 +91,9 @@ describe("account", () => {
     await h.call("POST", "/v1/sync/memory/commit", { token: s.sessionToken, body: { items: [{ id: `m${"1".repeat(21)}`, baseVersion: 0, keyVersion: 1, ciphertext: big }] } });
     expect((await appEnv.BLOBS.list({ prefix: `items/${s.accountId}/` })).objects).toHaveLength(1);
 
-    expect((await h.call("DELETE", "/v1/account", { token: s.sessionToken, body: { confirm: "yes" } })).status).toBe(400);
-    expect((await h.call("DELETE", "/v1/account", { token: s.sessionToken, body: { confirm: "delete my account" } })).status).toBe(200);
+    const confirmed = await confirmation(h, s, "delete_account");
+    expect((await h.call("DELETE", "/v1/account", { token: s.sessionToken, body: { ...confirmed, confirm: "yes" } })).status).toBe(400);
+    expect((await h.call("DELETE", "/v1/account", { token: s.sessionToken, body: { ...confirmed, confirm: "delete my account" } })).status).toBe(200);
     expect((await h.call("GET", "/v1/account", { token: s.sessionToken })).status).toBe(401);
     expect((await appEnv.BLOBS.list({ prefix: `items/${s.accountId}/` })).objects).toHaveLength(0);
     for (const table of ["items", "devices", "sessions", "wrapped_keys"]) {
@@ -88,5 +103,21 @@ describe("account", () => {
     // Signing in again with the same email starts a new, empty account.
     const again = await signIn(h, email);
     expect(again.accountId).not.toBe(s.accountId);
+  });
+
+  it("will not delete on a session alone, and a code works only on the device that asked", async () => {
+    const h = harness();
+    const email = freshEmail();
+    const s = await signIn(h, email);
+    const other = await signIn(h, email);
+    const del = (as: Session, body: object) => h.call("DELETE", "/v1/account", { token: as.sessionToken, body: { confirm: "delete my account", ...body } });
+    expect((await del(s, {})).status).toBe(400);
+    const confirmed = await confirmation(h, s, "delete_account");
+    expect(h.mailer.sent.at(-1)!.subject).toBe("Confirm a change to your Perch account");
+    expect((await del(other, confirmed)).status).toBe(403);
+    for (let i = 0; i < 5; i++) expect((await del(s, { ...confirmed, code: "AAAA-AAAA" })).status).toBe(403);
+    // Five wrong codes use it up, even with the right one after.
+    expect((await del(s, confirmed)).data.error.code).toBe("confirmation_expired");
+    expect((await h.call("GET", "/v1/account", { token: s.sessionToken })).status).toBe(200);
   });
 });

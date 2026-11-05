@@ -17,6 +17,7 @@ type Options = { baseUrl?: string; fetch?: FetchLike; token?: string };
 
 export type EmailStart = { requestId: string; pollSecret: string; matchNumber: number; expiresAt: number };
 export type SignInPoll = ({ status: "signed_in"; newAccount?: boolean } & SessionGrant) | { status: "pending" };
+export type Confirmation = { confirmationId: string; expiresAt: number };
 export type PairingStart = { pairingId: string; code: string; pollSecret: string; expiresAt: number };
 export type PairingLookup = { pairingId: string; code: string; publicKey: string; name: string; kind: string; expiresAt: number };
 export type PairingPoll = { status: "pending" } | ({ status: "approved"; approverDeviceId: string; grant: string; peers: Device[] } & SessionGrant);
@@ -61,7 +62,10 @@ export class SyncApi {
     this.request<SignInPoll>("POST", "/v1/auth/email/verify", { requestId: start.requestId, pollSecret: start.pollSecret, code });
   pollEmail = (start: EmailStart) => this.request<SignInPoll>("POST", "/v1/auth/email/poll", { requestId: start.requestId, pollSecret: start.pollSecret });
   account = () => this.request<{ id: string; email: string; bytesUsed: number; quotaBytes: number; keyVersion: number; deviceId: string }>("GET", "/v1/account");
-  deleteAccount = () => this.request<{ ok: true }>("DELETE", "/v1/account", { confirm: "delete my account" });
+  /** Emails a code to the account address; deleting the account and adding a passkey need it. */
+  confirmAction = (action: "delete_account" | "add_passkey") => this.request<Confirmation>("POST", "/v1/account/confirm", { action });
+  deleteAccount = (confirmation: Confirmation, code: string) =>
+    this.request<{ ok: true }>("DELETE", "/v1/account", { confirm: "delete my account", confirmationId: confirmation.confirmationId, code });
 
   // Devices
   devices = async () => (await this.request<{ devices: Device[] }>("GET", "/v1/devices")).devices;

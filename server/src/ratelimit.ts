@@ -22,6 +22,7 @@ export const RULES = {
   pairStartIp: { name: "pair-start-ip", capacity: 10, seconds: 600 },
   pairLookup: { name: "pair-lookup", capacity: 10, seconds: 600 },
   pollIp: { name: "poll-ip", capacity: 240, seconds: 600 },
+  confirmStart: { name: "confirm-start", capacity: 5, seconds: 3600 },
   relayConnect: { name: "relay-connect", capacity: 30, seconds: 60 },
 } as const satisfies Record<string, Rule>;
 

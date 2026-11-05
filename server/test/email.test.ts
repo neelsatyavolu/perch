@@ -37,15 +37,15 @@ describe("email sign-in", () => {
     expect(me.data.email).toBe(email);
   });
 
-  it("signs in by link only after the right number is picked, and only the asking device gets the session", async () => {
+  it("signs in by link only after the right number is typed, and only the asking device gets the session", async () => {
     const h = harness();
     const s = await start(h);
     const token = linkTokenFrom(s.mail.text);
     expect((await h.call("POST", "/v1/auth/email/poll", { body: { requestId: s.requestId, pollSecret: s.pollSecret } })).data.status).toBe("pending");
     const info = await h.call("POST", "/v1/auth/email/confirm/info", { body: { token } });
     expect(info.data.deviceName).toBe("Work Mac");
-    expect(info.data.choices).toHaveLength(3);
-    expect(info.data.choices).toContain(s.matchNumber);
+    // The page offers no choices to guess from: the person types the number.
+    expect(info.data).toEqual({ deviceName: "Work Mac" });
     const confirmed = await h.call("POST", "/v1/auth/email/confirm", { body: { token, match: s.matchNumber } });
     expect(confirmed.status).toBe(200);
     expect(confirmed.data).toEqual({ deviceName: "Work Mac" });
@@ -56,7 +56,7 @@ describe("email sign-in", () => {
     expect((await h.call("POST", "/v1/auth/email/poll", { body: { requestId: s.requestId, pollSecret: s.pollSecret } })).status).toBe(410);
   });
 
-  it("cancels the request when the wrong number is picked", async () => {
+  it("cancels the request when a wrong number is typed", async () => {
     const h = harness();
     const s = await start(h);
     const token = linkTokenFrom(s.mail.text);

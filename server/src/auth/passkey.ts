@@ -14,6 +14,7 @@ import { fromBase64Url, randomToken, toBase64Url } from "../crypto";
 import { clientIp, deviceSchema, HttpError, readJson } from "../http";
 import { limit, RULES } from "../ratelimit";
 import { createDeviceSession, requireBrowser } from "./session";
+import { confirmationSchema, requireConfirmation } from "./confirm-action";
 
 /**
  * Passkeys (WebAuthn). A signed-in device adds one; later any device signs in with it and no
@@ -46,7 +47,10 @@ async function takeChallenge(env: AppEnv, id: string, kind: string, now: number)
 
 const failed = () => new HttpError(400, "passkey_failed", "The passkey could not be checked. Try again, or sign in by email.");
 
+/** Adding a passkey gives lasting access, so it needs a fresh email confirmation first. */
 passkeyRoutes.post("/register/options", requireBrowser, async (c) => {
+  const confirmation = await readJson(c, confirmationSchema.strict());
+  await requireConfirmation(c.env, c.var.auth, "add_passkey", confirmation, c.var.deps.now());
   const { accountId } = c.var.auth;
   const account = await c.env.DB.prepare("SELECT email FROM accounts WHERE id = ?").bind(accountId).first<{ email: string }>();
   const { results } = await c.env.DB.prepare("SELECT id, transports FROM passkeys WHERE account_id = ?").bind(accountId).all<PasskeyRow>();

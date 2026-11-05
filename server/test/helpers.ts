@@ -51,6 +51,13 @@ export const linkTokenFrom = (text: string) => /#(elk_[A-Za-z0-9_-]+)/.exec(text
 
 export type Session = { sessionToken: string; accountId: string; deviceId: string };
 
+/** Asks for a fresh email confirmation and reads the code from the captured email. */
+export async function confirmation(h: Harness, s: Session, action: "delete_account" | "add_passkey") {
+  const res = await h.call("POST", "/v1/account/confirm", { token: s.sessionToken, body: { action } });
+  if (res.status !== 200) throw new Error(`confirm failed: ${res.status} ${JSON.stringify(res.data)}`);
+  return { confirmationId: res.data.confirmationId as string, code: codeFrom(h.mailer.sent.at(-1)!.text) };
+}
+
 /** Signs a new device in by email code, creating the account the first time. */
 export async function signIn(h: Harness, email = freshEmail(), dev?: { name: string; kind: string; publicKey: string }): Promise<Session> {
   const start = await h.call("POST", "/v1/auth/email/start", { body: { email, device: dev ?? (await device()) } });

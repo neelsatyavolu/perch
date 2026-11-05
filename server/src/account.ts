@@ -4,6 +4,7 @@ import type { AppEnv, HonoEnv } from "./env";
 import { quotaBytes } from "./env";
 import { HttpError, readJson } from "./http";
 import { requireAuth, requireBrowser } from "./auth/session";
+import { confirmationSchema, requireConfirmation } from "./auth/confirm-action";
 
 /** The signed-in account: what it holds, and deleting all of it. */
 export const accountRoutes = new Hono<HonoEnv>();
@@ -21,9 +22,13 @@ accountRoutes.get("/", async (c) => {
   });
 });
 
-/** Deletes the account, every device, session, key copy and synced item, and closes relay sockets. */
+/**
+ * Deletes the account, every device, session, key copy and synced item, and closes relay sockets.
+ * Needs a fresh email confirmation (POST /v1/account/confirm), not just a session.
+ */
 accountRoutes.delete("/", requireBrowser, async (c) => {
-  await readJson(c, z.object({ confirm: z.literal("delete my account") }).strict());
+  const body = await readJson(c, confirmationSchema.extend({ confirm: z.literal("delete my account") }).strict());
+  await requireConfirmation(c.env, c.var.auth, "delete_account", body, c.var.deps.now());
   const { accountId } = c.var.auth;
   await deleteAccount(c.env, accountId);
   return c.json({ ok: true });
@@ -36,7 +41,7 @@ export async function deleteAccount(env: AppEnv, accountId: string): Promise<voi
     if (listed.objects.length) await env.BLOBS.delete(listed.objects.map((o) => o.key));
     cursor = listed.truncated ? listed.cursor : undefined;
   } while (cursor);
-  const tables = ["items", "wrapped_keys", "passkeys", "sessions", "devices", "challenges"];
+  const tables = ["items", "wrapped_keys", "passkeys", "sessions", "devices", "challenges", "confirmations"];
   await env.DB.batch([
     ...tables.map((table) => env.DB.prepare(`DELETE FROM ${table} WHERE account_id = ?`).bind(accountId)),
     env.DB.prepare("DELETE FROM pairings WHERE account_id = ?").bind(accountId),

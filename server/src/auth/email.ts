@@ -9,8 +9,8 @@ import { confirmPage } from "./confirm-page";
 
 /**
  * Email sign-in. The email holds a link and a code. The link opens a confirm page that asks the
- * person to pick the number shown on the device that asked, so nobody signs a stranger's device in
- * with one careless click. The code is typed into that device directly. Either way the session
+ * person to type the number shown on the device that asked (not pick it from a list, which a
+ * guess passes too often), so nobody signs a stranger's device in with one careless click. The code is typed into that device directly. Either way the session
  * goes only to the device holding the poll secret.
  */
 export const emailRoutes = new Hono<HonoEnv>();
@@ -72,7 +72,7 @@ emailRoutes.get("/confirm", (c) => {
 emailRoutes.post("/confirm/info", limit(RULES.emailVerifyIp, ipKey), async (c) => {
   const { token } = await readJson(c, z.object({ token: linkToken }).strict());
   const row = await pendingByLink(c.env, token, c.var.deps.now());
-  return c.json({ deviceName: row.device_name, choices: choicesFor(row.match_number) });
+  return c.json({ deviceName: row.device_name });
 });
 
 emailRoutes.post("/confirm", limit(RULES.emailVerifyIp, ipKey), async (c) => {
@@ -129,15 +129,6 @@ async function complete(env: AppEnv, row: RequestRow, from: string, now: number)
   return { status: "signed_in", ...session, newAccount: account.created };
 }
 
-/** The right number and two others, with the right one in a random place. */
-function choicesFor(match: number): number[] {
-  const choices = new Set([match]);
-  while (choices.size < 3) choices.add(10 + (randomBytes(1)[0]! % 90));
-  const list = [...choices];
-  const shift = randomBytes(1)[0]! % 3;
-  return [...list.slice(shift), ...list.slice(0, shift)];
-}
-
 const escapeHtml = (text: string) =>
   text.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!);
 
@@ -147,14 +138,14 @@ function signInEmail(env: AppEnv, to: string, deviceName: string, token: string,
   const text = [
     `Someone asked to sign in to Perch on "${deviceName}".`,
     "",
-    `To sign in, open this link and pick the number Perch shows: ${link}`,
+    `To sign in, open this link and type the number Perch shows: ${link}`,
     "",
     `Or type this code in Perch: ${code}`,
     "",
     "The link and code work for 15 minutes. If this was not you, ignore this email; nothing changes.",
   ].join("\n");
   const html = `<p>Someone asked to sign in to Perch on “${escapeHtml(deviceName)}”.</p>
-<p><a href="${escapeHtml(link)}">Sign in to Perch</a>, then pick the number Perch shows.</p>
+<p><a href="${escapeHtml(link)}">Sign in to Perch</a>, then type the number Perch shows.</p>
 <p>Or type this code in Perch: <strong style="font-family:monospace">${code}</strong></p>
 <p>The link and code work for 15 minutes. If this was not you, ignore this email; nothing changes.</p>`;
   return { to, subject: "Sign in to Perch", text, html };

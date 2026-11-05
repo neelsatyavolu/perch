@@ -2,6 +2,12 @@
  * Where Perch keeps secrets: API keys, sign-in tokens and the settings key (spec 11.1).
  * On the Mac this is the login Keychain through Bun.secrets (Keychain Services), so no secret is
  * ever passed on a command line or written to a file. Tests use the in-memory keychain.
+ *
+ * Scope: a login-Keychain item's access list trusts the program that created it. Run as
+ * `bun run src/cli.ts`, that program is the shared `bun` binary, so any script bun runs (another
+ * project's install script, say) can read these items without a prompt. Spec 7.3 and 11.1 want
+ * them bound to Perch's code signature; that needs perchd shipped as a signed binary, or a signed
+ * helper that sets the access list, which comes with the release packaging (plan 3b).
  */
 
 import { secrets } from "bun";

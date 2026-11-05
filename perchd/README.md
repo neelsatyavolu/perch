@@ -26,6 +26,8 @@ Add `--show` to watch the browser and `--mode ask|guard|skip` to change the perm
 
 Until the Settings → Models page exists, the same API runs from the terminal. Keys and sign-in tokens go to the login Keychain; choices go to an encrypted file in `~/Library/Application Support/Perch` (`PERCH_HOME` changes the folder).
 
+In this dev setup the Keychain items trust the `bun` binary that created them, so any other script run by bun on this Mac can read them without asking. Use keys you can revoke, with low spending limits, until perchd ships as a signed binary with its items bound to Perch's signature.
+
 ```sh
 bun run src/cli.ts models sign-in codex          # ChatGPT; also: grok
 bun run src/cli.ts models key openai             # asks for the key without echoing it; also anthropic, xai, gemini, openrouter

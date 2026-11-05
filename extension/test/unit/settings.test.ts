@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_SETTINGS, isSiteOff, normalizeHost, sanitizeSettings, withSiteProtection } from "../../src/shared/settings";
+import { DEFAULT_SETTINGS, isSiteOff, listableHost, normalizeHost, protectionState, sanitizeSettings, withSiteProtection } from "../../src/shared/settings";
 import { siteOffRules, contentScriptPlan } from "../../src/background/plan";
 import { PRIORITY } from "../../src/rules/limits";
 import { validateRule } from "../../src/rules/compile";
@@ -29,6 +29,31 @@ describe("settings", () => {
     expect(isSiteOff(off, "www.example.com")).toBe(true);
     expect(isSiteOff(off, "badexample.com")).toBe(false);
     expect(withSiteProtection(off, "example.com", true).sitesOff).toEqual([]);
+  });
+
+  test("turning protections on for a subdomain removes the parent entry that turned them off", () => {
+    const off = { ...DEFAULT_SETTINGS, sitesOff: ["example.com", "other.example"] };
+    const on = withSiteProtection(off, "sub.example.com", true);
+    expect(isSiteOff(on, "sub.example.com")).toBe(false);
+    expect(on.sitesOff).toEqual(["other.example"]);
+  });
+
+  test("single-label intranet hosts can be listed; IPv6 literals cannot", () => {
+    expect(listableHost("intranet")).toBe("intranet");
+    expect(listableHost("Router.")).toBe("router");
+    expect(listableHost("news.example.com")).toBe("news.example.com");
+    expect(listableHost("[::1]")).toBeNull();
+    expect(listableHost("bad host!")).toBeNull();
+    expect(sanitizeSettings({ sitesOff: ["intranet", "[::1]"] }).sitesOff).toEqual(["intranet"]);
+    expect(withSiteProtection(DEFAULT_SETTINGS, "intranet", false).sitesOff).toEqual(["intranet"]);
+  });
+
+  test("protectionState says whether the switch can act and which entry turned protections off", () => {
+    const settings = { ...DEFAULT_SETTINGS, sitesOff: ["example.com"] };
+    expect(protectionState(settings, "example.com")).toEqual({ on: false, listable: true, offBy: "example.com" });
+    expect(protectionState(settings, "sub.example.com")).toEqual({ on: false, listable: true, offBy: "example.com" });
+    expect(protectionState(settings, "other.example")).toEqual({ on: true, listable: true, offBy: null });
+    expect(protectionState(settings, "[::1]")).toEqual({ on: true, listable: false, offBy: null });
   });
 });
 

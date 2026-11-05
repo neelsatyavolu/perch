@@ -1,6 +1,6 @@
 /** "This site": protections switch, what was blocked, tools, permissions, cookies. */
 
-import { loadSettings, saveSettings, withSiteProtection, isSiteOff } from "../shared/settings";
+import { loadSettings, protectionState, saveSettings, withSiteProtection } from "../shared/settings";
 import { pictureInPicture } from "../media/inject";
 import { errorText, h, switchButton } from "./dom";
 import { PERMISSIONS, cookieCount, forgetSite, matchedCounts, permission, setPermission, type PermissionValue } from "./site";
@@ -33,22 +33,27 @@ export async function renderSite(root: HTMLElement, tab: chrome.tabs.Tab | undef
 }
 
 async function protectionSection(host: string, tabId: number): Promise<HTMLElement> {
-  const settings = await loadSettings();
-  const on = !isSiteOff(settings, host);
+  const state = protectionState(await loadSettings(), host);
   const reload = h("div", { class: "note hidden" }, [
     h("span", { class: "grow", text: "Reload the page to apply the change." }),
     h("button", { text: "Reload", on: { click: () => void chrome.tabs.reload(tabId).then(() => window.close()) } }),
   ]);
-  const toggle = switchButton("Protections for this site", on, (next) => {
+  const toggle = switchButton("Protections for this site", state.on, (next) => {
     void loadSettings()
       .then((current) => saveSettings(withSiteProtection(current, host, next)))
       .then(() => reload.classList.remove("hidden"));
   });
+  toggle.disabled = !state.listable;
+  const caption = !state.listable
+    ? "Perch cannot turn protections off for this address."
+    : state.offBy && state.offBy !== host
+      ? `Off for ${state.offBy} and its subdomains. Turning them on applies to all of it.`
+      : "Blocking, cookie banners and tracking parameters";
   return h("div", { class: "section" }, [
     h("div", { class: "row" }, [
       h("div", { class: "grow" }, [
         h("div", { text: "Protections", attrs: { style: "color: var(--ink); font-weight: 500" } }),
-        h("div", { class: "caption", text: "Blocking, cookie banners and tracking parameters" }),
+        h("div", { class: "caption", text: caption, attrs: { "data-protection-caption": "" } }),
       ]),
       toggle,
     ]),

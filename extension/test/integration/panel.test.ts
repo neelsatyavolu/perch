@@ -57,6 +57,23 @@ describe("site panel", () => {
     await page.close();
   });
 
+  test("on a subdomain of a listed site, the switch says why it is off and turns protections back on", async () => {
+    await h.sw(`chrome.storage.local.set({ settings: { sitesOff: ["site.localhost"] } })`);
+    const page = await h.open(h.site.url("news.site.localhost", "/plain.html"));
+    const panel = await sitePanel(page);
+    expect(await panel.evaluate<string>("document.querySelector('[role=switch]').getAttribute('aria-checked')")).toBe("false");
+    expect(await panel.evaluate<string>("document.querySelector('[data-protection-caption]').textContent")).toContain("Off for site.localhost");
+    await panel.evaluate(`document.querySelector('[role=switch]').click()`);
+    const settings = await waitFor(async () => {
+      const s = await h.sw<{ settings?: { sitesOff?: string[] } }>(`chrome.storage.local.get("settings")`);
+      return s.settings?.sitesOff?.length === 0 ? s.settings : null;
+    }, "the parent entry removed");
+    expect(settings.sitesOff).toEqual([]);
+    await h.sw(`chrome.storage.local.set({ settings: {} })`);
+    await panel.close();
+    await page.close();
+  });
+
   test("changing a permission applies to this site", async () => {
     const page = await h.open(h.site.url("site.localhost", "/plain.html"));
     const panel = await sitePanel(page);

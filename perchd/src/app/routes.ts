@@ -31,6 +31,12 @@ function chatOf(ctx: RouteContext, id: string): Chat {
   return chat;
 }
 
+/** Returns the chat after telling every page it changed. */
+function announced(ctx: RouteContext, chat: Chat): Chat {
+  ctx.runs.announce(chat.id);
+  return chat;
+}
+
 function chatView(ctx: RouteContext, chat: Chat) {
   return { chat, run: ctx.runs.snapshot(chat.id), artifacts: ctx.artifacts.forChat(chat.id).map((r) => ctx.runs.artifactMeta(r)) };
 }
@@ -41,10 +47,10 @@ async function sideChat(ctx: RouteContext, tabId: string, body: unknown) {
   const tab = { id: tabId, windowId: v.id(o.windowId, "windowId") };
   if (o.chatId !== undefined) {
     chatOf(ctx, v.id(o.chatId, "chatId"));
-    return ctx.chats.attach(String(o.chatId), tab);
+    return announced(ctx, await ctx.chats.attach(String(o.chatId), tab));
   }
   const settings = o.settings === undefined ? {} : v.settingsPatch(o.settings, ctx.models);
-  return ctx.chats.create({ tab, settings: { ...ctx.defaults, ...settings } });
+  return announced(ctx, await ctx.chats.create({ tab, settings: { ...ctx.defaults, ...settings } }));
 }
 
 export function exportMarkdown(ctx: RouteContext, chat: Chat): string {
@@ -62,18 +68,19 @@ export function exportMarkdown(ctx: RouteContext, chat: Chat): string {
 export const ROUTES: Route[] = [
   route("GET", "/api/info", (ctx) => ctx.info()),
   route("GET", "/api/chats", (ctx) => ctx.chats.list().map((c) => ctx.runs.summary(c))),
-  route("POST", "/api/chats", (ctx, _, body) => {
+  route("POST", "/api/chats", async (ctx, _, body) => {
     const o = v.object(body ?? {});
     v.onlyKeys(o, ["title", "tab", "settings"]);
     const settings = o.settings === undefined ? {} : v.settingsPatch(o.settings, ctx.models);
-    return ctx.chats.create({
+    const chat = await ctx.chats.create({
       title: v.optionalText(o.title, "title", 200),
       tab: o.tab === undefined || o.tab === null ? null : v.tabRef(o.tab),
       settings: { ...ctx.defaults, ...settings },
     });
+    return announced(ctx, chat);
   }),
   route("GET", "/api/chats/:id", (ctx, [id]) => chatView(ctx, chatOf(ctx, id!))),
-  route("PATCH", "/api/chats/:id", (ctx, [id], body) => {
+  route("PATCH", "/api/chats/:id", async (ctx, [id], body) => {
     chatOf(ctx, id!);
     const o = v.object(body);
     v.onlyKeys(o, ["title", "draft", "scrollTop", "settings"]);
@@ -82,13 +89,15 @@ export const ROUTES: Route[] = [
     const scrollTop = o.scrollTop === undefined ? undefined : v.nonNegativeNumber(o.scrollTop, "scrollTop");
     const settings = o.settings === undefined ? undefined : v.settingsPatch(o.settings, ctx.models);
     if (title === "") throw new AppError("A chat title cannot be empty");
-    return ctx.chats.update(id!, (c) => ({
+    const chat = await ctx.chats.update(id!, (c) => ({
       ...c,
       ...(title !== undefined ? { title } : {}),
       ...(draft !== undefined ? { draft } : {}),
       ...(scrollTop !== undefined ? { scrollTop } : {}),
       ...(settings ? { settings: { ...c.settings, ...settings } } : {}),
     }));
+    // Drafts and scroll positions change often and only matter to the page that sent them.
+    return title !== undefined || settings ? announced(ctx, chat) : chat;
   }),
   route("DELETE", "/api/chats/:id", async (ctx, [id]) => {
     chatOf(ctx, id!);
@@ -96,6 +105,7 @@ export const ROUTES: Route[] = [
     await ctx.runs.idle();
     await ctx.artifacts.removeForChat(id!);
     await ctx.chats.remove(id!);
+    ctx.runs.announceRemoved(id!);
     return { removed: id };
   }),
   route("POST", "/api/chats/:id/messages", (ctx, [id], body) => {
@@ -108,9 +118,12 @@ export const ROUTES: Route[] = [
     const o = v.object(body);
     v.onlyKeys(o, ["messageId"]);
     chatOf(ctx, id!);
-    return ctx.chats.branch(id!, v.id(o.messageId, "messageId")).catch((e: Error) => {
-      throw new AppError(e.message, 404);
-    });
+    return ctx.chats.branch(id!, v.id(o.messageId, "messageId")).then(
+      (chat) => announced(ctx, chat),
+      (e: Error) => {
+        throw new AppError(e.message, 404);
+      },
+    );
   }),
   route("GET", "/api/chats/:id/export", (ctx, [id]) => new Response(exportMarkdown(ctx, chatOf(ctx, id!)), { headers: { "content-type": "text/markdown; charset=utf-8" } })),
   route("POST", "/api/chats/:id/artifacts", async (ctx, [id], body) => {

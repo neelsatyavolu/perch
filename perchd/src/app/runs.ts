@@ -130,12 +130,12 @@ export class RunManager {
             if (run.pending?.card.id !== card.id) return;
             run.pending = null;
             this.deps.emit({ type: "run.approval.resolved", chatId: run.chatId, runId: run.runId, approvalId: card.id, approved });
-            this.touch(run.chatId);
+            this.announce(run.chatId);
             resolve(approved);
           },
         };
         this.deps.emit({ type: "run.approval", chatId: run.chatId, runId: run.runId, card });
-        this.touch(run.chatId);
+        this.announce(run.chatId);
       });
     };
   }
@@ -165,7 +165,7 @@ export class RunManager {
       await this.finish(run, final, error);
     } finally {
       this.runs.delete(run.chatId);
-      this.touch(run.chatId);
+      this.announce(run.chatId);
     }
   }
 
@@ -197,7 +197,13 @@ export class RunManager {
     this.deps.emit({ type: "run.finished", chatId: run.chatId, runId: run.runId, message });
   }
 
-  private touch(chatId: string): void {
+  /** Tells every page that a chat is gone. */
+  announceRemoved(chatId: string): void {
+    this.deps.emit({ type: "chat.removed", chatId });
+  }
+
+  /** Tells every page a chat's title, status or binding changed. */
+  announce(chatId: string): void {
     const chat = this.deps.chats.get(chatId);
     if (chat) this.deps.emit({ type: "chat.updated", chat: this.summary(chat) });
   }

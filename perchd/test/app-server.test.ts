@@ -198,3 +198,13 @@ test("a Unix socket works and only the owner can open it", async () => {
     rmSync(sockDir, { recursive: true, force: true });
   }
 });
+
+test("pages hear about renames and removals", async () => {
+  const { ws, events } = await socket();
+  const chat = (await (await api("/api/chats", { method: "POST", json: {} })).json()) as Chat;
+  await api(`/api/chats/${chat.id}`, { method: "PATCH", json: { title: "Trip to Kyoto" } });
+  await until(() => events.find((e) => e.type === "chat.updated" && e.chat.title === "Trip to Kyoto"));
+  await api(`/api/chats/${chat.id}`, { method: "DELETE" });
+  await until(() => events.find((e) => e.type === "chat.removed" && e.chatId === chat.id));
+  ws.close();
+});

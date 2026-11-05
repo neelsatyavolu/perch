@@ -37,7 +37,6 @@ perchd/src/cli/      main.ts client.ts commands.ts mcp-proxy.ts self.ts install/
 perchd/src/apps/     flint.ts
 perchd/skills/       perch/SKILL.md, flint/SKILL.md
 perchd/test/         keychain clients sessions daemon cli mcp-proxy install flint .test.ts
-integrations/        agterm/, agmux/, flint/: patches for the owner's apps (see below)
 ```
 
 Shared files, touched minimally: `perchd/package.json` (bin build script), `perchd/src/agent/tool-specs.ts`, `tools.ts` and `permissions.ts` (one hook each for app tools).
@@ -55,11 +54,11 @@ Shared files, touched minimally: `perchd/package.json` (bin build script), `perc
 
 ## The owner's apps
 
-The task asked for a git worktree per app (`<repo>-perch`, branch `feat/perch-integration`). This agent runs isolated to the Perch worktree and its harness refuses git commands on other repositories, so each integration is built and checked in a scratch copy of the app and delivered as a patch in `integrations/<app>/`, with the commands to apply it on a worktree.
+Each integration lives in its own git worktree of the app (`~/Documents/GitHub/<app>-perch`, branch `feat/perch-integration`, from the app's HEAD), committed there and not pushed.
 
 - **agterm:** adds a `perch` MCP server (`perch mcp --client agterm --session <tab id> --agent <agent> --title <folder>`) to the claude and codex it starts when the perch CLI is installed (Settings → Agents switch, on by default); a browser mark on a tab whose agent has Perch tabs, which brings them forward on click; web links open in Perch when it is installed.
 - **agmux:** the same server for Claude Code and Codex PTY sessions, a mark on the thread row with click to focus, and web links (terminal and chat) open in Perch.
-- **Flint:** "Open in Perch" on a link's context menu, shown when Perch is installed.
+- **Flint:** "Open in Perch" on a link's right-click menu (with Open Link and Copy Link), shown when Perch is installed. Perch's agent reads and acts on mail through the `flint` tool above, with `--as perch` so Flint's Agent Activity names it.
 
 ## Deferred, and why
 

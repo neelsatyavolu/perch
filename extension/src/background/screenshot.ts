@@ -11,10 +11,26 @@ import { putShot } from "../shot/store";
 const CAPTURE_GAP_MS = 520;
 /** Shared across screenshots, so two taken back to back still respect Chrome's rate. */
 let lastCapture = 0;
+/**
+ * One capture at a time, across all tabs: two would scroll the same page against each other and
+ * share Chrome's capture rate. A second request is refused rather than queued, so a double press
+ * does not produce two images.
+ */
+let busy = false;
 
 type Metrics = { pageHeight: number; viewportHeight: number; viewportWidth: number; dpr: number; scrollX: number; scrollY: number };
 
 export async function fullPageScreenshot(tabId: number): Promise<string> {
+  if (busy) throw new Error("A screenshot is already being taken. Wait for it to finish.");
+  busy = true;
+  try {
+    return await capture(tabId);
+  } finally {
+    busy = false;
+  }
+}
+
+async function capture(tabId: number): Promise<string> {
   const tab = await chrome.tabs.get(tabId);
   if (!tab.url || !/^(https?|file):/.test(tab.url)) throw new Error("Perch can only capture web pages.");
   if (!tab.active) await chrome.tabs.update(tabId, { active: true });
@@ -86,7 +102,8 @@ async function scrollToY(y: number): Promise<number> {
 function hideFixed(): void {
   for (const el of document.querySelectorAll<HTMLElement>("body *")) {
     const position = getComputedStyle(el).position;
-    if (position === "fixed" || position === "sticky") {
+    // An element already marked keeps its original value; marking it again would save "hidden".
+    if ((position === "fixed" || position === "sticky") && el.dataset.perchShotHidden === undefined) {
       el.dataset.perchShotHidden = el.style.visibility;
       el.style.setProperty("visibility", "hidden", "important");
     }

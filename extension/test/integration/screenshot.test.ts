@@ -71,6 +71,26 @@ describe("full-page screenshot", () => {
     await page.close();
   }, 20_000);
 
+  test("a second request while one is running is refused, and the page is put back once", async () => {
+    const page = await h.open(h.site.url("site.localhost", "/long.html"));
+    await page.evaluate("scrollTo(0, 300)");
+    const tabId = await h.tabIdOf(page);
+    const panel = await h.extensionPage("options.html");
+    const replies = await panel.evaluate<{ ok: boolean; value?: string; error?: string }[]>(
+      `Promise.all([1, 2].map(() => chrome.runtime.sendMessage({ type: "screenshot", tabId: ${tabId} })))`,
+    );
+    await panel.close();
+    expect(replies.filter((r) => r.ok)).toHaveLength(1);
+    expect(replies.find((r) => !r.ok)?.error).toBe("A screenshot is already being taken. Wait for it to finish.");
+    expect(await page.evaluate<string>("getComputedStyle(document.querySelector('header')).visibility")).toBe("visible");
+    expect(await page.evaluate<number>("document.querySelectorAll('[data-perch-shot-hidden]').length")).toBe(0);
+    expect(await page.evaluate<number>("scrollY")).toBe(300);
+    const shotUrl = `chrome-extension://${h.extensionId}/shot.html?id=${replies.find((r) => r.ok)!.value}`;
+    const target = await waitFor(async () => (await h.browser.tabs()).find((t) => t.url === shotUrl) ?? null, "the screenshot page");
+    await (await Tab.attach(h.browser.conn, target.id)).close();
+    await page.close();
+  }, 20_000);
+
   test("a second screenshot while the first one's page is still open; each link opens once", async () => {
     const { page, shot, viewport } = await capture("/long.html");
     expect(near(await pixelAt(shot, 2850, viewport.dpr), [0, 0, 220])).toBe(true);

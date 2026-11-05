@@ -152,3 +152,54 @@ test("unreadable stored tokens count as signed out", async () => {
   await keychain.set("oauth:codex", "{not json");
   expect(await auth.status("codex")).toBe("signed-out");
 });
+
+test("a rate-limited or failing refresh is a passing problem, not an expired sign-in", async () => {
+  server = tokenServer([
+    { access_token: "acc-1", refresh_token: "ref-1", expires_in: 3600 },
+    { status: 429, error: "rate_limited" },
+    { status: 503, error: "unavailable" },
+    { access_token: "acc-2", refresh_token: "ref-2", expires_in: 3600 },
+  ]);
+  let clock = Date.now();
+  const { auth } = setup({ now: () => clock });
+  await auth.startSignIn("grok");
+  await auth.finishSignIn("grok", "code");
+  clock += 7200_000;
+  await expect(auth.tokens("grok")).rejects.toThrow("could not reach Grok");
+  expect(await auth.status("grok")).toBe("signed-in");
+  await expect(auth.tokens("grok")).rejects.toThrow("could not reach Grok");
+  expect((await auth.tokens("grok")).accessToken).toBe("acc-2");
+});
+
+test("a refresh rejected because another Perch process rotated the tokens uses the new ones", async () => {
+  let clock = Date.now();
+  let keychainRef: ReturnType<typeof setup>["keychain"] | null = null;
+  let n = 0;
+  server = fakeServer(async () => {
+    if (n++ === 0) return json({ access_token: "acc-1", refresh_token: "ref-1", expires_in: 3600 });
+    // The other process refreshed first: ref-1 is now spent and ref-2 is in the Keychain.
+    await keychainRef!.set("oauth:grok", JSON.stringify({ accessToken: "acc-other", refreshToken: "ref-2", expiresAt: clock + 3600_000 }));
+    return json({ error: "invalid_grant" }, 400);
+  });
+  const { keychain, auth } = setup({ now: () => clock });
+  keychainRef = keychain;
+  await auth.startSignIn("grok");
+  await auth.finishSignIn("grok", "code");
+  clock += 7200_000;
+  expect((await auth.tokens("grok")).accessToken).toBe("acc-other");
+  expect(await auth.status("grok")).toBe("signed-in");
+});
+
+test("an expired sign-in clears when new tokens appear in the Keychain", async () => {
+  server = tokenServer([{ access_token: "acc-1", refresh_token: "ref-1", expires_in: 3600 }, { status: 401, error: "invalid_grant" }]);
+  let clock = Date.now();
+  const { keychain, auth } = setup({ now: () => clock });
+  await auth.startSignIn("grok");
+  await auth.finishSignIn("grok", "code");
+  clock += 7200_000;
+  await expect(auth.tokens("grok")).rejects.toThrow("Sign in to Grok again");
+  // Signed in again from another Perch process (the dev CLI, say).
+  await keychain.set("oauth:grok", JSON.stringify({ accessToken: "acc-new", refreshToken: "ref-new", expiresAt: clock + 3600_000 }));
+  expect(await auth.status("grok")).toBe("signed-in");
+  expect((await auth.tokens("grok")).accessToken).toBe("acc-new");
+});

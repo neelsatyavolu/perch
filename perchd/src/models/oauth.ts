@@ -53,7 +53,9 @@ export function createSubscriptionAuth(opts: SubscriptionAuthOptions) {
   const fetchOpt = opts.fetch ? { fetch: opts.fetch } : {};
   let pending = new Map<SubscriptionId, Pending>();
   let listeners = new Map<SubscriptionId, LoopbackHandle>();
-  let expired = new Set<SubscriptionId>();
+  // The refresh token the provider rejected, per provider. Tokens saved after that (a new
+  // sign-in, here or in another Perch process) end the expired state on their own.
+  let expired = new Map<SubscriptionId, string>();
   let refreshing = new Map<SubscriptionId, Promise<Tokens>>();
   // Bumped by sign-out, so a token request still in flight cannot save tokens afterwards.
   let generations = new Map<SubscriptionId, number>();
@@ -91,9 +93,11 @@ export function createSubscriptionAuth(opts: SubscriptionAuthOptions) {
     if (pending.get(p)?.pkce.verifier !== verifier) throw new ProviderError(`That ${label(p)} sign-in was cancelled. Start again from Settings → Models.`);
     await save(p, tokens, since);
     pending = without(pending, p);
-    expired = new Set([...expired].filter((x) => x !== p));
+    expired = without(expired, p);
     opts.onChange?.(p);
   }
+
+  const isExpired = (p: SubscriptionId, t: Tokens) => expired.get(p) === t.refreshToken;
 
   function listen(p: SubscriptionId): boolean {
     if (!starter) return false;
@@ -140,6 +144,12 @@ export function createSubscriptionAuth(opts: SubscriptionAuthOptions) {
     stopListener(p);
   }
 
+  /** Status of a failed token request, from shared-ai-auth's "… token request failed (NNN)". */
+  const failedStatus = (error: unknown): number | null => {
+    const m = /\((\d{3})\)/.exec(String((error as Error)?.message));
+    return m ? Number(m[1]) : null;
+  };
+
   async function refresh(p: SubscriptionId, current: Tokens): Promise<Tokens> {
     const inflight = refreshing.get(p);
     if (inflight) return inflight;
@@ -149,13 +159,22 @@ export function createSubscriptionAuth(opts: SubscriptionAuthOptions) {
       try {
         next = await refreshTokens(p, current.refreshToken, { ...fetchOpt, previous: current });
       } catch (error) {
-        // A 4xx means the sign-in was revoked or expired; anything else is a network problem.
-        if (/\((4\d\d)\)/.test(String((error as Error)?.message))) {
-          expired = new Set(expired).add(p);
-          opts.onChange?.(p);
-          throw new ProviderError(signInAgain(p), "auth");
+        // Only 400 (invalid_grant) and 401 mean the refresh token is dead. A 429, a timeout or a
+        // server error leaves the sign-in as it is; the next request tries again.
+        const status = failedStatus(error);
+        if (status !== 400 && status !== 401) {
+          throw new ProviderError(`Perch could not reach ${label(p)} to renew the sign-in. Check your connection and try again.`, "unreachable");
         }
-        throw new ProviderError(`Perch could not reach ${label(p)} to renew the sign-in. Check your connection.`, "unreachable");
+        // Another Perch process may have rotated the tokens first, spending this refresh token.
+        const latest = await stored(p);
+        if (latest && latest.refreshToken !== current.refreshToken) {
+          if (latest.expiresAt > now() + REFRESH_AHEAD_MS) return latest;
+          refreshing = without(refreshing, p);
+          return refresh(p, latest);
+        }
+        expired = new Map(expired).set(p, current.refreshToken);
+        opts.onChange?.(p);
+        throw new ProviderError(signInAgain(p), "auth");
       }
       await save(p, next, since);
       return next;
@@ -164,7 +183,7 @@ export function createSubscriptionAuth(opts: SubscriptionAuthOptions) {
     try {
       return await run;
     } finally {
-      refreshing = without(refreshing, p);
+      if (refreshing.get(p) === run) refreshing = without(refreshing, p);
     }
   }
 
@@ -172,21 +191,22 @@ export function createSubscriptionAuth(opts: SubscriptionAuthOptions) {
   async function tokens(p: SubscriptionId): Promise<ResponsesTokens> {
     const current = await stored(p);
     if (!current) throw new ProviderError(`Sign in to ${label(p)} in Settings → Models first.`, "not-connected");
-    if (expired.has(p)) throw new ProviderError(signInAgain(p), "auth");
+    if (isExpired(p, current)) throw new ProviderError(signInAgain(p), "auth");
     const fresh = current.expiresAt > now() + REFRESH_AHEAD_MS ? current : await refresh(p, current);
     return { accessToken: fresh.accessToken, ...(fresh.accountId ? { accountId: fresh.accountId } : {}) };
   }
 
   async function status(p: SubscriptionId): Promise<SignInStatus> {
-    if (!(await stored(p))) return "signed-out";
-    return expired.has(p) ? "expired" : "signed-in";
+    const current = await stored(p);
+    if (!current) return "signed-out";
+    return isExpired(p, current) ? "expired" : "signed-in";
   }
 
   async function signOut(p: SubscriptionId): Promise<void> {
     generations = new Map(generations).set(p, generation(p) + 1);
     pending = without(pending, p);
     stopListener(p);
-    expired = new Set([...expired].filter((x) => x !== p));
+    expired = without(expired, p);
     await opts.keychain.delete(secretName(p));
     opts.onChange?.(p);
   }

@@ -29,7 +29,8 @@ Until the Settings → Models page exists, the same API runs from the terminal. 
 ```sh
 bun run src/cli.ts models sign-in codex          # ChatGPT; also: grok
 bun run src/cli.ts models key openai             # asks for the key without echoing it; also anthropic, xai, gemini, openrouter
-bun run src/cli.ts models endpoint ollama http://127.0.0.1:11434/v1
+bun run src/cli.ts models endpoint ollama http://127.0.0.1:11434/v1   # asks for an optional key; Return keeps the saved one
+bun run src/cli.ts models endpoint custom https://gateway.example.com/v1 --no-key   # --no-key removes a saved key
 bun run src/cli.ts models claude-code            # uses the installed Claude Code CLI as the runner
 bun run src/cli.ts models providers              # what is connected
 bun run src/cli.ts models roles                  # Default, Fast, Standard, Deep, Visual, Image

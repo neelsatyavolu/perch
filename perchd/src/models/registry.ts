@@ -199,18 +199,23 @@ export function createModelRegistry(opts: RegistryOptions) {
     return result;
   }
 
-  /** Connects a local server or custom endpoint: base URL and an optional key. */
-  async function connectEndpoint(idRaw: ProviderId, input: { baseUrl?: string; key?: string }): Promise<ConnectionResult> {
+  /**
+   * Connects a local server or custom endpoint: base URL and an optional key. Leaving `key` out
+   * keeps the saved key (and checks the new address with it); `null` or "" removes it.
+   */
+  async function connectEndpoint(idRaw: ProviderId, input: { baseUrl?: string; key?: string | null }): Promise<ConnectionResult> {
     const id = checkProvider(idRaw);
     const def = PROVIDERS[id];
     if (def.auth !== "endpoint") throw new ProviderError(`${def.label} is not an endpoint provider.`);
+    const address = input.baseUrl ?? baseUrl(id);
+    if (!address) throw new ProviderError(`Give the ${def.label} base URL first.`);
     let url: string;
     try {
-      url = checkBaseUrl(input.baseUrl ?? baseUrl(id));
+      url = checkBaseUrl(address);
     } catch (error) {
       throw new ProviderError(error instanceof SettingsError ? error.message : "The base URL is not valid.");
     }
-    const key = input.key?.trim() ? checkApiKey(input.key) : null;
+    const key = input.key === undefined ? await secret(id) : input.key?.trim() ? checkApiKey(input.key) : null;
     const started = now();
     let models: ModelInfo[];
     try {

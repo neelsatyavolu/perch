@@ -12,6 +12,7 @@ import { tempProfile } from "./helpers";
 
 const ANTHROPIC_KEY = "sk-ant-test-0123456789abcdef";
 const OPENAI_KEY = "sk-proj-test-0123456789abcdef";
+const LMS_KEY = "lms-test-key-0123456789abcdef";
 
 let server: FakeServer | null = null;
 const cleanups: (() => void)[] = [];
@@ -40,6 +41,9 @@ function providers(): FakeServer {
         return json({ data: [{ id: "gpt-6-astra" }, { id: "gpt-6.1-sol" }, { id: "gpt-6-luna" }, { id: "gpt-image-2.5-sunburst" }, { id: "whisper-1" }] });
       case "POST /openai/v1/images/generations":
         return json({ data: [{ b64_json: PNG_1PX }] });
+      case "GET /lms/v1/models":
+      case "GET /lms2/v1/models":
+        return auth === `Bearer ${LMS_KEY}` ? json({ data: [{ id: "qwen3-coder" }] }) : json({ error: { message: "key required" } }, 401);
       case "GET /ollama/v1/models":
         return json({ data: [{ id: "qwen3:8b" }, { id: "llava:13b" }] });
       case "POST /ollama/v1/chat/completions":
@@ -165,6 +169,26 @@ test("an endpoint that is not running is reported, not saved", async () => {
   expect(String(error)).toContain("Could not reach LM Studio");
   expect((await registry.listProviders()).find((p) => p.id === "lmstudio")!.connected).toBe(false);
   await expect(registry.connectEndpoint("custom", { baseUrl: "http://example.com/v1" })).rejects.toThrow("https");
+});
+
+test("changing an endpoint's address keeps its key; only an explicit null removes it", async () => {
+  const { registry, keychain } = await setup();
+  await registry.connectEndpoint("lmstudio", { baseUrl: `${server!.url}/lms/v1`, key: LMS_KEY });
+  expect(await keychain.get("api-key:lmstudio")).toBe(LMS_KEY);
+  // A new address alone is checked with the saved key, and the key stays.
+  const moved = await registry.connectEndpoint("lmstudio", { baseUrl: `${server!.url}/lms2/v1` });
+  expect(moved.ok).toBe(true);
+  expect(server!.seen.filter((s) => s.path === "/lms2/v1/models").at(-1)!.headers.authorization).toBe(`Bearer ${LMS_KEY}`);
+  expect(await keychain.get("api-key:lmstudio")).toBe(LMS_KEY);
+  expect((await registry.listProviders()).find((p) => p.id === "lmstudio")!.baseUrl).toBe(`${server!.url}/lms2/v1`);
+  // Clearing the key is explicit, and is checked like any other change: this server needs one.
+  await expect(registry.connectEndpoint("lmstudio", { key: null })).rejects.toThrow("LM Studio rejected");
+  expect(await keychain.get("api-key:lmstudio")).toBe(LMS_KEY);
+});
+
+test("a key for an endpoint with no address yet asks for the address first", async () => {
+  const { registry } = await setup();
+  await expect(registry.setKey("custom", LMS_KEY)).rejects.toThrow("base URL first");
 });
 
 test("setRole validates; the last model used becomes Default; sign-out falls back", async () => {

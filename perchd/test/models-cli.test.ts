@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { parseModelSpec, parseRoleArg } from "../src/models-cli";
+import { parseEndpointArgs, parseModelSpec, parseRoleArg } from "../src/models-cli";
 
 test("model specs name a role, a provider, or a provider and model", () => {
   expect(parseModelSpec("role:deep")).toEqual({ role: "deep" });
@@ -16,4 +16,11 @@ test("role arguments take a model and an optional effort", () => {
   expect(() => parseRoleArg(["deep", "openai"])).toThrow("provider:model");
   expect(() => parseRoleArg(["deep", "openai:x", "huge"])).toThrow("effort");
   expect(() => parseRoleArg(["sideways", "openai:x"])).toThrow("role");
+});
+
+test("endpoint arguments take an address and an optional --no-key", () => {
+  expect(parseEndpointArgs(["lmstudio", "http://127.0.0.1:1234/v1"])).toEqual({ baseUrl: "http://127.0.0.1:1234/v1", clearKey: false });
+  expect(parseEndpointArgs(["custom", "https://gw.example.com/v1", "--no-key"])).toEqual({ baseUrl: "https://gw.example.com/v1", clearKey: true });
+  expect(parseEndpointArgs(["ollama", "--no-key"])).toEqual({ clearKey: true });
+  expect(parseEndpointArgs(["ollama"])).toEqual({ clearKey: false });
 });

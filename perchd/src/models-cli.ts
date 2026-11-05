@@ -3,7 +3,7 @@
  * Uses the real Keychain and the encrypted settings in ~/Library/Application Support/Perch.
  *
  *   models providers | list <provider> | test <provider> | roles
- *   models sign-in codex|grok | key <provider> | endpoint <provider> <base-url> | claude-code | sign-out <provider>
+ *   models sign-in codex|grok | key <provider> | endpoint <provider> [base-url] [--no-key] | claude-code | sign-out <provider>
  *   models role <role> <provider>:<model> [effort] | models role <role> clear
  *   models image "<prompt>" <folder>
  */
@@ -39,6 +39,13 @@ export function parseRoleArg(args: string[]): { role: Role; choice: RoleChoice |
   if (!spec || !("provider" in spec) || !spec.model) throw new Error("Give the model as provider:model, for example openai:gpt-6-astra.");
   if (effort !== undefined && !isRoleEffort(effort)) throw new Error("The effort is one of off, low, medium, high or max.");
   return { role, choice: { provider: spec.provider, model: spec.model, ...(effort ? { effort } : {}) } };
+}
+
+/** `endpoint <provider> [base-url] [--no-key]`: the address to use, and whether to remove the saved key. */
+export function parseEndpointArgs(args: string[]): { baseUrl?: string; clearKey: boolean } {
+  const rest = args.slice(1);
+  const baseUrl = rest.find((a) => a !== "--no-key");
+  return { ...(baseUrl ? { baseUrl } : {}), clearKey: rest.includes("--no-key") };
 }
 
 export async function openRegistry(): Promise<ModelRegistry> {
@@ -108,9 +115,15 @@ export async function modelsCommand(args: string[]): Promise<number> {
       case "key":
         out((await registry.setKey(provider(), await readSecret(`${provider()} API key: `))).message);
         break;
-      case "endpoint":
-        out((await registry.connectEndpoint(provider(), { baseUrl: rest[1] })).message);
+      case "endpoint": {
+        const id = provider();
+        const { baseUrl, clearKey } = parseEndpointArgs(rest);
+        // An empty answer keeps the saved key (or none); --no-key removes it.
+        const typed = clearKey ? null : (await readSecret(`${id} API key (press Return to keep the saved one, or for none): `)).trim();
+        const key = clearKey ? null : typed ? typed : undefined;
+        out((await registry.connectEndpoint(id, { ...(baseUrl ? { baseUrl } : {}), ...(key !== undefined ? { key } : {}) })).message);
         break;
+      }
       case "claude-code":
         out((await registry.connectClaudeCode()).message);
         break;

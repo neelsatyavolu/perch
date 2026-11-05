@@ -14,7 +14,7 @@ export function startFixtures(): { port: number; url: (host: string, path: strin
   const server = Bun.serve({
     port: 0,
     hostname: "127.0.0.1",
-    async fetch(req) {
+    async fetch(req): Promise<Response> {
       const url = new URL(req.url);
       const host = (req.headers.get("host") ?? "").split(":")[0] ?? "";
       hits.push({ host, path: url.pathname, query: url.search, cookie: req.headers.get("cookie") });
@@ -33,6 +33,6 @@ export function startFixtures(): { port: number; url: (host: string, path: strin
       return new Response("not found", { status: 404 });
     },
   });
-  const port = server.port!;
+  const port: number = server.port!;
   return { port, url: (host, path) => `http://${host}:${port}${path}`, hits, stop: () => server.stop(true) };
 }

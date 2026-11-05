@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { AppEnv, HonoEnv } from "./env";
 import { quotaBytes } from "./env";
-import { fromBase64Url } from "./crypto";
+import { fromBase64Url, randomToken } from "./crypto";
 import { base64url, check, HttpError, readJson } from "./http";
 import { requireBrowser } from "./auth/session";
 import { limit, RULES } from "./ratelimit";
@@ -45,7 +45,12 @@ const itemOut = (row: ItemRow) => ({
   ...(row.blob_key !== null ? { blob: true } : {}),
 });
 
-const blobKey = (accountId: string, collection: string, id: string, version: number) => `items/${accountId}/${collection}/${id}/${version}`;
+/**
+ * Unique per write: two devices writing the same item from the same base each put their own
+ * object, so the one that loses in D1 deletes only its own and never the winner's.
+ */
+const blobKey = (accountId: string, collection: string, id: string, version: number) =>
+  `items/${accountId}/${collection}/${id}/${version}/${randomToken("b", 16)}`;
 
 syncRoutes.post("/:collection/commit", limit(RULES.syncWrite, (c) => c.var.auth.accountId), async (c) => {
   const collection = check(collectionSchema, c.req.param("collection"));

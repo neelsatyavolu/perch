@@ -82,10 +82,46 @@ describe("sync", () => {
     expect(res.res.headers.get("perch-item-version")).toBe("1");
     expect(res.data).toEqual(big);
     const listed1 = await appEnv.BLOBS.list({ prefix: `items/${s.accountId}/` });
-    expect(listed1.objects.map((o) => o.key)).toEqual([`items/${s.accountId}/bookmarks/${itemId(1)}/1`]);
+    expect(listed1.objects).toHaveLength(1);
+    expect(listed1.objects[0]!.key.startsWith(`items/${s.accountId}/bookmarks/${itemId(1)}/1/`)).toBe(true);
     await commit(h, s, [{ id: itemId(1), baseVersion: 1, keyVersion: 1, ciphertext: toBase64Url(big.slice().reverse()) }]);
     const listed2 = await appEnv.BLOBS.list({ prefix: `items/${s.accountId}/` });
-    expect(listed2.objects.map((o) => o.key)).toEqual([`items/${s.accountId}/bookmarks/${itemId(1)}/2`]);
+    expect(listed2.objects).toHaveLength(1);
+    expect(listed2.objects[0]!.key.startsWith(`items/${s.accountId}/bookmarks/${itemId(1)}/2/`)).toBe(true);
+  });
+
+  it("keeps the winner's blob when two devices commit the same large item from the same base at once", async () => {
+    const h = harness();
+    const email = freshEmail();
+    const a = await ready(h, email);
+    const b = await signIn(h, email);
+    const first = new Uint8Array(100_000).fill(1);
+    const second = new Uint8Array(100_000).fill(2);
+    // Both writes reach R2 before either reaches D1: hold each put until the other arrives.
+    let arrived = 0;
+    let release!: () => void;
+    const bothThere = new Promise<void>((resolve) => (release = resolve));
+    const blobs = appEnv.BLOBS;
+    const racing = { ...appEnv, BLOBS: { get: blobs.get.bind(blobs), delete: blobs.delete.bind(blobs), list: blobs.list.bind(blobs),
+      put: async (key: string, value: Uint8Array) => {
+        if (++arrived === 2) release();
+        await bothThere;
+        return blobs.put(key, value);
+      } } } as typeof appEnv;
+    const send = (s: Session, bytes: Uint8Array) => h.app.fetch(new Request("https://api.perchbrowser.com/v1/sync/bookmarks/commit", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${s.sessionToken}`, "cf-connecting-ip": h.ip },
+      body: JSON.stringify({ items: [{ id: itemId(1), baseVersion: 0, keyVersion: 1, ciphertext: toBase64Url(bytes) }] }),
+    }), racing).then(async (res) => ({ data: (await res.json()) as any }));
+    const [ra, rb] = await Promise.all([send(a, first), send(b, second)]);
+    const statuses = [ra.data.results[0].status, rb.data.results[0].status].sort();
+    expect(statuses).toEqual(["conflict", "ok"]);
+    const winner = ra.data.results[0].status === "ok" ? first : second;
+    const res = await h.call("GET", `/v1/sync/bookmarks/items/${itemId(1)}/blob`, { token: a.sessionToken });
+    expect(res.status).toBe(200);
+    expect(res.data).toEqual(winner);
+    const listed = await appEnv.BLOBS.list({ prefix: `items/${a.accountId}/` });
+    expect(listed.objects).toHaveLength(1);
   });
 
   it("refuses writes with an old key version after a rotation", async () => {

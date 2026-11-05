@@ -10,7 +10,7 @@ The spec covers nine subsystems (spec section 15). Each gets its own implementat
 |---|---|---|---|---|
 | 1 | Fork pipeline | `perch-build` tool, patch series, Perch branding and icon, Widevine on, signed and notarized DMG, Sparkle updates, first release | nothing | written: `2026-11-03-perch-01-fork-pipeline.md` |
 | 2 | Shell | Themes and token file, restyled tab strip, toolbar and profile menu, hide-chrome mode, split view, Brave search with Tab for Google, privacy patches and the allowed-connections settings, true incognito, built-in memory saver and Backrow, DRM playback check | 1 | next on the Chromium track |
-| 3a | Agent core (`perchd`) | Bun binary, CDP over `--remote-debugging-pipe`, page snapshot with refs, actions, REPL, agent tabs, model adapters (shared-ai-auth Codex and Grok, Claude Code headless, Claude API key), permission modes, audit log | nothing (develops against Chrome for Testing) | can start now |
+| 3a | Agent core (`perchd`) | Bun binary, CDP over `--remote-debugging-pipe`, page snapshot with refs, actions, REPL, agent tabs, model adapters (shared-ai-auth Codex and Grok, Claude Code headless, Claude API key), permission modes, audit log | nothing (develops against Chrome for Testing) | written: `2026-11-05-perch-03a-agent-core.md` |
 | 3b | Agent in the browser | Custom CDP domains (credential fill, approvals, tab ownership), sidebar chat WebUI, full-page chat, artifacts pane and `perch-artifact://` origin | 2, 3a | |
 | 4 | Outside agents | `perch` CLI, MCP server, Unix socket with per-client tokens, `perch skill install`, agterm MCP injection, built-in site skills | 3a | |
 | 5 | Memory | Encrypted markdown store, extraction, dreaming, FTS5 plus local embeddings, Memory page | 3a (store and search), 3b (page) | |

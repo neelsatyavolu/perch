@@ -21,6 +21,7 @@ export type Page = {
 
 const SOURCES: readonly FactSource[] = ["chat", "setup", "user", "dreaming", "import", "agent"];
 const ID = /^[a-f0-9]{32}$/;
+const FIXED_TITLES: Record<string, string> = { "USER.md": "About you", "MEMORY.md": "Rules for Perch" };
 
 export function newId(): string {
   return Buffer.from(crypto.getRandomValues(new Uint8Array(16))).toString("hex");
@@ -29,7 +30,8 @@ export function newId(): string {
 export function newPage(path: string, title: string, now: string, id = newId()): Page {
   const category = categoryOf(path);
   if (!category) throw new Error(`"${path}" is not a memory page path`);
-  return { id, path, title: cleanText(title, MAX_TITLE) || path, category, current: [], history: [], created: now, updated: now };
+  const fixed = FIXED_TITLES[path];
+  return { id, path, title: fixed ?? (cleanText(title, MAX_TITLE) || path), category, current: [], history: [], created: now, updated: now };
 }
 
 function renderFact(f: Fact): string {

@@ -42,6 +42,10 @@ test.each([
   [call("click", { ref: "e1" }), { role: "checkbox", name: "My device will have a $0 trade-in value unless I reset it. I agree to Terms" }, "change"],
   [call("click", { ref: "e1" }), { role: "button", name: "$9.99" }, "payment"],
   [call("click", { ref: "e1" }), { role: "button", name: "Get it for US$4.99" }, "payment"],
+  // Choosing an option only selects it, even when a store's name has a payment word in it.
+  [call("click", { ref: "e1" }), { role: "radio", name: "Drop-off at a Best Buy store" }, "change"],
+  [call("click", { ref: "e1" }), { role: "checkbox", name: "Subscribe to delivery updates" }, "change"],
+  [call("click", { ref: "e1" }), { role: "link", name: "Buy now" }, "payment"],
   [call("click", { ref: "e1" }), undefined, "risky"],
   [call("type", { ref: "e2", text: "Running late", submit: true }), { role: "textbox", name: "Message" }, "risky"],
   [call("type", { ref: "e2", text: "perch", submit: true }), { role: "searchbox", name: "Search mail" }, "change"],
@@ -76,6 +80,7 @@ test.each([
   [call("click", { ref: "e1" }), { role: "button", name: "Continue" }, { payment: true }, "payment"],
   [call("click", { ref: "e1" }), { role: "button", name: "Next" }, { payment: true }, "payment"],
   [call("click", { ref: "e1" }), { role: "link", name: "Shipping policy" }, { payment: true }, "change"],
+  [call("click", { ref: "e1" }), { role: "radio", name: "Express shipping $12.99" }, { payment: true }, "change"],
   [call("click_at", { x: 1, y: 1 }), undefined, { payment: true }, "payment"],
   [call("press", { key: "Enter" }), { role: "iframe", name: "" }, { payment: true }, "payment"],
   [call("type", { ref: "e3", text: "123", submit: true }), { role: "textbox", name: "Security code" }, { payment: true }, "payment"],

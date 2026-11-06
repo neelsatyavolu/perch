@@ -75,8 +75,13 @@ export function classify(call: ToolCall, target?: Target, page: PageContext = {}
   return "risky";
 }
 
+/** Roles whose click only selects an option; the form's own button is what commits it. */
+const CHOICES = new Set(["radio", "checkbox", "menuitemradio", "menuitemcheckbox", "option", "tab"]);
+
 function clickKind(target: Target | undefined, guarded: boolean): Kind {
   if (!target) return "risky";
+  // "Drop-off at a Best Buy store" is a choice, not a purchase.
+  if (CHOICES.has(target.role)) return "change";
   const name = target.name;
   if (PAYMENT.test(name) || PASSWORD.test(name) || charges(target, guarded)) return "payment";
   if (guarded && ADVANCES.test(name)) return "payment";

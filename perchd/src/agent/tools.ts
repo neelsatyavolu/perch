@@ -12,6 +12,7 @@ import { openPage } from "../page/navigation";
 import { refsFor } from "../page/refs";
 import { repl } from "../page/repl";
 import { clickAt, screenshot } from "../page/screenshot";
+import { search, type Engine, type Skips } from "../page/search";
 import { snapshot } from "../page/snapshot";
 import type { PageContext, Target } from "./permissions";
 import { changeNotes } from "./changes";
@@ -28,6 +29,10 @@ export type ToolContext = {
   shotScale: number;
   /** The chat's own folder: write_file saves here, and it is removed when the chat ends. */
   workDir: string;
+  /** Search engines that showed a bot check in this chat, skipped for a while. */
+  searchSkips: Skips;
+  /** Search engines to use instead of the default ones (tests). */
+  engines?: Engine[];
   close(): Promise<void>;
 };
 
@@ -43,6 +48,7 @@ export async function newToolContext(browser: Browser): Promise<ToolContext> {
     lastSnapshot: new WeakMap(),
     shotScale: 1,
     workDir: mkdtempSync(join(tmpdir(), "perch-chat-")),
+    searchSkips: new Map(),
     close: async () => {
       await Promise.all(ctx.owned.map((t) => t.close()));
       rmSync(ctx.workDir, { recursive: true, force: true });
@@ -312,6 +318,11 @@ async function dispatch(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
   tab.takePageErrors();
   actionStarted.set(tab, Date.now());
   switch (call.name) {
+    case "search": {
+      const query = String(a.query).trim();
+      if (!query) return { content: "give the words to search for", isError: true };
+      return { content: await search(tab, query, { engines: ctx.engines, skips: ctx.searchSkips }) };
+    }
     case "navigate": {
       const note = await openPage(tab, normalizeUrl(a.url));
       return { content: `${note ? `${note}\n\n` : ""}${await page(ctx, tab)}` };

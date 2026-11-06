@@ -12,6 +12,12 @@ function spec(name: string, description: string, properties: Record<string, Prop
 const ref: Prop = { type: "string", description: "Element ref from the snapshot, like e12" };
 
 export const TOOL_SPECS: ToolSpec[] = [
+  spec(
+    "search",
+    "Search the web; returns the top results with title, address and snippet. Use a few distinctive words (a name, a number, a quoted phrase), one clue at a time. Open results with navigate to confirm them.",
+    { query: { type: "string" } },
+    ["query"],
+  ),
   spec("navigate", "Open a URL in the current agent tab. Returns the page snapshot.", { url: { type: "string" } }, ["url"]),
   spec("snapshot", "Read the page as text. Interactive elements have refs like e12. Set full to include content far from the viewport.", { full: { type: "boolean" } }),
   spec("click", "Click an element by ref.", { ref }, ["ref"]),

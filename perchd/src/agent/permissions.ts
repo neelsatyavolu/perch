@@ -21,7 +21,7 @@ export type Target = { role: string; name: string };
 /** What the page around an action looks like: a checkout, or a password change. */
 export type PageContext = { payment?: boolean; passwordChange?: boolean };
 
-const READ_TOOLS = new Set(["navigate", "snapshot", "screenshot", "scroll", "hover", "wait_for", "back", "tabs", "open_tab", "switch_tab", "done"]);
+const READ_TOOLS = new Set(["search", "navigate", "snapshot", "screenshot", "scroll", "hover", "wait_for", "back", "tabs", "open_tab", "switch_tab", "done"]);
 
 const RISKY = /\b(send|post|publish|submit|delete|remove|discard|share|invite|transfer|confirm|sign up|unsubscribe|reply|forward|archive|trash)\b/i;
 const PAYMENT =

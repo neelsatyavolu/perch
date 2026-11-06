@@ -1,3 +1,6 @@
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { newToolContext, runTool } from "../src/agent/tools";
 import { anthropicModel } from "../src/models/anthropic";
@@ -124,6 +127,33 @@ test("the REPL is read-only and cannot reach secrets through frames or attribute
   expect(await repl(form, "return [...document.querySelectorAll('label')].length")).toEqual({ result: 6 });
   await tab.close();
   await form.close();
+});
+
+test("the REPL sees what was typed, chosen and ticked, except secrets", async () => {
+  const tab = await env.browser.newTab(env.site.url("/form.html"));
+  let snap = await snapshot(tab);
+  await type(tab, snap.refs, refOf(snap, 'textbox "Email"'), "ada@example.com");
+  await type(tab, snap.refs, refOf(snap, 'textbox "Password"'), "hunter2-secret");
+  await type(tab, snap.refs, refOf(snap, 'textbox "Code"'), "123456");
+  await type(tab, snap.refs, refOf(snap, 'textbox "Card number"'), "4111111111111111");
+  await click(tab, snap.refs, refOf(snap, 'checkbox "Remember me"'));
+  await tab.evaluate("document.getElementById('country').value = 'ca'");
+  // A field that was shown as a password stays secret after Show password turns it into text.
+  await click(tab, snap.refs, refOf(snap, 'button "Show password"'));
+  // Its name no longer says "password" either: only having been one keeps it secret.
+  await tab.evaluate("document.getElementById('password').id = 'field7'");
+  snap = await snapshot(tab);
+  const seen = await repl(tab, "return [...document.querySelectorAll('input, select')].map((el) => el.id + '=' + (el.type === 'checkbox' ? el.checked : el.value)).join(' ')");
+  expect(seen.result).toBe("email=ada@example.com field7= otp= card= country=ca remember=true");
+  const upload = await env.browser.newTab(env.site.url("/hiddenfile.html"));
+  const file = join(mkdtempSync(join(tmpdir(), "up-")), "notes.txt");
+  writeFileSync(file, "hello");
+  const input = await upload.send<{ root: { nodeId: number } }>("DOM.getDocument", { depth: -1 });
+  const { nodeId } = await upload.send<{ nodeId: number }>("DOM.querySelector", { nodeId: input.root.nodeId, selector: "input[type=file]" });
+  await upload.send("DOM.setFileInputFiles", { nodeId, files: [file] });
+  expect(await repl(upload, "return [...document.querySelector('input[type=file]').files].map((f) => f.name)")).toEqual({ result: ["notes.txt"] });
+  await upload.close();
+  await tab.close();
 });
 
 test("Meta+A selects all and punctuation types the right character", async () => {

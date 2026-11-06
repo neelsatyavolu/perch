@@ -178,8 +178,11 @@ export function describeTarget(ctx: ToolContext, call: ToolCall): Target | undef
   const text = ctx.tab ? ctx.lastSnapshot.get(ctx.tab) : undefined;
   if (typeof ref !== "string" || !text) return undefined;
   if (!REF.test(ref)) return undefined;
-  const match = text.match(new RegExp(`- (\\S+) "((?:[^"\\\\]|\\\\.)*)" \\[ref=${ref}\\]`));
-  return match ? { role: match[1]!, name: match[2]!.replace(/\\(.)/g, "$1") } : undefined;
+  const match = text.match(new RegExp(`- (\\S+) "((?:[^"\\\\]|\\\\.)*)" \\[ref=${ref}\\]([^\\n]*)`));
+  if (!match) return undefined;
+  const target: Target = { role: match[1]!, name: match[2]!.replace(/\\(.)/g, "$1") };
+  const expanded = match[3]!.match(/\bexpanded=(true|false)\b/);
+  return expanded ? { ...target, expanded: expanded[1] === "true" } : target;
 }
 
 /** The target of a ref the last snapshot did not show, read live from the page. */

@@ -37,6 +37,13 @@ test("bad calls come back as plain errors", async () => {
   await ctx.close();
 });
 
+test("describeTarget notes when the element opens a menu", () => {
+  const tab = {};
+  const ctx = { tab, lastSnapshot: new Map([[tab, '- button "Book" [ref=e10] expanded=false\n- link "Deals" [ref=e11]']]) } as never;
+  expect(describeTarget(ctx, call("click", { ref: "e10" }))).toEqual({ role: "button", name: "Book", expanded: false });
+  expect(describeTarget(ctx, call("click", { ref: "e11" }))).toEqual({ role: "link", name: "Deals" });
+});
+
 test("navigate adds https when needed and returns a snapshot; click returns the page after", async () => {
   const ctx = await newToolContext(env.browser);
   const opened = await runTool(ctx, call("navigate", { url: env.site.url("/mail.html") }));

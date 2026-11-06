@@ -16,7 +16,8 @@ export type Mode = "ask" | "guard" | "skip";
 export type Kind = "read" | "change" | "risky" | "payment";
 export type SiteRule = "allow" | "ask" | "never";
 export type Decision = "run" | "ask" | "block";
-export type Target = { role: string; name: string };
+/** `expanded` is set when the element opens and closes something, such as a menu. */
+export type Target = { role: string; name: string; expanded?: boolean };
 
 /** What the page around an action looks like: a checkout, or a password change. */
 export type PageContext = { payment?: boolean; passwordChange?: boolean };
@@ -25,7 +26,7 @@ const READ_TOOLS = new Set(["navigate", "snapshot", "screenshot", "scroll", "hov
 
 const RISKY = /\b(send|post|publish|submit|delete|remove|discard|share|invite|transfer|confirm|sign up|unsubscribe|reply|forward|archive|trash)\b/i;
 const PAYMENT =
-  /\b(pay|buy|purchase|checkout|check out|place (your )?order|submit (your )?order|complete (your )?(order|purchase|booking|reservation|payment|checkout)|reserve|request to book|book( now| it)?|confirm (and|&) pay|confirm (your )?(booking|purchase|payment|order|reservation)|subscribe|donate|start (your )?(free )?trial|upgrade)\b/i;
+  /\b(pay|buy|purchase|checkout|check out|place (your )?order|submit (your )?order|complete (your )?(order|purchase|booking|reservation|payment|checkout)|reserve|request to book|book( now| it)?|confirm (and|&) pay|confirm (your )?(booking|purchase|payment|order|reservation)|subscribe|donate|start (your )?(free )?trial|upgrade|pre[- ]?order|rent (it|this|now|for))\b/i;
 const MONEY = /[$€£¥₹]\s?\d|\d\s?(usd|eur|gbp|inr|jpy)\b/i;
 /** A button that is a price ("$9.99") or charges one ("Get it for $4.99", "Continue ($19.99)"). */
 const PRICE_ONLY = /^\s*(price:?\s*)?(us|ca|a)?[$€£¥₹]\s?\d[\d,.]*\s*$/i;
@@ -34,6 +35,16 @@ const PASSWORD = /\b(change|update|reset|save|set) (your |the )?password\b/i;
 /** Buttons that move a checkout or a password form forward. */
 const ADVANCES = /\b(continue|next|confirm|complete|submit|save|update|done|apply|finish|proceed|place|order|pay|book|reserve|change|set|verify)\b/i;
 const SEARCHY = /search|find|filter|lookup/i;
+/**
+ * Words that look like payments but name something: a day in a hotel's date picker ("11, Wednesday,
+ * November 2026. Select as checkout date.") and a store's page-title suffix ("Monitors - Best Buy").
+ */
+const STORE_SUFFIX = /\s[-|–—]\s*best buy\s*$/i;
+const STAY_DATE = /\b(select(ed)?|chosen?) as (the )?check[- ]?(in|out) date\b/gi;
+/** A day in a date picker names its weekday or month ("11, Wednesday, November 2026"). */
+const CALENDAR_DAY = /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|january|february|march|april|may|june|july|august|september|october|november|december)\b/i;
+/** Purchase words that keep a menu button asking: opening a menu never needs them. */
+const PURCHASE = /\b(pay|buy|purchase|checkout|check out|order|donate|confirm|complete)\b/i;
 /** Roles whose drag moves a value along a track rather than dropping something somewhere. */
 const ALONG_TRACK = new Set(["slider", "scrollbar", "separator"]);
 
@@ -82,8 +93,16 @@ function clickKind(target: Target | undefined, guarded: boolean): Kind {
   if (!target) return "risky";
   // "Drop-off at a Best Buy store" is a choice, not a purchase.
   if (CHOICES.has(target.role)) return "change";
-  const name = target.name;
-  if (PAYMENT.test(name) || PASSWORD.test(name) || charges(target, guarded)) return "payment";
+  const day = CALENDAR_DAY.test(target.name) ? target.name.replace(STAY_DATE, " ") : target.name;
+  const name = day.replace(STORE_SUFFIX, " ");
+  // A price next to a stripped phrase ("Extend check-out date ($30)") still charges.
+  if (name !== target.name && MONEY.test(target.name)) return "payment";
+  // A one-word menu button ("Book", "Subscribe") only opens its items, each judged when it is
+  // clicked. "Subscribe now" or "Book now" commits, so longer labels get the usual rules.
+  const word = /^\s*\w+\s*$/.test(name);
+  const menu = target.expanded !== undefined && !guarded && word && !PURCHASE.test(name);
+  if (menu) return "change";
+  if (PAYMENT.test(name) || PASSWORD.test(name) || charges({ ...target, name }, guarded)) return "payment";
   if (guarded && ADVANCES.test(name)) return "payment";
   if (RISKY.test(name)) return "risky";
   return "change";

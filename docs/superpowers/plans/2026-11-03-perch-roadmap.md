@@ -16,7 +16,7 @@ The spec covers nine subsystems (spec section 15). Each gets its own implementat
 | 5 | Memory | Encrypted markdown store, extraction, dreaming, FTS5 plus local embeddings, Memory page | 3a (store and search), 3b (page) | |
 | 6 | Import | Readers for every browser in spec section 10, open-tab restore asleep, Aside extras, wizard | 2 (restore), 5 (Aside memory) | |
 | 7 | Account, sync and relay | Cloudflare Worker, D1 and R2 sync server speaking Chromium's sync protocol, encrypted blob sync, relay with Durable Objects, pairing, remote MCP, Grok Bot prompt | 3a for the relay client; server side needs nothing | server can start now |
-| 8 | Enterprise | `.pkg`, Chrome policy check, Perch policies, `perch://policy`, audit log export, company sync with OpenID Connect, SBOM | 2, 4, 7 | |
+| 8 | Enterprise | `.pkg` (deferred: Perch ships as a DMG only for now, owner 2026-11-05; the Developer ID Installer certificate is not needed until then), Chrome policy check, Perch policies, `perch://policy`, audit log export, company sync with OpenID Connect, SBOM | 2, 4, 7 | |
 | 9 | Benchmarks, speed, 1.0 (no public release before every feature works; owner 2026-11-05) | `bench/` runner for the three suites, section 13 measurements, published results, 1.0 release, `perchbrowser.com` | everything | |
 
 ## Tracks that run at the same time
@@ -39,3 +39,6 @@ These need the owner, not an agent:
 4. Apply to Google's Widevine programme for a VMP certificate (spec 5.2).
 5. ~~Rotate the Aside provider tokens.~~ Dropped by the owner.
 6. Launch the first signed build and the update test by hand (plan 1, task 9). Agents never drive the GUI while the owner is using the Mac.
+7. ~~Key helper App ID and Developer ID profile.~~ Done 2026-11-05: `co.xanom.perch.keyhelper`, profile "Perch Keys Developer ID" in 1Password.
+8. ~~Safe Browsing API key.~~ Done 2026-11-05: Google Cloud project `perch-browser`, key in 1Password "Perch Safe Browsing API Key".
+9. Developer ID Installer certificate: deferred with the `.pkg`. The key and CSR are in 1Password ("Perch Developer ID Installer private key"); creating it needs the Account Holder's portal access.

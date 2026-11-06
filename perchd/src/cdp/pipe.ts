@@ -69,6 +69,10 @@ export async function launchChromium(opts: LaunchOptions): Promise<CdpConnection
   // browser exit mid-session. Two descriptors per launch is a small, bounded cost.
   RETIRED.push(child, toBrowser, fromBrowser);
   const exited = new Promise<void>((resolve) => child.once("exit", () => resolve()));
+  if (child.pid) {
+    const watcher = watchForParentExit(child.pid);
+    child.once("exit", () => watcher.kill());
+  }
   const conn = new CdpConnection(
     (message) => {
       if (toBrowser.destroyed || !toBrowser.writable) throw new Error("browser closed");
@@ -98,6 +102,18 @@ export async function launchChromium(opts: LaunchOptions): Promise<CdpConnection
 
   await conn.send("Browser.getVersion");
   return conn;
+}
+
+/**
+ * A browser normally quits when our end of its pipe closes, but one that has stopped responding
+ * never reads it, and outlived its parent for hours in a benchmark run. A small shell process
+ * kills the browser once this process is gone, however it ended.
+ */
+function watchForParentExit(browserPid: number) {
+  const script = `while kill -0 ${process.pid} 2>/dev/null; do sleep 2; done; kill -9 ${browserPid} 2>/dev/null`;
+  const watcher = spawn("/bin/sh", ["-c", script], { detached: true, stdio: "ignore" });
+  watcher.unref();
+  return watcher;
 }
 
 const CFT_ROOT = join(homedir(), ".cache", "perch-cft", "chrome");

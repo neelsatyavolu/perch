@@ -10,7 +10,21 @@ export type TabInfo = { id: string; url: string; title: string };
 const AGENT_WINDOW = { width: 1440, height: 900 };
 
 export class Browser {
-  private constructor(readonly conn: CdpConnection) {}
+  /** Pages opened by another page (target=_blank links, window.open), newest last. */
+  private readonly popups: { id: string; opener: string; at: number }[] = [];
+
+  private constructor(readonly conn: CdpConnection) {
+    conn.on("Target.targetCreated", (p: { targetInfo: { targetId: string; type: string; openerId?: string } }) => {
+      const t = p.targetInfo;
+      if (t.type === "page" && t.openerId) this.popups.push({ id: t.targetId, opener: t.openerId, at: Date.now() });
+      if (this.popups.length > 50) this.popups.shift();
+    });
+  }
+
+  /** Ids of pages the given tab opened at or after `since` (ms since the epoch). */
+  openedBy(opener: string, since: number): string[] {
+    return this.popups.filter((p) => p.opener === opener && p.at >= since).map((p) => p.id);
+  }
 
   static async launch(opts: { userDataDir: string; executable?: string; headless?: boolean; args?: string[] }): Promise<Browser> {
     const conn = await launchChromium({

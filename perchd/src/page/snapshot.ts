@@ -325,6 +325,10 @@ function extras(ctx: Ctx, tree: Tree, node: AXNode, role: string): string {
   if (checked !== undefined) parts.push(`checked=${checked}`);
   const expanded = prop(node, "expanded");
   if (expanded !== undefined) parts.push(`expanded=${expanded}`);
+  // Toggle buttons (filters, view switches) and chosen tabs or options: their state is the filter.
+  const pressed = prop(node, "pressed");
+  if (pressed !== undefined) parts.push(`pressed=${pressed}`);
+  if (prop(node, "selected") === true) parts.push("selected");
   if (prop(node, "disabled") === true) parts.push("disabled");
   return parts.length ? ` ${parts.join(" ")}` : "";
 }

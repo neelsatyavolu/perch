@@ -31,6 +31,7 @@ export class Tab {
   private isClosed = false;
   private readonly lifecycle: { loaderId: string; name: string }[] = [];
   private dialogNotes: string[] = [];
+  private pageErrors: string[] = [];
   private mainFrameId = "";
   private navigationPending = false;
   private loading = false;
@@ -48,6 +49,12 @@ export class Tab {
       const kind = p.type === "alert" ? "an alert" : p.type === "beforeunload" ? "a leave-page prompt" : `a ${p.type} dialog`;
       this.dialogNotes.push(`The page showed ${kind}: "${p.message}". Perch ${accept ? "closed" : "dismissed"} it.`);
       void conn.send("Page.handleJavaScriptDialog", { accept }, session).catch(() => undefined);
+    });
+    // Uncaught errors in the page's own script: a button whose handler throws does nothing visible.
+    conn.on("Runtime.exceptionThrown", (p: { exceptionDetails: { text: string; exception?: { description?: string } } }, sid) => {
+      if (sid !== session || this.pageErrors.length >= 3) return;
+      const d = p.exceptionDetails;
+      this.pageErrors.push((d.exception?.description ?? d.text).split("\n")[0]!.slice(0, 200));
     });
     conn.on("Target.attachedToTarget", (p: { sessionId: string; targetInfo: { targetId: string; type: string } }, sid) => {
       if (sid === session && p.targetInfo.type === "iframe") this.frameSessions.set(p.targetInfo.targetId, p.sessionId);
@@ -125,6 +132,13 @@ export class Tab {
     const notes = this.dialogNotes;
     this.dialogNotes = [];
     return notes;
+  }
+
+  /** Uncaught script errors the page raised since the last call; each is returned once. */
+  takePageErrors(): string[] {
+    const errors = this.pageErrors;
+    this.pageErrors = [];
+    return errors;
   }
 
   /** After an action: waits for any navigation it started to finish loading, up to 10 s. */

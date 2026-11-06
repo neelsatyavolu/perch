@@ -1,0 +1,18 @@
+<!doctype html>
+<title>Find a doctor</title>
+<h1>Optometrists</h1>
+<p>354 results</p>
+<button aria-pressed="false" onclick="this.setAttribute('aria-pressed', this.getAttribute('aria-pressed') === 'true' ? 'false' : 'true')">Virtual Visits</button>
+<button onclick="document.querySelector('ul').innerHTML = '<li><a href=#a>Dr. Telehealth One</a></li><li><a href=#b>Dr. Telehealth Two</a></li>'; document.querySelector('p').textContent = '2 results'">Telehealth only</button>
+<button onclick="undefined.preventDefault()">Broken</button>
+<a href="/mail.html" target="_blank">Open profile</a>
+<ul>
+  <li><a href="#1">Dr. Ada One</a></li><li><a href="#2">Dr. Ben Two</a></li><li><a href="#3">Dr. Cy Three</a></li>
+  <li><a href="#4">Dr. Di Four</a></li><li><a href="#5">Dr. Ed Five</a></li><li><a href="#6">Dr. Flo Six</a></li>
+  <li><a href="#7">Dr. Gus Seven</a></li><li><a href="#8">Dr. Hal Eight</a></li><li><a href="#9">Dr. Ivy Nine</a></li>
+  <li><a href="#10">Dr. Jo Ten</a></li><li><a href="#11">Dr. Kit Eleven</a></li><li><a href="#12">Dr. Lu Twelve</a></li>
+</ul>
+<form onsubmit="event.preventDefault(); document.body.append('Thanks, we will be in touch')">
+  <label>Email <input name="email" type="email" required></label>
+  <button>Join the list</button>
+</form>

@@ -66,3 +66,47 @@ test("a wheel scroll the page never acknowledges falls back to scrolling by scri
   tab.send = send;
   await ctx.close();
 }, 30_000);
+
+test("a filter click that only toggles its own button says the results did not update", async () => {
+  const ctx = await newToolContext(env.browser);
+  const opened = await runTool(ctx, call("navigate", { url: env.site.url("/results.html") }));
+  const toggled = await runTool(ctx, call("click", { ref: refIn(opened.content, 'button "Virtual Visits"') }));
+  expect(toggled.content).toContain('button "Virtual Visits"');
+  expect(toggled.content).toContain("pressed=true");
+  expect(toggled.content).toMatch(/Only 1 line of the page changed[^\n]*did not update/);
+  const filtered = await runTool(ctx, call("click", { ref: refIn(opened.content, 'button "Telehealth only"') }));
+  expect(filtered.content).not.toContain("did not update");
+  expect(filtered.content).not.toContain(UNCHANGED);
+  await ctx.close();
+}, 30_000);
+
+test("a Submit the browser refuses names the fields and its message, which the snapshot cannot show", async () => {
+  const ctx = await newToolContext(env.browser);
+  const opened = await runTool(ctx, call("navigate", { url: env.site.url("/results.html") }));
+  const sent = await runTool(ctx, call("click", { ref: refIn(opened.content, 'button "Join the list"') }));
+  expect(sent.content).toContain("did not send the form");
+  expect(sent.content).toMatch(/Email: Please fill (out|in) this field/);
+  await ctx.close();
+}, 30_000);
+
+test("a click whose handler throws reports the page's script error", async () => {
+  const ctx = await newToolContext(env.browser);
+  const opened = await runTool(ctx, call("navigate", { url: env.site.url("/results.html") }));
+  const broken = await runTool(ctx, call("click", { ref: refIn(opened.content, 'button "Broken"') }));
+  expect(broken.content).toContain("The page's own script failed");
+  expect(broken.content).toContain("TypeError");
+  await ctx.close();
+}, 30_000);
+
+test("a link that opens a new tab is followed into that tab", async () => {
+  const ctx = await newToolContext(env.browser);
+  const opened = await runTool(ctx, call("navigate", { url: env.site.url("/results.html") }));
+  const first = ctx.tab!;
+  const result = await runTool(ctx, call("click", { ref: refIn(opened.content, 'link "Open profile"') }));
+  expect(result.content).toContain("opened a new tab");
+  expect(result.content).toContain('button "Compose"');
+  expect(ctx.tab).not.toBe(first);
+  expect(ctx.owned).toContain(ctx.tab!);
+  expect(result.content).not.toContain(UNCHANGED);
+  await ctx.close();
+}, 30_000);

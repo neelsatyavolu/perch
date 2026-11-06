@@ -14,6 +14,7 @@ import { repl } from "../page/repl";
 import { clickAt, screenshot } from "../page/screenshot";
 import { snapshot } from "../page/snapshot";
 import type { PageContext, Target } from "./permissions";
+import { changeNotes } from "./changes";
 import { TOOL_SPECS, validate } from "./tool-specs";
 
 export { TOOL_SPECS };
@@ -99,10 +100,24 @@ async function page(ctx: ToolContext, tab: Tab, full = false): Promise<string> {
 }
 
 /** Actions after which an unchanged page is worth pointing out: the click or choice did nothing visible. */
-const EXPECT_CHANGE = new Set(["click", "select", "press", "click_at", "drag"]);
+const EXPECT_CHANGE = new Set(["click", "select", "press", "click_at", "drag", "submit"]);
+/** Actions that can send a form, so a refused form is worth explaining. */
+const SENDS = new Set(["click", "press", "click_at", "submit"]);
 const RECHECK_MS = 700;
 export const UNCHANGED =
   "The page looks the same as before this action. If you expected a change (a filter, a menu, a new page), it did not take effect: check, or try another way.";
+
+/**
+ * Fields the browser refused to send, after a Submit that did nothing. Chromium focuses the first
+ * invalid field and shows its message in a bubble, which is not part of the page or its snapshot.
+ */
+const INVALID_FIELDS_JS = `(() => {
+  let a = document.activeElement;
+  while (a && a.shadowRoot && a.shadowRoot.activeElement) a = a.shadowRoot.activeElement;
+  if (!a || !a.form || !a.validity || a.validity.valid) return [];
+  const name = (el) => ((el.labels && el.labels[0] && el.labels[0].innerText) || el.getAttribute('aria-label') || el.placeholder || el.name || el.type || '').trim().slice(0, 60);
+  return [...a.form.elements].filter((el) => el.willValidate && el.validity && !el.validity.valid).slice(0, 5).map((el) => name(el) + ': ' + el.validationMessage);
+})()`;
 
 async function withPage(ctx: ToolContext, tab: Tab, result: ActionResult, action = ""): Promise<ToolResult> {
   if (!result.ok) {
@@ -116,17 +131,45 @@ async function withPage(ctx: ToolContext, tab: Tab, result: ActionResult, action
     return { content: notes, isError: true };
   }
   await tab.settle();
+  const popup = SENDS.has(action) ? await followPopup(ctx, tab) : null;
+  if (popup) return { content: `${[result.note, ...tab.takeDialogNotes()].join("\n")}\n${popup}` };
   const before = ctx.lastSnapshot.get(tab);
+  const beforeUrl = shownUrl.get(tab);
+  const watch = EXPECT_CHANGE.has(action) && before !== undefined;
   let view = await page(ctx, tab);
-  let same = EXPECT_CHANGE.has(action) && before !== undefined && ctx.lastSnapshot.get(tab) === before;
-  if (same) {
+  const compare = () => changeNotes({ before: before ?? "", after: ctx.lastSnapshot.get(tab) ?? "", sameUrl: shownUrl.get(tab) === beforeUrl });
+  let change = watch ? compare() : { unchanged: false, text: "" };
+  if (change.small) {
     // Results often arrive a moment after the click; look once more before saying nothing happened.
     await Bun.sleep(RECHECK_MS);
     view = await page(ctx, tab);
-    same = ctx.lastSnapshot.get(tab) === before;
+    change = compare();
   }
-  const notes = tab.takeDialogNotes();
-  return { content: `${[result.note, ...(same ? [UNCHANGED] : []), ...notes].join("\n")}\n\n${view}` };
+  const notes = [result.note, ...(change.unchanged ? [UNCHANGED] : change.text ? [change.text] : [])];
+  if (change.small) {
+    const invalid = SENDS.has(action) ? await tab.evaluate<string[]>(INVALID_FIELDS_JS).catch(() => []) : [];
+    if (invalid.length) notes.push(`The browser did not send the form: these fields are not valid (its message bubble is not in the snapshot): ${invalid.join("; ")}`);
+    const errors = tab.takePageErrors();
+    if (errors.length) notes.push(`The page's own script failed during this action: ${errors.join("; ")}. The site may be broken here: try another way (another button, Enter in a field, or another page).`);
+  }
+  notes.push(...tab.takeDialogNotes());
+  return { content: `${notes.join("\n")}\n\n${view}` };
+}
+
+/** When each tab's current action started, to tell its own new tabs from older ones. */
+const actionStarted = new WeakMap<Tab, number>();
+
+/** A tab the action opened (a link with target=_blank, window.open) becomes the current tab. */
+async function followPopup(ctx: ToolContext, tab: Tab): Promise<string | null> {
+  const id = ctx.browser.openedBy(tab.id, actionStarted.get(tab) ?? Date.now()).at(-1);
+  if (!id) return null;
+  const popup = await Tab.attach(ctx.browser.conn, id).catch(() => null);
+  if (!popup) return null;
+  ctx.owned = [...ctx.owned, popup];
+  ctx.tab = popup;
+  for (let i = 0; i < 60 && (await popup.url().catch(() => "about:blank")) === "about:blank"; i++) await Bun.sleep(50);
+  await popup.settle();
+  return `This opened a new tab, and Perch switched to it. The previous page is still open (switch_tab ${tab.id}).\n\n${await page(ctx, popup)}`;
 }
 
 /** Role and name of the element a ref-based call targets, from the last snapshot of the tab. */
@@ -265,6 +308,9 @@ async function dispatch(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
   }
   const tab = await currentTab(ctx);
   const refs = refsFor(tab);
+  // Script errors and new tabs are reported for the action that caused them, not for earlier ones.
+  tab.takePageErrors();
+  actionStarted.set(tab, Date.now());
   switch (call.name) {
     case "navigate": {
       const note = await openPage(tab, normalizeUrl(a.url));
@@ -275,7 +321,7 @@ async function dispatch(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
     case "click":
       return withPage(ctx, tab, await click(tab, refs, a.ref), "click");
     case "type":
-      return withPage(ctx, tab, await type(tab, refs, a.ref, a.text, { submit: Boolean(a.submit) }));
+      return withPage(ctx, tab, await type(tab, refs, a.ref, a.text, { submit: Boolean(a.submit) }), a.submit ? "submit" : "type");
     case "select":
       return withPage(ctx, tab, await select(tab, refs, a.ref, a.value), "select");
     case "press":

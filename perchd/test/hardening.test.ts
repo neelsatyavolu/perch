@@ -141,7 +141,7 @@ test("the REPL sees what was typed, chosen and ticked, except secrets", async ()
   // A field that was shown as a password stays secret after Show password turns it into text.
   await click(tab, snap.refs, refOf(snap, 'button "Show password"'));
   // Its name no longer says "password" either: only having been one keeps it secret.
-  await tab.evaluate("document.getElementById('password').id = 'field7'");
+  await tab.evaluate("const p = document.getElementById('password'); p.id = 'field7'; p.removeAttribute('autocomplete')");
   snap = await snapshot(tab);
   const seen = await repl(tab, "return [...document.querySelectorAll('input, select')].map((el) => el.id + '=' + (el.type === 'checkbox' ? el.checked : el.value)).join(' ')");
   expect(seen.result).toBe("email=ada@example.com field7= otp= card= country=ca remember=true");
@@ -153,6 +153,31 @@ test("the REPL sees what was typed, chosen and ticked, except secrets", async ()
   await upload.send("DOM.setFileInputFiles", { nodeId, files: [file] });
   expect(await repl(upload, "return [...document.querySelector('input[type=file]').files].map((f) => f.name)")).toEqual({ result: ["notes.txt"] });
   await upload.close();
+  await tab.close();
+});
+
+test("a secret the REPL finds first stays hidden after it is shown as text", async () => {
+  const tab = await env.browser.newTab(env.site.url("/form.html"));
+  // No snapshot before the REPL: the REPL must remember the password field itself.
+  await tab.evaluate("document.getElementById('password').value = 'hunter2-secret'");
+  expect(JSON.stringify(await repl(tab, "return document.getElementById('password').value"))).not.toContain("hunter2");
+  await tab.evaluate("const p = document.getElementById('password'); p.type = 'text'; p.id = 'plain'; p.removeAttribute('autocomplete'); p.setAttribute('value', p.value)");
+  const seen = await repl(tab, "const el = document.getElementById('plain'); return [el.value, el.defaultValue, el.outerHTML].join(' ')");
+  expect(JSON.stringify(seen)).not.toContain("hunter2");
+  await tab.close();
+});
+
+test("secret text areas and selects are hidden, and reading fields runs none of the page's code", async () => {
+  const tab = await env.browser.newTab(env.site.url("/form.html"));
+  await tab.evaluate(`document.body.insertAdjacentHTML('beforeend', '<textarea id="verify" autocomplete="one-time-code"></textarea><select id="expiry" autocomplete="cc-exp-month"><option>01</option><option>07</option></select><input id="note">');
+    document.getElementById('verify').value = '845201';
+    document.getElementById('expiry').selectedIndex = 1;
+    document.getElementById('note').value = 'plain words';
+    Object.defineProperty(HTMLInputElement.prototype, 'value', { get() { window.__ran = true; return 'from the page'; }, configurable: true });
+    true`);
+  const seen = await repl(tab, "return [document.getElementById('verify').value, document.getElementById('expiry').value, document.getElementById('note').value].join('|')");
+  expect(seen.result).toBe("|01|plain words");
+  expect(await tab.evaluate("window.__ran === true")).toBe(false);
   await tab.close();
 });
 

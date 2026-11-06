@@ -11,7 +11,7 @@
 
 import type { CdpConnection } from "../cdp/connection";
 import { Tab } from "../browser/tab";
-import { IS_SECRET_JS, rememberedSecrets } from "./secrets";
+import { rememberedSecrets, secretKey } from "./secrets";
 
 export type ReplResult = { result: unknown; error?: string };
 
@@ -28,6 +28,12 @@ const LOCK_DOWN = `(() => {
   // Puts the live page's field values on the copy; kept before the setters below are blocked.
   const setter = (proto, n) => Object.getOwnPropertyDescriptor(proto, n).set;
   const sets = { input: setter(HTMLInputElement.prototype, 'value'), area: setter(HTMLTextAreaElement.prototype, 'value'), checked: setter(HTMLInputElement.prototype, 'checked'), selected: setter(HTMLOptionElement.prototype, 'selected') };
+  const text = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent').set;
+  window.__perchClear = (el) => {
+    if (el.tagName === 'TEXTAREA') { text.call(el, ''); sets.area.call(el, ''); }
+    else if (el.tagName === 'SELECT') [...el.options].forEach((o) => { window.__perchStrip.call(o, 'selected'); sets.selected.call(o, false); });
+    else { window.__perchStrip.call(el, 'value'); sets.input.call(el, ''); }
+  };
   window.__perchFill = (el, state) => {
     if ('files' in state) {
       // Empty stand-ins with the attached files' names: the copy never holds their contents.
@@ -82,14 +88,26 @@ async function sandbox(conn: CdpConnection): Promise<Tab> {
   return sandbox(conn);
 }
 
-/** Field order, identity and state, read from the live page. Secret fields give no state. */
+/** A field's identity: the copy's fields are matched to the live page's by position and this. */
 const FIELD_KEY = `(el) => [el.tagName, el.getAttribute('type') || '', el.getAttribute('name') || '', el.id || ''].join('|')`;
-const SECRET_NAME = "/pass|card|cvc|cvv|otp|one.?time/i";
+/**
+ * Secret fields of any kind: passwords, and inputs, text areas or selects marked as card,
+ * password or one-time-code fields, or named like one.
+ */
+const IS_SECRET_ANY = `(el) => {
+  if (el.tagName === 'INPUT' && (el.getAttribute('type') || '').toLowerCase() === 'password') return true;
+  if ((el.getAttribute('autocomplete') || '').toLowerCase().split(/\s+/).some((t) => /^(cc-.+|one-time-code|current-password|new-password)$/.test(t))) return true;
+  return /pass|card|cvc|cvv|otp|one.?time/i.test((el.getAttribute('name') || '') + ' ' + (el.id || ''));
+}`;
+const FIND_SECRETS = `function () {
+  const isSecret = ${IS_SECRET_ANY};
+  return [...this.querySelectorAll('input, textarea, select')].filter(isSecret);
+}`;
 const READ_FIELDS = `function (...skip) {
-  const isSecret = ${IS_SECRET_JS};
+  const isSecret = ${IS_SECRET_ANY};
   const key = ${FIELD_KEY};
   return [...this.querySelectorAll('input, textarea, select')].map((el) => {
-    if (skip.includes(el) || isSecret(el) || ${SECRET_NAME}.test((el.getAttribute('name') || '') + ' ' + (el.id || ''))) return [key(el), null];
+    if (skip.includes(el) || isSecret(el)) return [key(el), 'secret'];
     if (el.tagName === 'SELECT') return [key(el), { selected: [...el.options].map((o) => o.selected) }];
     if (el.type === 'checkbox' || el.type === 'radio') return [key(el), { checked: el.checked }];
     if (el.type === 'file') return [key(el), { files: [...(el.files || [])].map((f) => f.name) }];
@@ -97,32 +115,42 @@ const READ_FIELDS = `function (...skip) {
   });
 }`;
 
-type FieldState = [string, { value?: string; checked?: boolean; selected?: boolean[]; files?: string[] } | null];
+type FieldState = [string, { value?: string; checked?: boolean; selected?: boolean[]; files?: string[] } | "secret"];
 
 /**
  * What the user and the agent have typed, chosen and ticked: an HTML copy only has the values the
- * page loaded with, so without this a filled form reads as empty. Fields that are or were secret
- * (a password shown as text after "Show password") are left out.
+ * page loaded with, so without this a filled form reads as empty. It is read in an isolated world,
+ * where the page's own scripts cannot replace the getters, so reading runs none of the page's
+ * code. Secret fields found here are remembered, so they stay secret once shown as text; fields
+ * that are or were secret give no state, and the copy strips theirs.
  */
 async function liveFields(tab: Tab, rootNodeId: number): Promise<FieldState[]> {
   try {
-    const { object } = await tab.send<{ object: { objectId: string } }>("DOM.resolveNode", { nodeId: rootNodeId });
+    const { frameTree } = await tab.send<{ frameTree: { frame: { id: string } } }>("Page.getFrameTree");
+    const { executionContextId } = await tab.send<{ executionContextId: number }>("Page.createIsolatedWorld", { frameId: frameTree.frame.id, worldName: "perch-repl-fields" });
+    const resolve = async (node: { nodeId?: number; backendNodeId?: number }) =>
+      (await tab.send<{ object: { objectId: string } }>("DOM.resolveNode", { ...node, executionContextId })).object.objectId;
+    const doc = await resolve({ nodeId: rootNodeId });
+    const remembered = rememberedSecrets(tab);
+    const found = await tab.send<{ result: { objectId?: string } }>("Runtime.callFunctionOn", { objectId: doc, functionDeclaration: FIND_SECRETS, returnByValue: false });
+    if (found.result.objectId) {
+      const { result } = await tab.send<{ result: { name: string; value?: { objectId?: string } }[] }>("Runtime.getProperties", { objectId: found.result.objectId, ownProperties: true });
+      for (const prop of result) {
+        if (!/^\d+$/.test(prop.name) || !prop.value?.objectId) continue;
+        const { node } = await tab.send<{ node: { backendNodeId: number } }>("DOM.describeNode", { objectId: prop.value.objectId });
+        remembered.add(secretKey(node.backendNodeId));
+      }
+    }
     const secrets: { objectId: string }[] = [];
-    for (const key of rememberedSecrets(tab)) {
+    for (const key of remembered) {
       if (!key.startsWith("main:")) continue;
       try {
-        const r = await tab.send<{ object: { objectId: string } }>("DOM.resolveNode", { backendNodeId: Number(key.slice(5)) });
-        secrets.push({ objectId: r.object.objectId });
+        secrets.push({ objectId: await resolve({ backendNodeId: Number(key.slice(5)) }) });
       } catch {
         // The field is gone.
       }
     }
-    const res = await tab.send<{ result: { value?: FieldState[] } }>("Runtime.callFunctionOn", {
-      objectId: object.objectId,
-      functionDeclaration: READ_FIELDS,
-      arguments: secrets,
-      returnByValue: true,
-    });
+    const res = await tab.send<{ result: { value?: FieldState[] } }>("Runtime.callFunctionOn", { objectId: doc, functionDeclaration: READ_FIELDS, arguments: secrets, returnByValue: true });
     return res.result.value ?? [];
   } catch {
     return [];
@@ -137,17 +165,19 @@ export async function repl(tab: Tab, code: string): Promise<ReplResult> {
   const scratch = await sandbox(tab.conn);
   const body = /\b(return|await)\b|^\s*(const|let|var|throw|if|for|while)\b/.test(code) ? code : `return (${code}\n);`;
   const expression = `(async () => {
-    const isSecret = ${IS_SECRET_JS};
+    const isSecret = ${IS_SECRET_ANY};
     const document = new DOMParser().parseFromString(${JSON.stringify(outerHTML)}, 'text/html');
-    for (const el of document.querySelectorAll('input')) {
-      if (isSecret(el) || ${SECRET_NAME}.test((el.getAttribute('name') || '') + ' ' + (el.id || ''))) window.__perchStrip.call(el, 'value');
-    }
     const fields = ${JSON.stringify(fields)};
     const key = ${FIELD_KEY};
+    const copied = [...document.querySelectorAll('input, textarea, select')];
+    // Secret fields lose what the HTML held. A field the live page marks secret is cleared here
+    // wherever a field with its identity sits, in case the copy parsed in a different order.
+    const secretKeys = new Set(fields.filter((f) => f[1] === 'secret').map((f) => f[0]));
+    for (const el of copied) if (isSecret(el) || secretKeys.has(key(el))) window.__perchClear(el);
     // Fields are matched by position and identity; a copy that parsed differently is left as is.
-    [...document.querySelectorAll('input, textarea, select')].forEach((el, i) => {
+    copied.forEach((el, i) => {
       const live = fields[i];
-      if (live && live[1] && live[0] === key(el)) window.__perchFill(el, live[1]);
+      if (live && live[1] !== 'secret' && live[0] === key(el) && !secretKeys.has(key(el))) window.__perchFill(el, live[1]);
     });
     const location = new URL(${JSON.stringify(url)});
     return await (async () => { ${body}\n })();

@@ -194,6 +194,18 @@ test("REPL code cannot change how the next REPL call is cleaned", async () => {
   await tab.close();
 });
 
+test("REPL code cannot break out of its function to read the raw page", async () => {
+  const tab = await env.browser.newTab(env.site.url("/form.html"));
+  await tab.evaluate("document.getElementById('password').setAttribute('value', 'hunter2-secret'); true");
+  const escape = `return globalThis.captured; })();
+  function DOMParser() { return { parseFromString(html) { globalThis.captured = html; return { querySelectorAll() { return []; } }; } }; }
+  return await (async () => { return null`;
+  const first = await repl(tab, escape);
+  const second = await repl(tab, "return globalThis.captured || null");
+  expect(JSON.stringify([first, second])).not.toContain("hunter2");
+  await tab.close();
+});
+
 test("Meta+A selects all and punctuation types the right character", async () => {
   const tab = await env.browser.newTab(env.site.url("/mail.html"));
   let snap = await snapshot(tab);

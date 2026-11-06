@@ -190,7 +190,9 @@ export async function repl(tab: Tab, code: string): Promise<ReplResult> {
   const url = await tab.url();
   const scratch = await sandbox(tab.conn);
   const body = /\b(return|await)\b|^\s*(const|let|var|throw|if|for|while)\b/.test(code) ? code : `return (${code}\n);`;
-  const expression = `(async () => {
+  // The copy is made and cleaned first, by code of ours alone. The model's code is compiled on its
+  // own afterwards and given only the cleaned copy, so it cannot reach the raw HTML.
+  const clean = `(() => {
     const isSecret = ${IS_SECRET_ANY};
     const document = new DOMParser().parseFromString(${JSON.stringify(outerHTML)}, 'text/html');
     const fields = ${JSON.stringify(fields)};
@@ -205,14 +207,18 @@ export async function repl(tab: Tab, code: string): Promise<ReplResult> {
       const live = fields[i];
       if (live && live[1] !== 'secret' && live[0] === key(el) && !secretKeys.has(key(el))) window.__perchFill(el, live[1]);
     });
-    const location = new URL(${JSON.stringify(url)});
-    return await (async () => { ${body}\n })();
+    return document;
   })()`;
   const contextId = await freshWorld(scratch);
-  const res = await scratch.send<{ result: { value?: unknown }; exceptionDetails?: { text: string; exception?: { description?: string } } }>(
-    "Runtime.evaluate",
-    { expression, contextId, returnByValue: true, awaitPromise: true, timeout: 30_000 },
-  );
+  const copy = await scratch.send<{ result: { objectId?: string } }>("Runtime.evaluate", { expression: clean, contextId, returnByValue: false });
+  if (!copy.result.objectId) return { result: undefined, error: FIELDS_UNREADABLE };
+  const res = await scratch.send<{ result: { value?: unknown }; exceptionDetails?: { text: string; exception?: { description?: string } } }>("Runtime.callFunctionOn", {
+    functionDeclaration: `async function (document, href) {\n const location = new URL(href);\n ${body}\n }`,
+    executionContextId: contextId,
+    arguments: [{ objectId: copy.result.objectId }, { value: url }],
+    returnByValue: true,
+    awaitPromise: true,
+  });
   if (res.exceptionDetails) {
     const description = res.exceptionDetails.exception?.description ?? res.exceptionDetails.text;
     const first = description.split("\n")[0]!.replace(/^(Uncaught )?(Type)?Error: /, "");

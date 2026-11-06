@@ -4,16 +4,33 @@
  * works in its own session under that client's permission mode.
  */
 
+import { timingSafeEqual } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, unlinkSync } from "node:fs";
 import type { Socket, UnixSocketListener } from "bun";
 import type { ApprovalRequest, CallPolicy } from "../agent/session";
 import type { AuditLog } from "../agent/audit";
+import type { Mode } from "../agent/permissions";
 import type { ClientRecord, ClientRegistry } from "./clients";
 import { parseClientMessage, parseHello, type ApproveAsk, type Hello, type Request } from "./protocol";
 import type { AgentSession, SessionManager } from "./sessions";
 import { LineReader, SocketWriter } from "./wire";
 
 export type Handler = (conn: Connection, params: Record<string, unknown>) => Promise<unknown>;
+
+/** The client name a Perch sidebar run's outside agent connects as. */
+export const SIDEBAR_CLIENT = "perch-sidebar";
+
+/**
+ * A task the user started in Perch's sidebar and handed to an outside agent (Codex, Claude Code).
+ * Its session gets a one-off token, the chat's permission mode, and the sidebar's approval card.
+ */
+export type SidebarRun = { token: string; mode: Mode; approve: (request: ApprovalRequest) => Promise<boolean> };
+
+function sameToken(a: string, b: string): boolean {
+  const x = Buffer.from(a);
+  const y = Buffer.from(b);
+  return x.length === y.length && timingSafeEqual(x, y);
+}
 
 export type ServerOptions = {
   socket: string;
@@ -25,6 +42,8 @@ export type ServerOptions = {
   /** How long a persistent session waits for its client to reconnect before it ends. */
   graceMs?: number;
   approvalTimeoutMs?: number;
+  /** The sidebar run a session id belongs to, if any. */
+  sidebar?: (session: string) => SidebarRun | undefined;
 };
 
 /** One client connection after hello. */
@@ -42,6 +61,8 @@ export class Connection {
 
   /** The client's rules: its registered mode, its approvals, its name in the audit log. */
   policy(): CallPolicy {
+    const run = this.hello.client === SIDEBAR_CLIENT ? this.opts.sidebar?.(this.hello.session) : undefined;
+    if (run) return { mode: run.mode, audit: this.opts.audit, client: this.session.key, approve: run.approve };
     return {
       mode: this.opts.registry.list().find((c) => c.name === this.client.name)?.mode ?? this.client.mode,
       audit: this.opts.audit,
@@ -112,7 +133,13 @@ export async function startServer(opts: ServerOptions): Promise<Server> {
   async function onHello(state: State, value: unknown): Promise<void> {
     const hello = parseHello(value);
     if (typeof hello === "string") return fail(state, hello);
-    const verified = await opts.registry.verify(hello.client, hello.token);
+    const run = hello.client === SIDEBAR_CLIENT ? opts.sidebar?.(hello.session) : undefined;
+    const verified: Awaited<ReturnType<ClientRegistry["verify"]>> =
+      hello.client === SIDEBAR_CLIENT
+        ? run && sameToken(hello.token, run.token)
+          ? { name: SIDEBAR_CLIENT, mode: run.mode, created: new Date().toISOString() }
+          : { error: "Perch did not accept this client's token." }
+        : await opts.registry.verify(hello.client, hello.token);
     if ("error" in verified) {
       await opts.audit.append({ time: new Date().toISOString(), tab: "", site: "", action: "connect", client: hello.client, approved: null, result: "blocked" });
       return fail(state, verified.error);

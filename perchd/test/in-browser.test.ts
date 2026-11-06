@@ -1,0 +1,89 @@
+import { afterAll, beforeAll, expect, test } from "bun:test";
+import { PassThrough } from "node:stream";
+import { connectStreams } from "../src/cdp/adopt";
+import { encode } from "../src/cdp/pipe";
+import { SidebarRuns, stepLabel } from "../src/app/sidebar-runner";
+import { connect } from "../src/cli/client";
+import { parseBrowserSettings, perchCommand } from "../src/cli/serve-browser";
+import { startDaemon, type Daemon } from "../src/daemon/daemon";
+import { MemoryKeychain } from "../src/daemon/keychain";
+import { perchPaths } from "../src/daemon/paths";
+import { SIDEBAR_CLIENT } from "../src/daemon/server";
+import { codexArgs, tomlTable } from "../src/external";
+import { tempProfile } from "./helpers";
+
+const TOKEN = "t".repeat(43);
+
+test("the browser's settings line is checked before perchd uses it", () => {
+  const good = { op: "app", port: 50123, token: TOKEN, dataDir: "/Users/x/Library/Application Support/Perch", origins: ["chrome-untrusted://perch-side-chat.top-chrome", "https://evil.test"] };
+  expect(parseBrowserSettings(JSON.stringify(good))).toEqual({ port: 50123, token: TOKEN, dataDir: good.dataDir, origins: ["chrome-untrusted://perch-side-chat.top-chrome"] });
+  expect(() => parseBrowserSettings(JSON.stringify({ ...good, port: 0 }))).toThrow("bad port");
+  expect(() => parseBrowserSettings(JSON.stringify({ ...good, token: "short" }))).toThrow("bad token");
+  expect(() => parseBrowserSettings(JSON.stringify({ ...good, dataDir: "relative" }))).toThrow("bad data folder");
+  expect(() => parseBrowserSettings(JSON.stringify({ ...good, op: "key" }))).toThrow("bad port");
+});
+
+test("perch mcp is started from the compiled binary, or through bun in development", () => {
+  expect(perchCommand("/Applications/Perch.app/Contents/Frameworks/x/Helpers/perchd", "/$bunfs/root")).toEqual({ command: "/Applications/Perch.app/Contents/Frameworks/x/Helpers/perchd", args: [] });
+  expect(perchCommand("/opt/homebrew/bin/bun", "/repo/perchd/src/cli")).toEqual({ command: "/opt/homebrew/bin/bun", args: ["run", "/repo/perchd/src/cli/main.ts"] });
+});
+
+test("sidebar steps read as short actions", () => {
+  expect(stepLabel("navigate", { url: "https://www.example.com/a?b=1" })).toBe("Open www.example.com");
+  expect(stepLabel("navigate", { url: "example.com" })).toBe("Open example.com");
+  expect(stepLabel("click", { ref: "e12" })).toBe("Click");
+  expect(stepLabel("type", { ref: "e3", text: "secret words" })).toBe("Type");
+  expect(stepLabel("wait_for", {})).toBe("Wait for");
+});
+
+test("Codex gets the sidebar's MCP server with its session in the environment", () => {
+  expect(tomlTable({ PERCH_SESSION: "sidebar-1", PERCH_TOKEN: 'a"b' })).toBe('{PERCH_SESSION="sidebar-1",PERCH_TOKEN="a\\"b"}');
+  expect(() => tomlTable({ "bad key": "x" })).toThrow();
+  const args = codexArgs({ mcpArgs: ["mcp"], command: "/x/perchd", env: { PERCH_SESSION: "s" }, prompt: "p", otherServers: [] });
+  expect(args).toContain('mcp_servers.perch.command="/x/perchd"');
+  expect(args).toContain('mcp_servers.perch.env={PERCH_SESSION="s"}');
+});
+
+test("CDP over inherited streams: requests go out framed and replies come back", async () => {
+  const toBrowser = new PassThrough();
+  const fromBrowser = new PassThrough();
+  const conn = connectStreams(toBrowser, fromBrowser);
+  const sent: unknown[] = [];
+  toBrowser.on("data", (chunk: Buffer) => {
+    for (const part of chunk.toString().split("\0").filter(Boolean)) {
+      const msg = JSON.parse(part) as { id: number; method: string };
+      sent.push(msg.method);
+      fromBrowser.write(encode({ id: msg.id, result: { product: "Perch/158" } }));
+    }
+  });
+  expect(await conn.send<{ product: string }>("Browser.getVersion")).toEqual({ product: "Perch/158" });
+  expect(sent).toEqual(["Browser.getVersion"]);
+  fromBrowser.end();
+  expect(await conn.closed).toBeInstanceOf(Error);
+});
+
+const home = tempProfile();
+const paths = perchPaths({ PERCH_HOME: home.dir });
+const runs = new SidebarRuns();
+let daemon: Daemon;
+
+beforeAll(async () => {
+  daemon = await startDaemon({ paths, keychain: new MemoryKeychain(), launch: () => Promise.reject(new Error("unused")), sidebar: (s) => runs.get(s), helloTimeoutMs: 300 });
+});
+afterAll(async () => {
+  await daemon.stop();
+  home.cleanup();
+});
+
+const sidebarHello = (session: string, token: string) => ({ client: SIDEBAR_CLIENT, token, session, title: "Sidebar", agent: "Perch", persistent: true, onEnd: "close" as const });
+
+test("a sidebar run's agent connects with its one-off token and gets the chat's mode", async () => {
+  runs.add("sidebar-abc", { token: TOKEN, mode: "skip", approve: async () => true });
+  const client = await connect({ socket: paths.socket, hello: sidebarHello("sidebar-abc", TOKEN) });
+  expect(client.welcome.mode).toBe("skip");
+  client.close();
+  await expect(connect({ socket: paths.socket, hello: sidebarHello("sidebar-abc", "u".repeat(43)) })).rejects.toThrow("Perch did not accept this client's token.");
+  await expect(connect({ socket: paths.socket, hello: sidebarHello("sidebar-other", TOKEN) })).rejects.toThrow("Perch did not accept this client's token.");
+  runs.delete("sidebar-abc");
+  await expect(connect({ socket: paths.socket, hello: sidebarHello("sidebar-abc", TOKEN) })).rejects.toThrow("Perch did not accept this client's token.");
+});

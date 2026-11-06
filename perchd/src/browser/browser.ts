@@ -37,6 +37,13 @@ export class Browser {
     return new Browser(conn);
   }
 
+  /** The browser that started perchd, over a connection it handed over (src/cdp/adopt.ts). */
+  static async adopt(conn: CdpConnection): Promise<Browser> {
+    await conn.send("Browser.getVersion");
+    await conn.send("Target.setDiscoverTargets", { discover: true });
+    return new Browser(conn);
+  }
+
   /**
    * Opens an agent tab without taking focus from the user's tab. Chromium does not draw hidden
    * background tabs, and input events wait for a drawn frame, so a plain background tab never

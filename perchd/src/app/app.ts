@@ -23,6 +23,8 @@ export type AppOptions = {
   listen?: Listen;
   /** A folder of built pages served at /ui/, for development without the browser. */
   uiDir?: string;
+  /** The API token; Perch's browser picks it and hands it to its pages. Random when left out. */
+  token?: string;
 };
 
 export type App = {
@@ -125,7 +127,7 @@ export async function startApp(opts: AppOptions): Promise<App> {
   });
   const defaults: ChatSettings = { ...DEFAULT_SETTINGS, model: opts.models[0]?.id ?? "", ...opts.defaults };
   const info = (): AppInfo => ({ models: opts.models, defaults, artifactOrigin: artifactServer.origin });
-  const token = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url");
+  const token = opts.token ?? Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url");
   const server = startServer({
     token,
     allowedOrigins: opts.allowedOrigins,

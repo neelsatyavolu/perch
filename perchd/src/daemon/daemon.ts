@@ -13,7 +13,7 @@ import { macConfirm, type Confirm } from "./confirm";
 import { MemoryKeychain, type Keychain } from "./keychain";
 import type { PerchPaths } from "./paths";
 import { SESSION_ID, type OnEnd } from "./protocol";
-import { startServer, type Connection, type Handler } from "./server";
+import { startServer, type Connection, type Handler, type SidebarRun } from "./server";
 import { cdpTabGroups, SessionManager, type AgentSession, type TabGroups } from "./sessions";
 
 export const VERSION = "0.1.0";
@@ -33,6 +33,8 @@ export type DaemonOptions = {
   helloTimeoutMs?: number;
   idleSleepMs?: number;
   approvalTimeoutMs?: number;
+  /** Sessions started from Perch's sidebar (src/app/sidebar-runner.ts). */
+  sidebar?: (session: string) => SidebarRun | undefined;
 };
 
 export type Daemon = { manager: SessionManager; registry: ClientRegistry; stop(): Promise<void> };
@@ -160,6 +162,7 @@ export async function startDaemon(opts: DaemonOptions): Promise<Daemon> {
     graceMs: opts.graceMs,
     helloTimeoutMs: opts.helloTimeoutMs,
     approvalTimeoutMs: opts.approvalTimeoutMs,
+    sidebar: opts.sidebar,
   });
 
   return {

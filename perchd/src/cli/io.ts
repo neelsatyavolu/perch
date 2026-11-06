@@ -82,8 +82,8 @@ export async function openDaemon(io: CliIO, opts: SessionOptions = {}): Promise<
   // Nothing to talk to: say so before touching the Keychain.
   if (io.autostart === false && !existsSync(paths.socket)) throw new DaemonNotRunning();
   const client = opts.client ?? defaultClient(io.env);
-  const registry = new ClientRegistry(paths.clientsFile, io.keychain ?? new MacKeychain());
-  const token = await registry.token(client);
+  // A sidebar run's agent gets a one-off token from perchd itself, never one from the Keychain.
+  const token = io.env.PERCH_TOKEN || (await new ClientRegistry(paths.clientsFile, io.keychain ?? new MacKeychain()).token(client));
   const ask = io.ask;
   const attempt = () =>
     connect({

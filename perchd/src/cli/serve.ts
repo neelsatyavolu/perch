@@ -8,6 +8,11 @@ import { parseArgs } from "./args";
 import { pathsFor, type CliIO } from "./io";
 
 export async function serve(argv: string[], io: CliIO): Promise<number> {
+  // Perch started this perchd and handed it CDP and its settings (src/cli/serve-browser.ts).
+  if (argv.includes("--browser-fds")) {
+    const { serveInBrowser } = await import("./serve-browser");
+    return serveInBrowser(io);
+  }
   const a = parseArgs(argv, { flags: ["--headless"], options: ["--browser"] });
   const paths = pathsFor(io);
   mkdirSync(paths.home, { recursive: true, mode: 0o700 });

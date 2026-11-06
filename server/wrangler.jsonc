@@ -1,6 +1,6 @@
 // Perch account, sync and relay server. Nothing here is secret: the Resend key is a Worker
-// secret (`wrangler secret put RESEND_API_KEY`), and the D1 id below is a placeholder the owner
-// replaces after `wrangler d1 create perch` (see README.md). Never deployed by agents.
+// secret (`wrangler secret put RESEND_API_KEY`), and the D1 id below is the hosted database's id,
+// which is not a secret. Self-hosters replace it after `wrangler d1 create perch` (see README.md).
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "perch-server",
@@ -24,7 +24,7 @@
     {
       "binding": "DB",
       "database_name": "perch",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "b51aa21b-4cd9-44f8-be96-1a70cecfd84e",
       "migrations_dir": "migrations"
     }
   ],

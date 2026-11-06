@@ -44,9 +44,9 @@ The tests never send email: they pass a capture mailer to `createApp`. Passkey t
 
 After changing `wrangler.jsonc`, run `bunx wrangler types`.
 
-## Deploy (owner only)
+## Deploy
 
-Agents never deploy this. On a machine signed in to the Cloudflare account that holds `perchbrowser.com`:
+The hosted copy is live at `api.perchbrowser.com` and `relay.perchbrowser.com` (first deployed 2026-11-05). Deploy only with the owner's approval. The setup steps below ran once and are kept for self-hosting; a later release needs only `bunx wrangler d1 migrations apply perch --remote` (when there are new migrations) and `bunx wrangler deploy`. On a machine signed in to the Cloudflare account that holds `perchbrowser.com`:
 
 ```sh
 cd server

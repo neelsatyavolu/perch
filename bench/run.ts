@@ -2,7 +2,7 @@
  * Perch benchmark runner.
  *
  *   bun run bench/run.ts --suite bu|om2w [--agent claude-code|codex] [--limit N] [--per-category K] [--only ids.txt] [--concurrency 2]
- *                        [--model claude-sonnet-5-5] [--judge claude-opus-5-5] [--out <dir>] [--resume]
+ *                        [--model claude-sonnet-5-5] [--effort low|medium|high] [--judge claude-opus-5-5] [--out <dir>] [--resume]
  *                        [--executable <Perch.app/Contents/MacOS/Perch>]   drive a real Perch build in a window
  *
  * Suites: BU Bench V1 (bench/data/bu-bench-v1.json, from Aside's published runner) and
@@ -81,7 +81,9 @@ async function runOne(task: Task, out: string, model: string, judgeModel: string
   const runner = arg("--agent", "claude-code") === "codex" ? runCodex : runClaudeCode;
   const mode = (arg("--mode", "skip") ?? "skip") as "ask" | "guard" | "skip";
   const executable = arg("--executable");
-  const run = await runner({ task: task.task, model, timeoutMs: 15 * 60_000, auditPath: join(dir, "audit.jsonl"), mode, ...(executable ? { executable } : { userAgent: UA }) });
+  // Reasoning effort for Codex (passed as model_reasoning_effort); Claude Code ignores it.
+  const effort = arg("--effort");
+  const run = await runner({ task: task.task, model, ...(effort ? { effort } : {}), timeoutMs: 15 * 60_000, auditPath: join(dir, "audit.jsonl"), mode, ...(executable ? { executable } : { userAgent: UA }) });
   const seconds = Math.round((Date.now() - started) / 1000);
   writeFileSync(join(dir, "events.jsonl"), run.events.map((e) => JSON.stringify(e)).join("\n"));
   writeFileSync(join(dir, "answer.txt"), run.answer);

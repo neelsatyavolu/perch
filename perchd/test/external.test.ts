@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { claudeArgs, claudeLineToEvents, codexLineToEvents, otherCodexServers } from "../src/external";
+import { claudeArgs, claudeLineToEvents, codexArgs, codexLineToEvents, otherCodexServers } from "../src/external";
 
 test("Claude Code stream lines become Aside-style events", () => {
   const toolUse = { type: "assistant", message: { content: [{ type: "text", text: "Opening the site." }, { type: "tool_use", id: "t1", name: "mcp__perch__navigate", input: { url: "https://example.com" } }] } };
@@ -38,6 +38,19 @@ test("Codex JSON items become Aside-style events (shapes recorded from codex-cli
   ]);
   expect(codexLineToEvents({ type: "item.completed", item: { type: "agent_message", text: "Done." } })).toEqual([{ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "Done." }] } }]);
   expect(codexLineToEvents({ type: "turn.completed" })).toEqual([]);
+});
+
+test("the Codex command sets the model and, when given, the reasoning effort", () => {
+  const base = { mcpArgs: ["run", "mcp.ts"], prompt: "Do X", otherServers: [] as string[] };
+  const low = codexArgs({ ...base, model: "gpt-6.1-sol", effort: "low" });
+  expect(low[low.indexOf("-m") + 1]).toBe("gpt-6.1-sol");
+  expect(low).toContain('model_reasoning_effort="low"');
+  expect(low[low.indexOf('model_reasoning_effort="low"') - 1]).toBe("-c");
+  expect(low.at(-1)).toBe("Do X");
+  const plain = codexArgs(base);
+  expect(plain.some((a) => a.startsWith("model_reasoning_effort"))).toBe(false);
+  expect(plain).not.toContain("-m");
+  expect(() => codexArgs({ ...base, effort: 'low" x' })).toThrow();
 });
 
 test("other Codex MCP servers are found so they can be switched off", () => {

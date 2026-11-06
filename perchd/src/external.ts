@@ -78,6 +78,8 @@ const MCP_ENTRY = join(import.meta.dir, "mcp.ts");
 export type RunOptions = {
   task: string;
   model?: string;
+  /** Reasoning effort for Codex ("low", "medium", "high"); Claude Code uses its own default. */
+  effort?: string;
   timeoutMs: number;
   auditPath: string;
   /** Permission mode for the MCP server; delegated whole tasks use "skip" (payments still ask). */
@@ -203,6 +205,30 @@ export function otherCodexServers(config = join(homedir(), ".codex", "config.tom
   return [...new Set(names)].filter((n) => n !== "perch");
 }
 
+/** Reasoning effort names Codex accepts; anything else is refused before it reaches a -c override. */
+const EFFORT = /^[a-z]+$/;
+
+/** The `codex exec` arguments for one task: only Perch's tools, the model, and its reasoning effort. */
+export function codexArgs(opts: { mcpArgs: string[]; prompt: string; model?: string; effort?: string; otherServers: string[] }): string[] {
+  if (opts.effort !== undefined && !EFFORT.test(opts.effort)) throw new Error(`unknown reasoning effort "${opts.effort}"`);
+  return [
+    "exec", "--json", "--skip-git-repo-check", "-s", "read-only",
+    "-c", 'approval_policy="never"',
+    "-c", `mcp_servers.perch.command=${JSON.stringify(process.execPath)}`,
+    "-c", `mcp_servers.perch.args=${JSON.stringify(opts.mcpArgs)}`,
+    "-c", "mcp_servers.perch.tool_timeout_sec=120",
+    // Perch applies its own approval rules to every call; Codex's prompt would only block them.
+    "-c", 'mcp_servers.perch.default_tools_approval_mode="approve"',
+    // Only the browser: the user's other MCP servers and Codex's web search are off for the task.
+    ...opts.otherServers.flatMap((name) => ["-c", `mcp_servers.${name}.enabled=false`]),
+    "-c", 'web_search="disabled"',
+    "-c", "tools.web_search=false",
+    ...(opts.model ? ["-m", opts.model] : []),
+    ...(opts.effort ? ["-c", `model_reasoning_effort="${opts.effort}"`] : []),
+    opts.prompt,
+  ];
+}
+
 /** Runs a task with Codex CLI headless (the user's own ChatGPT sign-in) and Perch's MCP tools. */
 export async function runCodex(opts: RunOptions): Promise<ExternalResult> {
   const work = mkdtempSync(join(tmpdir(), "perch-exec-"));
@@ -210,21 +236,7 @@ export async function runCodex(opts: RunOptions): Promise<ExternalResult> {
   const mcpArgs = ["run", MCP_ENTRY, "--mode", mode, "--client", "codex", "--audit", opts.auditPath, "--profile", join(work, "profile")];
   mcpArgs.push(...serverArgs(opts));
   const prompt = `${systemPrompt({ mode, now: new Date(), finish: "reply" })}\n\nYour tools for this task are Perch's browser tools from the "perch" MCP server. Do not run shell commands or read files. Do the task in the browser, then reply with the answer, including the specific facts the task asks for.\n\nTask:\n${opts.task}`;
-  const args = [
-    "exec", "--json", "--skip-git-repo-check", "-s", "read-only",
-    "-c", 'approval_policy="never"',
-    "-c", `mcp_servers.perch.command=${JSON.stringify(process.execPath)}`,
-    "-c", `mcp_servers.perch.args=${JSON.stringify(mcpArgs)}`,
-    "-c", "mcp_servers.perch.tool_timeout_sec=120",
-    // Perch applies its own approval rules to every call; Codex's prompt would only block them.
-    "-c", 'mcp_servers.perch.default_tools_approval_mode="approve"',
-    // Only the browser: the user's other MCP servers and Codex's web search are off for the task.
-    ...otherCodexServers().flatMap((name) => ["-c", `mcp_servers.${name}.enabled=false`]),
-    "-c", 'web_search="disabled"',
-    "-c", "tools.web_search=false",
-    ...(opts.model ? ["-m", opts.model] : []),
-    prompt,
-  ];
+  const args = codexArgs({ mcpArgs, prompt, model: opts.model, effort: opts.effort, otherServers: otherCodexServers() });
   const child = Bun.spawn([codexBinary(), ...args], { cwd: work, stdout: "pipe", stderr: "pipe", stdin: "ignore" });
   let timedOut = false;
   const timer = setTimeout(() => {

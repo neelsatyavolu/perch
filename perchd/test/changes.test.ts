@@ -49,3 +49,20 @@ test("a gone ref comes back with the page as it is now", async () => {
   expect(gone.content).toContain('button "Compose"');
   await ctx.close();
 });
+
+test("a wheel scroll the page never acknowledges falls back to scrolling by script", async () => {
+  const ctx = await newToolContext(env.browser);
+  await runTool(ctx, call("navigate", { url: env.site.url("/long.html") }));
+  const tab = ctx.tab!;
+  const send = tab.send.bind(tab);
+  // A covered window that draws no frames never answers wheel input.
+  tab.send = ((method: string, params?: { type?: string }) =>
+    method === "Input.dispatchMouseEvent" && params?.type === "mouseWheel" ? new Promise(() => undefined) : send(method, params)) as typeof tab.send;
+  const started = Date.now();
+  const result = await runTool(ctx, call("scroll", { dy: 600 }));
+  expect(result.isError).toBeFalsy();
+  expect(result.content).toMatch(/^scrolled the page to [1-9]\d* of \d+ px/);
+  expect(Date.now() - started).toBeLessThan(10_000);
+  tab.send = send;
+  await ctx.close();
+}, 30_000);

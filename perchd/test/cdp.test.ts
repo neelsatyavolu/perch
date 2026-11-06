@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { encode, FrameDecoder } from "../src/cdp/pipe";
+import { chromiumArgs, encode, FrameDecoder } from "../src/cdp/pipe";
 import { findChromeForTesting, launchChromium } from "../src/cdp/pipe";
 import type { CdpConnection } from "../src/cdp/connection";
 import { tempProfile } from "./helpers";
@@ -24,6 +24,15 @@ describe("framing", () => {
     expect(decoder.push(bytes.subarray(5, 12))).toEqual([]);
     expect(decoder.push(bytes.subarray(12))).toEqual([{ id: 7, result: { product: "x" } }]);
   });
+});
+
+test("agent windows keep drawing when covered, so clicks, wheel scrolls and screenshots do not stall", () => {
+  const args = chromiumArgs({ executable: "x", userDataDir: "/tmp/p", headless: false });
+  for (const flag of ["--disable-backgrounding-occluded-windows", "--disable-renderer-backgrounding", "--disable-background-timer-throttling"]) expect(args).toContain(flag);
+  expect(args).toContain("--remote-debugging-pipe");
+  expect(args).not.toContain("--headless=new");
+  expect(args.at(-1)).toBe("about:blank");
+  expect(chromiumArgs({ executable: "x", userDataDir: "/tmp/p", headless: true, args: ["--extra"] })).toContain("--extra");
 });
 
 describe("launch over the pipe", () => {

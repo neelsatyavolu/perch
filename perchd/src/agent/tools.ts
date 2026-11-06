@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import type { Browser } from "../browser/browser";
-import { Tab } from "../browser/tab";
+import { PageTimeoutError, STOPPED_RESPONDING, Tab } from "../browser/tab";
 import { appTool } from "../apps/index";
 import type { ToolCall } from "../models/types";
 import { back, click, describeRef, drag, hover, press, scroll, select, type, upload, waitFor, type ActionResult } from "../page/actions";
@@ -94,6 +94,7 @@ async function page(ctx: ToolContext, tab: Tab, full = false): Promise<string> {
   const snap = await snapshot(tab, { full });
   ctx.lastSnapshot.set(tab, snap.text);
   const [title, url] = await Promise.all([tab.title().catch(() => ""), tab.url().catch(() => "")]);
+  if (url) shownUrl.set(tab, url);
   return `Page: ${title} (${url})\n${snap.text}`;
 }
 
@@ -105,6 +106,10 @@ export const UNCHANGED =
 
 async function withPage(ctx: ToolContext, tab: Tab, result: ActionResult, action = ""): Promise<ToolResult> {
   if (!result.ok) {
+    if (result.error === STOPPED_RESPONDING && tab === ctx.tab) {
+      const recovered = await replaceIfFrozen(ctx, tab);
+      if (recovered) return recovered;
+    }
     const notes = [result.error, ...tab.takeDialogNotes()].join("\n");
     // A gone ref means the page changed under the model: show it the page now, saving a step.
     if (/^ref e\d+ is gone/.test(result.error)) return { content: `${notes}. The page now:\n\n${await page(ctx, tab)}`, isError: true };
@@ -199,10 +204,42 @@ export async function focusedTarget(ctx: ToolContext): Promise<Target | undefine
 export async function runTool(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
   const problem = checkCall(call);
   if (problem) return { content: problem, isError: true };
+  const tab = ctx.tab;
   try {
     return await dispatch(ctx, call);
   } catch (error) {
+    if (error instanceof PageTimeoutError && tab && tab === ctx.tab) {
+      const recovered = await replaceIfFrozen(ctx, tab, call.name === "navigate" ? normalizeUrl(String(call.args.url)) : undefined);
+      if (recovered) return recovered;
+    }
     return { content: error instanceof Error ? error.message : String(error), isError: true };
+  }
+}
+
+/** The last address each tab showed the model, to reopen it if the tab locks up. */
+const shownUrl = new WeakMap<Tab, string>();
+const PROBE_MS = 2000;
+
+/**
+ * After a command timed out: if the page no longer answers at all (its script is stuck in a loop
+ * or the renderer froze), every later call on the tab would time out too, so the tab is closed
+ * and the same page opened in a fresh one. A page that still answers is left alone.
+ */
+async function replaceIfFrozen(ctx: ToolContext, frozen: Tab, wanted?: string): Promise<ToolResult | null> {
+  const probe = frozen.evaluate("1").then(() => true, () => false);
+  const answered = await Promise.race([probe, Bun.sleep(PROBE_MS).then(() => false)]);
+  if (answered || frozen.closed) return null;
+  const url = wanted ?? shownUrl.get(frozen) ?? "about:blank";
+  const fresh = await ctx.browser.newTab();
+  ctx.owned = [...ctx.owned.filter((t) => t !== frozen), fresh];
+  ctx.tab = fresh;
+  void frozen.close();
+  const note = `The tab stopped responding (the page's script froze), so Perch closed it and opened ${url} again in a new tab. Your last action may not have happened: check the page before you go on.`;
+  try {
+    const loading = await openPage(fresh, url);
+    return { content: `${note}${loading ? `\n${loading}` : ""}\n\n${await page(ctx, fresh)}`, isError: true };
+  } catch (error) {
+    return { content: `${note}\nThe page did not load again: ${error instanceof Error ? error.message : String(error)}`, isError: true };
   }
 }
 

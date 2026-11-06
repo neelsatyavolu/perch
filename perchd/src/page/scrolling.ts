@@ -28,13 +28,39 @@ const POLL_MS = 50;
 
 const atEnd = (s: ScrollState) => s.top + s.client >= s.height - 2;
 
+/** How long a wheel event may wait for the page to take it before scrolling by script instead. */
+const WHEEL_WAIT_MS = 3000;
+
+/** Scrolls what the wheel at a point would scroll, by script: for pages that stopped taking input. */
+const SCROLL_BY = (x: number, y: number, dy: number) => `(() => {
+  const page = document.scrollingElement || document.documentElement;
+  let el = document.elementFromPoint(${x}, ${y});
+  for (; el && el !== page && el !== document.body; el = el.parentElement) {
+    const s = getComputedStyle(el);
+    if (/(auto|scroll)/.test(s.overflowY) && el.scrollHeight > el.clientHeight + 2) break;
+  }
+  (el && el !== document.body && el !== page ? el : page).scrollBy(0, ${dy});
+})()`;
+
+/**
+ * A wheel event, or a scripted scroll when the page has not taken the event in a few seconds:
+ * input waits for a drawn frame, and a covered or busy window may not draw one for a long time.
+ */
+async function wheelOrScript(tab: Tab, point: { x: number; y: number }, delta: number): Promise<void> {
+  const wheel = mouse(tab, "mouseWheel", point, { deltaX: 0, deltaY: delta }).then(() => true);
+  wheel.catch(() => undefined);
+  const late = new Promise<false>((resolve) => setTimeout(() => resolve(false), WHEEL_WAIT_MS));
+  if (await Promise.race([wheel, late])) return;
+  await tab.evaluate(SCROLL_BY(point.x, point.y, delta));
+}
+
 export async function wheelScroll(tab: Tab, dy: number | undefined): Promise<string> {
   const [w, h] = await tab.evaluate<[number, number]>("[innerWidth, innerHeight]");
   const point = { x: Math.round(w / 2), y: Math.round(h / 2) };
   const read = () => tab.evaluate<ScrollState>(STATE_AT(point.x, point.y));
   const before = await read();
   const delta = dy ?? h * 0.8;
-  await mouse(tab, "mouseWheel", point, { deltaX: 0, deltaY: delta });
+  await wheelOrScript(tab, point, delta);
   // Wait for it to start moving, then for it to stop (wheel scrolling can be animated).
   let after = before;
   for (const started = Date.now(); Date.now() - started < MOVE_WAIT_MS; ) {

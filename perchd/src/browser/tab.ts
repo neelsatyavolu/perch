@@ -14,9 +14,11 @@ export class TabClosedError extends Error {
   }
 }
 
+export const STOPPED_RESPONDING = "the page stopped responding";
+
 export class PageTimeoutError extends Error {
   constructor() {
-    super("the page stopped responding");
+    super(STOPPED_RESPONDING);
   }
 }
 

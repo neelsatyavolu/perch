@@ -22,6 +22,8 @@ const SERVER = { name: "perch", version: "0.1.0" };
 
 type Request = { jsonrpc: "2.0"; id?: number | string; method: string; params?: any };
 
+export const BROWSER_RESTARTED = "The browser had closed, so Perch started it again: earlier tabs are gone. Open the page you need again.";
+
 export type ServerOptions = { profileDir: string; policy: CallPolicy; headless: boolean; userAgent?: string; executable?: string; extraArgs?: string[]; budget?: Budget };
 
 export function createServer(opts: ServerOptions) {
@@ -29,13 +31,24 @@ export function createServer(opts: ServerOptions) {
   let queue: Promise<unknown> = Promise.resolve();
   // Budget and repeated-call notes, as in Perch's own loop: the client's time limit is passed in.
   const progress = new Progress(opts.budget ?? {});
-  const context = () =>
-    (ctx ??= Browser.launch({
+  /** Set when the browser went away mid-task; the next call starts a new one and says so. */
+  let lost = false;
+  const launch = () =>
+    Browser.launch({
       userDataDir: opts.profileDir,
       headless: opts.headless,
       executable: opts.executable,
       args: [...(opts.userAgent ? [`--user-agent=${opts.userAgent}`] : []), ...(opts.extraArgs ?? [])],
-    }).then((browser) => newToolContext(browser)));
+    }).then((browser) => {
+      void browser.conn.closed.then(() => {
+        if (closing) return;
+        lost = true;
+        ctx = null;
+      });
+      return newToolContext(browser);
+    });
+  let closing = false;
+  const context = () => (ctx ??= launch());
 
   async function handle(req: Request): Promise<object | null> {
     switch (req.method) {
@@ -51,7 +64,12 @@ export function createServer(opts: ServerOptions) {
         const name = String(req.params?.name ?? "");
         const args = (req.params?.arguments ?? {}) as Record<string, unknown>;
         // One call at a time: each result is checked by the client before the next action.
-        const run = queue.then(async () => callTool(await context(), opts.policy, { id: String(req.id), name, args }));
+        const run = queue.then(async () => {
+          const restarted = lost;
+          lost = false;
+          const result = await callTool(await context(), opts.policy, { id: String(req.id), name, args });
+          return restarted ? { ...result, content: `${BROWSER_RESTARTED}\n\n${result.content}` } : result;
+        });
         queue = run.catch(() => undefined);
         const result = await run;
         const notes = progress.after({ id: String(req.id), name, args }, result.content);
@@ -75,6 +93,7 @@ export function createServer(opts: ServerOptions) {
       }
     },
     async close(): Promise<void> {
+      closing = true;
       if (ctx) {
         const c = await ctx;
         await c.close();
@@ -118,6 +137,10 @@ async function main(argv: string[]): Promise<void> {
   };
   process.once("SIGTERM", () => void stop());
   process.once("SIGINT", () => void stop());
+  // One failed call must not end the server: the client would lose every tool for the rest of
+  // its task ("Connection closed") and could hang until its own time limit.
+  process.on("unhandledRejection", (error) => process.stderr.write(`perch mcp: unhandled rejection: ${String(error)}\n`));
+  process.on("uncaughtException", (error) => process.stderr.write(`perch mcp: uncaught exception: ${error.stack ?? String(error)}\n`));
   const decoder = new TextDecoder();
   let buffer = "";
   const reader = Bun.stdin.stream().getReader();

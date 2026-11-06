@@ -33,17 +33,29 @@ const RETIRED: unknown[] = [];
 
 export type LaunchOptions = { executable: string; userDataDir: string; headless: boolean; args?: string[] };
 
-export async function launchChromium(opts: LaunchOptions): Promise<CdpConnection> {
-  const args = [
+/**
+ * Command-line flags for a browser perchd drives. Agent windows are often covered by the user's
+ * own windows; Chromium stops drawing covered windows, and mouse input, wheel scrolls and
+ * screenshots then wait for a frame that never comes ("the page stopped responding").
+ */
+export function chromiumArgs(opts: LaunchOptions): string[] {
+  return [
     "--remote-debugging-pipe",
     `--user-data-dir=${opts.userDataDir}`,
     "--no-first-run",
     "--no-default-browser-check",
     "--disable-background-networking",
+    "--disable-backgrounding-occluded-windows",
+    "--disable-renderer-backgrounding",
+    "--disable-background-timer-throttling",
     ...(opts.headless ? ["--headless=new"] : []),
     ...(opts.args ?? []),
     "about:blank",
   ];
+}
+
+export async function launchChromium(opts: LaunchOptions): Promise<CdpConnection> {
+  const args = chromiumArgs(opts);
   const child = spawn(opts.executable, args, { stdio: ["ignore", "ignore", "pipe", "pipe", "pipe"] });
   const toBrowser = child.stdio[3] as Writable;
   const fromBrowser = child.stdio[4] as Readable;

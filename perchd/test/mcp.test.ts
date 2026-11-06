@@ -74,3 +74,15 @@ test("risky actions are declined without an approval UI, and unknown methods fai
   const unknown = await rpc("resources/list");
   expect(unknown.error.code).toBe(-32601);
 }, 30_000);
+
+test("if the browser goes away, the next call starts a new one instead of failing for the rest of the task", async () => {
+  await rpc("tools/call", { name: "navigate", arguments: { url: site.url("/mail.html") } });
+  const children = Bun.spawnSync(["pgrep", "-P", String(proc.pid)]).stdout.toString().trim().split(/\s+/).filter(Boolean);
+  expect(children.length).toBeGreaterThan(0);
+  for (const pid of children) process.kill(Number(pid), "SIGKILL");
+  await Bun.sleep(500);
+  const again = await rpc("tools/call", { name: "navigate", arguments: { url: site.url("/mail.html") } });
+  expect(again.result.isError).toBeFalsy();
+  expect(again.result.content[0].text).toContain("started it again");
+  expect(again.result.content[0].text).toContain('button "Compose"');
+}, 60_000);

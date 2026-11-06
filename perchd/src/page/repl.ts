@@ -19,6 +19,8 @@ export const NO_NETWORK_MESSAGE =
   "the REPL has no network access: it reads a copy of the page. To read an API, a feed or another page, open its URL with navigate or open_tab (JSON and text pages work too), then read it";
 const NETWORK_ERROR = /Failed to fetch|Failed to parse URL|NetworkError|XMLHttpRequest|ERR_BLOCKED|WebSocket/i;
 
+const FIELDS_UNREADABLE = "the page changed while the REPL was reading it; try again";
+
 export const READ_ONLY_MESSAGE = "the REPL is read-only; use click, type and select to change the page";
 
 const LOCK_DOWN = `(() => {
@@ -29,9 +31,10 @@ const LOCK_DOWN = `(() => {
   const setter = (proto, n) => Object.getOwnPropertyDescriptor(proto, n).set;
   const sets = { input: setter(HTMLInputElement.prototype, 'value'), area: setter(HTMLTextAreaElement.prototype, 'value'), checked: setter(HTMLInputElement.prototype, 'checked'), selected: setter(HTMLOptionElement.prototype, 'selected') };
   const text = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent').set;
+  const removeChild = Node.prototype.removeChild;
   window.__perchClear = (el) => {
     if (el.tagName === 'TEXTAREA') { text.call(el, ''); sets.area.call(el, ''); }
-    else if (el.tagName === 'SELECT') [...el.options].forEach((o) => { window.__perchStrip.call(o, 'selected'); sets.selected.call(o, false); });
+    else if (el.tagName === 'SELECT') while (el.firstChild) removeChild.call(el, el.firstChild);
     else { window.__perchStrip.call(el, 'value'); sets.input.call(el, ''); }
   };
   window.__perchFill = (el, state) => {
@@ -96,7 +99,7 @@ const FIELD_KEY = `(el) => [el.tagName, el.getAttribute('type') || '', el.getAtt
  */
 const IS_SECRET_ANY = `(el) => {
   if (el.tagName === 'INPUT' && (el.getAttribute('type') || '').toLowerCase() === 'password') return true;
-  if ((el.getAttribute('autocomplete') || '').toLowerCase().split(/\s+/).some((t) => /^(cc-.+|one-time-code|current-password|new-password)$/.test(t))) return true;
+  if ((el.getAttribute('autocomplete') || '').toLowerCase().split(/\\s+/).some((t) => /^(cc-.+|one-time-code|current-password|new-password)$/.test(t))) return true;
   return /pass|card|cvc|cvv|otp|one.?time/i.test((el.getAttribute('name') || '') + ' ' + (el.id || ''));
 }`;
 const FIND_SECRETS = `function () {
@@ -124,7 +127,7 @@ type FieldState = [string, { value?: string; checked?: boolean; selected?: boole
  * code. Secret fields found here are remembered, so they stay secret once shown as text; fields
  * that are or were secret give no state, and the copy strips theirs.
  */
-async function liveFields(tab: Tab, rootNodeId: number): Promise<FieldState[]> {
+async function liveFields(tab: Tab, rootNodeId: number): Promise<FieldState[] | null> {
   try {
     const { frameTree } = await tab.send<{ frameTree: { frame: { id: string } } }>("Page.getFrameTree");
     const { executionContextId } = await tab.send<{ executionContextId: number }>("Page.createIsolatedWorld", { frameId: frameTree.frame.id, worldName: "perch-repl-fields" });
@@ -151,9 +154,9 @@ async function liveFields(tab: Tab, rootNodeId: number): Promise<FieldState[]> {
       }
     }
     const res = await tab.send<{ result: { value?: FieldState[] } }>("Runtime.callFunctionOn", { objectId: doc, functionDeclaration: READ_FIELDS, arguments: secrets, returnByValue: true });
-    return res.result.value ?? [];
+    return res.result.value ?? null;
   } catch {
-    return [];
+    return null;
   }
 }
 
@@ -161,6 +164,8 @@ export async function repl(tab: Tab, code: string): Promise<ReplResult> {
   const { root } = await tab.send<{ root: { nodeId: number } }>("DOM.getDocument", { depth: 0 });
   const { outerHTML } = await tab.send<{ outerHTML: string }>("DOM.getOuterHTML", { nodeId: root.nodeId });
   const fields = await liveFields(tab, root.nodeId);
+  // Without the field list the copy cannot tell which fields hold secrets, so nothing runs.
+  if (!fields) return { result: undefined, error: FIELDS_UNREADABLE };
   const url = await tab.url();
   const scratch = await sandbox(tab.conn);
   const body = /\b(return|await)\b|^\s*(const|let|var|throw|if|for|while)\b/.test(code) ? code : `return (${code}\n);`;

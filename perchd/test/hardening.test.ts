@@ -169,15 +169,19 @@ test("a secret the REPL finds first stays hidden after it is shown as text", asy
 
 test("secret text areas and selects are hidden, and reading fields runs none of the page's code", async () => {
   const tab = await env.browser.newTab(env.site.url("/form.html"));
-  await tab.evaluate(`document.body.insertAdjacentHTML('beforeend', '<textarea id="verify" autocomplete="one-time-code"></textarea><select id="expiry" autocomplete="cc-exp-month"><option>01</option><option>07</option></select><input id="note">');
+  await tab.evaluate(`document.body.insertAdjacentHTML('beforeend', '<textarea id="verify" autocomplete="one-time-code"></textarea><select id="expiry" autocomplete="cc-exp-month"><option>01</option><option>07</option></select><input id="note"><input id="code2" autocomplete="section-login one-time-code"><input id="login2" autocomplete="current-password"><select id="saved" autocomplete="cc-number"><option>4111 1111 1111 1111</option></select>');
     document.getElementById('verify').value = '845201';
     document.getElementById('expiry').selectedIndex = 1;
     document.getElementById('note').value = 'plain words';
+    document.getElementById('code2').value = '990011';
+    document.getElementById('login2').value = 'hunter3';
     Object.defineProperty(HTMLInputElement.prototype, 'value', { get() { window.__ran = true; return 'from the page'; }, configurable: true });
     true`);
   const seen = await repl(tab, "return [document.getElementById('verify').value, document.getElementById('expiry').value, document.getElementById('note').value].join('|')");
-  expect(seen.result).toBe("|01|plain words");
-  expect(await tab.evaluate("window.__ran === true")).toBe(false);
+  expect(seen.result).toBe("||plain words");
+  const others = await repl(tab, "const s = document.getElementById('saved'); return [document.getElementById('code2').value, document.getElementById('login2').value, s.outerHTML, s.textContent].join('|')");
+  expect(JSON.stringify(others)).not.toMatch(/990011|hunter3|4111/);
+  expect(await tab.evaluate<boolean>("window.__ran === true")).toBe(false);
   await tab.close();
 });
 

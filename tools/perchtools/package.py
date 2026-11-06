@@ -55,6 +55,31 @@ def _stage(paths: Paths, dist: Path) -> Path:
     return stage
 
 
+def _framework_version(app: Path) -> Path:
+    versions = app / "Contents" / "Frameworks" / "Perch Framework.framework" / "Versions"
+    found = [v for v in versions.iterdir() if v.is_dir() and not v.is_symlink()]
+    if len(found) != 1:
+        raise ValueError(f"expected one framework version in {versions}, found {len(found)}")
+    return found[0]
+
+
+def stage_agent(app: Path, repo: Path, run) -> Path:
+    """Put perchd (compiled with Bun) and the built chat pages (ui/dist) into the framework.
+
+    The browser starts Helpers/perchd and serves Resources/perch_ui (spec 7.1). Returns perchd's path.
+    """
+    version = _framework_version(app)
+    run(["bun", "run", "build"], cwd=repo / "ui")
+    perchd = version / "Helpers" / "perchd"
+    perchd.parent.mkdir(parents=True, exist_ok=True)
+    run(["bun", "build", "--compile", "--minify", repo / "perchd" / "src" / "cli" / "main.ts", "--outfile", perchd],
+        cwd=repo / "perchd")
+    pages = version / "Resources" / "perch_ui"
+    shutil.rmtree(pages, ignore_errors=True)
+    shutil.copytree(repo / "ui" / "dist", pages)
+    return perchd
+
+
 def _make_dmg(app: Path, dist: Path, info: VersionInfo, run) -> Path:
     folder = dist / "dmg"
     folder.mkdir(parents=True, exist_ok=True)
@@ -80,6 +105,7 @@ def package(
     dist = paths.repo / "dist"
     stage = _stage(paths, dist)
     app = stage / APP
+    perchd = stage_agent(app, paths.repo, run)
     if mode == "adhoc":
         update_plist(app / "Contents" / "Info.plist", bundle_versions(info))
         run(["codesign", "--force", "--deep", "--sign", "-", app])
@@ -94,6 +120,10 @@ def package(
     root = sparkle_root or fetch_sparkle(load_pin(paths.repo / "build" / "sparkle.json"), paths.repo / "dist" / "cache")
     embed_sparkle(app, root)
     sign_sparkle(app, creds.identity, run=run)
+    # Bun's JIT needs these under the hardened runtime; sign_chrome.py then seals the framework around it.
+    run(["codesign", "--force", "--timestamp", "--options", "runtime",
+         "--entitlements", paths.repo / "build" / "perchd.entitlements", "--sign", creds.identity, perchd],
+        secrets=secrets)
     update_plist(app / "Contents" / "Info.plist", bundle_versions(info) | sparkle_keys(FEED_URL, key))
     signed = dist / "signed"
     run(

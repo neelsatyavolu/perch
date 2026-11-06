@@ -15,12 +15,17 @@ def staged_build(paths, tmp_path):
     app = release / "Perch.app"
     (app / "Contents").mkdir(parents=True)
     (app / "Contents" / "Info.plist").write_bytes(plistlib.dumps({"CFBundleIdentifier": "co.xanom.perch"}))
+    framework = app / "Contents" / "Frameworks" / "Perch Framework.framework" / "Versions"
+    (framework / "158.0.8127.18" / "Resources").mkdir(parents=True)
+    (framework / "Current").symlink_to("158.0.8127.18")
     (release / "Perch Packaging").mkdir()
     (release / "Perch Packaging" / "sign_chrome.py").write_text("")
     sparkle = tmp_path / "sparkle"
     (sparkle / "Sparkle.framework" / "Versions" / "B").mkdir(parents=True)
     repo = tmp_path / "repo"
-    repo.mkdir()
+    (repo / "ui" / "dist" / "assets").mkdir(parents=True)
+    (repo / "ui" / "dist" / "sidebar.html").write_text("<!doctype html>")
+    (repo / "ui" / "dist" / "assets" / "a.js").write_text("1")
     paths = type(paths)(repo=repo, chromium=paths.chromium, src=paths.src, depot_tools=paths.depot_tools)
     return paths, sparkle
 
@@ -33,12 +38,19 @@ def test_package_release_runs_steps_in_order(staged_build, recorder):
     paths, sparkle = staged_build
     dmg = package(paths, INFO, "release", CREDS, run=recorder, sparkle_root=sparkle, public_key="PUB")
     assert dmg == paths.repo / "dist" / "Perch-0.1.0.dmg"
-    assert _names(recorder.calls) == ["codesign"] * 5 + [
+    assert _names(recorder.calls)[:2] == ["bun", "bun"]
+    assert _names(recorder.calls)[2:] == ["codesign"] * 6 + [
         "python3", "ditto", "hdiutil", "codesign", "xcrun notarytool submit", "xcrun stapler staple",
         "codesign", "spctl", "xcrun stapler validate",
     ]
     dist = paths.repo / "dist"
-    assert recorder.calls[5] == [
+    framework = dist / "stage" / "Perch.app" / "Contents" / "Frameworks" / "Perch Framework.framework" / "Versions" / "158.0.8127.18"
+    perchd = framework / "Helpers" / "perchd"
+    assert recorder.calls[1][:3] == ["bun", "build", "--compile"] and recorder.calls[1][-2:] == ["--outfile", str(perchd)]
+    assert recorder.calls[7][:2] == ["codesign", "--force"] and recorder.calls[7][-1] == str(perchd)
+    assert "--entitlements" in recorder.calls[7] and "runtime" in recorder.calls[7]
+    assert (framework / "Resources" / "perch_ui" / "assets" / "a.js").read_text() == "1"
+    assert recorder.calls[8] == [
         "python3", str(dist / "stage" / "Perch Packaging" / "sign_chrome.py"),
         "--input", str(dist / "stage"), "--output", str(dist / "signed"),
         "--identity", CREDS.identity, "--disable-packaging", "--notarize", "none",
@@ -77,8 +89,8 @@ def test_adhoc_skips_notarize_and_sparkle(staged_build, recorder):
     paths, sparkle = staged_build
     package(paths, INFO, "adhoc", None, run=recorder, sparkle_root=sparkle, public_key="")
     names = _names(recorder.calls)
-    assert names == ["codesign", "ditto", "hdiutil"]
-    assert recorder.calls[0][-2:] == ["-", str(paths.repo / "dist" / "stage" / "Perch.app")]
+    assert names == ["bun", "bun", "codesign", "ditto", "hdiutil"]
+    assert recorder.calls[2][-2:] == ["-", str(paths.repo / "dist" / "stage" / "Perch.app")]
     assert not (paths.repo / "dist" / "stage" / "Perch.app" / "Contents" / "Frameworks" / "Sparkle.framework").exists()
 
 

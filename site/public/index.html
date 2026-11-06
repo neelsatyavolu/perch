@@ -33,6 +33,7 @@
     </a>
     <nav aria-label="Site">
       <ul class="links">
+        <li><a href="#speed">Speed</a></li>
         <li><a href="#agent">Features</a></li>
         <li><a href="#privacy">Privacy</a></li>
         <li><a href="https://github.com/neelsatyavolu/perch">GitHub</a></li>
@@ -60,6 +61,31 @@
       </picture>
       <figcaption>Screenshots show Perch's own pages running on sample data. The window frame is drawn from Perch's design while the Chromium shell is built, and Mailroom is a stand-in website.</figcaption>
     </figure>
+  </section>
+
+  <section class="band" id="speed" aria-labelledby="speed-title">
+    <div class="wrap split">
+      <div class="copy">
+        <h2 id="speed-title">Speed comes first</h2>
+        <p>Perch keeps Chromium's engine as it is and adds as little as it can on top. Each release is measured against Chrome built from the same Chromium version, and 1.0 ships only when it clears this bar.</p>
+        <div class="targets">
+          <p class="t-head">The bar for 1.0, measured against Chrome</p>
+          <dl>
+            <div><dt>Speedometer 3 and JetStream</dt><dd>within 2%</dd></div>
+            <div><dt>Cold start to a usable window</dt><dd>no slower</dd></div>
+            <div><dt>Perch's own additions, idle</dt><dd>under 60 MB</dd></div>
+            <div><dt>Memory with 100 tabs open</dt><dd>half or less</dd></div>
+          </dl>
+          <p class="t-foot">Results are published here with the first release.</p>
+        </div>
+      </div>
+      <dl class="rows rows-side">
+        <div><dt>Native tabs and toolbar</dt><dd>The tab strip, toolbar and menus stay Chromium's own native code instead of being rebuilt as web pages.</dd></div>
+        <div><dt>Nothing extra running</dt><dd>No Google background services. The agent runs in its own small process that sits idle until you ask it for something.</dd></div>
+        <div><dt>Less for pages to load</dt><dd>The built-in blocker stops ads and trackers before they download, so pages fetch and run less.</dd></div>
+        <div><dt>An agent that reads the page</dt><dd>The agent works from the page's structure, its text, buttons and fields, and drives the browser over a private connection instead of clicking around a screenshot.</dd></div>
+      </dl>
+    </div>
   </section>
 
   <section class="band" id="agent" aria-labelledby="agent-title">

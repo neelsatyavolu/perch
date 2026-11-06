@@ -80,7 +80,6 @@ async function sandbox(conn: CdpConnection): Promise<Tab> {
       const tab = await Tab.attach(conn, targetId);
       await tab.send("Network.enable");
       await tab.send("Network.setBlockedURLs", { urls: ["*"] });
-      await tab.evaluate(LOCK_DOWN);
       return tab;
     })();
     sandboxes.set(conn, pending);
@@ -89,6 +88,28 @@ async function sandbox(conn: CdpConnection): Promise<Tab> {
   if (!tab.closed) return tab;
   sandboxes.delete(conn);
   return sandbox(conn);
+}
+
+const worldsMade = new WeakMap<Tab, number>();
+/** A world's name picks it: the same name gives back the same world, so each one gets its own. */
+let worldSerial = 0;
+/** Worlds stay until the scratch tab navigates; it is reset after this many. */
+const WORLDS_PER_RESET = 100;
+
+/**
+ * Every REPL call runs in a world of its own on the scratch tab: code from one call cannot leave
+ * anything behind (a replaced helper or prototype) that changes how the next copy is cleaned.
+ */
+async function freshWorld(scratch: Tab): Promise<number> {
+  const made = (worldsMade.get(scratch) ?? 0) + 1;
+  if (made > WORLDS_PER_RESET) {
+    await scratch.send("Page.navigate", { url: "about:blank" });
+    worldsMade.set(scratch, 1);
+  } else worldsMade.set(scratch, made);
+  const { frameTree } = await scratch.send<{ frameTree: { frame: { id: string } } }>("Page.getFrameTree");
+  const { executionContextId } = await scratch.send<{ executionContextId: number }>("Page.createIsolatedWorld", { frameId: frameTree.frame.id, worldName: `perch-repl-${++worldSerial}` });
+  await scratch.send("Runtime.evaluate", { expression: LOCK_DOWN, contextId: executionContextId });
+  return executionContextId;
 }
 
 /** A field's identity: the copy's fields are matched to the live page's by position and this. */
@@ -187,9 +208,10 @@ export async function repl(tab: Tab, code: string): Promise<ReplResult> {
     const location = new URL(${JSON.stringify(url)});
     return await (async () => { ${body}\n })();
   })()`;
+  const contextId = await freshWorld(scratch);
   const res = await scratch.send<{ result: { value?: unknown }; exceptionDetails?: { text: string; exception?: { description?: string } } }>(
     "Runtime.evaluate",
-    { expression, returnByValue: true, awaitPromise: true, timeout: 30_000 },
+    { expression, contextId, returnByValue: true, awaitPromise: true, timeout: 30_000 },
   );
   if (res.exceptionDetails) {
     const description = res.exceptionDetails.exception?.description ?? res.exceptionDetails.text;

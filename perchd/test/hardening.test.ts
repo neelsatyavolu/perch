@@ -185,6 +185,15 @@ test("secret text areas and selects are hidden, and reading fields runs none of 
   await tab.close();
 });
 
+test("REPL code cannot change how the next REPL call is cleaned", async () => {
+  const tab = await env.browser.newTab(env.site.url("/form.html"));
+  await tab.evaluate("document.body.insertAdjacentHTML('beforeend', '<select id=\"saved\" autocomplete=\"cc-number\"><option>4111 1111 1111 1111</option></select>'); document.getElementById('password').setAttribute('value', 'hunter2-secret'); true");
+  await repl(tab, "window.__perchClear = () => {}; window.__perchStrip = () => {}; Element.prototype.querySelectorAll = () => []; Document.prototype.querySelectorAll = () => []; return null");
+  const seen = await repl(tab, "return document.getElementById('saved').textContent + '|' + document.getElementById('password').outerHTML");
+  expect(JSON.stringify(seen)).not.toMatch(/4111|hunter2/);
+  await tab.close();
+});
+
 test("Meta+A selects all and punctuation types the right character", async () => {
   const tab = await env.browser.newTab(env.site.url("/mail.html"));
   let snap = await snapshot(tab);

@@ -108,7 +108,9 @@ export async function search(tab: Tab, query: string, opts: { engines?: Engine[]
       blocked.push(`${engine.name} did not load`);
       continue;
     }
-    if (looksBlocked(found.title, found.text) || (found.results.length === 0 && found.length < 300)) {
+    // A page that lists several results is a page of results, whatever words its snippets use.
+    const listsResults = found.results.length >= 3;
+    if (!listsResults && (looksBlocked(found.title, found.text) || (found.results.length === 0 && found.length < 300))) {
       opts.skips.set(engine.name, now());
       blocked.push(`${engine.name} showed a bot check`);
       continue;

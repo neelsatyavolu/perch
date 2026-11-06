@@ -66,3 +66,12 @@ test("search is a tool the agent can call, and it reads without asking", async (
   expect(classify({ id: "s", name: "search", args: { query: "ferns" } })).toBe("read");
   await ctx.close();
 }, 30_000);
+
+test("a page of results about bot checks is not taken for one", async () => {
+  const tab = await env.browser.newTab();
+  const skips = new Map<string, number>();
+  const text = await search(tab, "captcha solver", { engines: [engine("Topical", "/engine/captcha-results"), engine("Good", "/engine/results")], skips });
+  expect(text).toContain("(Topical):");
+  expect(skips.has("Topical")).toBe(false);
+  await tab.close();
+}, 30_000);

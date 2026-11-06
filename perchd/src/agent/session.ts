@@ -25,7 +25,7 @@ export type Prepared =
   | { kind: "answer"; result: ToolResult }
   | { kind: "run"; call: ToolCall; target?: Target; site: string; decision: "run" | "ask"; request: ApprovalRequest; entry: Omit<import("./audit").AuditEntry, "approved" | "result"> };
 
-const READS = new Set(["search", "navigate", "snapshot", "screenshot", "scroll", "hover", "wait_for", "back", "tabs", "open_tab", "switch_tab", "done", "repl"]);
+const READS = new Set(["navigate", "snapshot", "screenshot", "scroll", "hover", "wait_for", "back", "tabs", "open_tab", "switch_tab", "done", "repl"]);
 
 /** Checks and classifies a call. Calls that cannot run, or are blocked, are answered here. */
 export async function prepareCall(ctx: ToolContext, opts: CallPolicy, call: ToolCall): Promise<Prepared> {
@@ -118,7 +118,6 @@ export function label(call: ToolCall, target: Target | undefined, site: string):
       } catch {
         return `Opened ${call.args.url}`;
       }
-    case "search": return `Searched for "${call.args.query}"`;
     case "click": return `Clicked ${what}`;
     case "type": return `Typed into ${what}`;
     case "select": return `Chose "${call.args.value}" in ${what}`;

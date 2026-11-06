@@ -192,7 +192,7 @@ test("cancelling stops the rest of the turn's tool calls", async () => {
 test("the system prompt tells every model to browse, handle dialogs and finish the task", async () => {
   const { systemPrompt } = await import("../src/agent/prompt");
   const prompt = systemPrompt({ mode: "skip", now: new Date("2026-11-05T09:00:00Z") });
-  for (const phrase of ["never fill gaps from memory", "Never try to solve a CAPTCHA", "cookie", "use search", "YYYY-MM-DD", "every part of the task", "list what the task requires", "detail pages", "the site the task names", "write_file", "pick the matching suggestion", "every filter the task asks for"]) expect(prompt).toContain(phrase);
+  for (const phrase of ["never fill gaps from memory", "Never try to solve a CAPTCHA", "cookie", "search.brave.com", "YYYY-MM-DD", "every part of the task", "list what the task requires", "detail pages", "the site the task names", "write_file", "duckduckgo", "pick the matching suggestion", "every filter the task asks for"]) expect(prompt).toContain(phrase);
 });
 
 test("outside agents are told to reply, since they have no done tool", async () => {

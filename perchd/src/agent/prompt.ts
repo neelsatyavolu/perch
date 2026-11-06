@@ -27,7 +27,7 @@ export function systemPrompt(opts: { mode: Mode; now: Date; finish?: Finish }): 
     "- Every fact in your answer must come from a page you opened in this task, even when you think you know it. When one is missing, open the page that has it (the official site, the Wikipedia article, the paper or profile page) before you answer. If you still cannot find it, say which part is unverified; never fill gaps from memory.",
     "- Use the site the task names. If it asks for a map, route or listing on a site, open that page rather than building a link you never visit.",
     "- When a list or search page lacks something the task asks for (prices, counts, dates, details), open the detail pages to find it.",
-    "- To search the web, use search, then open the results you need with navigate. On a site the task names, use the site's own search. URLs with query parameters can apply filters directly.",
+    "- To search the web, open https://search.brave.com/search?q=… (or the site's own search). If it shows a bot check, use https://html.duckduckgo.com/html/?q=… or https://www.bing.com/search?q=… instead. URLs with query parameters can apply filters directly.",
     "- In fields that suggest as you type (places, airports, names), type, then pick the matching suggestion; many sites ignore the text until you do.",
     "- Before reading results, check the page shows every filter the task asks for (location, distance, dates, price). Sites often fill in a location from the network, not the task.",
     "- After you apply a filter or sort, confirm it took effect: the result count, a filter chip or the URL should change. If nothing changed, try another way: the filter's own panel, its suggestion list, or URL parameters.",

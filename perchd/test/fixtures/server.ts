@@ -9,17 +9,6 @@ export function startFixtures(): { url: (path: string) => string; stop: () => vo
     hostname: "127.0.0.1",
     async fetch(req) {
       const { pathname } = new URL(req.url);
-      // Stand-ins for search engines: a bot check, a page with no results, and a page of results.
-      if (pathname === "/engine/blocked") return new Response("<title>Just a moment...</title><p>Verify you are human by completing the action below.</p>", { headers: { "content-type": "text/html" } });
-      if (pathname === "/engine/empty") return new Response(`<title>Search</title><p>No results found for your search. ${"Try different keywords or check your spelling. ".repeat(10)}</p>`, { headers: { "content-type": "text/html" } });
-      if (pathname === "/engine/offtopic") return new Response(`<title>Engine</title>${[1, 2].map((n) => `<h2><a href="https://example.net/letter-${n}">The letter B, lesson ${n}</a></h2><p>Learn the alphabet song.</p>`).join("")}`, { headers: { "content-type": "text/html" } });
-      // Results about bot checks: the words of a challenge page, but a page of real results.
-      if (pathname === "/engine/captcha-results") return new Response(`<title>captcha solver - Engine</title>${[1, 2, 3].map((n) => `<h2><a href="https://example.org/captcha-${n}">How a captcha works, part ${n}</a></h2><p>Verify you are human: why sites ask, and access denied pages.</p>`).join("")}`, { headers: { "content-type": "text/html" } });
-      if (pathname === "/engine/results") {
-        const q = new URL(req.url).searchParams.get("q") ?? "";
-        const item = (n: number) => `<div class="result"><h2><a href="/l/?uddg=${encodeURIComponent(`https://example.org/page-${n}`)}">Result number ${n} about ${q}</a></h2><a href="/l/?uddg=${encodeURIComponent(`https://example.org/page-${n}`)}">example.org/page-${n}</a><p>Snippet ${n}: a short summary of page ${n} that mentions ${q}.</p></div>`;
-        return new Response(`<title>${q} at Engine</title><a href="/settings">Settings and privacy</a>${[1, 2, 3].map(item).join("")}`, { headers: { "content-type": "text/html" } });
-      }
       if (pathname === "/redirect") return Response.redirect("/mail.html", 302);
       if (pathname === "/slow-page") return Bun.sleep(800).then(() => new Response(Bun.file(join(PAGES, "shop.html")), { headers: { "content-type": "text/html; charset=utf-8" } }));
       // Parsed at once, but its load event never fires: an image that never arrives.

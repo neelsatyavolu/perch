@@ -10,7 +10,7 @@ const call = (name: string, args: Record<string, unknown> = {}) => ({ id: "c", n
 
 test("every tool spec is a strict JSON Schema object", () => {
   const names = TOOL_SPECS.map((s) => s.name);
-  expect(names).toEqual(["search", "navigate", "snapshot", "click", "type", "select", "press", "scroll", "drag", "hover", "upload", "write_file", "wait_for", "back", "screenshot", "click_at", "repl", "tabs", "open_tab", "switch_tab", "done"]);
+  expect(names).toEqual(["navigate", "snapshot", "click", "type", "select", "press", "scroll", "drag", "hover", "upload", "write_file", "wait_for", "back", "screenshot", "click_at", "repl", "tabs", "open_tab", "switch_tab", "done"]);
   for (const spec of TOOL_SPECS) {
     const p = spec.parameters as { type: string; properties: Record<string, unknown>; required?: string[]; additionalProperties: boolean };
     expect(p.type).toBe("object");

@@ -14,11 +14,13 @@
 #include "chrome/browser/browsing_data/chrome_browsing_data_remover_constants.h"
 #include "chrome/browser/perch/extensions/perch_component_extensions.h"
 #include "chrome/browser/perch/perch_pref_names.h"
+#include "chrome/browser/perch/privacy/allowed_connections.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/pref_names.h"
 #include "components/content_settings/core/browser/cookie_settings.h"
 #include "components/content_settings/core/common/pref_names.h"
 #include "components/prefs/pref_service.h"
+#include "components/privacy_sandbox/privacy_sandbox_prefs.h"
 #include "content/public/browser/browsing_data_filter_builder.h"
 #include "content/public/browser/browsing_data_remover.h"
 #include "extensions/browser/api/storage/storage_area_namespace.h"
@@ -149,7 +151,7 @@ base::DictValue Snapshot(Profile* profile,
   if (templates.empty()) {
     provider = "cloudflare";
   }
-  result.Set("dnsOverHttps", mode == "secure");
+  result.Set("dnsOverHttps", mode != "off");
   result.Set("dohProvider", provider);
   result.Set("dohCustomUrl", provider == "custom" ? templates : std::string());
 
@@ -160,8 +162,7 @@ base::DictValue Snapshot(Profile* profile,
                          content_settings::CookieControlsMode::kBlockThirdParty)
                  ? "block"
                  : "allow");
-  // The allowed-connections list (spec 5.1) arrives with its switches.
-  result.Set("backgroundConnections", base::ListValue());
+  result.Set("backgroundConnections", ListConnections(*local));
   return result;
 }
 
@@ -214,6 +215,13 @@ void ApplyPrefs(Profile* profile, const base::DictValue& patch) {
   }
   if (std::optional<bool> on = patch.FindBool("fingerprinting")) {
     prefs->SetBoolean(prefs::kFingerprinting, *on);
+    // On turns the ad-targeting APIs off. Off leaves them as they are; they
+    // stay off unless the user turns them on in chrome://settings.
+    if (*on) {
+      prefs->SetBoolean(::prefs::kPrivacySandboxM1TopicsEnabled, false);
+      prefs->SetBoolean(::prefs::kPrivacySandboxM1FledgeEnabled, false);
+      prefs->SetBoolean(::prefs::kPrivacySandboxM1AdMeasurementEnabled, false);
+    }
   }
   if (const std::string* cookies = patch.FindString("thirdPartyCookies")) {
     prefs->SetInteger(
@@ -235,7 +243,9 @@ void ApplyPrefs(Profile* profile, const base::DictValue& patch) {
       local->SetString(::prefs::kDnsOverHttpsTemplates,
                        std::string(*TemplateFor("cloudflare")));
     }
-    local->SetString(::prefs::kDnsOverHttpsMode, *on ? "secure" : "automatic");
+    // Automatic mode uses the resolver when it answers and falls back to the
+    // system's otherwise (spec 5.9).
+    local->SetString(::prefs::kDnsOverHttpsMode, *on ? "automatic" : "off");
   }
 }
 
@@ -300,6 +310,17 @@ void SetPrivacy(Profile* profile,
                 base::BindOnce(&Reply, profile, std::move(callback)));
           },
           profile->GetWeakPtr(), std::move(switches), std::move(callback)));
+}
+
+void SetBackgroundConnection(Profile* profile,
+                             const std::string& id,
+                             bool enabled,
+                             PrivacyCallback callback) {
+  if (!SetConnectionAllowed(*g_browser_process->local_state(), id, enabled)) {
+    std::move(callback).Run(base::unexpected("Unknown connection"));
+    return;
+  }
+  GetPrivacy(profile, std::move(callback));
 }
 
 void RemoveBlockerException(Profile* profile,

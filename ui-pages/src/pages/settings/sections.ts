@@ -41,7 +41,7 @@ export const SEARCH_INDEX: readonly SearchEntry[] = [
   { section: "privacy", anchor: "tracking-params", title: "Remove tracking parameters", words: "utm fbclid gclid links" },
   { section: "privacy", anchor: "https-only", title: "HTTPS-only", words: "secure connections" },
   { section: "privacy", anchor: "doh", title: "Encrypted DNS", words: "dns over https doh cloudflare quad9 mullvad" },
-  { section: "privacy", anchor: "fingerprinting", title: "Fingerprinting protection", words: "user agent privacy budget" },
+  { section: "privacy", anchor: "fingerprinting", title: "Block ad-targeting APIs", words: "fingerprinting topics protected audience fledge ad measurement privacy sandbox" },
   { section: "privacy", anchor: "third-party-cookies", title: "Block third-party cookies", words: "cookies tracking" },
   { section: "privacy", anchor: "background-connections", title: "Background connections", words: "network updates safe browsing widevine" },
   { section: "privacy", anchor: "site-data", title: "Site data", words: "cookies storage forget clear" },

@@ -4,12 +4,23 @@
   "version": "0.1.0",
   "description": "Blocks ads and trackers, rejects cookie banners, removes tracking parameters, and adds reader view, video tools, link preview, screenshots and one-time codes.",
   "minimum_chrome_version": "128",
-  "icons": { "16": "icons/16.png", "32": "icons/32.png", "48": "icons/48.png", "128": "icons/128.png" },
-  "background": { "service_worker": "background/index.js", "type": "module" },
+  "icons": {
+    "16": "icons/16.png",
+    "32": "icons/32.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "background": {
+    "service_worker": "background/index.js",
+    "type": "module"
+  },
   "action": {
     "default_title": "Site panel",
     "default_popup": "popup.html",
-    "default_icon": { "16": "icons/16.png", "32": "icons/32.png" }
+    "default_icon": {
+      "16": "icons/16.png",
+      "32": "icons/32.png"
+    }
   },
   "options_page": "options.html",
   "permissions": [
@@ -24,29 +35,109 @@
     "offscreen",
     "clipboardWrite"
   ],
-  "host_permissions": ["<all_urls>"],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "declarative_net_request": {
     "rule_resources": [
-      { "id": "easylist", "enabled": true, "path": "rules/easylist.json" },
-      { "id": "easyprivacy", "enabled": true, "path": "rules/easyprivacy.json" },
-      { "id": "params", "enabled": true, "path": "rules/params.json" }
+      {
+        "id": "easylist",
+        "enabled": true,
+        "path": "rules/easylist.json"
+      },
+      {
+        "id": "easyprivacy",
+        "enabled": true,
+        "path": "rules/easyprivacy.json"
+      },
+      {
+        "id": "params",
+        "enabled": true,
+        "path": "rules/params.json"
+      }
     ]
   },
   "commands": {
     "screenshot": {
-      "suggested_key": { "default": "Ctrl+Shift+2", "mac": "Command+Shift+2" },
+      "suggested_key": {
+        "default": "Ctrl+Shift+2",
+        "mac": "Command+Shift+2"
+      },
       "description": "Take a full-page screenshot"
     },
     "reader": {
-      "suggested_key": { "default": "Alt+Shift+R", "mac": "MacCtrl+Shift+R" },
+      "suggested_key": {
+        "default": "Alt+Shift+R",
+        "mac": "MacCtrl+Shift+R"
+      },
       "description": "Open or close reader view"
     },
     "pip": {
-      "suggested_key": { "default": "Alt+Shift+P", "mac": "MacCtrl+Shift+P" },
+      "suggested_key": {
+        "default": "Alt+Shift+P",
+        "mac": "MacCtrl+Shift+P"
+      },
       "description": "Picture in picture for the playing video"
     }
   },
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'"
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://netflix.com/*",
+        "https://*.netflix.com/*",
+        "https://hulu.com/*",
+        "https://*.hulu.com/*",
+        "https://disneyplus.com/*",
+        "https://*.disneyplus.com/*",
+        "https://primevideo.com/*",
+        "https://*.primevideo.com/*",
+        "https://amazon.com/*",
+        "https://*.amazon.com/*",
+        "https://peacocktv.com/*",
+        "https://*.peacocktv.com/*",
+        "https://max.com/*",
+        "https://*.max.com/*",
+        "https://hbomax.com/*",
+        "https://*.hbomax.com/*",
+        "https://f1tv.formula1.com/*",
+        "https://*.f1tv.formula1.com/*"
+      ],
+      "js": [
+        "content/drm-hook.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true,
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://netflix.com/*",
+        "https://*.netflix.com/*",
+        "https://hulu.com/*",
+        "https://*.hulu.com/*",
+        "https://disneyplus.com/*",
+        "https://*.disneyplus.com/*",
+        "https://primevideo.com/*",
+        "https://*.primevideo.com/*",
+        "https://amazon.com/*",
+        "https://*.amazon.com/*",
+        "https://peacocktv.com/*",
+        "https://*.peacocktv.com/*",
+        "https://max.com/*",
+        "https://*.max.com/*",
+        "https://hbomax.com/*",
+        "https://*.hbomax.com/*",
+        "https://f1tv.formula1.com/*",
+        "https://*.f1tv.formula1.com/*"
+      ],
+      "js": [
+        "content/drm-notice.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ]
 }

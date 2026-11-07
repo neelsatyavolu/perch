@@ -1,0 +1,23 @@
+# Perch: Brave is the default search engine in every region. Hooks GetPrepopulatedFallbackSearch.
+diff --git a/components/search_engines/template_url_prepopulate_data.cc b/components/search_engines/template_url_prepopulate_data.cc
+index a25ad76e9c..d7b8dd8c6b 100644
+--- a/components/search_engines/template_url_prepopulate_data.cc
++++ b/components/search_engines/template_url_prepopulate_data.cc
+@@ -358,9 +358,14 @@ std::unique_ptr<TemplateURLData> GetPrepopulatedFallbackSearch(
+     PrefService& prefs,
+     const std::vector<raw_ptr<const PrepopulatedEngine>>&
+         regional_prepopulated_engines) {
+-  return FindPrepopulatedEngineInternal(prefs, regional_prepopulated_engines,
+-                                        google.id,
+-                                        /*use_first_as_fallback=*/true);
++  // Perch: Brave is the default search engine in every region, also where
++  // it isn't in the regional list (spec 5.4).
++  if (std::unique_ptr<TemplateURLData> engine = FindPrepopulatedEngineInternal(
++          prefs, regional_prepopulated_engines, brave.id,
++          /*use_first_as_fallback=*/false)) {
++    return engine;
++  }
++  return TemplateURLDataFromPrepopulatedEngine(brave);
+ }
+ 
+ }  // namespace TemplateURLPrepopulateData

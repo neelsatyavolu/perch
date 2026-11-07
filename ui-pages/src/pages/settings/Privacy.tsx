@@ -17,7 +17,7 @@ const TOGGLES: readonly Toggle[] = [
   { id: "cookie-banners", key: "cookieBanners", title: "Reject cookie banners", detail: "Clicks reject for you where the site offers it" },
   { id: "tracking-params", key: "trackingParams", title: "Remove tracking parameters", detail: "Strips utm_, fbclid, gclid and similar from links you open and copy" },
   { id: "https-only", key: "httpsOnly", title: "HTTPS-only", detail: "Asks before opening a site that only offers an unencrypted connection" },
-  { id: "fingerprinting", key: "fingerprinting", title: "Fingerprinting protection", detail: "Limits what sites can learn about this Mac and sends a reduced user agent" },
+  { id: "fingerprinting", key: "fingerprinting", title: "Block ad-targeting APIs", detail: "Turns off Topics, Protected Audience and ad measurement, which let sites target ads without cookies" },
 ];
 
 function SiteDataCard() {

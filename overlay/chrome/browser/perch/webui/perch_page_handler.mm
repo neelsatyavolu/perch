@@ -176,6 +176,14 @@ void PerchPageHandler::Dispatch(const std::string& method,
       return;
     }
     SetPrivacy(profile(), arg0->GetDict(), std::move(privacy_reply));
+  } else if (method == "setBackgroundConnection") {
+    const std::string* connection = arg0 ? arg0->GetIfString() : nullptr;
+    if (!connection || args.size() < 2 || !args[1].is_bool()) {
+      Reject(std::move(id), "invalid", "Send the connection and on or off");
+      return;
+    }
+    SetBackgroundConnection(profile(), *connection, args[1].GetBool(),
+                            std::move(privacy_reply));
   } else if (method == "removeBlockerException") {
     if (!arg0 || !arg0->is_string()) {
       Reject(std::move(id), "invalid", "Send the site's host");

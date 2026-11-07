@@ -23,6 +23,7 @@ LOOPBACK = {"127.0.0.1", "localhost", "::1", "[::1]"}
 # Certificate revocation and issuer fetches: part of verifying a TLS connection to some other host,
 # and named by that host's certificate, so they are reported but never a violation.
 CERT_FETCH = re.compile(r"(\.crl|\.crt|\.cer|\.p7c|/ocsp)(\b|$)", re.IGNORECASE)
+CERT_HOST = re.compile(r"^(crl|ocsp)\d*\.")
 CERT_CHECKS = "certificate checks"
 _HOST_FIELD = re.compile(r"^(?:[a-z]+://)?(\[[^\]]+\]|[^:/]+)")
 
@@ -95,7 +96,8 @@ def cert_check_hosts(path: Path) -> set[str]:
     for event in log.get("events", []):
         url = (event.get("params") or {}).get("url")
         if isinstance(url, str) and (host := _host_of(url)):
-            (cert if CERT_FETCH.search(urlsplit(url).path) else other).add(host)
+            is_cert = CERT_FETCH.search(urlsplit(url).path) or CERT_HOST.match(host)
+            (cert if is_cert else other).add(host)
     return cert - other
 
 

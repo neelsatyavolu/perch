@@ -1,0 +1,132 @@
+# Perch: each background connection follows its switch in Settings → Privacy (spec 5.1). Hooks ExtensionUpdater::Start/NextCheck, ChromeConfigurator::InitialDelay/NextCheckDelay/UpdateUrl/PingUrl and GetSBProtocolConfig.
+diff --git a/chrome/browser/component_updater/chrome_component_updater_configurator.cc b/chrome/browser/component_updater/chrome_component_updater_configurator.cc
+index da79189b04..cf41efc2b8 100644
+--- a/chrome/browser/component_updater/chrome_component_updater_configurator.cc
++++ b/chrome/browser/component_updater/chrome_component_updater_configurator.cc
+@@ -2,6 +2,7 @@
+ // Use of this source code is governed by a BSD-style license that can be
+ // found in the LICENSE file.
+ 
++#include "chrome/browser/perch/privacy/allowed_connections.h"
+ #include "chrome/browser/component_updater/chrome_component_updater_configurator.h"
+ 
+ #include <memory>
+@@ -142,11 +143,24 @@ ChromeConfigurator::ChromeConfigurator(const base::CommandLine* cmdline,
+ 
+ base::TimeDelta ChromeConfigurator::InitialDelay() const {
+   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
++  // Perch: with Settings → Privacy → Security and media components off, no
++  // check is scheduled; netaudit starts the first one within seconds.
++  if (!perch::IsConnectionAllowed(perch::Connection::kComponents)) {
++    return base::Days(365);
++  }
++  if (perch::FastTimersForNetaudit()) {
++    return base::Seconds(10);
++  }
+   return configurator_impl_.InitialDelay();
+ }
+ 
+ base::TimeDelta ChromeConfigurator::NextCheckDelay() const {
+   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
++  // Perch: with the components switch off, the next check waits until the
++  // switch is on again and Perch restarts.
++  if (!perch::IsConnectionAllowed(perch::Connection::kComponents)) {
++    return base::Days(365);
++  }
+   return configurator_impl_.NextCheckDelay();
+ }
+ 
+@@ -162,11 +176,19 @@ base::TimeDelta ChromeConfigurator::UpdateDelay() const {
+ 
+ std::vector<GURL> ChromeConfigurator::UpdateUrl() const {
+   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
++  // Perch: with the components switch off there is no server to ask, so no
++  // check runs, scheduled or on demand.
++  if (!perch::IsConnectionAllowed(perch::Connection::kComponents)) {
++    return {};
++  }
+   return configurator_impl_.UpdateUrl();
+ }
+ 
+ std::vector<GURL> ChromeConfigurator::PingUrl() const {
+   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
++  if (!perch::IsConnectionAllowed(perch::Connection::kComponents)) {
++    return {};
++  }
+   return configurator_impl_.PingUrl();
+ }
+ 
+diff --git a/chrome/browser/extensions/updater/extension_updater.cc b/chrome/browser/extensions/updater/extension_updater.cc
+index fd6684c925..fc3cb56174 100644
+--- a/chrome/browser/extensions/updater/extension_updater.cc
++++ b/chrome/browser/extensions/updater/extension_updater.cc
+@@ -29,6 +29,7 @@
+ #include "chrome/browser/extensions/forced_extensions/install_stage_tracker_factory.h"
+ #include "chrome/browser/extensions/updater/extension_updater_factory.h"
+ #include "chrome/browser/lifetime/termination_notification.h"
++#include "chrome/browser/perch/privacy/allowed_connections.h"
+ #include "chrome/browser/profiles/keep_alive/profile_keep_alive_types.h"
+ #include "chrome/browser/profiles/keep_alive/scoped_profile_keep_alive.h"
+ #include "chrome/browser/profiles/profile.h"
+@@ -232,7 +233,10 @@ void ExtensionUpdater::Start() {
+   alive_ = true;
+   // Check soon, and set up the first delayed check.
+   if (!g_skip_scheduled_checks_for_tests) {
+-    CheckSoon();
++    // Perch: scheduled checks follow Settings → Privacy → Extension updates.
++    if (perch::IsConnectionAllowed(perch::Connection::kExtensionUpdates)) {
++      CheckSoon();
++    }
+     ScheduleNextCheck();
+   }
+ }
+@@ -273,7 +277,10 @@ void ExtensionUpdater::NextCheck() {
+   if (!alive_) {
+     return;
+   }
+-  CheckNow(CheckParams());
++  // Perch: scheduled checks follow Settings → Privacy → Extension updates.
++  if (perch::IsConnectionAllowed(perch::Connection::kExtensionUpdates)) {
++    CheckNow(CheckParams());
++  }
+   ScheduleNextCheck();
+ }
+ 
+diff --git a/chrome/browser/prefs/BUILD.gn b/chrome/browser/prefs/BUILD.gn
+index b698c1fefc..86b7a69261 100644
+--- a/chrome/browser/prefs/BUILD.gn
++++ b/chrome/browser/prefs/BUILD.gn
+@@ -56,6 +56,8 @@ source_set("impl") {
+     "//chrome/browser/perch/perch_pref_names.h",
+     "//chrome/browser/perch/perch_prefs.cc",
+     "//chrome/browser/perch/perch_prefs.h",
++    "//chrome/browser/perch/privacy/allowed_connections.cc",
++    "//chrome/browser/perch/privacy/allowed_connections.h",
+     "chrome_pref_model_associator_client.cc",
+     "chrome_pref_service_factory.cc",
+     "incognito_mode_prefs.cc",
+diff --git a/chrome/browser/safe_browsing/chrome_sb_protocol_config_provider.cc b/chrome/browser/safe_browsing/chrome_sb_protocol_config_provider.cc
+index 85d8986083..2892cb5f11 100644
+--- a/chrome/browser/safe_browsing/chrome_sb_protocol_config_provider.cc
++++ b/chrome/browser/safe_browsing/chrome_sb_protocol_config_provider.cc
+@@ -2,6 +2,7 @@
+ // Use of this source code is governed by a BSD-style license that can be
+ // found in the LICENSE file.
+ 
++#include "chrome/browser/perch/privacy/allowed_connections.h"
+ #include "chrome/browser/safe_browsing/chrome_sb_protocol_config_provider.h"
+ 
+ #include <string>
+@@ -45,7 +46,11 @@ SBProtocolConfig GetSBProtocolConfig() {
+   base::CommandLine* cmdline = base::CommandLine::ForCurrentProcess();
+   return ::safe_browsing::GetSBProtocolConfig(
+       GetProtocolConfigClientName(),
+-      cmdline->HasSwitch(::switches::kDisableBackgroundNetworking));
++      cmdline->HasSwitch(::switches::kDisableBackgroundNetworking) ||
++          // Perch: list updates follow Settings → Privacy → Safe Browsing
++          // lists; the lists already on disk stay in use.
++          !perch::IsConnectionAllowed(
++              perch::Connection::kSafeBrowsingLists));
+ }
+ 
+ }  // namespace safe_browsing

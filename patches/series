@@ -14,4 +14,9 @@ perch/shell/defaults-hooks.patch
 perch/shell/component-extensions.patch
 perch/shell/perch-scheme.patch
 perch/shell/perch-pages.patch
+perch/shell/service-pref-defaults.patch
+perch/shell/privacy-components.patch
+perch/shell/allowed-connections.patch
+perch/shell/search-default.patch
+perch/shell/tab-for-google.patch
 perch/build/thinlto-jobs.patch

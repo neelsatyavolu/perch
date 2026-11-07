@@ -5,14 +5,20 @@
 #import <AppKit/AppKit.h>
 
 #include "base/apple/bundle_locations.h"
+#include "chrome/browser/perch/privacy/allowed_connections.h"
 
-// The two Sparkle methods Perch calls. Sparkle is loaded at runtime, so
-// nothing links against it and builds without it still work.
+// The Sparkle methods Perch calls. Sparkle is loaded at runtime, so nothing
+// links against it and builds without it still work.
+@protocol PerchSparkleUpdater <NSObject>
+@property(nonatomic) BOOL automaticallyChecksForUpdates;
+@end
+
 @protocol PerchSparkleUpdaterController <NSObject>
 - (instancetype)initWithStartingUpdater:(BOOL)startUpdater
                         updaterDelegate:(id)updaterDelegate
                      userDriverDelegate:(id)userDriverDelegate;
 - (void)checkForUpdates:(id)sender;
+@property(nonatomic, readonly) id<PerchSparkleUpdater> updater;
 @end
 
 namespace perch {
@@ -59,6 +65,10 @@ void StartUpdater() {
           initWithStartingUpdater:YES
                   updaterDelegate:nil
                userDriverDelegate:nil];
+  // Scheduled checks follow Settings → Privacy → Perch updates; "Check for
+  // Updates…" always works.
+  g_updater_controller.updater.automaticallyChecksForUpdates =
+      IsConnectionAllowed(Connection::kPerchUpdates);
   AddCheckForUpdatesItem(g_updater_controller);
 }
 

@@ -1,0 +1,179 @@
+# Perch: register only the components Perch keeps (CRLSet, certificate data, Widevine, certificate error assistant, file type policies, hyphenation, Screen AI, on-device translation). Google's others register only with --perch-google-components. Hooks RegisterComponentsForUpdate.
+diff --git a/chrome/browser/component_updater/BUILD.gn b/chrome/browser/component_updater/BUILD.gn
+index d006b9e17e..803552fa85 100644
+--- a/chrome/browser/component_updater/BUILD.gn
++++ b/chrome/browser/component_updater/BUILD.gn
+@@ -138,6 +138,10 @@ source_set("impl") {
+     "private_verification_tokens_installer.cc",
+     "recovery_improved_component_installer.cc",
+     "registration.cc",
++
++    # Perch: which Google components register.
++    "//chrome/browser/perch/privacy/component_filter.cc",
++    "//chrome/browser/perch/privacy/component_filter.h",
+     "ssl_error_assistant_component_installer.cc",
+     "subresource_filter_component_installer.cc",
+     "trust_token_key_commitments_component_installer.cc",
+diff --git a/chrome/browser/component_updater/registration.cc b/chrome/browser/component_updater/registration.cc
+index 6a083ad696..598009cf78 100644
+--- a/chrome/browser/component_updater/registration.cc
++++ b/chrome/browser/component_updater/registration.cc
+@@ -2,6 +2,8 @@
+ // Use of this source code is governed by a BSD-style license that can be
+ // found in the LICENSE file.
+ 
++#include "chrome/browser/perch/privacy/allowed_connections.h"
++#include "chrome/browser/perch/privacy/component_filter.h"
+ #include "chrome/browser/component_updater/registration.h"
+ 
+ #include "base/feature_list.h"
+@@ -144,29 +146,38 @@ void DeleteOldComponents(const base::FilePath& user_data_dir) {
+ 
+ void RegisterComponentsForUpdate() {
+   auto* const cus = g_browser_process->component_updater();
++  // Perch: Google's components register only with --perch-google-components;
++  // the ones Perch keeps register as before.
++  const bool google = perch::RegisterGoogleComponents();
+ 
+ #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
+-  RegisterRecoveryImprovedComponent(cus, g_browser_process->local_state());
++  if (google) {
++    RegisterRecoveryImprovedComponent(cus, g_browser_process->local_state());
++  }
+ #endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
+ 
+ #if BUILDFLAG(ENABLE_WIDEVINE_CDM_COMPONENT)
+   RegisterWidevineCdmComponent(cus);
+ #endif  // BUILDFLAG(ENABLE_WIDEVINE_CDM_COMPONENT)
+ 
+-  RegisterSubresourceFilterComponent(cus);
+-  RegisterOnDeviceHeadSuggestComponent(
+-      cus, g_browser_process->GetApplicationLocale());
+-  RegisterOptimizationHintsComponent(cus);
+-  RegisterTrustTokenKeyCommitmentsComponentIfTrustTokensEnabled(cus);
+-  RegisterPrivateVerificationTokensComponentIfEnabled(cus);
+-  RegisterPrivacySandboxAttestationsComponent(cus);
+-  RegisterActorSafetyListsComponent(cus, base::OnceClosure());
+-  if (history_embeddings::IsHistoryEmbeddingsFeatureEnabled()) {
+-    RegisterHistorySearchStringsComponent(cus);
++  if (google) {
++    RegisterSubresourceFilterComponent(cus);
++    RegisterOnDeviceHeadSuggestComponent(
++        cus, g_browser_process->GetApplicationLocale());
++    RegisterOptimizationHintsComponent(cus);
++    RegisterTrustTokenKeyCommitmentsComponentIfTrustTokensEnabled(cus);
++    RegisterPrivateVerificationTokensComponentIfEnabled(cus);
++    RegisterPrivacySandboxAttestationsComponent(cus);
++    RegisterActorSafetyListsComponent(cus, base::OnceClosure());
++    if (history_embeddings::IsHistoryEmbeddingsFeatureEnabled()) {
++      RegisterHistorySearchStringsComponent(cus);
++    }
+   }
+   RegisterSSLErrorAssistantComponent(cus);
+ 
+-  RegisterIndigoComponent(cus);
++  if (google) {
++    RegisterIndigoComponent(cus);
++  }
+ 
+ #if BUILDFLAG(SAFE_BROWSING_AVAILABLE)
+   RegisterFileTypePoliciesComponent(cus);
+@@ -179,13 +190,17 @@ void RegisterComponentsForUpdate() {
+   component_updater::RegisterCRLSetComponent(cus);
+ #endif  // !BUILDFLAG(IS_CHROMEOS)
+ 
+-  RegisterOriginTrialsComponent(cus);
+-  RegisterMediaEngagementPreloadComponent(cus, base::OnceClosure());
++  if (google) {
++    RegisterOriginTrialsComponent(cus);
++    RegisterMediaEngagementPreloadComponent(cus, base::OnceClosure());
++  }
+ 
+   MaybeRegisterPKIMetadataComponent(cus);
+ 
+-  RegisterSafetyTipsComponent(cus);
+-  RegisterCrowdDenyComponent(cus);
++  if (google) {
++    RegisterSafetyTipsComponent(cus);
++    RegisterCrowdDenyComponent(cus);
++  }
+ 
+ #if BUILDFLAG(IS_CHROMEOS)
+   RegisterSmartDimComponent(cus);
+@@ -197,9 +212,11 @@ void RegisterComponentsForUpdate() {
+ #endif
+ 
+ #if !BUILDFLAG(IS_ANDROID)
+-  RegisterDictationConnectorComponent(cus);
+-  RegisterIwaKeyDistributionComponent(cus);
+-  RegisterZxcvbnDataComponent(cus);
++  if (google) {
++    RegisterDictationConnectorComponent(cus);
++    RegisterIwaKeyDistributionComponent(cus);
++    RegisterZxcvbnDataComponent(cus);
++  }
+ #endif  // !BUILDFLAG(IS_ANDROID)
+ 
+ #if BUILDFLAG(IS_ANDROID)
+@@ -210,9 +227,14 @@ void RegisterComponentsForUpdate() {
+   ManageScreenAIComponentRegistration(cus, g_browser_process->local_state());
+ #endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_CHROMEOS)
+ 
+-  RegisterCommerceHeuristicsComponent(cus);
++  if (google) {
++    RegisterCommerceHeuristicsComponent(cus);
++  }
+ 
+ #if BUILDFLAG(ENABLE_ON_DEVICE_TRANSLATION)
++  // Perch: translation downloads follow Settings → Privacy → Translation
++  // packs.
++  if (perch::IsConnectionAllowed(perch::Connection::kTranslationPacks)) {
+   // TODO(crbug.com/364795294): Support other platforms.
+   RegisterTranslateKitComponent(cus, g_browser_process->local_state(),
+                                 /*force_install=*/false,
+@@ -222,21 +244,27 @@ void RegisterComponentsForUpdate() {
+       cus, g_browser_process->local_state());
+   RegisterTranslateKitLanguagePackComponentsForAutoDownload(
+       cus, g_browser_process->local_state());
++  }
+ #endif  // BUILDFLAG(ENABLE_ON_DEVICE_TRANSLATION)
+ 
+ #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || \
+     BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID)
+-  RegisterAmountExtractionHeuristicRegexesComponent(cus);
++  if (google) {
++    RegisterAmountExtractionHeuristicRegexesComponent(cus);
++  }
+ #endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) ||
+         // BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID)
+ 
+ #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
+-  RegisterWasmTtsEngineComponent(cus, g_browser_process->local_state());
++  if (google) {
++    RegisterWasmTtsEngineComponent(cus, g_browser_process->local_state());
++  }
+ #endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
+ 
+-  RegisterCaptchaProviderComponent(cus);
+-
+-  MaybeRegisterPlatformRuntimeComponent(cus);
++  if (google) {
++    RegisterCaptchaProviderComponent(cus);
++    MaybeRegisterPlatformRuntimeComponent(cus);
++  }
+ 
+ #if BUILDFLAG(IS_WIN)
+   MaybeRegisterDynamicPatchComponent(cus);
+@@ -244,8 +272,10 @@ void RegisterComponentsForUpdate() {
+ 
+   base::FilePath path;
+   if (base::PathService::Get(chrome::DIR_USER_DATA, &path)) {
+-    ManageAIEmbeddingsComponentRegistration(cus,
+-                                            g_browser_process->local_state());
++    if (google) {
++      ManageAIEmbeddingsComponentRegistration(
++          cus, g_browser_process->local_state());
++    }
+ 
+     if (!history_embeddings::IsHistoryEmbeddingsFeatureEnabled()) {
+       DeleteHistorySearchStringsComponent(path);

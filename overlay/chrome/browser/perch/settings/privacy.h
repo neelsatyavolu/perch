@@ -29,6 +29,12 @@ void SetPrivacy(Profile* profile,
                 const base::DictValue& patch,
                 PrivacyCallback callback);
 
+// Switches one of the background connections (spec 5.1) by id.
+void SetBackgroundConnection(Profile* profile,
+                             const std::string& id,
+                             bool enabled,
+                             PrivacyCallback callback);
+
 // Turns the content blocker back on for `host` (and its subdomains).
 void RemoveBlockerException(Profile* profile,
                             const std::string& host,

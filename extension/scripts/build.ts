@@ -33,7 +33,7 @@ export type BuildOptions = {
 export type BuildReport = { outDir: string; rules: Record<string, number>; skipped: Record<string, Record<string, number>> };
 
 const ESM_ENTRIES = ["src/background/index.ts", "src/ui/popup.ts", "src/ui/options.ts", "src/ui/shot.ts", "src/ui/offscreen.ts"];
-const CONTENT_ENTRIES = ["src/content/banners.ts", "src/content/pip.ts", "src/content/speed.ts", "src/content/preview.ts", "src/content/reader.ts"];
+const CONTENT_ENTRIES = ["src/content/banners.ts", "src/content/pip.ts", "src/content/speed.ts", "src/content/preview.ts", "src/content/reader.ts", "src/content/drm-hook.ts", "src/content/drm-notice.ts"];
 
 export async function build(opts: BuildOptions = {}): Promise<BuildReport> {
   const outDir = opts.outDir ?? join(ROOT, "dist");

@@ -1,0 +1,38 @@
+# Perch: apply Perch's defaults for Chromium prefs once the keyed services have registered theirs (sign-in and URL-keyed data collection are registered there).
+diff --git a/chrome/browser/prefs/browser_prefs.cc b/chrome/browser/prefs/browser_prefs.cc
+index faa37f3b4f..36f7b6a8ee 100644
+--- a/chrome/browser/prefs/browser_prefs.cc
++++ b/chrome/browser/prefs/browser_prefs.cc
+@@ -2592,9 +2592,9 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry,
+ 
+   registry->RegisterBooleanPref(prefs::kStaticStorageQuotaEnabled, false);
+ 
+-  // Perch: its own prefs, then its defaults for Chromium's.
++  // Perch: its own prefs. Its defaults for Chromium's come once the services
++  // have registered theirs (pref_service_builder_utils.cc).
+   perch::RegisterProfilePrefs(registry);
+-  perch::OverrideChromiumDefaults(registry);
+ }
+ 
+ void RegisterUserProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {
+diff --git a/chrome/browser/profiles/pref_service_builder_utils.cc b/chrome/browser/profiles/pref_service_builder_utils.cc
+index 8986f4d47c..1867a579f5 100644
+--- a/chrome/browser/profiles/pref_service_builder_utils.cc
++++ b/chrome/browser/profiles/pref_service_builder_utils.cc
+@@ -2,6 +2,7 @@
+ // Use of this source code is governed by a BSD-style license that can be
+ // found in the LICENSE file.
+ 
++#include "chrome/browser/perch/perch_prefs.h"
+ #include "chrome/browser/profiles/pref_service_builder_utils.h"
+ 
+ #include <stddef.h>
+@@ -77,6 +78,8 @@ void RegisterProfilePrefs(bool is_signin_profile,
+       pref_registry);
+   BrowserContextDependencyManager::GetInstance()
+       ->RegisterProfilePrefsForServices(pref_registry);
++  // Perch: its defaults for Chromium's prefs, now that all are registered.
++  perch::OverrideChromiumDefaults(pref_registry);
+ }
+ 
+ std::unique_ptr<sync_preferences::PrefServiceSyncable> CreateProfilePrefService(

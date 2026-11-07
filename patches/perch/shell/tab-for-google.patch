@@ -1,0 +1,41 @@
+# Perch: Tab switches a typed search between Brave and Google. Hooks OmniboxEditModel::OnTabPressed.
+diff --git a/chrome/browser/ui/omnibox/BUILD.gn b/chrome/browser/ui/omnibox/BUILD.gn
+index c21eb30b25..4b317bc76c 100644
+--- a/chrome/browser/ui/omnibox/BUILD.gn
++++ b/chrome/browser/ui/omnibox/BUILD.gn
+@@ -80,6 +80,10 @@ source_set("impl") {
+   sources = [
+     "omnibox_controller.cc",
+     "omnibox_edit_model.cc",
++
++    # Perch: Tab for Google.
++    "//chrome/browser/perch/search/tab_for_google.cc",
++    "//chrome/browser/perch/search/tab_for_google.h",
+     "omnibox_next_features.cc",
+     "omnibox_pedal_implementations.cc",
+     "omnibox_popup_state_manager.cc",
+diff --git a/chrome/browser/ui/omnibox/omnibox_edit_model.cc b/chrome/browser/ui/omnibox/omnibox_edit_model.cc
+index 7af049b6b6..7b206f25ea 100644
+--- a/chrome/browser/ui/omnibox/omnibox_edit_model.cc
++++ b/chrome/browser/ui/omnibox/omnibox_edit_model.cc
+@@ -2,6 +2,7 @@
+ // Use of this source code is governed by a BSD-style license that can be
+ // found in the LICENSE file.
+ 
++#include "chrome/browser/perch/search/tab_for_google.h"
+ #include "chrome/browser/ui/omnibox/omnibox_edit_model.h"
+ 
+ #include <stddef.h>
+@@ -1459,6 +1460,12 @@ void OmniboxEditModel::OnUpOrDownPressed(bool down, bool page) {
+ }
+ 
+ void OmniboxEditModel::OnTabPressed(bool shift) {
++  // Perch: Tab switches a typed search between Brave and Google.
++  if (perch::HandleTabForGoogle(
++          this, controller_->client()->GetTemplateURLService(),
++          controller_->client()->GetSchemeClassifier(), shift)) {
++    return;
++  }
+   const OmniboxPopupSelection::Direction direction =
+       shift ? OmniboxPopupSelection::Direction::kBackward
+             : OmniboxPopupSelection::Direction::kForward;

@@ -59,10 +59,11 @@ def test_certificate_fetches_are_reported_but_never_violations(tmp_path: Path):
     path = _log(tmp_path, [
         {"type": 1, "params": {"url": "http://crl.example-ca.net/root.crl"}},
         {"type": 1, "params": {"url": "http://www.ca.example/security/pki/certs/issuer.cer"}},
+        {"type": 1, "params": {"url": "http://crl.prod.ca.example/MjAyNi0xMQ"}},
         {"type": 1, "params": {"url": "https://www.gstatic.com/x"}},
     ])
     certs = cert_check_hosts(path)
-    assert certs == {"crl.example-ca.net", "www.ca.example"}
+    assert certs == {"crl.example-ca.net", "www.ca.example", "crl.prod.ca.example"}
     assert check(hosts_from_netlog(path), ALLOWED, cert_hosts=certs) == ["www.gstatic.com: NOT ALLOWED"]
 
 

@@ -7,6 +7,7 @@
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_ui.h"
 #include "content/public/browser/web_ui_data_source.h"
+#include "content/public/common/bindings_policy.h"
 #include "content/public/common/url_constants.h"
 
 namespace perch {
@@ -16,6 +17,9 @@ PerchChatUIConfig::PerchChatUIConfig()
 
 PerchChatUI::PerchChatUI(content::WebUI* web_ui)
     : content::WebUIController(web_ui) {
+  // The page talks to perchd over HTTP and never to the browser, so it gets
+  // no WebUI bindings. Chromium cuts pages that have them off the network.
+  web_ui->SetBindings(content::BindingsPolicySet());
   content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
       web_ui->GetWebContents()->GetBrowserContext(), kChatHost);
   ServePerchPages(source, "chat.html", /*side_panel=*/false);

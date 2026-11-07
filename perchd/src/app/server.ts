@@ -126,7 +126,12 @@ export function startServer(opts: Options): Server {
         return new Response("expected a WebSocket", { status: 400 });
       }
       if (req.method === "OPTIONS") return new Response(null, { status: origin && cors(origin)["access-control-allow-origin"] ? 204 : 403, headers: cors(origin) });
-      if (url.pathname.startsWith("/api/")) return handleApi(req, url, origin);
+      if (url.pathname.startsWith("/api/")) {
+        const res = await handleApi(req, url, origin);
+        // Refusals go to perchd's log: the browser's own reports have no other place to show them.
+        if (res.status >= 400) console.error(`app api: ${req.method} ${url.pathname} -> ${res.status}`);
+        return res;
+      }
       if (opts.uiDir && url.pathname.startsWith("/ui/") && req.method === "GET") return serveUi(url.pathname);
       return new Response("not found", { status: 404 });
     },

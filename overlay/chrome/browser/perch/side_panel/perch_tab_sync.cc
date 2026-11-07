@@ -16,9 +16,12 @@
 #include "base/uuid.h"
 #include "chrome/browser/perch/agent/perchd_launcher.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/sessions/session_service.h"
+#include "chrome/browser/sessions/session_service_factory.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "components/sessions/content/session_tab_helper.h"
 #include "components/tabs/public/tab_interface.h"
 #include "content/public/browser/devtools_agent_host.h"
 #include "content/public/browser/storage_partition.h"
@@ -64,10 +67,55 @@ std::map<int32_t, TabState>& Tabs() {
   return *tabs;
 }
 
+// The id a restored tab had before the restart, until the tab gets its state.
+class RestoredTabId : public base::SupportsUserData::Data {
+ public:
+  explicit RestoredTabId(std::string id) : id_(std::move(id)) {}
+  const std::string& id() const { return id_; }
+
+  static const void* Key() {
+    static const char kKey = 0;
+    return &kKey;
+  }
+
+ private:
+  std::string id_;
+};
+
+std::string RestoredIdOf(content::WebContents* contents) {
+  if (!contents) {
+    return std::string();
+  }
+  auto* data =
+      static_cast<RestoredTabId*>(contents->GetUserData(RestoredTabId::Key()));
+  return data ? data->id() : std::string();
+}
+
+// Writes the id into the session file, so it comes back after a restart.
+void Persist(content::WebContents* contents, const std::string& id) {
+  if (!contents) {
+    return;
+  }
+  Profile* profile =
+      Profile::FromBrowserContext(contents->GetBrowserContext());
+  SessionService* service =
+      profile ? SessionServiceFactory::GetForProfile(profile) : nullptr;
+  const SessionID window_id =
+      sessions::SessionTabHelper::IdForWindowContainingTab(contents);
+  const SessionID tab_id = sessions::SessionTabHelper::IdForTab(contents);
+  if (service && window_id.is_valid() && tab_id.is_valid()) {
+    service->AddTabExtraData(window_id, tab_id, kTabIdExtraDataKey, id);
+  }
+}
+
 TabState& StateFor(tabs::TabInterface* tab) {
   TabState& state = Tabs()[tab->GetHandle().raw_value()];
   if (state.id.empty()) {
-    state.id = base::Uuid::GenerateRandomV4().AsLowercaseString();
+    const std::string restored = RestoredIdOf(tab->GetContents());
+    state.id = restored.empty()
+                   ? base::Uuid::GenerateRandomV4().AsLowercaseString()
+                   : restored;
+    Persist(tab->GetContents(), state.id);
   }
   return state;
 }
@@ -97,6 +145,31 @@ base::DictValue TabInfo(const std::string& window_id,
 
 std::string TabIdFor(tabs::TabInterface* tab) {
   return StateFor(tab).id;
+}
+
+std::string PersistedTabId(content::WebContents* contents) {
+  if (tabs::TabInterface* tab =
+          contents ? tabs::TabInterface::MaybeGetFromContents(contents)
+                   : nullptr) {
+    auto it = Tabs().find(tab->GetHandle().raw_value());
+    if (it != Tabs().end()) {
+      return it->second.id;
+    }
+  }
+  return RestoredIdOf(contents);
+}
+
+void RestoreTabId(content::WebContents* contents,
+                  const std::map<std::string, std::string>& extra_data) {
+  auto it = extra_data.find(kTabIdExtraDataKey);
+  if (!contents || it == extra_data.end()) {
+    return;
+  }
+  const base::Uuid id = base::Uuid::ParseLowercase(it->second);
+  if (id.is_valid()) {
+    contents->SetUserData(RestoredTabId::Key(),
+                          std::make_unique<RestoredTabId>(it->second));
+  }
 }
 
 bool IsPanelOpenFor(tabs::TabInterface* tab) {

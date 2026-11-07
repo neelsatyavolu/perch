@@ -5,6 +5,7 @@
 #define CHROME_BROWSER_PERCH_SIDE_PANEL_PERCH_TAB_SYNC_H_
 
 #include <deque>
+#include <map>
 #include <memory>
 #include <string>
 
@@ -32,6 +33,15 @@ namespace perch {
 // A tab's id for side chats: a random GUID that stays with the tab for its
 // life, also when the tab is discarded and its WebContents replaced.
 std::string TabIdFor(tabs::TabInterface* tab);
+// Session restore keeps side chats with their tabs: a tab's id is stored in
+// the session file under this key and read back when the tab is restored.
+inline constexpr char kTabIdExtraDataKey[] = "perch.tab_id";
+// The id the session file keeps for these contents, or empty.
+std::string PersistedTabId(content::WebContents* contents);
+// Gives restored contents the id they had, from the session file's data.
+void RestoreTabId(content::WebContents* contents,
+                  const std::map<std::string, std::string>& extra_data);
+
 // Whether the user left the Perch sidebar open on this tab.
 bool IsPanelOpenFor(tabs::TabInterface* tab);
 void SetPanelOpenFor(tabs::TabInterface* tab, bool open);

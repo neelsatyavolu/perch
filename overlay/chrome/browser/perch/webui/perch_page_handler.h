@@ -11,6 +11,7 @@
 #include "components/prefs/pref_change_registrar.h"
 #include "content/public/browser/web_ui_message_handler.h"
 
+class GURL;
 class Profile;
 
 namespace perch {
@@ -41,6 +42,8 @@ class PerchPageHandler : public content::WebUIMessageHandler {
   void Resolve(base::Value callback_id, base::Value result);
   void Reject(base::Value callback_id, std::string code, std::string message);
   void OnAppearanceChanged();
+  // Opens `url` in this page's tab.
+  void Navigate(const GURL& url);
 
   Profile* profile();
 

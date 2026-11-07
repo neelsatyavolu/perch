@@ -1,0 +1,68 @@
+# Perch: block the policies that control Google services Perch does not include (BrowserSignin, CloudManagementEnrollmentToken, MetricsReportingEnabled) from every source, so chrome://policy shows them blocked and nothing applies them.
+diff --git a/components/policy/core/common/local_test_policy_loader.cc b/components/policy/core/common/local_test_policy_loader.cc
+index ca75330649..c397532c6a 100644
+--- a/components/policy/core/common/local_test_policy_loader.cc
++++ b/components/policy/core/common/local_test_policy_loader.cc
+@@ -101,6 +101,9 @@ void LocalTestPolicyLoader::SetPolicyListJson(
+   for (auto& [key, bundle] : bundles) {
+     FilterSensitivePolicies(
+         &bundle.Get(PolicyNamespace(POLICY_DOMAIN_CHROME, std::string())));
++    // Perch: Google-only policies never apply, from any source.
++    FilterGoogleOnlyPolicies(
++        &bundle.Get(PolicyNamespace(POLICY_DOMAIN_CHROME, std::string())));
+     bundles_to_merge.push_back(&bundle);
+   }
+   std::vector<std::unique_ptr<PolicyMigrator>> migrators;
+diff --git a/components/policy/core/common/policy_loader_common.cc b/components/policy/core/common/policy_loader_common.cc
+index 9a68eeab4e..4670b47816 100644
+--- a/components/policy/core/common/policy_loader_common.cc
++++ b/components/policy/core/common/policy_loader_common.cc
+@@ -166,6 +166,20 @@ void FilterSensitivePolicies(PolicyMap* policy) {
+                           invalid_policies);
+ }
+ 
++void FilterGoogleOnlyPolicies(PolicyMap* policy) {
++  static constexpr const char* kGoogleOnly[] = {
++      key::kBrowserSignin,
++      key::kCloudManagementEnrollmentToken,
++      key::kMetricsReportingEnabled,
++  };
++  for (const char* name : kGoogleOnly) {
++    if (PolicyMap::Entry* entry = policy->GetMutable(name)) {
++      entry->AddMessage(PolicyMap::MessageType::kError, IDS_POLICY_BLOCKED);
++      entry->SetBlocked();
++    }
++  }
++}
++
+ bool IsPolicyNameSensitive(const std::string& policy_name) {
+   for (const char* sensitive_policy : GetSensitivePolicies()) {
+     if (sensitive_policy == policy_name) {
+diff --git a/components/policy/core/common/policy_loader_common.h b/components/policy/core/common/policy_loader_common.h
+index 7303b43186..502044028f 100644
+--- a/components/policy/core/common/policy_loader_common.h
++++ b/components/policy/core/common/policy_loader_common.h
+@@ -17,6 +17,10 @@ class PolicyMap;
+ // Modifies the |policy| in place. Only call this if the source is untrusted.
+ POLICY_EXPORT void FilterSensitivePolicies(PolicyMap* policy);
+ 
++// Perch: blocks the policies that control Google services Perch does not
++// include, so chrome://policy shows them as ignored and nothing applies them.
++POLICY_EXPORT void FilterGoogleOnlyPolicies(PolicyMap* policy);
++
+ // Returns if |policy_name| is in |kSensitivePolicies|
+ POLICY_EXPORT bool IsPolicyNameSensitive(const std::string& policy_name);
+ 
+diff --git a/components/policy/core/common/policy_loader_mac.mm b/components/policy/core/common/policy_loader_mac.mm
+index e120dc60a1..6f524ff3db 100644
+--- a/components/policy/core/common/policy_loader_mac.mm
++++ b/components/policy/core/common/policy_loader_mac.mm
+@@ -159,6 +159,8 @@ PolicyBundle PolicyLoaderMac::Load() {
+   if (should_filter) {
+     FilterSensitivePolicies(&chrome_policy);
+   }
++  // Perch: Google-only policies never apply.
++  FilterGoogleOnlyPolicies(&chrome_policy);
+ 
+   return bundle;
+ }

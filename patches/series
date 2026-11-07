@@ -19,4 +19,8 @@ perch/shell/privacy-components.patch
 perch/shell/allowed-connections.patch
 perch/shell/search-default.patch
 perch/shell/tab-for-google.patch
+perch/shell/new-tab-page.patch
+perch/policy/no-test-policies-in-release.patch
+perch/policy/ignored-google-policies.patch
+perch/policy/update-policy.patch
 perch/build/thinlto-jobs.patch

@@ -19,7 +19,7 @@ import { useChat } from "../state/use-chat";
 const LIST_BREAKPOINT = 1100;
 export const EMPTY ="Ask Perch to do something on the web. It works in its own tabs and asks before it sends, buys or deletes anything.";
 
-type Props = { client: Client; initialChat?: string | null; onNavigate?: (chatId: string | null) => void };
+type Props = { client: Client; initialChat?: string | null; initialAsk?: string | null; onNavigate?: (chatId: string | null) => void };
 
 function saveFile(name: string, text: string): void {
   const a = document.createElement("a");
@@ -29,7 +29,7 @@ function saveFile(name: string, text: string): void {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-export function FullChat({ client, initialChat = null, onNavigate }: Props) {
+export function FullChat({ client, initialChat = null, initialAsk = null, onNavigate }: Props) {
   const chat = useChat(client);
   const [info, setInfo] = useState<AppInfo | null>(null);
   const [list, setList] = useState<ChatSummary[]>([]);
@@ -83,6 +83,15 @@ export function FullChat({ client, initialChat = null, onNavigate }: Props) {
   const settings: ChatSettings = view.chat?.settings ?? { ...(info?.defaults ?? { mode: "guard", model: "", effort: "medium" }), scope: "agent", ...pending };
   const summary = list.find((c) => c.id === selected);
   const status = summary?.status ?? (view.run ? (view.run.approval ? "waiting" : "running") : "idle");
+
+  // Ask from the new tab page: a new chat that starts with the question, once the defaults
+  // (the model above all) are known.
+  const [asked, setAsked] = useState(false);
+  useEffect(() => {
+    if (!info || asked || initialChat || !initialAsk?.trim()) return;
+    setAsked(true);
+    void chat.send(initialAsk.trim(), undefined, create);
+  }, [info]);
 
   const create = async () => {
     const created = await client.createChat({ settings });

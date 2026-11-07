@@ -13,12 +13,19 @@
 #include "base/apple/bundle_locations.h"
 #include "base/apple/foundation_util.h"
 #include "base/functional/bind.h"
+#include "base/strings/escape.h"
+#include "base/strings/string_util.h"
 #include "base/strings/sys_string_conversions.h"
+#include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/perch/extensions/perch_component_extensions.h"
 #include "chrome/browser/perch/perch_pref_names.h"
 #include "chrome/browser/perch/settings/appearance.h"
 #include "chrome/browser/perch/settings/privacy.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/search_engines/template_url_service_factory.h"
+#include "components/search_engines/search_engine_type.h"
+#include "components/search_engines/template_url.h"
+#include "components/search_engines/template_url_service.h"
 #include "components/prefs/pref_service.h"
 #include "components/version_info/version_info.h"
 #include "content/public/browser/page_navigator.h"
@@ -63,6 +70,35 @@ base::DictValue About() {
   return about;
 }
 
+// The results page for `text` on Brave or Google, from the profile's engines.
+std::optional<GURL> SearchURL(Profile* profile,
+                              const std::string& engine,
+                              const std::string& text) {
+  TemplateURLService* urls = TemplateURLServiceFactory::GetForProfile(profile);
+  if (!urls) {
+    return std::nullopt;
+  }
+  const SearchEngineType wanted =
+      engine == "google" ? SEARCH_ENGINE_GOOGLE : SEARCH_ENGINE_BRAVE;
+  const TemplateURL* chosen = nullptr;
+  for (const TemplateURL* url : urls->GetTemplateURLs()) {
+    if (url->GetEngineType(urls->search_terms_data()) == wanted) {
+      chosen = url;
+      break;
+    }
+  }
+  if (!chosen) {
+    chosen = urls->GetDefaultSearchProvider();
+  }
+  if (!chosen) {
+    return std::nullopt;
+  }
+  const GURL result(chosen->url_ref().ReplaceSearchTerms(
+      TemplateURLRef::SearchTermsArgs(base::UTF8ToUTF16(text)),
+      urls->search_terms_data()));
+  return result.is_valid() ? std::optional<GURL>(result) : std::nullopt;
+}
+
 base::ListValue BuiltIns(Profile* profile) {
   base::ListValue list;
   for (const BuiltInExtensionState& state : ListBuiltInExtensions(profile)) {
@@ -77,6 +113,14 @@ base::ListValue BuiltIns(Profile* profile) {
 
 PerchPageHandler::PerchPageHandler() = default;
 PerchPageHandler::~PerchPageHandler() = default;
+
+void PerchPageHandler::Navigate(const GURL& url) {
+  web_ui()->GetWebContents()->OpenURL(
+      content::OpenURLParams(url, content::Referrer(),
+                             WindowOpenDisposition::kCurrentTab,
+                             ui::PAGE_TRANSITION_LINK, false),
+      {});
+}
 
 Profile* PerchPageHandler::profile() {
   return Profile::FromWebUI(web_ui());
@@ -209,11 +253,44 @@ void PerchPageHandler::Dispatch(const std::string& method,
     if (args.size() > 1 && args[1].is_string() && !args[1].GetString().empty()) {
       url += "#" + args[1].GetString();
     }
-    web_ui()->GetWebContents()->OpenURL(
-        content::OpenURLParams(GURL(url), content::Referrer(),
-                               WindowOpenDisposition::kCurrentTab,
-                               ui::PAGE_TRANSITION_LINK, false),
-        {});
+    Navigate(GURL(url));
+    Resolve(std::move(id), base::Value());
+  } else if (method == "submitQuery") {
+    const base::DictValue* query = arg0 ? arg0->GetIfDict() : nullptr;
+    const std::string* text = query ? query->FindString("text") : nullptr;
+    const std::string* mode = query ? query->FindString("mode") : nullptr;
+    const std::string* engine = query ? query->FindString("engine") : nullptr;
+    if (!text || !mode || !engine ||
+        base::TrimWhitespaceASCII(*text, base::TRIM_ALL).empty()) {
+      Reject(std::move(id), "invalid", "Type something to search or ask");
+      return;
+    }
+    std::optional<GURL> target;
+    if (*mode == "ask") {
+      target = GURL("chrome://perch-chat/?ask=" +
+                    base::EscapeQueryParamValue(*text, /*use_plus=*/false));
+    } else if (*mode == "search") {
+      target = SearchURL(profile(), *engine, *text);
+    }
+    if (!target) {
+      Reject(std::move(id), "invalid", "Perch couldn't run that search");
+      return;
+    }
+    Navigate(*target);
+    Resolve(std::move(id), base::Value());
+  } else if (method == "openChat") {
+    const std::string* chat = arg0 ? arg0->GetIfString() : nullptr;
+    if (!chat || chat->empty() || chat->size() > 100 ||
+        !std::all_of(chat->begin(), chat->end(), [](char c) {
+          return base::IsAsciiAlphaNumeric(c) || c == '-' || c == '_';
+        })) {
+      Reject(std::move(id), "invalid", "Unknown chat");
+      return;
+    }
+    Navigate(GURL("chrome://perch-chat/?chat=" + *chat));
+    Resolve(std::move(id), base::Value());
+  } else if (method == "newChat") {
+    Navigate(GURL("chrome://perch-chat/"));
     Resolve(std::move(id), base::Value());
   } else if (method == "getAbout") {
     Resolve(std::move(id), base::Value(About()));

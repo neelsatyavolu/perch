@@ -14,7 +14,7 @@ import type { Bridge } from "./rpc";
 export const BROWSER_METHODS: ReadonlySet<string> = new Set([
   "getAppearance", "setAppearance",
   "getPrivacy", "setPrivacy", "setBackgroundConnection", "removeBlockerException", "listSiteData", "forgetSite",
-  "openPage", "chooseFile", "openFullDiskAccess",
+  "openPage", "chooseFile", "openFullDiskAccess", "submitQuery", "openChat", "newChat",
   "getAbout", "checkForUpdates", "installUpdate", "setAutoUpdate",
   "listBuiltInExtensions", "setBuiltInExtension",
 ]);

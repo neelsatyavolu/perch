@@ -58,11 +58,11 @@ test("values get the local server and proxy addresses", () => {
 test("reads the policy page's report: applied, ignored in Perch, or a problem", () => {
   const report = { policyValues: { chrome: { name: "Chrome policies", policies: {
     URLBlocklist: { value: ["x"], level: "mandatory" },
-    BrowserSignin: { value: 0, error: "Perch ignores this policy. It controls a Google service Perch does not include." },
+    BrowserSignin: { value: 0, error: "This policy is blocked, its value will be ignored." },
     Bad: { value: 1, error: "Schema validation error" },
   } } } };
   expect(judgePolicy(findPolicy(report, "URLBlocklist")).status).toBe("works");
-  expect(judgePolicy(findPolicy(report, "BrowserSignin")).status).toBe("ignored");
+  expect(judgePolicy(findPolicy(report, "BrowserSignin"), "BrowserSignin").status).toBe("ignored");
   expect(judgePolicy(findPolicy(report, "Bad"))).toEqual({ status: "fails", detail: "policy page: Schema validation error" });
   expect(judgePolicy(findPolicy(report, "Missing")).status).toBe("fails");
 });

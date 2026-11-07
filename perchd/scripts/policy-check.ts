@@ -45,8 +45,14 @@ export const MANDATORY = 1;
 export const MACHINE = 1;
 export const PLATFORM = 5;
 export const LOCAL_TEST_POLICIES = "local_test_policies_for_next_startup";
-/** The status Perch's ignored-policy handler (task 2) puts on Google-only policies. */
-export const IGNORED_TEXT = "Perch ignores this policy";
+/**
+ * What chrome://policy says about a Google-only policy Perch blocks (FilterGoogleOnlyPolicies,
+ * patches/perch/policy/ignored-google-policies.patch). It reuses Chromium's own "blocked" string,
+ * so no translated string changes.
+ */
+export const IGNORED_TEXT = "This policy is blocked, its value will be ignored.";
+/** The Google-only policies Perch blocks (components/policy/core/common/policy_loader_common.cc). */
+export const GOOGLE_ONLY: ReadonlySet<string> = new Set(["BrowserSignin", "CloudManagementEnrollmentToken", "MetricsReportingEnabled"]);
 
 const REPO = join(import.meta.dir, "..", "..");
 const SETTLE_MS = 3000;
@@ -101,10 +107,11 @@ export function findPolicy(report: unknown, name: string): Record<string, unknow
 }
 
 /** How the policy page reports one policy: applied, ignored by Perch, or a problem. */
-export function judgePolicy(entry: Record<string, unknown> | null): Pick<CaseResult, "status" | "detail"> {
+export function judgePolicy(entry: Record<string, unknown> | null, name = ""): Pick<CaseResult, "status" | "detail"> {
   if (!entry) return { status: "fails", detail: "not listed on the policy page" };
   const error = typeof entry.error === "string" ? entry.error : "";
-  if (error.includes(IGNORED_TEXT)) return { status: "ignored", detail: "policy page: ignored in Perch" };
+  // Chromium uses the same words for its own sensitive policies; only Perch's list is "ignored".
+  if (error.includes(IGNORED_TEXT) && GOOGLE_ONLY.has(name)) return { status: "ignored", detail: "policy page: ignored in Perch" };
   if (error) return { status: "fails", detail: `policy page: ${error}` };
   if (entry.ignored === true) return { status: "fails", detail: "policy page: ignored" };
   return { status: "works", detail: "policy page: applied" };
@@ -162,7 +169,7 @@ async function runCheck(c: Case, env: Env): Promise<Pick<CaseResult, "status" | 
     case "policy": {
       const report = await policyReport(conn, session);
       const names = c.check.names ?? c.policies.map((p) => p.name);
-      const judged = names.map((n) => ({ n, ...judgePolicy(findPolicy(report, n)) }));
+      const judged = names.map((n) => ({ n, ...judgePolicy(findPolicy(report, n), n) }));
       const worst = judged.find((j) => j.status === "fails") ?? judged.find((j) => j.status === "ignored") ?? judged[0]!;
       return { status: worst.status, detail: judged.map((j) => `${j.n}: ${j.detail.replace("policy page: ", "")}`).join("; ") };
     }

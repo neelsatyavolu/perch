@@ -2,17 +2,14 @@
 
 import type { ChatSummary, NtpSection, OnboardingStep, Suggestion } from "../../../../ui-pages/src/api";
 import type { Chat } from "../protocol";
-import { AppError } from "../runs";
 import * as v from "../validate";
-import { notYet, type Methods } from "./common";
+import type { Methods } from "./common";
 import type { PagesDeps } from "./deps";
 
 const SECTIONS: readonly NtpSection[] = ["recent", "suggested"];
 const STEPS: readonly OnboardingStep[] = ["appearance", "models", "import", "memory"];
 const MAX_CHATS = 200;
 const SHOWN_SUGGESTIONS = 3;
-const NAVIGATION =
-  "Perch can't open chats or search from this page yet. Use the side chat or the address bar.";
 
 const SETUP: readonly (Suggestion & { readonly needed: (s: Setup) => boolean })[] = [
   {
@@ -48,7 +45,7 @@ function layoutPatch(value: unknown) {
 
 export function ntpPages(deps: PagesDeps): Methods<
   | "getNtpLayout" | "setNtpLayout" | "listChats" | "searchChats" | "listSuggestions" | "dismissSuggestion"
-  | "submitQuery" | "openChat" | "newChat" | "getOnboarding" | "completeOnboardingStep" | "finishOnboarding"
+  | "getOnboarding" | "completeOnboardingStep" | "finishOnboarding"
 > {
   async function setup(): Promise<Setup> {
     const { imported } = await deps.state.get();
@@ -84,21 +81,6 @@ export function ntpPages(deps: PagesDeps): Methods<
     async dismissSuggestion([id]) {
       const clean = v.id(id, "id");
       await deps.state.update((s) => (s.dismissed.includes(clean) ? s : { ...s, dismissed: [...s.dismissed, clean].slice(-100) }));
-    },
-    async submitQuery([query]) {
-      const o = v.object(query, '"query"');
-      v.onlyKeys(o, ["text", "mode", "engine"]);
-      if (!v.text(o.text, "text", 50_000).trim()) throw new AppError("Type something to search or ask");
-      v.oneOf(o.mode, "mode", ["search", "ask"] as const);
-      v.oneOf(o.engine, "engine", ["brave", "google"] as const);
-      return notYet(NAVIGATION);
-    },
-    async openChat([id]) {
-      v.id(id, "id");
-      return notYet(NAVIGATION);
-    },
-    async newChat() {
-      return notYet(NAVIGATION);
     },
     async getOnboarding() {
       return (await deps.state.get()).onboarding;

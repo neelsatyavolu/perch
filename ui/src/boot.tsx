@@ -42,8 +42,9 @@ export async function boot(page: "sidebar" | "chat"): Promise<void> {
       const url = new URL(location.href);
       if (id) url.searchParams.set("chat", id);
       else url.searchParams.delete("chat");
+      url.searchParams.delete("ask");
       history.replaceState(null, "", url);
     };
-    render(<FullChat client={client} initialChat={params.get("chat")} onNavigate={navigate} />, root);
+    render(<FullChat client={client} initialChat={params.get("chat")} initialAsk={params.get("ask")} onNavigate={navigate} />, root);
   }
 }

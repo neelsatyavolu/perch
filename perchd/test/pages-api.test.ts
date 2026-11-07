@@ -248,12 +248,8 @@ test("new tab page: layout, chats, suggestions; navigation is not perchd's yet",
   expect((await api.listSuggestions()).map((s) => s.id)).toEqual(["setup-import", "setup-routines"]);
   expect((await fails(api.dismissSuggestion("not an id!"))).status).toBe(400);
 
-  expect((await fails(api.submitQuery({ text: "weather", mode: "search", engine: "brave" }))).status).toBe(501);
-  expect((await fails(api.submitQuery({ text: "  ", mode: "ask", engine: "brave" }))).message).toBe("Type something to search or ask");
-  expect((await fails(api.openChat(chat.id))).status).toBe(501);
-  expect((await fails(api.openChat("../etc"))).status).toBe(400);
-  expect((await fails(api.newChat())).status).toBe(501);
-  expect((await raw("newChat", ["x"])).status).toBe(400);
+  // The browser opens chats and runs searches; perchd doesn't know these.
+  for (const m of ["submitQuery", "openChat", "newChat"]) expect((await raw(m, [])).status).toBe(404);
 });
 
 test("onboarding", async () => {

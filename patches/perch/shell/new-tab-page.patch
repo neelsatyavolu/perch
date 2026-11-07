@@ -1,0 +1,24 @@
+# Perch: chrome://perch-newtab is the new tab page (IsNTPURL), so the omnibox treats it as one.
+diff --git a/chrome/browser/search/search.cc b/chrome/browser/search/search.cc
+index 58d75e090d..103a81c3c6 100644
+--- a/chrome/browser/search/search.cc
++++ b/chrome/browser/search/search.cc
+@@ -13,6 +13,7 @@
+ #include "base/feature_list.h"
+ #include "base/metrics/histogram_macros.h"
+ #include "build/build_config.h"
++#include "chrome/browser/perch/scheme/perch_scheme.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/search_engines/template_url_service_factory.h"
+ #include "chrome/browser/search_engines/ui_thread_search_terms_data.h"
+@@ -272,6 +273,10 @@ bool IsNTPOrRelatedURL(const GURL& url, Profile* profile) {
+ }
+ 
+ bool IsNTPURL(const GURL& url) {
++  // Perch: its own new tab page.
++  if (perch::IsPerchNewTabURL(url)) {
++    return true;
++  }
+   if (url.SchemeIs(chrome::kChromeSearchScheme) &&
+       url.host() == chrome::kChromeSearchRemoteNtpHost) {
+     return true;

@@ -167,3 +167,33 @@ def test_publish_uploads_five_files(tmp_path, recorder):
     names = ["Perch-0.1.0.dmg", "Perch-0.1.0.pkg", "appcast.xml", "Perch-0.1.0.spdx.json", "SHA256SUMS"]
     publish(INFO, [tmp_path / n for n in names], "notes", run=recorder)
     assert recorder.calls[0][-5:] == [str(tmp_path / n) for n in names]
+
+
+def test_beta_appcast_marks_the_channel_and_keeps_published_items(tmp_path):
+    dmg = tmp_path / "Perch-0.2.0.dmg"
+    dmg.write_text("dmg")
+    seen = {}
+
+    class Keeping(AppcastRecorder):
+        def __call__(self, cmd, **kwargs):
+            if str(cmd[0]).endswith("generate_appcast"):
+                from pathlib import Path
+
+                seen["previous"] = (Path(str(cmd[-1])) / "appcast.xml").read_text()
+            return super().__call__(cmd, **kwargs)
+
+    recorder = Keeping()
+    appcast(dmg, tmp_path / "release", "op://x", INFO, tmp_path / "bin", run=recorder, channel="beta", previous="<rss>stable</rss>")
+    generate = recorder.calls[1]
+    assert generate[generate.index("--channel") + 1] == "beta"
+    assert seen["previous"] == "<rss>stable</rss>"
+
+
+def test_stable_appcast_has_no_channel_and_unknown_channels_fail(tmp_path):
+    dmg = tmp_path / "Perch-0.2.0.dmg"
+    dmg.write_text("dmg")
+    recorder = AppcastRecorder()
+    appcast(dmg, tmp_path / "release", "op://x", INFO, tmp_path / "bin", run=recorder)
+    assert "--channel" not in recorder.calls[1]
+    with pytest.raises(ValueError, match="channel"):
+        appcast(dmg, tmp_path / "r2", "op://x", INFO, tmp_path / "bin", run=recorder, channel="nightly")

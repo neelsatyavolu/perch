@@ -53,6 +53,12 @@ GURL WithSchemeAndHost(const GURL& url,
 }  // namespace
 
 bool RewritePerchURL(GURL* url, content::BrowserContext* context) {
+  // A new tab opens Perch's own page, never a search engine's remote one.
+  // An enterprise or extension override registered earlier still wins.
+  if (url->SchemeIs(content::kChromeUIScheme) && url->host() == "newtab") {
+    *url = WithSchemeAndHost(*url, content::kChromeUIScheme, "perch-newtab");
+    return true;
+  }
   if (url->SchemeIs(content::kChromeUIScheme)) {
     // Perch's own pages: claimed so the reverse half shows them as perch://.
     return PerchHostFor(url->host()).has_value();
@@ -74,6 +80,10 @@ bool ReversePerchURL(GURL* url, content::BrowserContext* context) {
   *url = WithSchemeAndHost(*url, kPerchScheme,
                            PerchHostFor(host).value_or(host));
   return true;
+}
+
+bool IsPerchNewTabURL(const GURL& url) {
+  return url.SchemeIs(content::kChromeUIScheme) && url.host() == "perch-newtab";
 }
 
 }  // namespace perch

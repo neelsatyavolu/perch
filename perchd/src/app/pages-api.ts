@@ -27,6 +27,7 @@ import * as v from "./validate";
 export const BROWSER_METHODS = [
   "getAppearance", "setAppearance", "getPrivacy", "setPrivacy", "setBackgroundConnection", "removeBlockerException", "listSiteData", "forgetSite",
   "openPage", "chooseFile", "openFullDiskAccess", "getAbout", "checkForUpdates", "installUpdate", "setAutoUpdate",
+  "submitQuery", "openChat", "newChat",
   "listBuiltInExtensions", "setBuiltInExtension",
 ] as const satisfies readonly ApiMethod[];
 
@@ -35,7 +36,7 @@ export const PERCHD_METHODS: readonly PerchdMethod[] = API_METHODS.filter((m): m
 
 /** How many arguments each method takes at most; the rest take none. */
 const ARITY: Partial<Record<PerchdMethod, number>> = {
-  setNtpLayout: 1, listChats: 1, searchChats: 1, dismissSuggestion: 1, submitQuery: 1, openChat: 1,
+  setNtpLayout: 1, listChats: 1, searchChats: 1, dismissSuggestion: 1,
   signIn: 1, signOut: 1, connectProvider: 1, setTaskModel: 2,
   importMcpServers: 1, addMcpServer: 1, updateMcpServer: 2, removeMcpServer: 1, addSkill: 1, setSkillEnabled: 2, removeSkill: 1,
   setPermissionMode: 1, addSiteRule: 1, removeSiteRule: 1, setClientMode: 2, listAuditLog: 1, exportAuditLog: 1,

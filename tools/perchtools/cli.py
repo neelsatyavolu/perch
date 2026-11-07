@@ -175,9 +175,14 @@ def _tag_exists(tag: str) -> bool:
     return run(["gh", "release", "view", tag, "--repo", REPO_SLUG], check=False, capture=True).returncode == 0
 
 
-def _published_build() -> int | None:
+def _published_appcast() -> str | None:
     result = run(["gh", "release", "download", "--repo", REPO_SLUG, "--pattern", "appcast.xml", "--output", "-"], check=False, capture=True)
-    return published_build_from_appcast(result.stdout) if result.returncode == 0 else None
+    return result.stdout if result.returncode == 0 else None
+
+
+def _published_build() -> int | None:
+    xml = _published_appcast()
+    return published_build_from_appcast(xml) if xml else None
 
 
 def _release_preflight(paths: Paths, info: VersionInfo, sbom) -> list[str]:
@@ -212,7 +217,7 @@ def _cmd_release(args: argparse.Namespace) -> int:
     except (SbomError, OSError, subprocess.CalledProcessError) as error:
         print(f"error: could not write the SBOM: {error}", file=sys.stderr)
         return 1
-    feed = appcast(dmg, out, key_ref, info, sparkle_bin(REPO), run)
+    feed = appcast(dmg, out, key_ref, info, sparkle_bin(REPO), run, channel=args.channel, previous=_published_appcast())
     assets = release_assets(dmg, REPO / "dist" / f"Perch-{info.perch}.pkg", feed, sbom_path)
     sums = out / "SHA256SUMS"
     sums.write_text(checksums(assets))
@@ -306,6 +311,8 @@ def build_parser() -> argparse.ArgumentParser:
     pkg.set_defaults(func=_cmd_package)
     rel = sub.add_parser("release", help="check, write the appcast and publish to GitHub")
     rel.add_argument("--dry-run", action="store_true", help="write everything to dist/release and publish nothing")
+    rel.add_argument("--channel", choices=["stable", "beta"], default="stable",
+                     help="beta marks the update for Macs whose UpdateChannel policy is beta")
     rel.set_defaults(func=_cmd_release)
     reb = sub.add_parser("rebase", help="move to a new Chromium version (latest Stable by default)")
     reb.add_argument("--security", action="store_true", help="a security point release: bump the patch version")

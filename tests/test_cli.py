@@ -109,7 +109,7 @@ def _release_env(monkeypatch, tmp_path, paths, reasons):
     monkeypatch.setattr(cli, "preflight", lambda *a, **k: reasons)
     monkeypatch.setattr(cli, "sparkle_bin", lambda repo: tmp_path / "bin")
 
-    def fake_appcast(dmg, out, key_ref, info, bin_dir, run):
+    def fake_appcast(dmg, out, key_ref, info, bin_dir, run, channel="stable", previous=None):
         (out / "appcast.xml").write_text("<rss/>")
         return out / "appcast.xml"
 

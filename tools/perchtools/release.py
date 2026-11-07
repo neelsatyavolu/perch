@@ -94,20 +94,34 @@ def release_notes(info: VersionInfo, patches: Sequence[str]) -> str:
     )
 
 
-def appcast(dmg: Path, out: Path, key_ref: str, info: VersionInfo, sparkle_bin: Path, run=default_run) -> Path:
-    """Write out/appcast.xml for dmg, EdDSA-signed with the key at key_ref in 1Password."""
+CHANNELS = ("stable", "beta")
+
+
+def appcast(dmg: Path, out: Path, key_ref: str, info: VersionInfo, sparkle_bin: Path, run=default_run,
+            *, channel: str = "stable", previous: str | None = None) -> Path:
+    """Write out/appcast.xml for dmg, EdDSA-signed with the key at key_ref in 1Password.
+
+    `previous` is the published appcast: its items are kept, so a beta release (marked
+    <sparkle:channel>beta</sparkle:channel>) never hides the newest stable one from stable users.
+    """
+    if channel not in CHANNELS:
+        raise ValueError(f"unknown channel {channel}")
     out.mkdir(parents=True, exist_ok=True)
     archives = out / "archives"
     shutil.rmtree(archives, ignore_errors=True)
     archives.mkdir()
     shutil.copy2(dmg, archives / dmg.name)
+    if previous:
+        (archives / "appcast.xml").write_text(previous)
     prefix = f"https://github.com/{REPO_SLUG}/releases/download/v{info.perch}/"
     with tempfile.TemporaryDirectory() as secrets_dir:
         os.chmod(secrets_dir, 0o700)
         key_file = Path(secrets_dir) / "sparkle.key"
         run(["op", "read", "--out-file", key_file, key_ref])
         os.chmod(key_file, 0o600)
-        run([sparkle_bin / "generate_appcast", "--ed-key-file", key_file, "--download-url-prefix", prefix, archives])
+        channel_args = ["--channel", channel] if channel != "stable" else []
+        run([sparkle_bin / "generate_appcast", "--ed-key-file", key_file, "--download-url-prefix", prefix,
+             *channel_args, archives])
     target = out / "appcast.xml"
     shutil.move(archives / "appcast.xml", target)
     return target

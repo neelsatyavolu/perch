@@ -1,0 +1,50 @@
+# Perch: release builds never load test policies, which would replace the company's: IsPolicyTestingEnabled returns false and MaybeApplyLocalTestPolicies does nothing under OFFICIAL_BUILD.
+diff --git a/chrome/browser/policy/chrome_browser_policy_connector.cc b/chrome/browser/policy/chrome_browser_policy_connector.cc
+index c8b09c3b15..454fd96570 100644
+--- a/chrome/browser/policy/chrome_browser_policy_connector.cc
++++ b/chrome/browser/policy/chrome_browser_policy_connector.cc
+@@ -194,6 +194,11 @@ void ChromeBrowserPolicyConnector::SetLocalTestPolicyProviderForTesting(
+ 
+ void ChromeBrowserPolicyConnector::MaybeApplyLocalTestPolicies(
+     PrefService* local_state) {
++#if defined(OFFICIAL_BUILD)
++  // Perch: release builds never load test policies from Local State, which
++  // would replace the company's (see IsPolicyTestingEnabled).
++  return;
++#else
+   // Early return if the policy test page is disabled by any policy. This is
+   // done because that policy is a profile level policy and we have not yet
+   // loaded any profile to access its prefs.
+@@ -220,6 +225,7 @@ void ChromeBrowserPolicyConnector::MaybeApplyLocalTestPolicies(
+   GetPolicyService()->UseLocalTestPolicyProvider(test_provider);
+   test_provider->LoadJsonPolicies(policies_to_apply);
+   local_state->ClearPref(policy_prefs::kLocalTestPoliciesForNextStartup);
++#endif  // defined(OFFICIAL_BUILD)
+ }
+ 
+ #if !BUILDFLAG(IS_CHROMEOS)
+diff --git a/components/policy/core/common/policy_utils.cc b/components/policy/core/common/policy_utils.cc
+index 2c97e1e7b9..96005489ad 100644
+--- a/components/policy/core/common/policy_utils.cc
++++ b/components/policy/core/common/policy_utils.cc
+@@ -12,6 +12,12 @@ namespace policy::utils {
+ 
+ bool IsPolicyTestingEnabled(PrefService* pref_service,
+                             version_info::Channel channel) {
++#if defined(OFFICIAL_BUILD)
++  // Perch: an unbranded build's channel is DEFAULT, which would turn test
++  // policies on, and active test policies replace the company's. Release
++  // builds never allow them.
++  return false;
++#else
+   if (pref_service &&
+       !pref_service->GetBoolean(policy_prefs::kPolicyTestPageEnabled)) {
+     return false;
+@@ -36,6 +42,7 @@ bool IsPolicyTestingEnabled(PrefService* pref_service,
+ #else
+   return false;
+ #endif
++#endif  // defined(OFFICIAL_BUILD)
+ }
+ 
+ base::DictValue GetPolicyNameToTypeMapping(const base::ListValue& policy_names,

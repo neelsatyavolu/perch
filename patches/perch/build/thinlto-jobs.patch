@@ -1,0 +1,15 @@
+# Perch: release links use 6 ThinLTO jobs, not every core; builds run on a laptop that overheated.
+diff --git a/build/config/compiler/BUILD.gn b/build/config/compiler/BUILD.gn
+index c267546ebd..127edbaa86 100644
+--- a/build/config/compiler/BUILD.gn
++++ b/build/config/compiler/BUILD.gn
+@@ -841,7 +841,8 @@ config("compiler") {
+       # and let it use all cores.
+       # TODO(thakis): Check if '=0' (that is, number of cores, instead
+       # of "all" which means number of hardware threads) is faster.
+-      ldflags += [ "-Wl,--thinlto-jobs=all" ]
++      # Perch: builds run on a laptop; all cores for an hour overheated it.
++      ldflags += [ "-Wl,--thinlto-jobs=6" ]
+ 
+       if (is_chromeos) {
+         # ARM was originally set lower than x86 to keep the size

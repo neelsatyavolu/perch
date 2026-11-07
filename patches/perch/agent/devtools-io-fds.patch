@@ -1,0 +1,33 @@
+# Perch: let the browser hand its own CDP client (perchd) two socket ends on POSIX, as --remote-debugging-io-pipes does on Windows.
+diff --git a/content/browser/devtools/devtools_agent_host_impl.cc b/content/browser/devtools/devtools_agent_host_impl.cc
+index 44ffa91fca..5c8f338c71 100644
+--- a/content/browser/devtools/devtools_agent_host_impl.cc
++++ b/content/browser/devtools/devtools_agent_host_impl.cc
+@@ -229,6 +229,27 @@ void DevToolsAgentHost::StartRemoteDebuggingPipeHandler(
+     std::move(on_disconnect).Run();
+     return;
+   }
++#endif
++#if BUILDFLAG(IS_POSIX)
++  // Perch: the browser starts its own CDP client (perchd) and passes its ends
++  // of the two sockets as "<read>,<write>".
++  const std::string io_fds =
++      base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
++          "remote-debugging-io-pipes");
++  if (!io_fds.empty()) {
++    std::vector<std::string_view> parts = base::SplitStringPiece(
++        io_fds, ",", base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
++    int custom_read = -1;
++    int custom_write = -1;
++    if (parts.size() != 2 || !base::StringToInt(parts[0], &custom_read) ||
++        !base::StringToInt(parts[1], &custom_write) || custom_read < 0 ||
++        custom_write < 0) {
++      std::move(on_disconnect).Run();
++      return;
++    }
++    read_fd = custom_read;
++    write_fd = custom_write;
++  }
+ #endif
+   SetDevToolsPipeHandler(std::make_unique<DevToolsPipeHandler>(
+       read_fd, write_fd, std::move(on_disconnect)));

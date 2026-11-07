@@ -1,0 +1,133 @@
+# Perch: the Perch sidebar (a side panel entry, its toolbar action and the untrusted side chat page) and the hooks that start perchd per window.
+diff --git a/chrome/browser/ui/actions/chrome_action_id.h b/chrome/browser/ui/actions/chrome_action_id.h
+index 4bcf8e9afd..03b80b60d8 100644
+--- a/chrome/browser/ui/actions/chrome_action_id.h
++++ b/chrome/browser/ui/actions/chrome_action_id.h
+@@ -342,6 +342,7 @@
+   E(kActionSidePanelShowContextualTasks) \
+   E(kActionSidePanelShowHistoryCluster, IDC_SHOW_HISTORY_CLUSTERS_SIDE_PANEL) \
+   E(kActionSidePanelShowHistory, IDC_SHOW_HISTORY_SIDE_PANEL) \
++  E(kActionSidePanelShowPerch) \
+   E(kActionSidePanelShowLens) \
+   E(kActionSidePanelShowLensOverlayResults) \
+   E(kActionSidePanelShowReadAnything) \
+diff --git a/chrome/browser/ui/browser_actions.cc b/chrome/browser/ui/browser_actions.cc
+index 411759de1e..e8ee266bdf 100644
+--- a/chrome/browser/ui/browser_actions.cc
++++ b/chrome/browser/ui/browser_actions.cc
+@@ -460,6 +460,20 @@ void BrowserActions::InitializeSidePanelActions() {
+               CreateToggleSidePanelActionCallback(
+                   SidePanelEntryKey(SidePanelEntryId::kBookmarks), bwi)))
+           .Build());
++  // Perch: the sidebar with each tab's side chat.
++  root_action_item_->AddChild(
++      actions::ActionItem::Builder(
++          CreateToggleSidePanelActionCallback(
++              SidePanelEntryKey(SidePanelEntryId::kPerch), bwi))
++          .SetActionId(kActionSidePanelShowPerch)
++          .SetText(u"Perch")
++          .SetTooltipText(u"Perch sidebar")
++          .SetImage(ui::ImageModel::FromVectorIcon(vector_icons::kChatIcon,
++                                                   ui::kColorIcon))
++          .SetProperty(actions::kActionItemPinnableKey,
++                       std::underlying_type_t<actions::ActionPinnableState>(
++                           actions::ActionPinnableState::kPinnable))
++          .Build());
+   root_action_item_->AddChild(
+       SidePanelAction(SidePanelEntryId::kReadingList, IDS_READ_LATER_TITLE,
+                       IDS_READ_LATER_TITLE,
+diff --git a/chrome/browser/ui/browser_window/internal/BUILD.gn b/chrome/browser/ui/browser_window/internal/BUILD.gn
+index 0ddb4fcbb7..a4ca6bcca1 100644
+--- a/chrome/browser/ui/browser_window/internal/BUILD.gn
++++ b/chrome/browser/ui/browser_window/internal/BUILD.gn
+@@ -62,6 +62,16 @@ source_set("internal") {
+   } else {
+     sources += [
+       "browser_window_features.cc",
++
++      # Perch: the agent, its sidebar and the side chat page.
++      "//chrome/browser/perch/agent/perchd_launcher.cc",
++      "//chrome/browser/perch/agent/perchd_launcher.h",
++      "//chrome/browser/perch/side_panel/perch_side_panel_controller.cc",
++      "//chrome/browser/perch/side_panel/perch_side_panel_controller.h",
++      "//chrome/browser/perch/side_panel/perch_tab_sync.cc",
++      "//chrome/browser/perch/side_panel/perch_tab_sync.h",
++      "//chrome/browser/perch/webui/perch_side_chat_ui.cc",
++      "//chrome/browser/perch/webui/perch_side_chat_ui.h",
+       "browser_window_interface_iterator_non_android.cc",
+       "create_browser_window_non_android.cc",
+       "desktop_browser_window_capabilities.cc",
+diff --git a/chrome/browser/ui/browser_window/internal/browser_window_features.cc b/chrome/browser/ui/browser_window/internal/browser_window_features.cc
+index 728f2fc352..6026c0b716 100644
+--- a/chrome/browser/ui/browser_window/internal/browser_window_features.cc
++++ b/chrome/browser/ui/browser_window/internal/browser_window_features.cc
+@@ -149,6 +149,7 @@
+ #include "chrome/browser/ui/views/profiles/profile_menu_coordinator.h"
+ #include "chrome/browser/ui/views/sharing/sharing_window_controller.h"
+ #include "chrome/browser/ui/views/side_panel/bookmarks/bookmarks_side_panel_coordinator.h"
++#include "chrome/browser/perch/side_panel/perch_side_panel_controller.h"
+ #include "chrome/browser/ui/views/side_panel/comments/comments_side_panel_coordinator.h"
+ #include "chrome/browser/ui/views/side_panel/history/history_side_panel_coordinator.h"
+ #include "chrome/browser/ui/views/side_panel/history_clusters/history_clusters_side_panel_coordinator.h"
+@@ -897,6 +898,8 @@ void BrowserWindowFeatures::InitPostWindowConstruction(
+   bookmarks_side_panel_coordinator_ =
+       GetUserDataFactory().CreateInstance<BookmarksSidePanelCoordinator>(
+           *browser, browser->GetUnownedUserDataHost(), *side_panel_registry_);
++  // Perch: the sidebar with each tab's side chat.
++  perch::InitWindowFeatures(browser, *side_panel_registry_);
+ 
+   // TODO(webium): Consider supporting additional side panels beyond reading
+   // list and bookmarks.
+@@ -1202,6 +1205,7 @@ void BrowserWindowFeatures::TearDownPreBrowserWindowDestruction() {
+   history_side_panel_coordinator_.reset();
+   history_clusters_side_panel_coordinator_.reset();
+   comments_side_panel_coordinator_.reset();
++  perch::TearDownWindowFeatures(browser_);
+   bookmarks_side_panel_coordinator_.reset();
+   // TODO(crbug.com/346148093): This logic should not be gated behind a
+   // conditional.
+diff --git a/chrome/browser/ui/side_panel/side_panel_entry_id.h b/chrome/browser/ui/side_panel/side_panel_entry_id.h
+index 3e9dc27c0b..15443585bc 100644
+--- a/chrome/browser/ui/side_panel/side_panel_entry_id.h
++++ b/chrome/browser/ui/side_panel/side_panel_entry_id.h
+@@ -43,6 +43,7 @@
+   V(kGlic, kActionSidePanelShowGlic, "Glic")                                  \
+   V(kTabsFromOtherDevices, kActionSidePanelShowTabsFromOtherDevices,          \
+     "TabsFromOtherDevices")                                                   \
++  V(kPerch, kActionSidePanelShowPerch, "Perch")                               \
+   V(kSidePanelDev, std::nullopt, "SidePanelDev")                              \
+   V(kTestTabScopedEntry, std::nullopt, "TestTabScopedEntry")                  \
+   /* Extensions (nothing more should be added below here) */                  \
+diff --git a/chrome/browser/ui/webui/chrome_untrusted_web_ui_configs.cc b/chrome/browser/ui/webui/chrome_untrusted_web_ui_configs.cc
+index 861c5c41cf..ac2257b723 100644
+--- a/chrome/browser/ui/webui/chrome_untrusted_web_ui_configs.cc
++++ b/chrome/browser/ui/webui/chrome_untrusted_web_ui_configs.cc
+@@ -13,6 +13,7 @@
+ #if defined(TOOLKIT_VIEWS)
+ #include "chrome/browser/ui/webui/data_sharing/data_sharing_ui.h"
+ #include "chrome/browser/ui/webui/side_panel/read_anything/read_anything_untrusted_ui.h"
++#include "chrome/browser/perch/webui/perch_side_chat_ui.h"
+ #include "components/compose/buildflags.h"
+ #if BUILDFLAG(ENABLE_COMPOSE)
+ #include "chrome/browser/ui/webui/compose/compose_untrusted_ui.h"
+@@ -74,6 +75,8 @@ void RegisterChromeUntrustedWebUIConfigs() {
+       std::make_unique<lens::LensSidePanelUntrustedUIConfig>());
+   map.AddUntrustedWebUIConfig(
+       std::make_unique<ReadAnythingUIUntrustedConfig>());
++  // Perch: the side chat.
++  map.AddUntrustedWebUIConfig(std::make_unique<perch::PerchSideChatUIConfig>());
+   map.AddUntrustedWebUIConfig(std::make_unique<DataSharingUIConfig>());
+ 
+ #if BUILDFLAG(ENABLE_COMPOSE)
+diff --git a/tools/metrics/histograms/metadata/page/histograms.xml b/tools/metrics/histograms/metadata/page/histograms.xml
+index 12d987aaf9..f648d89c5f 100644
+--- a/tools/metrics/histograms/metadata/page/histograms.xml
++++ b/tools/metrics/histograms/metadata/page/histograms.xml
+@@ -1097,6 +1097,7 @@ chromium-metrics-reviews@google.com.
+   <variant name=".OmniboxEverywhere"/>
+   <variant name=".OmniboxPopup"/>
+   <variant name=".PerformanceSidePanel"/>
++  <variant name=".PerchSideChat"/>
+   <variant name=".ReadAnythingUntrusted"/>
+   <variant name=".ReadingList"/>
+   <variant name=".ReloadButtonUI"/>

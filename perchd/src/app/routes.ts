@@ -4,6 +4,7 @@ import type { ArtifactServer } from "./artifact-server";
 import type { ArtifactStore } from "./artifacts";
 import type { Windows } from "./app";
 import type { ChatStore } from "./chats";
+import type { PagesApi } from "./pages-api";
 import type { AppInfo, ArtifactKind, Chat, ChatSettings, TabInfo } from "./protocol";
 import { AppError, type RunManager } from "./runs";
 import * as v from "./validate";
@@ -16,7 +17,9 @@ export type RouteContext = {
   artifactServer: ArtifactServer;
   info: () => AppInfo;
   models: string[];
-  defaults: ChatSettings;
+  readonly defaults: ChatSettings;
+  /** Perch's own pages (pages-api.ts); null when this app does not serve them. */
+  pages: PagesApi | null;
 };
 
 type Handler = (ctx: RouteContext, params: string[], body: unknown, query: URLSearchParams) => Promise<unknown> | unknown;
@@ -216,6 +219,10 @@ export const ROUTES: Route[] = [
     return { ok: true };
   }),
   route("GET", "/api/windows/:id", (ctx, [id]) => ctx.windows.state(id!)),
+  route("POST", "/api/pages/([A-Za-z]{1,64})", (ctx, [method], body) => {
+    if (!ctx.pages) throw new AppError("not found", 404);
+    return ctx.pages.call(method!, body);
+  }),
   browserRoute("POST", "/api/windows/:id/active", (ctx, [id], body) => {
     const o = v.object(body);
     v.onlyKeys(o, ["tab"]);

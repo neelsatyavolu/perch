@@ -104,7 +104,7 @@ export function createMemoryApi(deps: MemoryApiDeps) {
       attempt(() => {
         const i = record(input);
         const patch: Partial<MemorySettings> = {};
-        for (const key of ["extraction", "paused"] as const) {
+        for (const key of ["extraction", "paused", "dreaming"] as const) {
           const value = flag(i, key);
           if (value !== undefined) patch[key] = value;
         }

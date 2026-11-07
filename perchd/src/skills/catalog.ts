@@ -1,7 +1,7 @@
 /**
  * Every skill the agent can use: Perch's built-in site skills (plain SKILL.md folders shipped with
  * perchd) and the user's own (encrypted, from SkillStore). A user's skill with the same name as a
- * built-in one replaces it.
+ * built-in one replaces it. Skills switched off in Settings are left out.
  */
 
 import { readdir } from "node:fs/promises";
@@ -25,10 +25,11 @@ export class SkillCatalog {
   static async load(opts: { builtInDir?: string; store?: SkillStore } = {}): Promise<SkillCatalog> {
     const builtIn = await loadBuiltInSkills(opts.builtInDir);
     const mine = opts.store ? await opts.store.list() : [];
+    const off = opts.store ? await opts.store.disabled() : new Set<string>();
     const map = new Map<string, SkillEntry>();
     for (const b of builtIn) map.set(b.name, { ...b, origin: "built-in" });
     for (const m of mine) map.set(m.name, { name: m.name, description: m.description, files: m.files, origin: "mine" });
-    return new SkillCatalog(map);
+    return new SkillCatalog(new Map([...map].filter(([name]) => !off.has(name))));
   }
 
   static of(entries: SkillEntry[]): SkillCatalog {

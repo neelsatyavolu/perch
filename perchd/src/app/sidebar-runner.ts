@@ -8,6 +8,7 @@
 import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import type { StepEvent } from "../agent/loop";
+import type { MemoryAccess } from "../memory/agent";
 import { SIDEBAR_CLIENT, type SidebarRun } from "../daemon/server";
 import { claudeBinary, codexBinary, runClaudeCode, runCodex, type AsideEvent, type McpServer } from "../external";
 import type { ModelInfo } from "./protocol";
@@ -82,6 +83,8 @@ export type SidebarRunnerOptions = {
   home: string;
   auditPath: string;
   timeoutMs?: number;
+  /** The profile's memory for this chat: what Perch knows goes in with the task, and facts are learned from the answer. */
+  memory?: () => Promise<MemoryAccess | undefined>;
 };
 
 export function sidebarRunner(opts: SidebarRunnerOptions): Runner {
@@ -92,6 +95,8 @@ export function sidebarRunner(opts: SidebarRunnerOptions): Runner {
       yield { type: "error", message: "Pick Codex or Claude Code as the model for this chat." };
       return;
     }
+    const memory = await opts.memory?.().catch(() => undefined);
+    const known = memory ? await memory.context(input.task).catch(() => "") : "";
     const session = `sidebar-${randomBytes(12).toString("hex")}`;
     const token = randomBytes(32).toString("base64url");
     opts.runs.add(session, { token, mode: input.settings.mode, approve: input.approve, ...(input.tab?.targetId ? { tab: input.tab.targetId } : {}) });
@@ -108,7 +113,7 @@ export function sidebarRunner(opts: SidebarRunnerOptions): Runner {
     };
     const run = agent === "codex" ? runCodex : runClaudeCode;
     const done = run({
-      task: input.task,
+      task: known ? `${input.task}\n\n${known}` : input.task,
       model: model && model !== "default" ? model : undefined,
       effort: agent === "codex" ? input.settings.effort : undefined,
       mode: input.settings.mode,
@@ -140,6 +145,7 @@ export function sidebarRunner(opts: SidebarRunnerOptions): Runner {
       if ("error" in f) {
         yield { type: "error", message: f.error };
       } else if (f.result.answer.trim()) {
+        memory?.chatEnded([{ role: "user", text: input.task }, { role: "assistant", text: f.result.answer.trim(), toolCalls: [] }]);
         yield { type: "final", text: f.result.answer.trim() };
       } else if (!input.signal.aborted) {
         const why = f.result.timedOut ? "it ran out of time" : `it stopped (exit ${f.result.exitCode})`;

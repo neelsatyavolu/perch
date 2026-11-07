@@ -13,12 +13,16 @@ import { Browser } from "../browser/browser";
 import { adoptBrowserFds } from "../cdp/adopt";
 import { startApp } from "../app/app";
 import { macKeychain } from "../app/keychain";
+import { openPageServices } from "../app/pages/services";
 import { SidebarRuns, sidebarModels, sidebarRunner } from "../app/sidebar-runner";
 import { Vault } from "../app/vault";
 import { startDaemon, type Daemon } from "../daemon/daemon";
 import { MacKeychain } from "../daemon/keychain";
 import { perchPaths } from "../daemon/paths";
 import type { CliIO } from "./io";
+
+/** perchd serves one profile inside Perch for now. */
+const PROFILE = "Default";
 
 export type BrowserSettings = { port: number; token: string; browserToken: string; origins: string[]; dataDir: string };
 
@@ -85,20 +89,34 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
     home = join(base, "home");
     daemon = await start({ ...io.env, PERCH_HOME: home });
   }
+  const vault = await Vault.open(macKeychain(), PROFILE);
+  const services = openPageServices({
+    userDataDir: settings.dataDir,
+    profile: PROFILE,
+    vault,
+    browser,
+    conn,
+    clients: daemon.registry,
+    daemonAudit: perchPaths({ ...io.env, PERCH_HOME: home }).auditFile,
+    env: io.env,
+  });
   const app = await startApp({
     dataDir: join(base, "app"),
-    vault: await Vault.open(macKeychain(), "Default"),
-    runner: sidebarRunner({ runs, perch: perchCommand(), home, auditPath: join(base, "sidebar-audit.jsonl") }),
+    vault,
+    runner: sidebarRunner({ runs, perch: perchCommand(), home, auditPath: services.sidebarAudit, memory: services.chatMemory }),
     models: sidebarModels(),
     allowedOrigins: settings.origins,
     listen: { port: settings.port },
     token: settings.token,
     browserToken: settings.browserToken,
+    pages: services.pages,
   });
+  services.attach(app);
   io.stderr(`perchd ${process.pid}: connected to browser; app API on 127.0.0.1:${settings.port}; socket in ${home}\n`);
   await Promise.race([closed, conn.closed]);
   io.stderr("perchd: the browser went away; stopping\n");
   await app.stop();
+  await services.stop();
   await daemon.stop();
   return 0;
 }

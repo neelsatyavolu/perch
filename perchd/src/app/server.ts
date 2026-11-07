@@ -127,6 +127,8 @@ export function startServer(opts: Options): Server {
       }
       if (req.method === "OPTIONS") return new Response(null, { status: origin && cors(origin)["access-control-allow-origin"] ? 204 : 403, headers: cors(origin) });
       if (url.pathname.startsWith("/api/")) {
+        // A pages call may wait on a person (a provider's sign-in page), longer than the idle timeout.
+        if (url.pathname.startsWith("/api/pages/")) srv.timeout(req, 0);
         const res = await handleApi(req, url, origin);
         // Refusals go to perchd's log: the browser's own reports have no other place to show them.
         if (res.status >= 400) console.error(`app api: ${req.method} ${url.pathname} -> ${res.status}`);

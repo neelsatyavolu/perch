@@ -3,9 +3,10 @@
  * local time, or manual. Lists, ranges, steps, month and day names and @hourly/@daily/@weekly/
  * @monthly work. When both day fields are set, either may match, as in Vixie cron. A time that a
  * daylight-saving change skips runs at the first minute after the gap; a repeated hour runs once.
+ * An interval schedule runs every so many hours (1 to 168), counted from the last run.
  */
 
-export type Schedule = { kind: "manual" } | { kind: "cron"; expr: string };
+export type Schedule = { kind: "manual" } | { kind: "cron"; expr: string } | { kind: "interval"; hours: number };
 export type CronSpec = {
   minutes: readonly number[];
   hours: readonly number[];
@@ -22,6 +23,7 @@ const WEEKDAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const SEARCH_DAYS = 366 * 5;
 const MIN_GAP_MS = 15 * 60_000;
+export const MAX_INTERVAL_HOURS = 168;
 
 type Field = { name: string; min: number; max: number; names?: string[]; nameBase?: number };
 const FIELDS: Field[] = [
@@ -98,6 +100,10 @@ function nextFromSpec(spec: CronSpec, after: Date): Date | null {
 /** The first run strictly after `after`, or null for manual schedules and ones that never run. */
 export function nextRun(schedule: Schedule, after: Date): Date | null {
   if (schedule.kind === "manual") return null;
+  if (schedule.kind === "interval") {
+    if (!Number.isInteger(schedule.hours) || schedule.hours < 1 || schedule.hours > MAX_INTERVAL_HOURS) throw new Error(`Pick between 1 and ${MAX_INTERVAL_HOURS} hours.`);
+    return new Date(after.getTime() + schedule.hours * 3_600_000);
+  }
   return nextFromSpec(parseCron(schedule.expr), after);
 }
 
@@ -131,6 +137,7 @@ const pad = (n: number) => String(n).padStart(2, "0");
 
 export function describeSchedule(schedule: Schedule): string {
   if (schedule.kind === "manual") return "Only when you run it";
+  if (schedule.kind === "interval") return schedule.hours === 1 ? "Every hour" : `Every ${schedule.hours} hours`;
   const expr = schedule.expr.trim();
   let spec: CronSpec;
   try {

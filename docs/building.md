@@ -42,6 +42,10 @@ scripts/with-apple-creds.sh uv run perch-build release
 
 `with-apple-creds.sh` loads the certificate into a temporary keychain and removes it, and the notarization key, when the command ends.
 
+A release also needs [osv-scanner](https://github.com/google/osv-scanner) version 2 (`brew install osv-scanner`). `perch-build release` writes an SPDX SBOM with Chromium's `tools/licenses/licenses.py` plus the npm packages and Sparkle that ship in `Perch.app`, checks it with `osv-scanner scan source -L`, and refuses to publish a finding that [known-vulnerabilities.md](known-vulnerabilities.md) does not list. It uploads the DMG, the `.pkg` when one exists, the appcast, the SBOM and `SHA256SUMS`. `uv run perch-build sbom` writes and checks the SBOM on its own.
+
+Before a release, `perch-build release` also checks that the files made from `enterprise/policies.json` are current. After editing the catalogue, run `uv run perch-build policies generate` and commit the result.
+
 ### The Sparkle key (once)
 
 Updates are signed with an EdDSA key. Create it without printing the private key, using the Sparkle tools that `perch-build release` downloads to `dist/cache/sparkle-<version>/bin`:

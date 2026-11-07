@@ -1,0 +1,65 @@
+caption: "Model providers users can connect"
+desc: "The providers Settings &gt; Models offers. Providers not listed are hidden, and a chat on one of their models stops. When unset, every provider is allowed."
+example_value:
+- anthropic
+- openai
+features:
+  can_be_recommended: false
+  dynamic_refresh: true
+  per_profile: false
+items:
+- caption: codex
+  name: codex
+  value: codex
+- caption: claude-code
+  name: claude-code
+  value: claude-code
+- caption: grok
+  name: grok
+  value: grok
+- caption: anthropic
+  name: anthropic
+  value: anthropic
+- caption: openai
+  name: openai
+  value: openai
+- caption: xai
+  name: xai
+  value: xai
+- caption: gemini
+  name: gemini
+  value: gemini
+- caption: openrouter
+  name: openrouter
+  value: openrouter
+- caption: custom
+  name: custom
+  value: custom
+- caption: lmstudio
+  name: lmstudio
+  value: lmstudio
+- caption: ollama
+  name: ollama
+  value: ollama
+owners:
+- file://chrome/browser/perch/OWNERS
+schema:
+  items:
+    enum:
+    - codex
+    - claude-code
+    - grok
+    - anthropic
+    - openai
+    - xai
+    - gemini
+    - openrouter
+    - custom
+    - lmstudio
+    - ollama
+    type: string
+  type: array
+supported_on:
+- chrome.*:158-
+tags: []
+type: string-enum-list

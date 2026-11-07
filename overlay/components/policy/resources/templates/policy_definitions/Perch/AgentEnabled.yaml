@@ -1,0 +1,21 @@
+caption: "Turn the agent on or off"
+default: true
+desc: "When true or unset, the agent works as usual. When false, the agent cannot run: the sidebar chat, the perch CLI's exec command, the MCP server's exec tool and routines all stop with \"Your organization turned off the agent.\" Browsing is not affected."
+example_value: false
+features:
+  can_be_recommended: false
+  dynamic_refresh: true
+  per_profile: false
+items:
+- caption: Enabled
+  value: true
+- caption: Disabled
+  value: false
+owners:
+- file://chrome/browser/perch/OWNERS
+schema:
+  type: boolean
+supported_on:
+- chrome.*:158-
+tags: []
+type: main

@@ -1,0 +1,17 @@
+caption: "Sync server"
+default: https://api.perchbrowser.com
+desc: "The https address of the sync server, for example a company server that signs people in through the company's identity provider. Data stays end-to-end encrypted."
+example_value: https://perch-sync.example.com
+features:
+  can_be_recommended: false
+  dynamic_refresh: true
+  per_profile: false
+owners:
+- file://chrome/browser/perch/OWNERS
+schema:
+  pattern: "^https://[^\\s/]+(/\\S*)?$"
+  type: string
+supported_on:
+- chrome.*:158-
+tags: []
+type: string

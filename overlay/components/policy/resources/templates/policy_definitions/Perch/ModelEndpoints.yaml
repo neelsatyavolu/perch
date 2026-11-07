@@ -1,0 +1,39 @@
+caption: "Company model endpoints"
+desc: "Model endpoints the company runs, OpenAI-compatible or Anthropic-compatible, over https. keyRef names a Keychain item the MDM installs, as keychain:&lt;service&gt;/&lt;account&gt;; the key itself never goes in the profile. When set, these endpoints replace personal sign-in."
+example_value:
+- keyRef: keychain:com.example.models/perch
+  kind: openai
+  name: "Company models"
+  url: https://models.example.com/v1
+features:
+  can_be_recommended: false
+  dynamic_refresh: true
+  per_profile: false
+owners:
+- file://chrome/browser/perch/OWNERS
+schema:
+  items:
+    properties:
+      keyRef:
+        pattern: "^keychain:[^/]+/.+$"
+        type: string
+      kind:
+        enum:
+        - openai
+        - anthropic
+        type: string
+      name:
+        type: string
+      url:
+        pattern: "^https://"
+        type: string
+    required:
+    - name
+    - kind
+    - url
+    type: object
+  type: array
+supported_on:
+- chrome.*:158-
+tags: []
+type: dict

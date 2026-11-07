@@ -1,0 +1,16 @@
+caption: "Minimum Perch version"
+desc: "A version in the form x.y.z. When the running Perch is older, it checks for updates at launch and installs the update on quit, unless AutoUpdateEnabled is false."
+example_value: "1.4.0"
+features:
+  can_be_recommended: false
+  dynamic_refresh: true
+  per_profile: false
+owners:
+- file://chrome/browser/perch/OWNERS
+schema:
+  pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+  type: string
+supported_on:
+- chrome.*:158-
+tags: []
+type: string

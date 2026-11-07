@@ -1,0 +1,32 @@
+caption: "Sites the agent must never act on or must always ask on"
+desc: "Each rule has a site pattern (a host such as bank.example, which also covers its subdomains) and never or ask. A policy rule wins over the user's own rule for the same site, and a never rule cannot be loosened."
+example_value:
+- pattern: bank.example
+  rule: never
+- pattern: hr.example.com
+  rule: ask
+features:
+  can_be_recommended: false
+  dynamic_refresh: true
+  per_profile: false
+owners:
+- file://chrome/browser/perch/OWNERS
+schema:
+  items:
+    properties:
+      pattern:
+        type: string
+      rule:
+        enum:
+        - never
+        - ask
+        type: string
+    required:
+    - pattern
+    - rule
+    type: object
+  type: array
+supported_on:
+- chrome.*:158-
+tags: []
+type: dict

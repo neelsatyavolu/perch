@@ -1,0 +1,21 @@
+caption: "Let outside agents connect"
+default: true
+desc: "When true or unset, the perch CLI and MCP clients such as Claude Code and Codex can connect. When false, they cannot, and every request answers \"Your organization doesn't allow outside agents.\""
+example_value: false
+features:
+  can_be_recommended: false
+  dynamic_refresh: true
+  per_profile: false
+items:
+- caption: Enabled
+  value: true
+- caption: Disabled
+  value: false
+owners:
+- file://chrome/browser/perch/OWNERS
+schema:
+  type: boolean
+supported_on:
+- chrome.*:158-
+tags: []
+type: main

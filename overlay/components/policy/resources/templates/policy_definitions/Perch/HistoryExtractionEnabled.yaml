@@ -1,0 +1,21 @@
+caption: "Let browsing history feed memory"
+default: true
+desc: "When true or unset, memory can learn from browsing history as well as chats. When false, it learns from chats only."
+example_value: false
+features:
+  can_be_recommended: false
+  dynamic_refresh: true
+  per_profile: false
+items:
+- caption: Enabled
+  value: true
+- caption: Disabled
+  value: false
+owners:
+- file://chrome/browser/perch/OWNERS
+schema:
+  type: boolean
+supported_on:
+- chrome.*:158-
+tags: []
+type: main

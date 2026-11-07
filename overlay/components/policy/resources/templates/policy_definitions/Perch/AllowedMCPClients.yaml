@@ -1,0 +1,20 @@
+caption: "Outside agents that can connect"
+desc: "Client names as perch clients lists them, for example claude-code or codex. Clients not listed are refused. When unset, every client can connect."
+example_value:
+- claude-code
+- codex
+features:
+  can_be_recommended: false
+  dynamic_refresh: true
+  per_profile: false
+owners:
+- file://chrome/browser/perch/OWNERS
+schema:
+  items:
+    pattern: "^[a-z0-9][a-z0-9-]*$"
+    type: string
+  type: array
+supported_on:
+- chrome.*:158-
+tags: []
+type: list

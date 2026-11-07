@@ -1,0 +1,25 @@
+caption: "Built-in extensions"
+default:
+  backrow: true
+  memorySaver: true
+desc: "Set backrow or memorySaver to false to turn Backrow watch parties or the memory saver off."
+example_value:
+  backrow: false
+  memorySaver: true
+features:
+  can_be_recommended: false
+  dynamic_refresh: true
+  per_profile: false
+owners:
+- file://chrome/browser/perch/OWNERS
+schema:
+  properties:
+    backrow:
+      type: boolean
+    memorySaver:
+      type: boolean
+  type: object
+supported_on:
+- chrome.*:158-
+tags: []
+type: dict

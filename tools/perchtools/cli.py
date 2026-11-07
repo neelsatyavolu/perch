@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import os
+import subprocess
 import sys
 import urllib.request
 from pathlib import Path
@@ -16,8 +18,10 @@ from .gnargs import build as build_chromium
 from .package import creds_from_env, package
 from .patching import Generator, PatchFailed, apply_series, continue_series, export_series
 from .paths import REPO, Paths, load_paths
-from .release import REPO_SLUG, appcast, preflight, publish, published_build_from_appcast, release_notes
+from .policies import CATALOGUE, CatalogueError, policy_ids_generator, stale_files, write_generated
+from .release import REPO_SLUG, appcast, preflight, publish, published_build_from_appcast, release_assets, release_notes
 from .rename import rename_product_strings
+from .sbom import KNOWN_VULNERABILITIES, SbomError, checksums, known_vulnerabilities, unlisted, vulnerability_check, write_sbom
 from .series import read_series
 from .sparkle import fetch_sparkle, load_pin
 from .stage import BUNDLED_FILE, StageError, load_bundled, stage_extensions
@@ -31,7 +35,10 @@ def fetch_json(url: str) -> Any:
         return json.load(response)
 
 
-GENERATORS: list[Generator] = [("product-name", rename_product_strings)]
+GENERATORS: list[Generator] = [
+    ("product-name", rename_product_strings),
+    ("policy ids", policy_ids_generator(REPO / CATALOGUE)),
+]
 
 
 def current_paths() -> Paths:
@@ -126,6 +133,21 @@ def _cmd_netaudit(args: argparse.Namespace) -> int:
     return 1 if problems else 0
 
 
+def _cmd_policies(args: argparse.Namespace) -> int:
+    try:
+        if args.action == "generate":
+            for path in write_generated(REPO):
+                print(f"Wrote {path}")
+            return 0
+        stale = stale_files(REPO)
+    except CatalogueError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+    for path in stale:
+        print(f"error: {path} is out of date; run perch-build policies generate", file=sys.stderr)
+    return 1 if stale else 0
+
+
 def _cmd_package(args: argparse.Namespace) -> int:
     creds = None
     if args.mode == "release":
@@ -158,10 +180,20 @@ def _published_build() -> int | None:
     return published_build_from_appcast(result.stdout) if result.returncode == 0 else None
 
 
+def _release_preflight(paths: Paths, info: VersionInfo, sbom) -> list[str]:
+    return preflight(
+        REPO, paths.src, info, _tag_exists, _published_build,
+        stale_policies=lambda: stale_files(REPO),
+        vulnerabilities=lambda: vulnerability_check(sbom(), run),
+    )
+
+
 def _cmd_release(args: argparse.Namespace) -> int:
     paths = current_paths()
     info = read_version(REPO / "version.json")
-    reasons = preflight(REPO, paths.src, info, _tag_exists, _published_build)
+    out = REPO / "dist" / "release"
+    sbom = functools.cache(lambda: write_sbom(paths, info, out, run))
+    reasons = _release_preflight(paths, info, sbom)
     for reason in reasons:
         print(f"{'warning' if args.dry_run else 'error'}: {reason}", file=sys.stderr)
     if reasons and not args.dry_run:
@@ -174,17 +206,43 @@ def _cmd_release(args: argparse.Namespace) -> int:
     if not key_ref:
         print("error: PERCH_SPARKLE_KEY_REF is not set; run through scripts/with-apple-creds.sh", file=sys.stderr)
         return 1
-    out = REPO / "dist" / "release"
     out.mkdir(parents=True, exist_ok=True)
+    try:
+        sbom_path = sbom()
+    except (SbomError, OSError, subprocess.CalledProcessError) as error:
+        print(f"error: could not write the SBOM: {error}", file=sys.stderr)
+        return 1
     feed = appcast(dmg, out, key_ref, info, sparkle_bin(REPO), run)
+    assets = release_assets(dmg, REPO / "dist" / f"Perch-{info.perch}.pkg", feed, sbom_path)
+    sums = out / "SHA256SUMS"
+    sums.write_text(checksums(assets))
     notes = release_notes(info, read_series(REPO / "patches" / "series"))
     if args.dry_run:
         (out / "notes.md").write_text(notes)
-        print(f"Dry run: wrote {feed} and {out / 'notes.md'}; published nothing.")
+        print(f"Dry run: wrote {', '.join(p.name for p in [*assets, sums])} and notes.md in {out}; published nothing.")
         return 0
-    publish(info, dmg, feed, notes, run)
+    publish(info, [*assets, sums], notes, run)
     print(f"Published Perch {info.perch}.")
     return 0
+
+
+def _cmd_sbom(args: argparse.Namespace) -> int:
+    info = read_version(REPO / "version.json")
+    try:
+        sbom = write_sbom(current_paths(), info, REPO / "dist" / "release", run)
+        print(f"Wrote {sbom}")
+        if args.no_scan:
+            return 0
+        known = known_vulnerabilities(REPO / KNOWN_VULNERABILITIES)
+        found = vulnerability_check(sbom, run)
+    except (SbomError, OSError, subprocess.CalledProcessError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+    new = unlisted(found, known)
+    for finding in found:
+        print(f"{'not listed' if finding in new else 'listed    '} {finding}")
+    print(f"{len(found)} findings, {len(new)} not listed in {KNOWN_VULNERABILITIES}")
+    return 1 if new else 0
 
 
 def rebase(paths: Paths, repo: Path, kind: str, version: str | None, run=run) -> VersionInfo:
@@ -263,6 +321,12 @@ def build_parser() -> argparse.ArgumentParser:
     stage = sub.add_parser("stage-extensions", help="build the built-in extensions into out/<config>/perch_extensions")
     stage.add_argument("--config", choices=["dev", "release"], default="dev")
     stage.set_defaults(func=_cmd_stage)
+    sb = sub.add_parser("sbom", help="write the release SBOM to dist/release and check it with osv-scanner")
+    sb.add_argument("--no-scan", action="store_true", help="write the SBOM only")
+    sb.set_defaults(func=_cmd_sbom)
+    pol = sub.add_parser("policies", help="generate or check the files made from enterprise/policies.json")
+    pol.add_argument("action", choices=["generate", "check"])
+    pol.set_defaults(func=_cmd_policies)
     return parser
 
 

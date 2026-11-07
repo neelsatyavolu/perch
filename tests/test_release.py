@@ -1,10 +1,12 @@
 import shutil
+from pathlib import Path
 
 import pytest
 
 from conftest import TAG, Recorder, git
 from perchtools.patching import apply_series
-from perchtools.release import appcast, preflight, publish, published_build_from_appcast, release_notes
+from perchtools.release import appcast, preflight, publish, published_build_from_appcast, release_assets, release_notes
+from perchtools.sbom import Finding, SbomError
 from perchtools.version import VersionInfo
 
 INFO = VersionInfo("0.1.0", 1, TAG)
@@ -22,8 +24,8 @@ def setup(tmp_path, chromium_like, patch_dirs):
     return repo, chromium_like
 
 
-def _preflight(repo, src, info=INFO, tag_exists=lambda tag: False, published=lambda: None):
-    return preflight(repo, src, info, tag_exists, published)
+def _preflight(repo, src, info=INFO, tag_exists=lambda tag: False, published=lambda: None, stale=lambda: [], findings=lambda: []):
+    return preflight(repo, src, info, tag_exists, published, stale_policies=stale, vulnerabilities=findings)
 
 
 def test_preflight_clean_passes(setup):
@@ -101,8 +103,67 @@ def test_release_notes_list_patches():
 
 
 def test_publish_creates_release(tmp_path, recorder):
-    publish(INFO, tmp_path / "Perch-0.1.0.dmg", tmp_path / "appcast.xml", "notes", run=recorder)
+    publish(INFO, [tmp_path / "Perch-0.1.0.dmg", tmp_path / "appcast.xml"], "notes", run=recorder)
     assert recorder.calls == [[
         "gh", "release", "create", "v0.1.0", "--repo", "neelsatyavolu/perch", "--title", "Perch 0.1.0",
         "--notes", "notes", str(tmp_path / "Perch-0.1.0.dmg"), str(tmp_path / "appcast.xml"),
     ]]
+
+
+FINDING = Finding("GHSA-aaaa-bbbb-cccc", ("CVE-2026-1",), "smol-toml", "1.9.1")
+
+
+def test_preflight_refuses_stale_policy_files(setup):
+    reasons = _preflight(*setup, stale=lambda: [Path("docs/enterprise/policies.md")])
+    assert any("docs/enterprise/policies.md" in r and "perch-build policies generate" in r for r in reasons)
+
+
+def test_preflight_refuses_unlisted_vulnerability(setup):
+    reasons = _preflight(*setup, findings=lambda: [FINDING])
+    assert any("GHSA-aaaa-bbbb-cccc in smol-toml 1.9.1" in r and "known-vulnerabilities.md" in r for r in reasons)
+
+
+def _list_known(repo, row):
+    (repo / "docs").mkdir(exist_ok=True)
+    (repo / "docs" / "known-vulnerabilities.md").write_text(
+        "# Known vulnerabilities\n\n| ID | Package | Reason | Date |\n|---|---|---|---|\n" + row + "\n"
+    )
+    git(repo, "add", "-A")
+    git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "known")
+
+
+def test_preflight_allows_listed_vulnerability(setup):
+    repo, src = setup
+    _list_known(repo, "| CVE-2026-1 | smol-toml | Perch never parses untrusted TOML | 2026-11-07 |")
+    assert _preflight(repo, src, findings=lambda: [FINDING]) == []
+
+
+def test_preflight_refuses_listing_without_reason(setup):
+    repo, src = setup
+    _list_known(repo, "| GHSA-aaaa-bbbb-cccc | smol-toml |  | 2026-11-07 |")
+    assert any("reason" in r for r in _preflight(repo, src, findings=lambda: [FINDING]))
+
+
+def test_preflight_reports_a_failed_scan(setup):
+    def broken():
+        raise SbomError("osv-scanner exited 127")
+
+    assert any("osv-scanner exited 127" in r for r in _preflight(*setup, findings=broken))
+
+
+def test_release_notes_link_chrome_policies():
+    notes = release_notes(INFO, [])
+    assert "https://github.com/neelsatyavolu/perch/blob/v0.1.0/docs/enterprise/chrome-policies.md" in notes
+
+
+def test_release_assets_include_pkg_only_when_built(tmp_path):
+    dmg, pkg, feed, sbom = (tmp_path / n for n in ("Perch-0.1.0.dmg", "Perch-0.1.0.pkg", "appcast.xml", "Perch-0.1.0.spdx.json"))
+    assert release_assets(dmg, pkg, feed, sbom) == [dmg, feed, sbom]
+    pkg.write_text("pkg")
+    assert release_assets(dmg, pkg, feed, sbom) == [dmg, pkg, feed, sbom]
+
+
+def test_publish_uploads_five_files(tmp_path, recorder):
+    names = ["Perch-0.1.0.dmg", "Perch-0.1.0.pkg", "appcast.xml", "Perch-0.1.0.spdx.json", "SHA256SUMS"]
+    publish(INFO, [tmp_path / n for n in names], "notes", run=recorder)
+    assert recorder.calls[0][-5:] == [str(tmp_path / n) for n in names]

@@ -1,0 +1,62 @@
+# Perch: host Perch's own pages (Settings, New Tab, Memory, Routines, Import, Welcome) on chrome://perch-*. Hooks RegisterChromeWebUIConfigs and lets those pages reach perchd on loopback in IsWebUIAllowedToMakeNetworkRequests (their CSP allows nothing else).
+diff --git a/chrome/browser/ui/browser_window/internal/BUILD.gn b/chrome/browser/ui/browser_window/internal/BUILD.gn
+index 8e29449fd3..5e53f6cd2d 100644
+--- a/chrome/browser/ui/browser_window/internal/BUILD.gn
++++ b/chrome/browser/ui/browser_window/internal/BUILD.gn
+@@ -76,6 +76,14 @@ source_set("internal") {
+       "//chrome/browser/perch/webui/perch_chat_ui.h",
+       "//chrome/browser/perch/webui/perch_ui_source.cc",
+       "//chrome/browser/perch/webui/perch_ui_source.h",
++      "//chrome/browser/perch/webui/perch_pages_ui.cc",
++      "//chrome/browser/perch/webui/perch_pages_ui.h",
++      "//chrome/browser/perch/webui/perch_page_handler.h",
++      "//chrome/browser/perch/webui/perch_page_handler.mm",
++      "//chrome/browser/perch/settings/appearance.cc",
++      "//chrome/browser/perch/settings/appearance.h",
++      "//chrome/browser/perch/settings/privacy.cc",
++      "//chrome/browser/perch/settings/privacy.h",
+       "browser_window_interface_iterator_non_android.cc",
+       "create_browser_window_non_android.cc",
+       "desktop_browser_window_capabilities.cc",
+diff --git a/chrome/browser/ui/webui/chrome_web_ui_configs.cc b/chrome/browser/ui/webui/chrome_web_ui_configs.cc
+index efd15a01ab..9e2134e63f 100644
+--- a/chrome/browser/ui/webui/chrome_web_ui_configs.cc
++++ b/chrome/browser/ui/webui/chrome_web_ui_configs.cc
+@@ -145,6 +145,7 @@
+ #include "chrome/browser/ui/webui/webnn_internals/webnn_internals_ui.h"
+ #include "chrome/browser/ui/webui/webui_gallery/webui_gallery_ui.h"
+ #include "chrome/browser/perch/webui/perch_chat_ui.h"
++#include "chrome/browser/perch/webui/perch_pages_ui.h"
+ #include "chrome/browser/ui/webui/webui_js_error/webui_js_error_ui.h"
+ #else  // !BUILDFLAG(IS_ANDROID)
+ #include "chrome/browser/ui/webui/chrome_finds_internals/chrome_finds_internals_ui.h"
+@@ -427,6 +428,7 @@ void RegisterChromeWebUIConfigs() {
+   map.AddWebUIConfig(std::make_unique<WebUIToolbarConfig>());
+   // Perch: the full-page chat.
+   map.AddWebUIConfig(std::make_unique<perch::PerchChatUIConfig>());
++  perch::RegisterPerchPagesWebUIConfigs(map);
+ #endif  // BUILDFLAG(IS_ANDROID)
+ 
+ #if BUILDFLAG(ENABLE_WEBUI_TABSTRIP_NTB)
+diff --git a/chrome/browser/ui/webui/chrome_web_ui_controller_factory.cc b/chrome/browser/ui/webui/chrome_web_ui_controller_factory.cc
+index 524089c3d4..99fb60d3d4 100644
+--- a/chrome/browser/ui/webui/chrome_web_ui_controller_factory.cc
++++ b/chrome/browser/ui/webui/chrome_web_ui_controller_factory.cc
+@@ -19,6 +19,7 @@
+ #include "build/build_config.h"
+ #include "chrome/browser/about_flags.h"
+ #include "chrome/browser/buildflags.h"
++#include "chrome/browser/perch/webui/perch_pages_ui.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/ui/webui/about/about_ui.h"
+ #include "chrome/browser/ui/webui/components/components_ui.h"
+@@ -346,6 +347,9 @@ bool ChromeWebUIControllerFactory::IsWebUIAllowedToMakeNetworkRequests(
+   // If you are adding a new host to this list, please file a corresponding bug
+   // to track its removal. See https://crbug.com/40091019 for the metabug.
+   return
++      // Perch: its pages reach perchd on loopback; their CSP allows nothing
++      // else.
++      perch::IsPerchPageHost(origin.host()) ||
+       // https://crbug.com/40571286
+       origin.host() == chrome::kChromeUISyncConfirmationHost ||
+       // https://crbug.com/40583261

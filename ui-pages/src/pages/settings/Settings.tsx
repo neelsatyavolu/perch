@@ -2,6 +2,7 @@ import type { ComponentType } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { Icon, Search } from "../../ui/icons";
 import { About } from "./About";
+import { BuiltIn } from "./BuiltIn";
 import { Appearance } from "./Appearance";
 import { ImportSection, MemorySection, RoutinesSection } from "./Links";
 import { Models } from "./Models";
@@ -12,7 +13,7 @@ import { SkillsMcp } from "./SkillsMcp";
 import "./settings.css";
 
 const PAGES: Readonly<Record<SectionId, ComponentType>> = {
-  appearance: Appearance, models: Models, skills: SkillsMcp, permissions: Permissions, privacy: Privacy,
+  appearance: Appearance, models: Models, skills: SkillsMcp, permissions: Permissions, privacy: Privacy, builtin: BuiltIn,
   memory: MemorySection, routines: RoutinesSection, import: ImportSection, about: About,
 };
 

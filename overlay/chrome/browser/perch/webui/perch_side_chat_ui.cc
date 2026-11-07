@@ -21,7 +21,7 @@ PerchSideChatUI::PerchSideChatUI(content::WebUI* web_ui)
     : UntrustedTopChromeWebUIController(web_ui) {
   content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
       web_ui->GetWebContents()->GetBrowserContext(), kSideChatURL);
-  ServePerchPages(source, "sidebar.html", /*side_panel=*/true);
+  ServePerchPages(source, "sidebar.html", PageKind::kSidePanel);
 }
 
 PerchSideChatUI::~PerchSideChatUI() = default;

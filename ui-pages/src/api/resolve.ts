@@ -6,6 +6,7 @@
 
 import type { Appearance, PerchApi } from "../api";
 import { ACCENT_NAMES, type AccentName, THEME_NAMES, type ThemeName } from "../theme/tokens";
+import { installHostBridge } from "./host";
 import { createRpcApi, isBridge } from "./rpc";
 
 export function appearanceFromQuery(search: string): Partial<Appearance> {
@@ -19,6 +20,7 @@ export function appearanceFromQuery(search: string): Partial<Appearance> {
 }
 
 export async function loadApi(win: Window): Promise<PerchApi | null> {
+  installHostBridge(win);
   const bridge = (win as Window & { perch?: unknown }).perch;
   if (isBridge(bridge)) return createRpcApi(bridge);
   if (import.meta.env?.MODE === "fake") {

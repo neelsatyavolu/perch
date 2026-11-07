@@ -38,8 +38,7 @@ struct BuiltIn {
 // The ids follow from the public keys in build/bundled-extensions.json, which
 // perch-build writes into each staged manifest.
 constexpr BuiltIn kBuiltIns[] = {
-    {"perch", "ocjanjehckpdbcjamffmbeemoooamjpo",
-     prefs::kExtensionPerchEnabled},
+    {"perch", kPerchExtensionId, prefs::kExtensionPerchEnabled},
     {"backrow", "ajhempjobmeelmhloiiecnbljbpoohcc",
      prefs::kExtensionBackrowEnabled},
     {"lulltab", "cajablldnlcmhamlhpbjdapikiakdjdm",
@@ -167,6 +166,27 @@ void AddPerchComponentExtensions(Profile* profile) {
   for (const BuiltIn& builtin : kBuiltIns) {
     watcher->Sync(builtin);
   }
+}
+
+std::vector<BuiltInExtensionState> ListBuiltInExtensions(Profile* profile) {
+  std::vector<BuiltInExtensionState> result;
+  for (const BuiltIn& builtin : kBuiltIns) {
+    result.push_back(
+        {builtin.name, profile->GetPrefs()->GetBoolean(builtin.pref)});
+  }
+  return result;
+}
+
+bool SetBuiltInExtensionEnabled(Profile* profile,
+                                std::string_view name,
+                                bool enabled) {
+  for (const BuiltIn& builtin : kBuiltIns) {
+    if (name == builtin.name) {
+      profile->GetPrefs()->SetBoolean(builtin.pref, enabled);
+      return true;
+    }
+  }
+  return false;
 }
 
 bool IsPerchComponentExtension(std::string_view id) {

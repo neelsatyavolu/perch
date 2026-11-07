@@ -16,6 +16,16 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {
   registry->RegisterBooleanPref(prefs::kExtensionBackrowEnabled, true);
   registry->RegisterBooleanPref(prefs::kExtensionLulltabEnabled, true);
   registry->RegisterBooleanPref(prefs::kExtensionCaveatlyEnabled, true);
+
+  registry->RegisterStringPref(prefs::kAppearanceTheme, "ink");
+  registry->RegisterStringPref(prefs::kAppearanceAccent, "blue");
+  registry->RegisterBooleanPref(prefs::kAppearanceMatchSystem, false);
+  registry->RegisterStringPref(prefs::kAppearanceDarkTheme, "ink");
+  registry->RegisterBooleanPref(prefs::kAppearanceHideChrome, false);
+  registry->RegisterBooleanPref(prefs::kAppearanceRevealOnHover, true);
+  registry->RegisterStringPref(prefs::kAppearanceDensity, "comfortable");
+
+  registry->RegisterBooleanPref(prefs::kFingerprinting, true);
 }
 
 void OverrideChromiumDefaults(user_prefs::PrefRegistrySyncable* registry) {}

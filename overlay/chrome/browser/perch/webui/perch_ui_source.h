@@ -6,19 +6,32 @@
 
 #include <string_view>
 
+#include "base/files/file_path.h"
+
 namespace content {
 class WebUIDataSource;
 }
 
 namespace perch {
 
-// Serves Perch's built pages (ui/dist, in the app bundle) on `source`, with
+enum class PageKind {
+  // The full-page chat, from ui/dist.
+  kChat,
+  // The side chat, from ui/dist; its config.js also defines window.perchHost.
+  kSidePanel,
+  // Settings, New Tab and the other ui-pages/ entries, from ui-pages/dist.
+  kPages,
+};
+
+// Serves Perch's built pages (in the app bundle) on `source`, with
 // `default_page` for the root and config.js telling the page where perchd is.
-// The CSP lets the page reach perchd on loopback and nothing else. The side
-// panel's config.js also defines window.perchHost.
+// The CSP lets the page reach perchd on loopback and nothing else.
 void ServePerchPages(content::WebUIDataSource* source,
                      std::string_view default_page,
-                     bool side_panel);
+                     PageKind kind);
+
+// Where ui-pages/dist is: --perch-pages-dir, else Resources/perch_pages.
+base::FilePath PagesDir();
 
 }  // namespace perch
 

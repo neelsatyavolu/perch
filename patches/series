@@ -12,4 +12,6 @@ perch/agent/tab-ids.patch
 perch/agent/chat-page.patch
 perch/shell/defaults-hooks.patch
 perch/shell/component-extensions.patch
+perch/shell/perch-scheme.patch
+perch/shell/perch-pages.patch
 perch/build/thinlto-jobs.patch

@@ -224,6 +224,9 @@ export type PrivacySettings = {
   readonly backgroundConnections: readonly BackgroundConnection[];
 };
 export type PrivacyPatch = Partial<Omit<PrivacySettings, "backgroundConnections" | "blockerExceptions">>;
+/** An extension Perch ships built in: it can be turned off but not removed (spec 5.6, 5.7, 5.9). */
+export type BuiltInName = "perch" | "backrow" | "lulltab" | "caveatly";
+export type BuiltInExtension = { readonly name: BuiltInName; readonly enabled: boolean };
 export type SiteData = { readonly host: string; readonly bytes: number; readonly cookies: number; readonly lastUsed: Iso };
 
 /* ---------- Memory (spec 8) ---------- */
@@ -405,6 +408,8 @@ export interface PerchApi {
   listSiteData(): Promise<readonly SiteData[]>;
   /** Clears the site's cookies, storage and cache ("Forget this site", spec 5.9). */
   forgetSite(host: string): Promise<void>;
+  listBuiltInExtensions(): Promise<readonly BuiltInExtension[]>;
+  setBuiltInExtension(name: BuiltInName, enabled: boolean): Promise<readonly BuiltInExtension[]>;
 
   // Memory
   getMemorySettings(): Promise<MemorySettings>;
@@ -480,6 +485,7 @@ export const API_METHODS = [
   "listSkills", "addSkill", "setSkillEnabled", "removeSkill",
   "getPermissions", "setPermissionMode", "addSiteRule", "removeSiteRule", "setClientMode", "listAuditLog", "exportAuditLog",
   "getPrivacy", "setPrivacy", "setBackgroundConnection", "removeBlockerException", "listSiteData", "forgetSite",
+  "listBuiltInExtensions", "setBuiltInExtension",
   "getMemorySettings", "setMemorySettings", "listMemoryPages", "readMemoryPage", "writeMemoryPage", "deleteMemoryPage", "wipeMemory",
   "listDreamLogs", "listSetupSources", "startProfileBuild", "getProfileBuild", "getProfileDraft", "saveProfileDraft", "discardProfileDraft",
   "listRoutines", "saveRoutine", "setRoutineEnabled", "deleteRoutine", "runRoutine", "findRoutineProposals", "acceptProposal", "dismissProposal",

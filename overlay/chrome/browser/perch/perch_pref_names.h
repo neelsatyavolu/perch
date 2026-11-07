@@ -17,6 +17,20 @@ inline constexpr char kExtensionLulltabEnabled[] =
 inline constexpr char kExtensionCaveatlyEnabled[] =
     "perch.extensions.caveatly.enabled";
 
+// Appearance (ui-pages/src/api.ts Appearance). Profile prefs.
+inline constexpr char kAppearanceTheme[] = "perch.appearance.theme";
+inline constexpr char kAppearanceAccent[] = "perch.appearance.accent";
+inline constexpr char kAppearanceMatchSystem[] =
+    "perch.appearance.match_system";
+inline constexpr char kAppearanceDarkTheme[] = "perch.appearance.dark_theme";
+inline constexpr char kAppearanceHideChrome[] = "perch.appearance.hide_chrome";
+inline constexpr char kAppearanceRevealOnHover[] =
+    "perch.appearance.reveal_on_hover";
+inline constexpr char kAppearanceDensity[] = "perch.appearance.density";
+
+// Fingerprinting protection (spec 5.1), applied in the shell's privacy work.
+inline constexpr char kFingerprinting[] = "perch.fingerprinting";
+
 }  // namespace perch::prefs
 
 #endif  // CHROME_BROWSER_PERCH_PERCH_PREF_NAMES_H_

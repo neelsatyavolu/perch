@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <string>
 #include <utility>
 
 #include "base/apple/bundle_locations.h"
@@ -229,6 +230,10 @@ void PerchdLauncher::Launch() {
   base::ListValue origins;
   origins.Append(kSideChatOrigin);
   origins.Append(kChatOrigin);
+  for (const char* page : {"settings", "newtab", "memory", "routines", "import",
+                           "welcome"}) {
+    origins.Append(std::string("chrome://perch-") + page);
+  }
   config.Set("origins", std::move(origins));
   std::string line = base::WriteJson(config).value_or("{}") + "\n";
   base::ThreadPool::PostTaskAndReplyWithResult(

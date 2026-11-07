@@ -6,6 +6,8 @@
 #include <string>
 #include <utility>
 
+#include "base/apple/bundle_locations.h"
+#include "base/command_line.h"
 #include "base/files/file_util.h"
 #include "base/functional/bind.h"
 #include "base/json/string_escape.h"
@@ -20,6 +22,8 @@
 namespace perch {
 
 namespace {
+
+constexpr char kPagesDirSwitch[] = "perch-pages-dir";
 
 // Paths in ui/dist are plain: letters, digits, dots, dashes, underscores and
 // slashes, never "..".
@@ -43,7 +47,7 @@ std::string PathOnly(const std::string& path) {
 
 // window.perchApp for the page (docs/design/webui-hosting.md). The token lives
 // only in this script and the page's memory, never in an address.
-std::string ConfigScript(bool side_panel) {
+std::string ConfigScript(PageKind kind) {
   const PerchdLauncher& launcher = PerchdLauncher::Get();
   std::string script = base::StringPrintf(
       "window.perchApp = Object.freeze({api: %s, token: %s, "
@@ -51,7 +55,7 @@ std::string ConfigScript(bool side_panel) {
       "'main', theme: 'system', accent: 'blue'});\n",
       base::GetQuotedJSONString(launcher.ApiOrigin()).c_str(),
       base::GetQuotedJSONString(launcher.token()).c_str());
-  if (side_panel) {
+  if (kind == PageKind::kSidePanel) {
     // The panel view closes the panel on this same-document navigation
     // (perch_side_panel_controller.cc), and opens window.open in a tab.
     script +=
@@ -75,7 +79,7 @@ bool ShouldHandle(const std::string& path) {
 }
 
 void HandleRequest(const std::string& default_page,
-                   bool side_panel,
+                   PageKind kind,
                    const std::string& raw_path,
                    content::WebUIDataSource::GotDataCallback callback) {
   std::string path = PathOnly(raw_path);
@@ -84,7 +88,7 @@ void HandleRequest(const std::string& default_page,
   }
   if (path == "config.js") {
     std::move(callback).Run(
-        base::MakeRefCounted<base::RefCountedString>(ConfigScript(side_panel)));
+        base::MakeRefCounted<base::RefCountedString>(ConfigScript(kind)));
     return;
   }
   if (!IsSafePath(path)) {
@@ -93,20 +97,34 @@ void HandleRequest(const std::string& default_page,
   }
   base::ThreadPool::PostTaskAndReplyWithResult(
       FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_BLOCKING},
-      base::BindOnce(&ReadPage, PerchdLauncher::Get().UiDir().Append(path)),
+      base::BindOnce(&ReadPage,
+                     (kind == PageKind::kPages ? PagesDir()
+                                               : PerchdLauncher::Get().UiDir())
+                         .Append(path)),
       std::move(callback));
 }
 
 }  // namespace
 
+base::FilePath PagesDir() {
+  base::FilePath dir =
+      base::CommandLine::ForCurrentProcess()->GetSwitchValuePath(
+          kPagesDirSwitch);
+  if (!dir.empty()) {
+    return dir;
+  }
+  return base::apple::FrameworkBundlePath()
+      .Append("Resources")
+      .Append("perch_pages");
+}
+
 void ServePerchPages(content::WebUIDataSource* source,
                      std::string_view default_page,
-                     bool side_panel) {
+                     PageKind kind) {
   PerchdLauncher::Get().MaybeStart();
   source->SetRequestFilter(
       base::BindRepeating(&ShouldHandle),
-      base::BindRepeating(&HandleRequest, std::string(default_page),
-                          side_panel));
+      base::BindRepeating(&HandleRequest, std::string(default_page), kind));
   const std::string api = PerchdLauncher::Get().ApiOrigin();
   const std::string socket =
       api.empty() ? std::string()

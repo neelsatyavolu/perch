@@ -5,7 +5,7 @@
  */
 
 import type {
-  AboutInfo, Appearance, ChatSummary, DetectedBrowser, DraftFact, FileChoice, FileKind, JobId, JobProgress, McpImportCandidate, McpServer,
+  AboutInfo, Appearance, BuiltInExtension, ChatSummary, DetectedBrowser, DraftFact, FileChoice, FileKind, JobId, JobProgress, McpImportCandidate, McpServer,
   MemoryDoc, MemorySettings, NtpLayout, Onboarding, PerchApi, PermissionMode, Permissions, PrivacySettings, Provider, Routine, RoutineInput,
   RoutineProposal, SiteData, Skill, SystemAccess, TaskModel,
 } from "../api";
@@ -32,6 +32,7 @@ type State = {
   permissions: Permissions;
   privacy: PrivacySettings;
   siteData: readonly SiteData[];
+  builtIns: readonly BuiltInExtension[];
   memorySettings: MemorySettings;
   docs: readonly MemoryDoc[];
   draft: readonly DraftFact[];
@@ -85,6 +86,7 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     permissions: { ...seed.PERMISSIONS, ...options.permissions },
     privacy: seed.PRIVACY,
     siteData: seed.SITE_DATA,
+    builtIns: (["perch", "backrow", "lulltab", "caveatly"] as const).map((name) => ({ name, enabled: true })),
     memorySettings: seed.MEMORY_SETTINGS,
     docs: seed.MEMORY_DOCS,
     draft: [],
@@ -381,6 +383,14 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     },
     async forgetSite(host) {
       set({ siteData: state.siteData.filter((s) => s.host !== host) });
+    },
+    async listBuiltInExtensions() {
+      return state.builtIns;
+    },
+    async setBuiltInExtension(name, enabled) {
+      if (!state.builtIns.some((b) => b.name === name)) throw new Error("Unknown built-in extension");
+      set({ builtIns: state.builtIns.map((b) => (b.name === name ? { ...b, enabled } : b)) });
+      return state.builtIns;
     },
 
     async getMemorySettings() {

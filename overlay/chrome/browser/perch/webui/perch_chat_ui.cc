@@ -22,7 +22,7 @@ PerchChatUI::PerchChatUI(content::WebUI* web_ui)
   web_ui->SetBindings(content::BindingsPolicySet());
   content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
       web_ui->GetWebContents()->GetBrowserContext(), kChatHost);
-  ServePerchPages(source, "chat.html", /*side_panel=*/false);
+  ServePerchPages(source, "chat.html", PageKind::kChat);
 }
 
 PerchChatUI::~PerchChatUI() = default;

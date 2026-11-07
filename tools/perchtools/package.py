@@ -64,9 +64,11 @@ def _framework_version(app: Path) -> Path:
 
 
 def stage_agent(app: Path, repo: Path, run) -> Path:
-    """Put perchd (compiled with Bun) and the built chat pages (ui/dist) into the framework.
+    """Put perchd (compiled with Bun), the chat pages (ui/dist) and Perch's other pages
+    (ui-pages/dist) into the framework.
 
-    The browser starts Helpers/perchd and serves Resources/perch_ui (spec 7.1). Returns perchd's path.
+    The browser starts Helpers/perchd and serves Resources/perch_ui and Resources/perch_pages
+    (spec 7.1). Returns perchd's path.
     """
     version = _framework_version(app)
     run(["bun", "run", "build"], cwd=repo / "ui")
@@ -77,6 +79,10 @@ def stage_agent(app: Path, repo: Path, run) -> Path:
     pages = version / "Resources" / "perch_ui"
     shutil.rmtree(pages, ignore_errors=True)
     shutil.copytree(repo / "ui" / "dist", pages)
+    run(["bun", "run", "build"], cwd=repo / "ui-pages")
+    other = version / "Resources" / "perch_pages"
+    shutil.rmtree(other, ignore_errors=True)
+    shutil.copytree(repo / "ui-pages" / "dist", other)
     return perchd
 
 

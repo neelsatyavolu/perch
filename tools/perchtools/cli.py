@@ -21,6 +21,7 @@ from .rename import rename_product_strings
 from .series import read_series
 from .sparkle import fetch_sparkle, load_pin
 from .stage import BUNDLED_FILE, StageError, load_bundled, stage_extensions
+from .netaudit import AllowedHosts, netaudit
 from .run import run
 from .version import VersionInfo, bump, latest_stable_mac, read_version, write_version
 
@@ -108,6 +109,21 @@ def _cmd_stage(args: argparse.Namespace) -> int:
         return 1
     print(f"Staged the built-in extensions in {out}")
     return 0
+
+
+def _cmd_netaudit(args: argparse.Namespace) -> int:
+    paths = current_paths()
+    app = Path(args.app) if args.app else paths.out(args.config) / "Perch.app"
+    allowed = AllowedHosts.load(REPO / "build" / "allowed-hosts.json")
+    staged = paths.out(args.config) / "perch_extensions"
+    extra = [f"--perch-extensions-dir={staged}"] if not args.app and staged.is_dir() else []
+    lines, problems = netaudit(app, allowed, args.minutes, args.all_off, extra)
+    for line in lines:
+        print(line)
+    for problem in problems:
+        print(f"error: {problem}", file=sys.stderr)
+    print(f"{len(lines)} hosts, {len(problems)} not allowed")
+    return 1 if problems else 0
 
 
 def _cmd_package(args: argparse.Namespace) -> int:
@@ -238,6 +254,12 @@ def build_parser() -> argparse.ArgumentParser:
     reb.add_argument("version", nargs="?", help="Chromium version, e.g. 158.0.8127.30")
     reb.set_defaults(func=_cmd_rebase)
     sub.add_parser("export", help="write the perch branch's commits back to patches/").set_defaults(func=_cmd_export)
+    audit = sub.add_parser("netaudit", help="run Perch idle and list every host it contacts")
+    audit.add_argument("--minutes", type=float, default=10)
+    audit.add_argument("--all-off", action="store_true", help="turn every allowed connection off and expect no hosts")
+    audit.add_argument("--config", choices=["dev", "release"], default="dev")
+    audit.add_argument("--app", help="a Perch.app to audit instead of out/<config>")
+    audit.set_defaults(func=_cmd_netaudit)
     stage = sub.add_parser("stage-extensions", help="build the built-in extensions into out/<config>/perch_extensions")
     stage.add_argument("--config", choices=["dev", "release"], default="dev")
     stage.set_defaults(func=_cmd_stage)

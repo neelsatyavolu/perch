@@ -65,7 +65,7 @@ test("bad input gets plain errors and changes nothing", async () => {
 
 test("Configure: settings are checked; wipe needs the typed confirmation", async () => {
   const { a, store } = await api();
-  expect(ok(await a.updateSettings({ paused: true, episodicRetentionDays: 90 }))).toEqual({ extraction: true, paused: true, episodicRetentionDays: 90 });
+  expect(ok(await a.updateSettings({ paused: true, episodicRetentionDays: 90 }))).toEqual({ extraction: true, paused: true, dreaming: true, episodicRetentionDays: 90 });
   expect(await a.updateSettings({ paused: "yes" })).toEqual({ ok: false, error: "paused must be true or false." });
   expect(await a.updateSettings({ episodicRetentionDays: 7 })).toMatchObject({ ok: false });
   ok(await a.addFact({ category: "user", text: "Likes tea" }));

@@ -12,6 +12,8 @@ import { SKILL_NAME } from "./skill-file";
 
 const LABEL = "perch/skill/v1";
 const EXT = ".skill";
+const DISABLED_FILE = "disabled.settings";
+const DISABLED_LABEL = "perch/skills-disabled/v1";
 
 export type StoredSkill = SkillBundle & { source: string; installedAt: string };
 
@@ -52,6 +54,21 @@ export class SkillStore {
 
   async remove(name: string): Promise<void> {
     await rm(this.path(name), { force: true });
+    await this.setEnabled(name, true);
+  }
+
+  /** Skills (built-in or the user's own) switched off in Settings; the agent does not see them. */
+  async disabled(): Promise<ReadonlySet<string>> {
+    const names = await readSealedJson<unknown>(join(this.dir, DISABLED_FILE), await dataKey(this.keychain), DISABLED_LABEL);
+    return new Set(Array.isArray(names) ? names.filter((n): n is string => typeof n === "string" && SKILL_NAME.test(n)) : []);
+  }
+
+  async setEnabled(name: string, enabled: boolean): Promise<void> {
+    checkName(name);
+    const current = await this.disabled();
+    if (current.has(name) !== enabled) return;
+    const next = enabled ? [...current].filter((n) => n !== name) : [...current, name];
+    await writeSealedJson(join(this.dir, DISABLED_FILE), await dataKey(this.keychain), DISABLED_LABEL, next.sort());
   }
 
   /** Writes the skill as a plain folder: <dir>/<name>/SKILL.md and its files. */

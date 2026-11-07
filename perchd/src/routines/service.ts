@@ -65,12 +65,12 @@ export async function openPerchData(opts: PerchDataOptions) {
   let lastDream = "";
   let dreamTimer: ReturnType<typeof setInterval> | null = null;
 
-  /** Runs dreaming once a day after 03:00 local time, unless memory is paused or off. */
+  /** Runs dreaming once a day after 03:00 local time, unless memory is paused or off, or dreaming is. */
   async function dreamIfDue(): Promise<DreamReport | null> {
     const t = now();
     const today = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
     const settings = memory.settings();
-    if (lastDream === today || t.getHours() < DREAM_HOUR || settings.paused || !settings.extraction) return null;
+    if (lastDream === today || t.getHours() < DREAM_HOUR || settings.paused || !settings.extraction || !settings.dreaming) return null;
     lastDream = today;
     const model = await opts.models.fast().catch(() => undefined);
     return dream({ store: memory, model, now: t });

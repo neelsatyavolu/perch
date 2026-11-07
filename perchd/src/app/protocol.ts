@@ -107,7 +107,9 @@ export type AppEvent =
   | { type: "run.approval.resolved"; chatId: string; runId: string; approvalId: string; approved: boolean }
   | { type: "run.finished"; chatId: string; runId: string; message: ChatMessage }
   | { type: "artifact.saved"; chatId: string; artifact: ArtifactMeta }
-  | { type: "window.active"; state: WindowState };
+  | { type: "window.active"; state: WindowState }
+  /** For Perch's own pages (ui-pages): `job:<id>` carries a job's progress; `appearance` the theme. */
+  | { type: "pages.event"; event: string; data: unknown };
 
 /** A run in progress, for a page that opens while it runs. */
 export type RunSnapshot = { runId: string; chatId: string; text: string; steps: string[]; approval: ApprovalCard | null };

@@ -6,7 +6,7 @@
 import type { ApprovalRequest } from "../agent/loop";
 import { attempt, flag, id, int, oneOf, record, text, type ApiResult } from "../memory/api-input";
 import { newId } from "../memory/page";
-import { checkSchedule, describeSchedule, nextRun, upcoming, type Schedule } from "./schedule";
+import { checkSchedule, describeSchedule, MAX_INTERVAL_HOURS, nextRun, upcoming, type Schedule } from "./schedule";
 import type { RunFn, Scheduler } from "./scheduler";
 import type { Routine, RoutineChat, RoutineStore, RunRecord } from "./store";
 
@@ -26,8 +26,9 @@ const MODEL_ID = /^[\w.:/-]{1,100}$/;
 
 function scheduleFrom(input: unknown, now: Date): Schedule {
   const s = record(input);
-  const kind = oneOf(s, "kind", ["manual", "cron"] as const);
-  const schedule: Schedule = kind === "manual" ? { kind } : { kind, expr: text(s, "expr", { max: 100, label: "The schedule" }) };
+  const kind = oneOf(s, "kind", ["manual", "cron", "interval"] as const);
+  const schedule: Schedule =
+    kind === "manual" ? { kind } : kind === "interval" ? { kind, hours: int(s, "hours", { min: 1, max: MAX_INTERVAL_HOURS }) } : { kind, expr: text(s, "expr", { max: 100, label: "The schedule" }) };
   const problem = checkSchedule(schedule, now);
   if (problem) throw new Error(problem);
   return schedule;

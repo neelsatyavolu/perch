@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { startArtifactServer, type ArtifactServer } from "./artifact-server";
 import { ArtifactStore } from "./artifacts";
 import { ChatStore, DEFAULT_SETTINGS } from "./chats";
+import type { PagesApi } from "./pages-api";
 import type { AppEvent, AppInfo, ChatSettings, ModelInfo, TabInfo, WindowState } from "./protocol";
 import { RunManager, type Runner } from "./runs";
 import { startServer, type Listen, type Server } from "./server";
@@ -27,6 +28,16 @@ export type AppOptions = {
   token?: string;
   /** The browser's own token for reporting tabs, inside Perch (server.ts). */
   browserToken?: string;
+  /** Perch's own pages (ui-pages) through `POST /api/pages/<method>`; left out, those routes are not found. */
+  pages?: (core: PagesCore) => PagesApi;
+};
+
+/** What the pages API gets from the app: its chats, runs, an event to the pages, and the new-chat defaults. */
+export type PagesCore = {
+  chats: ChatStore;
+  runs: RunManager;
+  emit: (event: string, data: unknown) => void;
+  setDefaults: (patch: Partial<ChatSettings>) => void;
 };
 
 export type App = {
@@ -38,6 +49,7 @@ export type App = {
   token: string;
   info(): AppInfo;
   windows: Windows;
+  pages: PagesApi | null;
   stop(): Promise<void>;
 };
 
@@ -127,8 +139,16 @@ export async function startApp(opts: AppOptions): Promise<App> {
     artifactUrl: artifactServer.urlFor,
     tabs: () => windows.tabs(),
   });
-  const defaults: ChatSettings = { ...DEFAULT_SETTINGS, model: opts.models[0]?.id ?? "", ...opts.defaults };
+  let defaults: ChatSettings = { ...DEFAULT_SETTINGS, model: opts.models[0]?.id ?? "", ...opts.defaults };
   const info = (): AppInfo => ({ models: opts.models, defaults, artifactOrigin: artifactServer.origin });
+  const pages = opts.pages?.({
+    chats,
+    runs,
+    emit: (event, data) => publish({ type: "pages.event", event, data }),
+    setDefaults: (patch) => {
+      defaults = { ...defaults, ...patch };
+    },
+  }) ?? null;
   const token = opts.token ?? Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url");
   const server = startServer({
     token,
@@ -136,7 +156,12 @@ export async function startApp(opts: AppOptions): Promise<App> {
     allowedOrigins: opts.allowedOrigins,
     listen: opts.listen ?? { port: 0 },
     uiDir: opts.uiDir,
-    ctx: { chats, artifacts, runs, windows, info, artifactServer, models: opts.models.map((m) => m.id), defaults },
+    ctx: {
+      chats, artifacts, runs, windows, info, artifactServer, pages, models: opts.models.map((m) => m.id),
+      get defaults() {
+        return defaults;
+      },
+    },
   });
   publish = server.publish;
   ownOrigin = server.origin;
@@ -149,6 +174,7 @@ export async function startApp(opts: AppOptions): Promise<App> {
     token,
     info,
     windows,
+    pages,
     async stop() {
       for (const chat of chats.list()) runs.cancel(chat.id);
       await runs.idle();

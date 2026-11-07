@@ -2,6 +2,7 @@ import { useState } from "preact/hooks";
 import type { Effort, Model, Provider, TaskModel, TaskRole } from "../../api";
 import { EFFORTS, EFFORT_LABELS, ROLES } from "../../lib/labels";
 import { useAction, useApi, useLoad } from "../../ui/frame";
+import { useManaged } from "../../ui/useManaged";
 import { Icon, Plus } from "../../ui/icons";
 import { Group, Row } from "../../ui/Row";
 import { Switch } from "../../ui/Switch";
@@ -22,6 +23,7 @@ function Providers({ onModelsChanged }: { readonly onModelsChanged: () => void }
   const api = useApi();
   const act = useAction();
   const providers = useLoad((a) => a.listProviders());
+  const { locked } = useManaged();
   const [connecting, setConnecting] = useState<Provider | null>(null);
   const [showMore, setShowMore] = useState(false);
   const list = providers.data ?? [];
@@ -66,6 +68,7 @@ function Providers({ onModelsChanged }: { readonly onModelsChanged: () => void }
         )}
       </div>
       <p class="note">Claude runs through Claude Code on this Mac, which keeps its own sign-in. Perch never reads its tokens.</p>
+      {locked("providers") && <p class="note">Your organization chooses which providers and models you can use.</p>}
       <ConnectDialog
         provider={connecting}
         onClose={() => setConnecting(null)}

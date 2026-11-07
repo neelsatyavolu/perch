@@ -13,10 +13,13 @@ import { memoryPages } from "./pages/memory";
 import { modelsPages } from "./pages/models";
 import { ntpPages } from "./pages/ntp";
 import { permissionsPages } from "./pages/permissions";
+import { auditPages } from "./pages/audit";
+import { policyPages } from "./pages/policy";
+import { capMode } from "../policy/policy";
 import { profilePages } from "./pages/profile";
 import { routinesPages } from "./pages/routines";
 import { skillsPages } from "./pages/skills";
-import type { ApiMethod, Methods } from "./pages/common";
+import { policyOf, type ApiMethod, type Methods } from "./pages/common";
 import { AppError } from "./runs";
 import * as v from "./validate";
 
@@ -35,7 +38,7 @@ const ARITY: Partial<Record<PerchdMethod, number>> = {
   setNtpLayout: 1, listChats: 1, searchChats: 1, dismissSuggestion: 1, submitQuery: 1, openChat: 1,
   signIn: 1, signOut: 1, connectProvider: 1, setTaskModel: 2,
   importMcpServers: 1, addMcpServer: 1, updateMcpServer: 2, removeMcpServer: 1, addSkill: 1, setSkillEnabled: 2, removeSkill: 1,
-  setPermissionMode: 1, addSiteRule: 1, removeSiteRule: 1, setClientMode: 2, listAuditLog: 1,
+  setPermissionMode: 1, addSiteRule: 1, removeSiteRule: 1, setClientMode: 2, listAuditLog: 1, exportAuditLog: 1,
   setMemorySettings: 1, readMemoryPage: 1, writeMemoryPage: 2, deleteMemoryPage: 1, listDreamLogs: 1,
   startProfileBuild: 2, saveProfileDraft: 1,
   saveRoutine: 1, setRoutineEnabled: 2, deleteRoutine: 1, runRoutine: 1, acceptProposal: 1, dismissProposal: 1,
@@ -53,6 +56,8 @@ export function createPagesApi(deps: PagesDeps): PagesApi {
     ...mcpPages(deps),
     ...skillsPages(deps),
     ...permissionsPages(deps),
+    ...auditPages(deps),
+    ...policyPages(deps),
     ...memoryPages(deps, forget),
     ...profileMethods,
     ...routinesPages(deps),
@@ -60,7 +65,7 @@ export function createPagesApi(deps: PagesDeps): PagesApi {
     getJob: async ([id]) => deps.jobs.get(v.text(id, "id", 100)),
   } satisfies Methods<PerchdMethod>;
   const known = new Set<string>(PERCHD_METHODS);
-  void deps.state.get().then((s) => deps.setDefaults?.({ mode: s.mode }), () => undefined);
+  void deps.state.get().then((s) => deps.setDefaults?.({ mode: capMode(s.mode, policyOf(deps)) }), () => undefined);
 
   return {
     async call(method, args) {

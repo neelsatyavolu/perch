@@ -9,7 +9,10 @@ export type PerchPaths = {
   socket: string;
   sessionsFile: string;
   clientsFile: string;
+  /** The one audit log outside the browser: the perch command, `perch serve`, MCP and the dev CLI all write it. */
   auditFile: string;
+  /** Audit logs older versions kept per client, merged into `auditFile` on first use. */
+  legacyAuditFiles: string[];
   profileDir: string;
   logFile: string;
 };
@@ -28,7 +31,8 @@ export function perchPaths(env: Record<string, string | undefined> = process.env
     socket,
     sessionsFile: join(runDir, "sessions.json"),
     clientsFile: join(home, "clients.json"),
-    auditFile: join(home, "agent-audit.jsonl"),
+    auditFile: join(home, "audit.jsonl"),
+    legacyAuditFiles: ["agent-audit.jsonl", "mcp-audit.jsonl", "dev-audit.jsonl", "exec-audit.jsonl"].map((f) => join(home, f)),
     profileDir: join(home, "agent-profile"),
     logFile: join(home, "perchd.log"),
   };

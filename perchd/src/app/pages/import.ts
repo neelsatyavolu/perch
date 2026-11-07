@@ -13,7 +13,8 @@ import type { DataType } from "../../import/types";
 import { importSource, listSources, type SourceSummary } from "../../import/wizard";
 import { AppError } from "../runs";
 import * as v from "../validate";
-import { notYet, type Methods } from "./common";
+import { importAllowed } from "../../policy/policy";
+import { managed, notYet, policyOf, type Methods } from "./common";
 import type { PagesDeps } from "./deps";
 
 const BROWSERS: readonly BrowserId[] = ["aside", "chrome", "arc", "dia", "brave", "edge", "vivaldi", "opera", "helium", "safari", "firefox", "zen"];
@@ -70,13 +71,17 @@ export function importPages(deps: PagesDeps): Methods<"detectBrowsers" | "getSys
     async detectBrowsers() {
       const all = sources();
       const agent = all.find((s) => s.browser === ASIDE_AGENT);
+      const policy = policyOf(deps);
+      // A kind the company does not allow is shown as unavailable; a browser it does not allow is left out.
+      const allowed = (browser: string) => (o: ImportOption): ImportOption => (importAllowed(browser, KINDS[o.kind].type ?? "", policy) ? o : { kind: o.kind, available: false });
       return all
         .filter((s): s is SourceSummary & { browser: BrowserId } => (BROWSERS as readonly string[]).includes(s.browser))
+        .filter((s) => !policy.ImportEnabled?.browsers || policy.ImportEnabled.browsers.includes(s.browser))
         .map((s): DetectedBrowser => ({
           id: s.browser,
           name: s.name,
           profiles: s.profiles.map((p) => ({ id: p.id, name: p.name })),
-          options: [...BROWSER_KINDS.map((k) => option(k, s)), ...(s.browser === "aside" && agent ? AGENT_KINDS.map((k) => option(k, agent)) : [])],
+          options: [...BROWSER_KINDS.map((k) => option(k, s)), ...(s.browser === "aside" && agent ? AGENT_KINDS.map((k) => option(k, agent)) : [])].map(allowed(s.browser)),
         }));
     },
     async getSystemAccess(): Promise<SystemAccess> {
@@ -90,6 +95,8 @@ export function importPages(deps: PagesDeps): Methods<"detectBrowsers" | "getSys
       const profile = v.text(o.profile, "profile", 300);
       const kinds = [...new Set(v.list(o.kinds, "kinds", ALL_KINDS.length).map((k) => v.oneOf(k, "kinds", ALL_KINDS)))];
       if (kinds.length === 0) throw new AppError("Pick at least one thing to import");
+      const policy = policyOf(deps);
+      if (kinds.some((k) => !importAllowed(browser, KINDS[k].type ?? "", policy))) managed("Your organization doesn't allow importing this.");
       if (o.passwordsCsv !== undefined) notYet("Perch can't read a chosen passwords file yet. Untick Passwords, or import the file later.");
       const unbacked = kinds.find((k) => KINDS[k].type === null);
       if (unbacked) notYet("Perch can't bring in Aside's permission mode and model choices yet. Untick them to import the rest.");

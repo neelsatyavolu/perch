@@ -3,7 +3,9 @@ import type { PermissionMode, Permissions as P, SiteRuleKind } from "../../api";
 import { MODES, SITE_RULES } from "../../lib/labels";
 import { relativeTime } from "../../lib/time";
 import { checkSitePattern } from "../../lib/validate";
+import { MANAGED_NOTE } from "../../lib/managed";
 import { useAction, useApi, useLoad } from "../../ui/frame";
+import { useManaged } from "../../ui/useManaged";
 import { Icon, Trash2 } from "../../ui/icons";
 import { Group, Row } from "../../ui/Row";
 import { focusSibling, nextIndex } from "../../ui/roving";
@@ -53,6 +55,7 @@ export function Permissions() {
   const api = useApi();
   const act = useAction();
   const perms = useLoad((a) => a.getPermissions());
+  const { locked } = useManaged();
   const [pattern, setPattern] = useState("");
   const [rule, setRule] = useState<SiteRuleKind>("never");
   const [error, setError] = useState<string | null>(null);
@@ -74,7 +77,7 @@ export function Permissions() {
     <div class="sec">
       <Group label="Default mode for new chats" id="permission-mode">
         <ModePicker value={p.mode} max={p.maxMode} onChange={(m) => apply(() => api.setPermissionMode(m), `New chats use ${MODES[m].label}`)} />
-        {p.maxMode && <p class="note">Managed by your organization</p>}
+        {(p.maxMode || locked("permission-mode")) && <p class="note">{MANAGED_NOTE}</p>}
         <p class="note">Each chat can change its own mode from the composer. Payments always wait for you, in every mode.</p>
       </Group>
 
@@ -125,6 +128,7 @@ export function Permissions() {
           The perch command, each MCP client and remote control get their own mode. Guard is the default.
           {p.maxMode && ` Your organization allows up to ${MODES[p.maxMode].label}.`}
         </p>
+        {locked("client-rules") && !p.maxMode && <p class="note">{MANAGED_NOTE}</p>}
       </Group>
 
       <AuditLog />

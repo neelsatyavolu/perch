@@ -20,13 +20,16 @@ export type SyncAdapter = {
 };
 
 export type SyncFailure = { collection: Collection; naturalId: string; reason: "quota" | "too_large" };
-export type SyncRun = { state: SyncState; failed: SyncFailure[]; unreadable: number; keyChanged?: number };
+/** `stopped`: a company policy turned sync off during the pass, which ended before the next collection. */
+export type SyncRun = { state: SyncState; failed: SyncFailure[]; unreadable: number; keyChanged?: number; stopped?: "policy" };
 
-export async function syncOnce(engine: SyncEngine, state: SyncState, adapters: readonly SyncAdapter[]): Promise<SyncRun> {
+/** `allowed` is asked before every collection, so turning sync off by policy stops a pass in progress. */
+export async function syncOnce(engine: SyncEngine, state: SyncState, adapters: readonly SyncAdapter[], allowed: () => boolean = () => true): Promise<SyncRun> {
   let current = state;
   const failed: SyncFailure[] = [];
   let unreadable = 0;
   for (const adapter of adapters) {
+    if (!allowed()) return { state: current, failed, unreadable, stopped: "policy" };
     try {
       const pulled = await engine.pull(current, adapter.collection);
       current = pulled.state;

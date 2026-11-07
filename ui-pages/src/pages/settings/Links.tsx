@@ -4,7 +4,9 @@ import { useState } from "preact/hooks";
 import type { MemorySettings } from "../../api";
 import { describeSchedule } from "../../lib/labels";
 import { relativeTime } from "../../lib/time";
+import { MANAGED_NOTE } from "../../lib/managed";
 import { useAction, useApi, useLoad } from "../../ui/frame";
+import { useManaged } from "../../ui/useManaged";
 import { Dialog } from "../../ui/Dialog";
 import { Group, Row } from "../../ui/Row";
 import { Switch } from "../../ui/Switch";
@@ -14,6 +16,7 @@ export function MemorySection() {
   const api = useApi();
   const act = useAction();
   const settings = useLoad((a) => a.getMemorySettings());
+  const { locked } = useManaged();
   const [wiping, setWiping] = useState(false);
   const [reading, setReading] = useState(false);
   const s = settings.data;
@@ -26,14 +29,14 @@ export function MemorySection() {
     <div class="sec">
       <Group label="What Perch remembers">
         <div class="card">
-          <Row id="memory-extraction" title="Learn from chats" detail="After each chat, your Fast model saves lasting facts to memory">
-            <Switch label="Learn from chats" describedBy="memory-extraction-d" checked={s.extraction} onChange={(extraction) => patch({ extraction })} />
+          <Row id="memory-extraction" title="Learn from chats" detail={locked("memory-extraction") ? MANAGED_NOTE : "After each chat, your Fast model saves lasting facts to memory"}>
+            <Switch label="Learn from chats" describedBy="memory-extraction-d" checked={s.extraction} disabled={locked("memory-extraction")} onChange={(extraction) => patch({ extraction })} />
           </Row>
-          <Row id="history-extraction" title="Learn from browsing history" detail="Notes which sites you use for what. Runs on this Mac on a schedule.">
-            <Switch label="Learn from browsing history" describedBy="history-extraction-d" checked={s.historyExtraction} onChange={(historyExtraction) => patch({ historyExtraction })} />
+          <Row id="history-extraction" title="Learn from browsing history" detail={locked("history-extraction") ? MANAGED_NOTE : "Notes which sites you use for what. Runs on this Mac on a schedule."}>
+            <Switch label="Learn from browsing history" describedBy="history-extraction-d" checked={s.historyExtraction} disabled={locked("history-extraction")} onChange={(historyExtraction) => patch({ historyExtraction })} />
           </Row>
-          <Row id="dreaming" title="Tidy memory overnight" detail={s.lastDream ? `Merges duplicates and moves old facts to history. Last ran ${relativeTime(s.lastDream).toLowerCase()}.` : "Merges duplicates and moves old facts to history"}>
-            <Switch label="Tidy memory overnight" describedBy="dreaming-d" checked={s.dreaming} onChange={(dreaming) => patch({ dreaming })} />
+          <Row id="dreaming" title="Tidy memory overnight" detail={locked("dreaming") ? MANAGED_NOTE : s.lastDream ? `Merges duplicates and moves old facts to history. Last ran ${relativeTime(s.lastDream).toLowerCase()}.` : "Merges duplicates and moves old facts to history"}>
+            <Switch label="Tidy memory overnight" describedBy="dreaming-d" checked={s.dreaming} disabled={locked("dreaming")} onChange={(dreaming) => patch({ dreaming })} />
           </Row>
           <Row id="dream-log" sub title="Overnight tidy log" detail="What each pass merged, updated and moved, by date">
             <button type="button" class="btn" onClick={() => setReading(true)}>Read the log</button>
@@ -100,6 +103,7 @@ export function ImportSection() {
   const api = useApi();
   const act = useAction();
   const browsers = useLoad((a) => a.detectBrowsers());
+  const { locked } = useManaged();
   const list = browsers.data ?? [];
   return (
     <div class="sec">
@@ -113,6 +117,7 @@ export function ImportSection() {
           ))}
         </div>
         <p class="note">Tabs open asleep and load when you click them, so a large import doesn't slow the Mac down.</p>
+        {locked("import-browsers") && <p class="note">Your organization chooses which browsers and data you can import.</p>}
       </Group>
     </div>
   );

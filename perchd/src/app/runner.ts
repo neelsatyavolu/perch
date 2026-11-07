@@ -5,6 +5,7 @@ import { runTask, type StepEvent } from "../agent/loop";
 import type { SiteRule } from "../agent/permissions";
 import type { Browser } from "../browser/browser";
 import type { Model } from "../models/types";
+import type { PolicyView } from "../policy/policy";
 import type { Runner } from "./runs";
 
 export type LoopRunnerOptions = {
@@ -14,6 +15,8 @@ export type LoopRunnerOptions = {
   audit: AuditLog;
   siteRule?: (host: string) => SiteRule | undefined;
   maxSteps?: number;
+  /** Company policy: the agent on or off, the mode cap and site rules, applied before each action. */
+  policy?: PolicyView;
 };
 
 export function loopRunner(opts: LoopRunnerOptions): Runner {
@@ -35,6 +38,7 @@ export function loopRunner(opts: LoopRunnerOptions): Runner {
       siteRule: opts.siteRule,
       signal: input.signal,
       maxSteps: opts.maxSteps,
+      ...(opts.policy ? { policy: opts.policy } : {}),
     });
   };
 }

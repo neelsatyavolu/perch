@@ -11,7 +11,8 @@ import { PROVIDERS, ProviderError, secretName } from "../../models/providers";
 import type { ModelRegistry, ProviderStatus } from "../../models/registry";
 import { AppError } from "../runs";
 import * as v from "../validate";
-import type { Methods } from "./common";
+import { allowsModel, allowsProvider, MODEL_NOT_ALLOWED, type Policy } from "../../policy/policy";
+import { managed, policyOf, type Methods } from "./common";
 import type { PagesDeps } from "./deps";
 
 const ENDPOINTS: readonly ProviderId[] = ["custom", "lmstudio", "ollama"];
@@ -57,8 +58,22 @@ async function registryCall<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
+/**
+ * Whether the company allows a registry provider (spec 12.2): AllowedModelProviders, and with
+ * ModelEndpoints set, personal sign-in (the subscription providers) is replaced by the company's.
+ */
+export function providerAllowed(id: ProviderId, policy: Policy): boolean {
+  if (!allowsProvider(id, policy)) return false;
+  return !(policy.ModelEndpoints && PROVIDERS[id].kind === "subscription");
+}
+
+const pageAllowed = (page: PageProvider, policy: Policy): boolean => (page === "local" ? ENDPOINTS : [fromPage(page)]).some((id) => providerAllowed(id, policy));
+
 export function modelsPages(deps: PagesDeps): Methods<"listProviders" | "signIn" | "signOut" | "connectProvider" | "listModels" | "getTaskModels" | "setTaskModel"> {
   const registry = () => deps.models.registry();
+  const requireProvider = (page: PageProvider) => {
+    if (!pageAllowed(page, policyOf(deps))) managed("Your organization doesn't allow this provider.");
+  };
 
   async function keyHint(id: ProviderId): Promise<string | undefined> {
     const key = await deps.models.keychain.get(secretName(id)).catch(() => null);
@@ -117,10 +132,12 @@ export function modelsPages(deps: PagesDeps): Methods<"listProviders" | "signIn"
   return {
     async listProviders() {
       const all = await (await registry()).listProviders();
-      return Promise.all(PAGE_IDS.map((id) => view(id, all)));
+      const policy = policyOf(deps);
+      return Promise.all(PAGE_IDS.filter((id) => pageAllowed(id, policy)).map((id) => view(id, all)));
     },
     async signIn([raw]) {
       const page = v.oneOf(raw, "id", PAGE_IDS);
+      requireProvider(page);
       const id = fromPage(page);
       const r = await registry();
       if (id === "claude-code") await registryCall(() => r.connectClaudeCode());
@@ -144,12 +161,14 @@ export function modelsPages(deps: PagesDeps): Methods<"listProviders" | "signIn"
       if (o.kind === "api-key") {
         v.onlyKeys(o, ["kind", "provider", "key"]);
         const page = v.oneOf(o.provider, "provider", KEY_PROVIDERS);
+        requireProvider(page);
         await registryCall(() => r.setKey(page, v.text(o.key, "key", 1000)));
         return provider(page);
       }
       if (o.kind !== "endpoint") throw new AppError('"kind" must be one of api-key, endpoint');
       v.onlyKeys(o, ["kind", "name", "baseUrl", "key"]);
       if (!v.text(o.name, "name", 60).trim()) throw new AppError("Give it a name");
+      if (!providerAllowed("custom", policyOf(deps))) managed("Your organization doesn't allow this provider.");
       const baseUrl = v.text(o.baseUrl, "baseUrl", 2000).trim();
       const key = v.optionalText(o.key, "key", 1000);
       await registryCall(() => r.connectEndpoint("custom", { baseUrl, key: key?.trim() ? key : null }));
@@ -157,10 +176,12 @@ export function modelsPages(deps: PagesDeps): Methods<"listProviders" | "signIn"
     },
     async listModels() {
       const r = await registry();
+      const policy = policyOf(deps);
       const lists = await Promise.all(
-        (await connected()).map(async (id) => (await r.listModels(id).catch(() => [])).map((m): Model => ({
-          id: modelId(id, m.id), label: m.label, provider: toPage(id), vision: m.vision, imageGeneration: m.imageOutput,
-        }))),
+        (await connected()).filter((id) => providerAllowed(id, policy)).map(async (id) =>
+          (await r.listModels(id).catch(() => [])).filter((m) => allowsModel(id, m.id, policy)).map((m): Model => ({
+            id: modelId(id, m.id), label: m.label, provider: toPage(id), vision: m.vision, imageGeneration: m.imageOutput,
+          }))),
       );
       return lists.flat();
     },
@@ -176,6 +197,8 @@ export function modelsPages(deps: PagesDeps): Methods<"listProviders" | "signIn"
       else {
         const picked = o.modelId === undefined ? await currentChoice(role) : parseModelId(v.text(o.modelId, "modelId", 300));
         if (!picked) throw new AppError("Pick a model for this task first");
+        const policy = policyOf(deps);
+        if (!providerAllowed(picked.provider, policy) || !allowsModel(picked.provider, picked.model, policy)) managed(MODEL_NOT_ALLOWED);
         const current = await currentChoice(role);
         const kept = current && current.provider === picked.provider && current.model === picked.model ? current : null;
         const e = effort ?? kept?.effort;

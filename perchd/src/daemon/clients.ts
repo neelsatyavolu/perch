@@ -12,6 +12,7 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { Mode } from "../agent/permissions";
+import { ManagedError } from "../policy/policy";
 import { CLIENT_NAME, type Keychain } from "./keychain";
 
 export type ClientRecord = { name: string; mode: Mode; created: string; lastUsed?: string; revoked?: boolean };
@@ -57,8 +58,16 @@ export class ClientRegistry {
   private records: ClientRecord[] | null = null;
   private key: string | null = null;
 
-  /** `sealKeychain` holds the file's seal key; perchd passes one, the CLI does not need it. */
-  constructor(readonly file: string, private readonly keychain: Keychain, private readonly sealKeychain?: Keychain) {}
+  /**
+   * `sealKeychain` holds the file's seal key; perchd passes one, the CLI does not need it.
+   * `maxMode` is the company's cap (spec 12.2): no client can be set above it.
+   */
+  constructor(
+    readonly file: string,
+    private readonly keychain: Keychain,
+    private readonly sealKeychain?: Keychain,
+    private readonly maxMode: () => Mode | undefined = () => undefined,
+  ) {}
 
   /** perchd's start: reads the file once and checks its seal. */
   async load(): Promise<void> {
@@ -113,6 +122,8 @@ export class ClientRegistry {
 
   async setMode(name: string, mode: Mode): Promise<void> {
     if (!isMode(mode)) throw new Error("The mode must be ask, guard or skip");
+    const max = this.maxMode();
+    if (max && raisesMode(max, mode)) throw new ManagedError(`Your organization allows outside agents up to ${max} mode.`);
     await this.upsert({ ...this.find(name), mode });
   }
 

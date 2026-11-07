@@ -5,6 +5,7 @@
 
 import type { ApiResult } from "../../memory/api-input";
 import type { PerchApi } from "../../../../ui-pages/src/api";
+import { MANAGED, ManagedError, type Policy, type PolicyView } from "../../policy/policy";
 import { AppError } from "../runs";
 
 export type ApiMethod = Exclude<keyof PerchApi, "watchJob">;
@@ -21,12 +22,21 @@ export function gone(message: string): never {
   throw new AppError(message, 404);
 }
 
-/** Runs a module call whose errors are plain sentences meant for the person, as a 400. */
+/** A write the company's policy does not allow (spec 12.2): refused here, not only greyed out in the page. */
+export function managed(message: string = MANAGED): never {
+  throw new AppError(message, 403);
+}
+
+/** The company policy in force now; empty on an unmanaged Mac. */
+export const policyOf = (deps: { policy?: PolicyView }): Policy => deps.policy?.current() ?? {};
+
+/** Runs a module call whose errors are plain sentences meant for the person, as a 400 (403 for a policy refusal). */
 export async function plainly<T>(fn: () => Promise<T> | T): Promise<T> {
   try {
     return await fn();
   } catch (error) {
     if (error instanceof AppError) throw error;
+    if (error instanceof ManagedError) managed(error.message);
     throw new AppError(error instanceof Error ? error.message : String(error));
   }
 }

@@ -8,9 +8,9 @@
  */
 
 import { mkdtempSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { AuditLog } from "./agent/audit";
+import { homeAuditLog } from "./agent/audit-home";
 import type { Mode } from "./agent/permissions";
 import { Progress, type Budget } from "./agent/progress";
 import { callTool, type CallPolicy } from "./agent/session";
@@ -115,7 +115,7 @@ function budgetFrom(value: string | undefined): Budget | undefined {
 }
 
 async function main(argv: string[]): Promise<void> {
-  const audit = new AuditLog(arg(argv, "--audit") ?? join(homedir(), "Library", "Application Support", "Perch", "mcp-audit.jsonl"));
+  const audit = homeAuditLog({ path: arg(argv, "--audit") });
   const server = createServer({
     profileDir: arg(argv, "--profile") ?? mkdtempSync(join(tmpdir(), "perch-mcp-")),
     headless: !argv.includes("--show"),

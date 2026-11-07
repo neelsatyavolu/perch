@@ -195,7 +195,7 @@ beforeAll(async () => {
         mcp: { store: mcpStore, keychain: secrets, manager, findImports: () => findImports({ home, env: {} }) },
         skills: { store: skills, builtInDir: builtIn, home },
         clients,
-        auditFiles: [audit, join(dir, "missing.jsonl")],
+        audit: new AuditLog(audit, { legacy: [join(dir, "missing.jsonl")] }),
         data: async () => data,
         importer: { home, target: { userDataDir: userData }, keychain: importKeychain({ "Chrome Safe Storage": FAKE_SAFE_STORAGE }) },
       }),
@@ -386,7 +386,12 @@ test("permissions: default mode reaches new chats, site rules, outside clients, 
   expect(log.map((e) => [e.client, e.action, e.outcome])).toEqual([["claude-code", "Type", "declined"], ["Perch", 'Click: button "Send"', "approved"]]);
   expect((await api.listAuditLog({ limit: 10, before: "2026-11-02T00:00:00.000Z" })).map((e) => e.site)).toEqual(["mail.example"]);
   expect((await fails(api.listAuditLog({ limit: 9999 }))).status).toBe(400);
-  expect((await fails(api.exportAuditLog())).status).toBe(501);
+  const exported = await api.exportAuditLog();
+  expect(exported).toMatchObject({ type: "application/x-ndjson", entries: 2 });
+  expect(exported.name).toMatch(/^perch-activity-\d{4}-\d{2}-\d{2}\.jsonl$/);
+  expect(exported.text.trim().split("\n").map((l) => JSON.parse(l).site)).toEqual(["mail.example", "shop.example"]);
+  expect((await api.exportAuditLog("csv")).text.split("\r\n")[0]).toBe("time,client,tab,site,url,action,detail,approved,result");
+  expect((await fails(api.exportAuditLog("xml" as never))).status).toBe(400);
 });
 
 test("memory: settings, pages as markdown, the tidy's log, wipe", async () => {

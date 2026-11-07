@@ -6,9 +6,11 @@
  */
 
 import { writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { perchPaths } from "./daemon/paths";
 import { runClaudeCode, runCodex } from "./external";
+import { cfPreferences } from "./policy/cfprefs";
+import { AGENT_OFF, agentAllowed, allowsModel, MODEL_NOT_ALLOWED } from "./policy/policy";
+import { PolicyWatcher } from "./policy/watch";
 
 export type ExecArgs = { provider: string; model: string; thinking?: string; logDump?: string; task: string };
 
@@ -36,12 +38,18 @@ export async function main(argv: string[]): Promise<number> {
     process.stderr.write(`${(error as Error).message}\n`);
     return 64;
   }
+  const policy = new PolicyWatcher({ source: cfPreferences(), watchDir: null }).current();
+  const refused = !agentAllowed(policy) ? AGENT_OFF : !allowsModel(args.provider, args.model, policy) ? MODEL_NOT_ALLOWED : null;
+  if (refused) {
+    process.stderr.write(`${refused}\n`);
+    return 77;
+  }
   const run = args.provider === "codex" ? runCodex : runClaudeCode;
   const result = await run({
     task: args.task,
     model: args.model,
     timeoutMs: 30 * 60_000,
-    auditPath: join(homedir(), "Library", "Application Support", "Perch", "exec-audit.jsonl"),
+    auditPath: perchPaths().auditFile,
   });
   if (args.logDump) writeFileSync(args.logDump, result.events.map((e) => JSON.stringify(e)).join("\n"));
   process.stdout.write(`${result.answer}\n`);

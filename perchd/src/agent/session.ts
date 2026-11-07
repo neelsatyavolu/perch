@@ -44,7 +44,10 @@ export async function prepareCall(ctx: ToolContext, opts: CallPolicy, call: Tool
   const decision = ruled === "run" && app?.alwaysAsks(call.args) ? "ask" : ruled;
   const what = [target ? `${target.role} "${target.name}"` : summarizeArgs(call), drop ? `onto ${drop.role} "${drop.name}"` : ""].filter(Boolean).join(" ");
   const detail = kind === "read" ? what : [what, await approvalDetail(ctx, call)].filter(Boolean).join(" ");
-  const entry = { time: new Date().toISOString(), tab: ctx.tab?.id ?? "", site, url: destination, action: call.name, detail, client: opts.client ?? "sidebar" };
+  // The audit log holds what was typed or filled only when an approval card showed it to the
+  // person; an action that ran without asking is logged by its target alone (Review Focus 4).
+  const shown = decision === "ask" ? detail : what;
+  const entry = { time: new Date().toISOString(), tab: ctx.tab?.id ?? "", site, url: destination, action: call.name, detail: shown, client: opts.client ?? "sidebar" };
 
   if (decision === "block") {
     await opts.audit.append({ ...entry, approved: null, result: "blocked" });

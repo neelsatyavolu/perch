@@ -11,6 +11,7 @@ import type { StepEvent } from "../agent/loop";
 import type { MemoryAccess } from "../memory/agent";
 import { SIDEBAR_CLIENT, type SidebarRun } from "../daemon/server";
 import { claudeBinary, codexBinary, runClaudeCode, runCodex, type AsideEvent, type McpServer } from "../external";
+import { AGENT_OFF, agentAllowed, allowsModel, capMode, MODEL_NOT_ALLOWED, type Policy, type PolicyView } from "../policy/policy";
 import type { ModelInfo } from "./protocol";
 import type { Runner } from "./runs";
 
@@ -85,7 +86,23 @@ export type SidebarRunnerOptions = {
   timeoutMs?: number;
   /** The profile's memory for this chat: what Perch knows goes in with the task, and facts are learned from the answer. */
   memory?: () => Promise<MemoryAccess | undefined>;
+  /** Company policy: the agent on or off, allowed models, and the mode cap. */
+  policy?: PolicyView;
 };
+
+/** Why a chat on this model cannot start under the company policy, or null when it can. */
+export function sidebarRefusal(agent: string, model: string, policy: Policy): string | null {
+  if (!agentAllowed(policy)) return AGENT_OFF;
+  return allowsModel(agent, model, policy) ? null : MODEL_NOT_ALLOWED;
+}
+
+/** The sidebar's models the company policy allows. */
+export function allowedSidebarModels(models: readonly ModelInfo[], policy: Policy): ModelInfo[] {
+  return models.filter((m) => {
+    const [agent = "", ...rest] = m.id.split(":");
+    return allowsModel(agent, rest.join(":"), policy);
+  });
+}
 
 export function sidebarRunner(opts: SidebarRunnerOptions): Runner {
   return async function* (input): AsyncIterable<StepEvent> {
@@ -95,11 +112,18 @@ export function sidebarRunner(opts: SidebarRunnerOptions): Runner {
       yield { type: "error", message: "Pick Codex or Claude Code as the model for this chat." };
       return;
     }
+    const policy = opts.policy?.current() ?? {};
+    const refused = sidebarRefusal(agent, model, policy);
+    if (refused) {
+      yield { type: "error", message: refused };
+      return;
+    }
     const memory = await opts.memory?.().catch(() => undefined);
     const known = memory ? await memory.context(input.task).catch(() => "") : "";
     const session = `sidebar-${randomBytes(12).toString("hex")}`;
     const token = randomBytes(32).toString("base64url");
-    opts.runs.add(session, { token, mode: input.settings.mode, approve: input.approve, ...(input.tab?.targetId ? { tab: input.tab.targetId } : {}) });
+    const mode = capMode(input.settings.mode, policy);
+    opts.runs.add(session, { token, mode, approve: input.approve, ...(input.tab?.targetId ? { tab: input.tab.targetId } : {}) });
     const mcp: McpServer = {
       command: opts.perch.command,
       args: [...opts.perch.args, "mcp", "--agent", "Perch", "--title", "Sidebar"],
@@ -116,7 +140,7 @@ export function sidebarRunner(opts: SidebarRunnerOptions): Runner {
       task: known ? `${input.task}\n\n${known}` : input.task,
       model: model && model !== "default" ? model : undefined,
       effort: agent === "codex" ? input.settings.effort : undefined,
-      mode: input.settings.mode,
+      mode,
       timeoutMs: opts.timeoutMs ?? 20 * 60_000,
       auditPath: opts.auditPath,
       mcp,

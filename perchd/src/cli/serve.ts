@@ -4,6 +4,7 @@ import { mkdirSync } from "node:fs";
 import { Browser } from "../browser/browser";
 import { browserExecutable, startDaemon } from "../daemon/daemon";
 import { MacKeychain } from "../daemon/keychain";
+import { startPolicyWatcher } from "../policy/watch";
 import { parseArgs } from "./args";
 import { pathsFor, type CliIO } from "./io";
 
@@ -17,7 +18,9 @@ export async function serve(argv: string[], io: CliIO): Promise<number> {
   const paths = pathsFor(io);
   mkdirSync(paths.home, { recursive: true, mode: 0o700 });
   const executable = browserExecutable(a.options.get("--browser") ?? io.env.PERCH_BROWSER);
+  const policy = startPolicyWatcher();
   const daemon = await startDaemon({
+    policy,
     paths,
     keychain: io.keychain ?? new MacKeychain(),
     sealKeychain: io.keychain ? undefined : new MacKeychain("Perch registry"),
@@ -29,5 +32,6 @@ export async function serve(argv: string[], io: CliIO): Promise<number> {
     process.once("SIGINT", resolve);
   });
   await daemon.stop();
+  policy.stop();
   return 0;
 }

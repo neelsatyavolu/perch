@@ -1,7 +1,9 @@
 import { useState } from "preact/hooks";
 import type { UpdateStatus } from "../../api";
 import { shortDateTime } from "../../lib/time";
+import { MANAGED_NOTE } from "../../lib/managed";
 import { useAction, useApi, useLoad } from "../../ui/frame";
+import { useManaged } from "../../ui/useManaged";
 import { PerchMark } from "../../ui/PerchMark";
 import { Group, Row } from "../../ui/Row";
 import { Switch } from "../../ui/Switch";
@@ -23,6 +25,7 @@ export function About() {
   const api = useApi();
   const act = useAction();
   const about = useLoad((a) => a.getAbout());
+  const { locked, managed } = useManaged();
   const [status, setStatus] = useState<UpdateStatus | null>(null);
   const a = about.data;
   if (!a) return <p class="mute">{about.error ?? ""}</p>;
@@ -45,12 +48,17 @@ export function About() {
               <button type="button" class="btn" disabled={status?.state === "checking"} onClick={check}>Check for updates</button>
             )}
           </Row>
-          <Row id="auto-update" title="Update automatically" detail="Checks once a day on GitHub and installs signed updates when you restart">
-            <Switch label="Update automatically" describedBy="auto-update-d" checked={a.autoUpdate} onChange={async (on) => {
+          <Row id="auto-update" title="Update automatically" detail={locked("auto-update") ? MANAGED_NOTE : "Checks once a day on GitHub and installs signed updates when you restart"}>
+            <Switch label="Update automatically" describedBy="auto-update-d" checked={a.autoUpdate} disabled={locked("auto-update")} onChange={async (on) => {
               const next = await act(() => api.setAutoUpdate(on));
               if (next) about.set(next);
             }} />
           </Row>
+          {managed && (
+            <Row id="managed" title="Your organization manages some settings" detail="See every policy and where it came from">
+              <a class="btn" href="perch://policy">Open policies</a>
+            </Row>
+          )}
         </div>
       </Group>
       <Group label="Components">

@@ -11,6 +11,8 @@
 #include "base/functional/bind.h"
 #include "base/no_destructor.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "chrome/browser/perch/agent/perchd_launcher.h"
 #include "chrome/browser/perch/side_panel/perch_tab_sync.h"
@@ -33,8 +35,10 @@
 #include "chrome/browser/ui/webui/top_chrome/webui_contents_wrapper.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/tabs/public/tab_interface.h"
+#include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/page_navigator.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/browser/web_contents_observer.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/page_transition_types.h"
@@ -59,6 +63,35 @@ const SidePanelEntryKey& PerchKey() {
   return *key;
 }
 
+// The page's close button (window.perchHost.close in config.js) makes a
+// same-document navigation to #perch-close-<n>; this closes the panel.
+class CloseWatcher : public content::WebContentsObserver {
+ public:
+  CloseWatcher(content::WebContents* contents, BrowserWindowInterface* browser)
+      : content::WebContentsObserver(contents), browser_(browser) {}
+
+  void DidFinishNavigation(content::NavigationHandle* handle) override {
+    if (!handle->IsInPrimaryMainFrame() || !handle->IsSameDocument() ||
+        !handle->GetURL().ref().starts_with("perch-close-")) {
+      return;
+    }
+    // Not from inside this observer: closing may destroy these contents.
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::BindOnce(&CloseWatcher::ClosePanel,
+                                  weak_factory_.GetWeakPtr()));
+  }
+
+ private:
+  void ClosePanel() {
+    if (SidePanelUI* side_panel = SidePanelUI::From(browser_)) {
+      side_panel->Close();
+    }
+  }
+
+  raw_ptr<BrowserWindowInterface> browser_;
+  base::WeakPtrFactory<CloseWatcher> weak_factory_{this};
+};
+
 // Links in the side chat open in a new tab of the same window; the panel
 // itself never leaves the chat page.
 class PerchSidePanelWebView : public SidePanelWebUIViewT<PerchSideChatUI> {
@@ -75,7 +108,8 @@ class PerchSidePanelWebView : public SidePanelWebUIViewT<PerchSideChatUI> {
                             base::RepeatingClosure(),
                             base::RepeatingClosure(),
                             std::move(contents_wrapper)),
-        browser_(browser) {}
+        browser_(browser),
+        close_watcher_(this->contents_wrapper()->web_contents(), browser) {}
   PerchSidePanelWebView(const PerchSidePanelWebView&) = delete;
   PerchSidePanelWebView& operator=(const PerchSidePanelWebView&) = delete;
   ~PerchSidePanelWebView() override = default;
@@ -112,6 +146,7 @@ class PerchSidePanelWebView : public SidePanelWebUIViewT<PerchSideChatUI> {
   }
 
   raw_ptr<BrowserWindowInterface> browser_;
+  CloseWatcher close_watcher_;
 };
 
 BEGIN_METADATA(PerchSidePanelWebView)

@@ -51,7 +51,12 @@ std::string ConfigScript() {
   return base::StringPrintf(
       "window.perchApp = Object.freeze({api: %s, token: %s, "
       "windowId: new URLSearchParams(location.search).get('window') || "
-      "'main', theme: 'system', accent: 'blue'});\n",
+      "'main', theme: 'system', accent: 'blue'});\n"
+      // The panel view closes the panel on this same-document navigation
+      // (perch_side_panel_controller.cc), and opens window.open in a tab.
+      "(() => { let n = 0; window.perchHost = Object.freeze({"
+      "close() { location.replace('#perch-close-' + (++n)); },"
+      "openTab(url) { window.open(url, '_blank', 'noopener'); }}); })();\n",
       base::GetQuotedJSONString(launcher.ApiOrigin()).c_str(),
       base::GetQuotedJSONString(launcher.token()).c_str());
 }

@@ -11,9 +11,9 @@ its own policies.
 
 ## Policies Perch ignores
 
-Some Chrome policies control Google services Perch does not include. Perch accepts them, does
-nothing with them, and marks them on `perch://policy` with "Perch ignores this policy. It controls a
-Google service Perch does not include.":
+Some Chrome policies control Google services Perch does not include. Perch blocks them wherever they
+come from, so nothing applies them, and `perch://policy` marks them with Chromium's own status "This
+policy is blocked, its value will be ignored.":
 
 | Policy | Why |
 |---|---|
@@ -75,7 +75,8 @@ Checked 2026-11-07 on Chromium 158.0.8127.18.
 | SafeBrowsingProtectionLevel | works | status on the policy page | SafeBrowsingProtectionLevel: applied |
 | ComponentUpdatesEnabled | works | status on the policy page | ComponentUpdatesEnabled: applied |
 | CAPlatformIntegrationEnabled | works | status on the policy page | CAPlatformIntegrationEnabled: applied |
-| BrowserSignin | works (expected ignored) | status on the policy page | BrowserSignin: applied |
-| CloudManagementEnrollmentToken | works (expected ignored) | status on the policy page | CloudManagementEnrollmentToken: applied |
-| MetricsReportingEnabled | blocked in test policies; needs a managed Mac | status on the policy page | MetricsReportingEnabled: This policy is blocked, its value will be ignored. |
+| BrowserSignin | ignored | status on the policy page | BrowserSignin: ignored in Perch |
+| CloudManagementEnrollmentToken | ignored | status on the policy page | CloudManagementEnrollmentToken: ignored in Perch |
+| MetricsReportingEnabled | ignored | status on the policy page | MetricsReportingEnabled: ignored in Perch |
+| AgentEnabled | works | status on the policy page | AgentEnabled: applied |
 <!-- policy-check:end -->

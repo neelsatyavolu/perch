@@ -1,0 +1,21 @@
+caption: "Update automatically"
+default: true
+desc: "When true or unset, Perch checks for updates and installs them. When false, Perch does not check for updates and hides Check for Updates."
+example_value: true
+features:
+  can_be_recommended: false
+  dynamic_refresh: true
+  per_profile: false
+items:
+- caption: Enabled
+  value: true
+- caption: Disabled
+  value: false
+owners:
+- file://chrome/browser/perch/OWNERS
+schema:
+  type: boolean
+supported_on:
+- chrome.*:158-
+tags: []
+type: main

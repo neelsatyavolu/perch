@@ -1,0 +1,93 @@
+{
+  "version": 1,
+  "about": "Chrome policies perchd/scripts/policy-check.ts sets on a dev build of Perch, and what it expects. {server} is a local test server, {proxy} the check's own proxy.",
+  "cases": [
+    {
+      "id": "url-blocking",
+      "policies": [
+        { "name": "URLBlocklist", "value": ["127.0.0.1"] },
+        { "name": "URLAllowlist", "value": ["127.0.0.1/ok"] }
+      ],
+      "check": { "kind": "navigation", "blocked": "/blocked", "allowed": "/ok" },
+      "expect": "works"
+    },
+    {
+      "id": "startup-pages",
+      "policies": [
+        { "name": "HomepageLocation", "value": "https://example.org/" },
+        { "name": "RestoreOnStartup", "value": 4 },
+        { "name": "RestoreOnStartupURLs", "value": ["https://example.org/"] }
+      ],
+      "check": { "kind": "policy" },
+      "expect": "mdm-only",
+      "note": "Chromium treats startup and homepage policies as sensitive and takes them only from a managed Mac, never from test policies."
+    },
+    {
+      "id": "incognito",
+      "policies": [{ "name": "IncognitoModeAvailability", "value": 1 }],
+      "check": { "kind": "policy" },
+      "expect": "works"
+    },
+    {
+      "id": "extensions",
+      "policies": [
+        { "name": "ExtensionInstallBlocklist", "value": ["*"] },
+        { "name": "ExtensionInstallAllowlist", "value": ["cjpalhdlnbpafiamejdnhcphjbkeiagm"] },
+        { "name": "ExtensionInstallForcelist", "value": ["cjpalhdlnbpafiamejdnhcphjbkeiagm;https://clients2.google.com/service/update2/crx"] }
+      ],
+      "check": { "kind": "policy" },
+      "expect": "works",
+      "note": "Installing the forced extension needs the Chrome Web Store, so the check reads the policy page instead of waiting for the install."
+    },
+    {
+      "id": "downloads",
+      "policies": [{ "name": "DownloadRestrictions", "value": 3 }],
+      "check": { "kind": "download", "path": "/download" },
+      "expect": "works"
+    },
+    {
+      "id": "proxy",
+      "policies": [{ "name": "ProxySettings", "value": { "ProxyMode": "fixed_servers", "ProxyServer": "{proxy}" } }],
+      "check": { "kind": "proxy", "url": "http://perch-policy-check.example/" },
+      "expect": "works"
+    },
+    {
+      "id": "safe-browsing",
+      "policies": [{ "name": "SafeBrowsingProtectionLevel", "value": 0 }],
+      "check": { "kind": "policy" },
+      "expect": "works"
+    },
+    {
+      "id": "component-updates",
+      "policies": [{ "name": "ComponentUpdatesEnabled", "value": false }],
+      "check": { "kind": "policy" },
+      "expect": "works"
+    },
+    {
+      "id": "certificates",
+      "policies": [{ "name": "CAPlatformIntegrationEnabled", "value": false }],
+      "check": { "kind": "policy" },
+      "expect": "works",
+      "note": "CACertificates (a page signed by a generated root loading without a warning) is not part of this check yet."
+    },
+    {
+      "id": "google-sign-in",
+      "policies": [{ "name": "BrowserSignin", "value": 0 }],
+      "check": { "kind": "policy" },
+      "expect": "ignored"
+    },
+    {
+      "id": "cloud-enrollment",
+      "policies": [{ "name": "CloudManagementEnrollmentToken", "value": "00000000-0000-0000-0000-000000000000" }],
+      "check": { "kind": "policy" },
+      "expect": "ignored"
+    },
+    {
+      "id": "metrics",
+      "policies": [{ "name": "MetricsReportingEnabled", "value": false }],
+      "check": { "kind": "policy" },
+      "expect": "mdm-only",
+      "note": "Sensitive in Chromium, so test policies cannot set it. On a managed Mac the policy page should show it ignored in Perch."
+    }
+  ]
+}

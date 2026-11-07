@@ -1,11 +1,24 @@
 import { useState } from "preact/hooks";
-import type { AuditEntry } from "../../api";
+import type { AuditEntry, AuditExport, AuditFormat } from "../../api";
 import { AUDIT_OUTCOMES } from "../../lib/labels";
 import { shortDateTime } from "../../lib/time";
 import { useAction, useAnnounce, useApi, useLoad } from "../../ui/frame";
 import { Group } from "../../ui/Row";
 
 const PAGE = 50;
+
+/** Saves the export with a download link: perchd hands back the file's text, not a path. */
+export function download(file: AuditExport): void {
+  const url = URL.createObjectURL(new Blob([file.text], { type: file.type }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = file.name;
+  link.style.display = "none";
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
 
 /** Every agent action (spec 7.4): when, which client, which tab and site, what, and whether it was approved. */
 export function AuditLog() {
@@ -24,9 +37,11 @@ export function AuditLog() {
     setOlder((x) => [...x, ...next]);
     if (next.length < PAGE) setEnd(true);
   };
-  const exportLog = async () => {
-    const r = await act(() => api.exportAuditLog());
-    if (r) announce(`Saved ${r.entries} actions to ${r.name}`);
+  const exportLog = async (format: AuditFormat) => {
+    const r = await act(() => api.exportAuditLog(format));
+    if (!r) return;
+    download(r);
+    announce(`Saved ${r.entries} actions to ${r.name}`);
   };
   const hasMore = !end && (first.data?.length ?? 0) >= PAGE;
 
@@ -58,7 +73,8 @@ export function AuditLog() {
       </div>
       <div class="audit-foot">
         <p class="note">Kept on this Mac, encrypted. Routines and outside agents are listed here too.</p>
-        <button type="button" class="btn" onClick={exportLog}>Export</button>
+        <button type="button" class="btn" onClick={() => exportLog("csv")}>Export CSV</button>
+        <button type="button" class="btn" onClick={() => exportLog("jsonl")}>Export JSON lines</button>
       </div>
     </Group>
   );

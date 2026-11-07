@@ -1,6 +1,7 @@
 /** What the pages API is built from: the app's stores and the modules each page delegates to. */
 
 import type { PermissionMode } from "../../../../ui-pages/src/api";
+import type { AuditLog } from "../../agent/audit";
 import type { CdpConnection } from "../../cdp/connection";
 import type { Keychain as SettingsKeychain } from "../../config/keychain";
 import type { ClientRegistry } from "../../daemon/clients";
@@ -10,6 +11,7 @@ import type { Found } from "../../mcp-client/importers/sources";
 import type { McpManager } from "../../mcp-client/manager";
 import type { RegistryStore } from "../../mcp-client/registry";
 import type { ModelRegistry } from "../../models/registry";
+import type { PolicyError, PolicyView } from "../../policy/policy";
 import type { PerchData } from "../../routines/service";
 import type { SecretStore } from "../../secure/keychain";
 import type { SkillStore } from "../../skills/store";
@@ -43,8 +45,8 @@ export type PagesDeps = {
   };
   skills: { store: SkillStore; builtInDir?: string; home: string };
   clients: ClientRegistry;
-  /** Every audit log perchd writes (the socket's, the sidebar's, routines'). */
-  auditFiles: readonly string[];
+  /** The profile's one audit log (spec 7.4): every client writes it. */
+  audit: AuditLog;
   /** Memory and routines, opened in the background at startup. */
   data: () => Promise<PerchData>;
   importer: {
@@ -54,4 +56,8 @@ export type PagesDeps = {
     running?: CdpConnection;
   };
   now?: () => Date;
+  /** Company policy (spec 12.2); left out on an unmanaged Mac and in most tests. */
+  policy?: PolicyView & { errors?: () => readonly PolicyError[] };
+  /** Problems outside the policy itself that perch://policy and Settings report, such as an unwritable AuditLogPath. */
+  policyProblems?: () => readonly PolicyError[];
 };

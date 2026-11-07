@@ -10,6 +10,7 @@ export async function cleanup(env: AppEnv, now: number): Promise<void> {
   const before = now - TOMBSTONE_DAYS * DAY;
   const results = await env.DB.batch([
     env.DB.prepare("DELETE FROM email_requests WHERE expires_at <= ?").bind(now),
+    env.DB.prepare("DELETE FROM oidc_requests WHERE expires_at <= ?").bind(now),
     env.DB.prepare("DELETE FROM challenges WHERE expires_at <= ?").bind(now),
     env.DB.prepare("DELETE FROM confirmations WHERE expires_at <= ?").bind(now),
     env.DB.prepare("DELETE FROM pairings WHERE expires_at <= ?").bind(now),

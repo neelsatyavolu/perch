@@ -1,0 +1,21 @@
+caption: "Allow the anonymous daily ping"
+default: false
+desc: "The ping is off unless a user turns it on. Set this to false to keep it off. True is treated as unset: a policy cannot turn telemetry on."
+example_value: false
+features:
+  can_be_recommended: false
+  dynamic_refresh: true
+  per_profile: false
+items:
+- caption: Enabled
+  value: true
+- caption: Disabled
+  value: false
+owners:
+- file://chrome/browser/perch/OWNERS
+schema:
+  type: boolean
+supported_on:
+- chrome.*:158-
+tags: []
+type: main

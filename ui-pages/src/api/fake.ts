@@ -6,7 +6,7 @@
 
 import type {
   AboutInfo, Appearance, BuiltInExtension, ChatSummary, DetectedBrowser, DraftFact, FileChoice, FileKind, JobId, JobProgress, McpImportCandidate, McpServer,
-  MemoryDoc, MemorySettings, NtpLayout, Onboarding, PerchApi, PermissionMode, Permissions, PrivacySettings, Provider, Routine, RoutineInput,
+  MemoryDoc, MemorySettings, NtpLayout, Onboarding, PerchApi, PermissionMode, Permissions, PolicyProblem, PrivacySettings, Provider, Routine, RoutineInput,
   RoutineProposal, SiteData, Skill, SystemAccess, TaskModel,
 } from "../api";
 import { DEFAULT_APPEARANCE } from "../theme/apply";
@@ -58,6 +58,23 @@ export type FakeOptions = {
   readonly failJobs?: string;
   /** What the open panel returns; by default the person picks a file. */
   readonly pickFile?: (kind: FileKind) => string | null;
+  /** Perch policies in force, as perchd reports them (spec 12.2); none by default. */
+  readonly policy?: Readonly<Record<string, unknown>>;
+  readonly policyErrors?: readonly PolicyProblem[];
+};
+
+/** MaxPermissionMode as perchd reports it in `Permissions.maxMode`. */
+const policyMaxMode = (policy: FakeOptions["policy"]): Partial<Permissions> => {
+  const max = policy?.MaxPermissionMode;
+  return max === "ask" || max === "guard" || max === "skip" ? { maxMode: max } : {};
+};
+
+/** perchd's answer to a write a company policy locks. */
+const MANAGED = "Managed by your organization";
+/** As perchd writes CSV: a cell starting with = + - or @ gets a leading ' so it is never run as a formula. */
+const csvCell = (raw: string): string => {
+  const safe = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
+  return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 };
 
 const must = <T>(check: Check<T>): T => {
@@ -83,7 +100,7 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     taskModels: seed.TASK_MODELS,
     servers: seed.MCP_SERVERS,
     skills: seed.SKILLS,
-    permissions: { ...seed.PERMISSIONS, ...options.permissions },
+    permissions: { ...seed.PERMISSIONS, ...policyMaxMode(options.policy), ...options.permissions },
     privacy: seed.PRIVACY,
     siteData: seed.SITE_DATA,
     builtIns: (["perch", "backrow", "lulltab", "caveatly"] as const).map((name) => ({ name, enabled: true })),
@@ -131,7 +148,7 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
   const checkMode = (mode: PermissionMode) => {
     const max = state.permissions.maxMode;
     if (!MODE_ORDER.includes(mode)) throw new Error("Unknown permission mode");
-    if (max && MODE_ORDER.indexOf(mode) > MODE_ORDER.indexOf(max)) throw new Error("Your organization doesn't allow that mode");
+    if (max && MODE_ORDER.indexOf(mode) > MODE_ORDER.indexOf(max)) throw new Error(MANAGED);
   };
   const file = (id: string | undefined, kind: FileKind) => state.files.find((f) => f.id === id && f.kind === kind);
   /** Import candidates as perchd returns them: targets redacted, found tokens listed as Keychain names. */
@@ -359,8 +376,17 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
       const older = query.before ? seed.AUDIT_LOG.filter((e) => e.at < query.before!) : seed.AUDIT_LOG;
       return older.slice(0, Math.max(0, Math.min(query.limit, 500)));
     },
-    async exportAuditLog() {
-      return { name: "perch-audit-log.jsonl", entries: seed.AUDIT_LOG.length };
+    async exportAuditLog(format = "jsonl") {
+      if (format !== "jsonl" && format !== "csv") throw new Error('"format" must be one of jsonl, csv');
+      const entries = [...seed.AUDIT_LOG].reverse();
+      const text = format === "csv"
+        ? `${["at,client,tab,site,action,outcome", ...entries.map((e) => [e.at, e.client, e.tab, e.site, e.action, e.outcome].map(csvCell).join(","))].join("\r\n")}\r\n`
+        : entries.map((e) => `${JSON.stringify(e)}\n`).join("");
+      return { name: `perch-activity-2026-11-07.${format}`, type: format === "csv" ? "text/csv" : "application/x-ndjson", entries: entries.length, text };
+    },
+    async getPolicy() {
+      const values = options.policy ?? {};
+      return { managed: Object.keys(values).length > 0, values, errors: options.policyErrors ?? [] };
     },
 
     async setPrivacy(patch) {
@@ -394,9 +420,13 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     },
 
     async getMemorySettings() {
-      return state.memorySettings;
+      // As perchd: with memory off by policy, the switches show off whatever was chosen before.
+      const off = options.policy?.MemoryEnabled === false;
+      return off ? { ...state.memorySettings, extraction: false, historyExtraction: false, dreaming: false } : state.memorySettings;
     },
     async setMemorySettings(patch) {
+      const off = options.policy?.MemoryEnabled === false || (patch.historyExtraction && options.policy?.HistoryExtractionEnabled === false);
+      if (off && Object.values(patch).some((v) => v === true)) throw new Error(MANAGED);
       set({ memorySettings: { ...state.memorySettings, ...patch } });
       return state.memorySettings;
     },

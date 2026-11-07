@@ -13,6 +13,7 @@ import type { Browser } from "../browser/browser";
 import type { MemoryAccess } from "../memory/agent";
 import { newId } from "../memory/page";
 import type { Model } from "../models/types";
+import type { PolicyView } from "../policy/policy";
 import type { Routine, RoutineStore, RunRecord, RunStatus, RunTrigger } from "./store";
 
 export type RunnerDeps = {
@@ -25,6 +26,8 @@ export type RunnerDeps = {
   runTask?: (opts: TaskOptions) => AsyncIterable<StepEvent>;
   now?: () => Date;
   timeoutMs?: number;
+  /** Company policy: turns the agent off, caps the mode, adds site rules. */
+  policy?: PolicyView;
 };
 export type RunOptions = { approve?: (request: ApprovalRequest) => Promise<boolean>; scheduledFor?: Date | null; signal?: AbortSignal };
 
@@ -59,7 +62,7 @@ export async function runRoutine(routine: Routine, trigger: RunTrigger, deps: Ru
   try {
     const [browser, model] = await Promise.all([deps.browser(), deps.model(routine)]);
     const run = deps.runTask ?? runTask;
-    for await (const event of run({ model, browser, task, mode: routine.mode, approve, audit: deps.audit, client: `routine:${routine.id}`, signal, memory: deps.memory?.(routine, { attended: Boolean(attended) }) })) {
+    for await (const event of run({ model, browser, task, mode: routine.mode, approve, audit: deps.audit, client: `routine:${routine.id}`, signal, memory: deps.memory?.(routine, { attended: Boolean(attended) }), ...(deps.policy ? { policy: deps.policy } : {}) })) {
       if (event.type !== "text") events.push(event);
       if (event.type === "final") answer = event.text;
       if (event.type === "error") {

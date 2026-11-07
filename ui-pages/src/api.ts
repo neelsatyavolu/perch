@@ -203,6 +203,19 @@ export type AuditEntry = {
   readonly outcome: AuditOutcome;
 };
 export type AuditQuery = { readonly limit: number; readonly before?: Iso };
+export type AuditFormat = "jsonl" | "csv";
+/** The whole log as a file's contents; the page saves it with a download link. */
+export type AuditExport = { readonly name: string; readonly type: string; readonly entries: number; readonly text: string };
+
+/* ---------- Company policy (spec 12.2) ---------- */
+
+/** One policy problem: a value that failed its schema, or an AuditLogPath Perch cannot write. */
+export type PolicyProblem = { readonly name: string; readonly message: string };
+/**
+ * The Perch policies in force, by policy name (enterprise/policies.json). `managed` is false on an
+ * unmanaged Mac, and then nothing in Settings changes.
+ */
+export type PolicyState = { readonly managed: boolean; readonly values: Readonly<Record<string, unknown>>; readonly errors: readonly PolicyProblem[] };
 
 /* ---------- Privacy and security (spec 5.1, 5.9) ---------- */
 
@@ -397,8 +410,12 @@ export interface PerchApi {
   setClientMode(id: string, mode: PermissionMode): Promise<Permissions>;
   /** Newest first. */
   listAuditLog(query: AuditQuery): Promise<readonly AuditEntry[]>;
-  /** Writes the whole log as JSON lines to a file the person picks in perchd's save panel; null when cancelled. */
-  exportAuditLog(): Promise<{ readonly name: string; readonly entries: number } | null>;
+  /** The whole log, oldest first, as JSON lines (the default) or CSV; the page offers it as a download. */
+  exportAuditLog(format?: AuditFormat): Promise<AuditExport>;
+
+  // Company policy
+  /** Which Perch policies are in force; perchd refuses every Settings write a policy locks. */
+  getPolicy(): Promise<PolicyState>;
 
   // Privacy and security
   getPrivacy(): Promise<PrivacySettings>;
@@ -483,7 +500,7 @@ export const API_METHODS = [
   "listProviders", "signIn", "signOut", "connectProvider", "listModels", "getTaskModels", "setTaskModel",
   "listMcpServers", "scanMcpImports", "importMcpServers", "addMcpServer", "updateMcpServer", "removeMcpServer",
   "listSkills", "addSkill", "setSkillEnabled", "removeSkill",
-  "getPermissions", "setPermissionMode", "addSiteRule", "removeSiteRule", "setClientMode", "listAuditLog", "exportAuditLog",
+  "getPermissions", "setPermissionMode", "addSiteRule", "removeSiteRule", "setClientMode", "listAuditLog", "exportAuditLog", "getPolicy",
   "getPrivacy", "setPrivacy", "setBackgroundConnection", "removeBlockerException", "listSiteData", "forgetSite",
   "listBuiltInExtensions", "setBuiltInExtension",
   "getMemorySettings", "setMemorySettings", "listMemoryPages", "readMemoryPage", "writeMemoryPage", "deleteMemoryPage", "wipeMemory",

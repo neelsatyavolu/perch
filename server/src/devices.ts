@@ -42,15 +42,21 @@ deviceRoutes.delete("/:id", async (c) => {
   const id = check(idSchema, c.req.param("id"));
   const { accountId } = c.var.auth;
   if (id !== c.var.auth.deviceId) browserOnly(c.var.auth.kind);
-  const [revoked] = await c.env.DB.batch([
-    c.env.DB.prepare("UPDATE devices SET revoked_at = ? WHERE id = ? AND account_id = ? AND revoked_at IS NULL").bind(c.var.deps.now(), id, accountId),
-    c.env.DB.prepare("DELETE FROM sessions WHERE device_id = ? AND account_id = ?").bind(id, accountId),
-    c.env.DB.prepare("DELETE FROM wrapped_keys WHERE slot = ? AND account_id = ?").bind(id, accountId),
-  ]);
-  if (revoked?.meta.changes !== 1) throw noDevice();
-  await c.env.RELAY.get(c.env.RELAY.idFromName(accountId)).disconnect(id);
+  if (!(await revokeDevice(c.env, accountId, id, c.var.deps.now()))) throw noDevice();
   return c.json({ ok: true });
 });
+
+/** Revokes a live device of an account (also used by the company admin routes). False if there is none. */
+export async function revokeDevice(env: AppEnv, accountId: string, id: string, now: number): Promise<boolean> {
+  const [revoked] = await env.DB.batch([
+    env.DB.prepare("UPDATE devices SET revoked_at = ? WHERE id = ? AND account_id = ? AND revoked_at IS NULL").bind(now, id, accountId),
+    env.DB.prepare("DELETE FROM sessions WHERE device_id = ? AND account_id = ?").bind(id, accountId),
+    env.DB.prepare("DELETE FROM wrapped_keys WHERE slot = ? AND account_id = ?").bind(id, accountId),
+  ]);
+  if (revoked?.meta.changes !== 1) return false;
+  await env.RELAY.get(env.RELAY.idFromName(accountId)).disconnect(id);
+  return true;
+}
 
 function browserOnly(kind: string): void {
   if (kind !== "browser") throw new HttpError(403, "browser_only", "Only a Perch browser signed in to this account can change other devices.");

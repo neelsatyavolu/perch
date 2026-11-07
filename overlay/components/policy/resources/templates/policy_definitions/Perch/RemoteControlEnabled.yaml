@@ -1,0 +1,21 @@
+caption: "Allow remote control"
+default: true
+desc: "When true or unset, users can let cloud assistants such as Grok Bot drive Perch through the relay. When false, they cannot, and an open relay connection closes."
+example_value: false
+features:
+  can_be_recommended: false
+  dynamic_refresh: true
+  per_profile: false
+items:
+- caption: Enabled
+  value: true
+- caption: Disabled
+  value: false
+owners:
+- file://chrome/browser/perch/OWNERS
+schema:
+  type: boolean
+supported_on:
+- chrome.*:158-
+tags: []
+type: main

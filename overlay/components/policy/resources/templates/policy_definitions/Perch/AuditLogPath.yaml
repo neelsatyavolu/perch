@@ -1,0 +1,16 @@
+caption: "Copy the agent audit log to a file"
+desc: "An absolute path, or one starting with ~/, where Perch appends every agent audit entry as a JSON line for the company's security tools. ${USER} is replaced with the user's short name. The copy holds what the local log holds and nothing more."
+example_value: "~/Library/Logs/Perch/audit-${USER}.jsonl"
+features:
+  can_be_recommended: false
+  dynamic_refresh: true
+  per_profile: false
+owners:
+- file://chrome/browser/perch/OWNERS
+schema:
+  pattern: "^(/|~/)"
+  type: string
+supported_on:
+- chrome.*:158-
+tags: []
+type: string

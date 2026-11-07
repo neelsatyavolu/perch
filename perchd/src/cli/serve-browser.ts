@@ -13,8 +13,10 @@ import { Browser } from "../browser/browser";
 import { adoptBrowserFds } from "../cdp/adopt";
 import { startApp } from "../app/app";
 import { macKeychain } from "../app/keychain";
-import { openPageServices } from "../app/pages/services";
-import { SidebarRuns, sidebarModels, sidebarRunner } from "../app/sidebar-runner";
+import { PolicyAuditMirror } from "../agent/audit-mirror";
+import { openPageServices, profileAuditLog } from "../app/pages/services";
+import { allowedSidebarModels, SidebarRuns, sidebarModels, sidebarRunner } from "../app/sidebar-runner";
+import { startPolicyWatcher } from "../policy/watch";
 import { Vault } from "../app/vault";
 import { startDaemon, type Daemon } from "../daemon/daemon";
 import { MacKeychain } from "../daemon/keychain";
@@ -71,6 +73,14 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
   const base = join(settings.dataDir, "Perch Agent");
   const keychain = io.keychain ?? new MacKeychain();
   const runs = new SidebarRuns();
+  // Company policy (spec 12.2) and the profile's one audit log, shared by the daemon, the sidebar and routines.
+  const policy = startPolicyWatcher();
+  const mirror = new PolicyAuditMirror(policy);
+  const audit = profileAuditLog(settings.dataDir, perchPaths(io.env), mirror);
+  const policyProblems = () => {
+    const problem = mirror.error();
+    return problem ? [{ name: "AuditLogPath", message: problem }] : [];
+  };
   const start = (env: Record<string, string | undefined>) =>
     startDaemon({
       paths: perchPaths(env),
@@ -78,6 +88,8 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
       sealKeychain: io.keychain ? undefined : new MacKeychain("Perch registry"),
       launch: async () => browser,
       sidebar: (session) => runs.get(session),
+      policy,
+      audit,
     });
   let home = perchPaths(io.env).home;
   let daemon: Daemon;
@@ -97,14 +109,16 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
     browser,
     conn,
     clients: daemon.registry,
-    daemonAudit: perchPaths({ ...io.env, PERCH_HOME: home }).auditFile,
+    audit,
     env: io.env,
+    policy,
+    policyProblems,
   });
   const app = await startApp({
     dataDir: join(base, "app"),
     vault,
-    runner: sidebarRunner({ runs, perch: perchCommand(), home, auditPath: services.sidebarAudit, memory: services.chatMemory }),
-    models: sidebarModels(),
+    runner: sidebarRunner({ runs, perch: perchCommand(), home, auditPath: services.sidebarAudit, memory: services.chatMemory, policy }),
+    models: allowedSidebarModels(sidebarModels(), policy.current()),
     allowedOrigins: settings.origins,
     listen: { port: settings.port },
     token: settings.token,
@@ -118,5 +132,6 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
   await app.stop();
   await services.stop();
   await daemon.stop();
+  policy.stop();
   return 0;
 }

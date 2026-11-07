@@ -7,7 +7,11 @@
 
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { AuditLog } from "../../agent/audit";
+import { AuditLog, type AuditSink } from "../../agent/audit";
+import type { PerchPaths } from "../../daemon/paths";
+import { allowsModel, MODEL_NOT_ALLOWED, type PolicyError } from "../../policy/policy";
+import type { PolicyWatcher } from "../../policy/watch";
+import { providerAllowed } from "./models";
 import type { Browser } from "../../browser/browser";
 import type { CdpConnection } from "../../cdp/connection";
 import { systemKeychain } from "../../config/keychain";
@@ -42,15 +46,27 @@ export type PageServicesOptions = {
   browser: Browser;
   conn: CdpConnection;
   clients: ClientRegistry;
-  /** The daemon's audit log, for Settings → Permissions. */
-  daemonAudit: string;
+  /** The profile's one audit log: the daemon, the sidebar and routines all write it. */
+  audit: AuditLog;
   env: Record<string, string | undefined>;
+  /** Company policy (spec 12.2) and problems to report beside it, such as an unwritable AuditLogPath. */
+  policy?: PolicyWatcher;
+  policyProblems?: () => readonly PolicyError[];
 };
+
+/** The profile's audit log, with every older log merged in on first use (spec 7.4). */
+export function profileAuditLog(userDataDir: string, home: PerchPaths, mirror?: AuditSink): AuditLog {
+  const base = join(userDataDir, "Perch Agent");
+  return new AuditLog(join(base, "audit.jsonl"), {
+    legacy: [join(base, "sidebar-audit.jsonl"), home.auditFile, ...home.legacyAuditFiles],
+    ...(mirror ? { mirror } : {}),
+  });
+}
 
 export type PageServices = {
   /** For `startApp({ pages })`. */
   pages: (core: PagesCore) => PagesApi;
-  /** The sidebar runner's audit log, listed with the others. */
+  /** The audit log file the sidebar's outside agents write. */
   sidebarAudit: string;
   /** Memory for a sidebar chat. */
   chatMemory: () => Promise<Awaited<ReturnType<PerchData["chatMemory"]>>>;
@@ -75,7 +91,6 @@ export function openPageServices(opts: PageServicesOptions): PageServices {
   const models = () => (registry ??= SettingsStore.open({ dir: base, keychain: settingsKeychain }).then((store) => createModelRegistry({ store, keychain: settingsKeychain })));
 
   let app: { chats: ChatStore; windows: Windows } | null = null;
-  const routinesAudit = join(base, "audit.jsonl");
   const data = openPerchData({
     dataDir: base,
     profile: opts.profile,
@@ -84,11 +99,15 @@ export function openPageServices(opts: PageServicesOptions): PageServices {
       forRoutine: async (routine) => {
         const [provider, ...rest] = (routine.model ?? "").split(":");
         const r = await models();
-        return modelOf(await r.modelFor(isProviderId(provider) && rest.length ? { provider, model: rest.join(":") } : "default"));
+        const handle = await r.modelFor(isProviderId(provider) && rest.length ? { provider, model: rest.join(":") } : "default");
+        const policy = opts.policy?.current() ?? {};
+        if (!providerAllowed(handle.provider, policy) || !allowsModel(handle.provider, handle.info.id, policy)) throw new Error(MODEL_NOT_ALLOWED);
+        return modelOf(handle);
       },
     },
     browser: async () => opts.browser,
-    audit: new AuditLog(routinesAudit),
+    audit: opts.audit,
+    ...(opts.policy ? { policy: opts.policy } : {}),
     setupInputs: () => ({
       history: () => readChromiumHistory(profileDir, { now: new Date() }),
       bookmarks: () => readChromiumBookmarks(profileDir),
@@ -106,10 +125,9 @@ export function openPageServices(opts: PageServicesOptions): PageServices {
   const manager = new McpManager({ store: mcpStore, keychain: secrets, env: opts.env, openUrl, approveLaunch: (r) => confirm(describeLaunch(r)) });
   void manager.start().catch((error: Error) => process.stderr.write(`perchd: MCP servers did not start: ${error.message}\n`));
   const home = opts.env.HOME || homedir();
-  const sidebarAudit = join(base, "sidebar-audit.jsonl");
 
   return {
-    sidebarAudit,
+    sidebarAudit: opts.audit.path,
     chatMemory: async () => (await data).chatMemory(),
     attach(a) {
       app = a;
@@ -125,7 +143,9 @@ export function openPageServices(opts: PageServicesOptions): PageServices {
         mcp: { store: mcpStore, keychain: secrets, manager, findImports: () => findImports({ home, env: opts.env }) },
         skills: { store: new SkillStore(join(base, "skills"), secrets), home },
         clients: opts.clients,
-        auditFiles: [opts.daemonAudit, sidebarAudit, routinesAudit],
+        audit: opts.audit,
+        ...(opts.policy ? { policy: opts.policy } : {}),
+        ...(opts.policyProblems ? { policyProblems: opts.policyProblems } : {}),
         data: () => data.catch((error: Error) => Promise.reject(new AppError(`Perch couldn't open memory and routines: ${error.message}`, 503))),
         importer: { home, target: { userDataDir: opts.userDataDir }, keychain: importKeychain(), running: opts.conn },
       }),

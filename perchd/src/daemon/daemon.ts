@@ -5,9 +5,11 @@
 
 import { existsSync } from "node:fs";
 import { AuditLog } from "../agent/audit";
+import { PolicyAuditMirror } from "../agent/audit-mirror";
 import { TOOL_SPECS } from "../agent/tools";
 import { Browser } from "../browser/browser";
 import type { Mode } from "../agent/permissions";
+import { ManagedError, type PolicyView } from "../policy/policy";
 import { ClientRegistry, isMode, raisesMode } from "./clients";
 import { macConfirm, type Confirm } from "./confirm";
 import { MemoryKeychain, type Keychain } from "./keychain";
@@ -35,6 +37,10 @@ export type DaemonOptions = {
   approvalTimeoutMs?: number;
   /** Sessions started from Perch's sidebar (src/app/sidebar-runner.ts). */
   sidebar?: (session: string) => SidebarRun | undefined;
+  /** Company policy (spec 12.2); a watcher's changes close connections it no longer allows. */
+  policy?: PolicyView & { onChange?: (listener: () => void) => () => void };
+  /** The audit log to write; inside Perch, the profile's one log. Defaults to the Perch folder's. */
+  audit?: AuditLog;
 };
 
 export type Daemon = { manager: SessionManager; registry: ClientRegistry; stop(): Promise<void> };
@@ -63,10 +69,11 @@ const DECLINED_HERE = "Not changed: it was not allowed in the Perch dialog.";
 
 export async function startDaemon(opts: DaemonOptions): Promise<Daemon> {
   let browser: Promise<Browser> | null = null;
-  const registry = new ClientRegistry(opts.paths.clientsFile, opts.keychain, opts.sealKeychain ?? new MemoryKeychain());
+  const maxMode = () => opts.policy?.current().MaxPermissionMode;
+  const registry = new ClientRegistry(opts.paths.clientsFile, opts.keychain, opts.sealKeychain ?? new MemoryKeychain(), maxMode);
   await registry.load();
   const confirm = opts.confirm ?? macConfirm();
-  const audit = new AuditLog(opts.paths.auditFile);
+  const audit = opts.audit ?? new AuditLog(opts.paths.auditFile, { legacy: opts.paths.legacyAuditFiles, ...(opts.policy ? { mirror: new PolicyAuditMirror(opts.policy) } : {}) });
   const getBrowser = (): Promise<Browser> =>
     (browser ??= opts
       .launch()
@@ -147,6 +154,8 @@ export async function startDaemon(opts: DaemonOptions): Promise<Daemon> {
       const mode = params.mode;
       if (!isMode(mode)) throw new Error("The mode must be ask, guard or skip.");
       const name = str(params, "name") ?? "";
+      const max = maxMode();
+      if (max && raisesMode(max, mode)) throw new ManagedError(`Your organization allows outside agents up to ${max} mode.`);
       if (raisesMode(registry.find(name).mode, mode) && !(await confirm(`Let "${name}" ${MODE_TEXT[mode]} in Perch (${mode} mode)?`))) throw new Error(DECLINED_HERE);
       await registry.setMode(name, mode);
       return registry.list();
@@ -163,12 +172,15 @@ export async function startDaemon(opts: DaemonOptions): Promise<Daemon> {
     helloTimeoutMs: opts.helloTimeoutMs,
     approvalTimeoutMs: opts.approvalTimeoutMs,
     sidebar: opts.sidebar,
+    ...(opts.policy ? { policy: opts.policy } : {}),
   });
+  const stopWatching = opts.policy?.onChange?.(() => server.enforce());
 
   return {
     manager,
     registry,
     async stop() {
+      stopWatching?.();
       server.stop();
       await manager.closeAll();
       const b = browser;

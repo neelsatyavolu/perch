@@ -10,6 +10,7 @@ import type { Socket, UnixSocketListener } from "bun";
 import type { ApprovalRequest, CallPolicy } from "../agent/session";
 import type { AuditLog } from "../agent/audit";
 import type { Mode } from "../agent/permissions";
+import { AGENT_OFF, agentAllowed, allowsClient, capMode, CLIENTS_OFF, siteRuleFor, type PolicyView } from "../policy/policy";
 import type { ClientRecord, ClientRegistry } from "./clients";
 import { parseClientMessage, parseHello, type ApproveAsk, type Hello, type Request } from "./protocol";
 import type { AgentSession, SessionManager } from "./sessions";
@@ -50,7 +51,17 @@ export type ServerOptions = {
   approvalTimeoutMs?: number;
   /** The sidebar run a session id belongs to, if any. */
   sidebar?: (session: string) => SidebarRun | undefined;
+  /** Company policy (spec 12.2): which clients may connect, the mode cap and site rules. */
+  policy?: PolicyView;
 };
+
+/** Why a connection may not go on under the current policy, or null when it may. */
+function refusal(client: string, policy: PolicyView | undefined): string | null {
+  if (!policy) return null;
+  const p = policy.current();
+  if (client === SIDEBAR_CLIENT) return agentAllowed(p) ? null : AGENT_OFF;
+  return allowsClient(client, p) ? null : CLIENTS_OFF;
+}
 
 /** One client connection after hello. */
 export class Connection {
@@ -67,6 +78,13 @@ export class Connection {
 
   /** The client's rules: its registered mode, its approvals, its name in the audit log. */
   policy(): CallPolicy {
+    const own = this.ownPolicy();
+    const company = this.opts.policy?.current();
+    if (!company) return own;
+    return { ...own, mode: capMode(own.mode, company), siteRule: (host) => siteRuleFor(host, own.siteRule?.(host), company) };
+  }
+
+  private ownPolicy(): CallPolicy {
     const run = this.hello.client === SIDEBAR_CLIENT ? this.opts.sidebar?.(this.hello.session) : undefined;
     if (run) return { mode: run.mode, audit: this.opts.audit, client: this.session.key, approve: run.approve };
     return {
@@ -109,6 +127,8 @@ export type Server = {
   stop(): void;
   /** Closes every open connection of a client, as after a revoke. */
   disconnect(client: string): void;
+  /** Closes every connection the current policy no longer allows; perchd calls it after a change. */
+  enforce(): void;
 };
 
 async function socketInUse(path: string): Promise<boolean> {
@@ -139,6 +159,11 @@ export async function startServer(opts: ServerOptions): Promise<Server> {
   async function onHello(state: State, value: unknown): Promise<void> {
     const hello = parseHello(value);
     if (typeof hello === "string") return fail(state, hello);
+    const refused = refusal(hello.client, opts.policy);
+    if (refused) {
+      await opts.audit.append({ time: new Date().toISOString(), tab: "", site: "", action: "connect", client: hello.client, approved: null, result: "blocked" });
+      return fail(state, refused);
+    }
     const run = hello.client === SIDEBAR_CLIENT ? opts.sidebar?.(hello.session) : undefined;
     const verified: Awaited<ReturnType<ClientRegistry["verify"]>> =
       hello.client === SIDEBAR_CLIENT
@@ -170,6 +195,9 @@ export async function startServer(opts: ServerOptions): Promise<Server> {
   }
 
   async function onRequest(state: State, req: Request): Promise<void> {
+    // Checked on every request too, so a policy that changes while a client is connected applies at once.
+    const refused = refusal(state.conn!.hello.client, opts.policy);
+    if (refused) return state.writer.send({ type: "response", id: req.id, error: refused });
     const handler = Object.hasOwn(opts.methods, req.method) ? opts.methods[req.method] : undefined;
     if (!handler) return state.writer.send({ type: "response", id: req.id, error: `Unknown method "${req.method}".` });
     try {
@@ -250,6 +278,12 @@ export async function startServer(opts: ServerOptions): Promise<Server> {
     stop() {
       listener.stop(true);
       if (existsSync(opts.socket)) unlinkSync(opts.socket);
+    },
+    enforce() {
+      for (const state of live) {
+        const refused = state.conn ? refusal(state.conn.hello.client, opts.policy) : null;
+        if (refused) fail(state, refused);
+      }
     },
     disconnect(client) {
       for (const state of live) if (state.conn?.client.name === client) fail(state, `Client "${client}" was revoked.`);

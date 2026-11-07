@@ -106,9 +106,20 @@ def _release_env(monkeypatch, tmp_path, paths, reasons):
     monkeypatch.setattr(cli, "REPO", repo)
     monkeypatch.setattr(cli, "current_paths", lambda: paths)
     monkeypatch.setenv("PERCH_SPARKLE_KEY_REF", "op://Private/k/key")
-    monkeypatch.setattr(cli, "preflight", lambda *a: reasons)
+    monkeypatch.setattr(cli, "preflight", lambda *a, **k: reasons)
     monkeypatch.setattr(cli, "sparkle_bin", lambda repo: tmp_path / "bin")
-    monkeypatch.setattr(cli, "appcast", lambda dmg, out, key_ref, info, bin_dir, run: out / "appcast.xml")
+
+    def fake_appcast(dmg, out, key_ref, info, bin_dir, run):
+        (out / "appcast.xml").write_text("<rss/>")
+        return out / "appcast.xml"
+
+    def fake_sbom(paths, info, out, run):
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "Perch-0.1.0.spdx.json").write_text("{}")
+        return out / "Perch-0.1.0.spdx.json"
+
+    monkeypatch.setattr(cli, "appcast", fake_appcast)
+    monkeypatch.setattr(cli, "write_sbom", fake_sbom)
     published = []
     monkeypatch.setattr(cli, "publish", lambda *a, **k: published.append(a))
     return published
@@ -131,6 +142,17 @@ def test_cli_release_publishes(monkeypatch, tmp_path, paths):
     published = _release_env(monkeypatch, tmp_path, paths, [])
     assert cli.main(["release"]) == 0
     assert len(published) == 1
+    assert [p.name for p in published[0][1]] == ["Perch-0.1.0.dmg", "appcast.xml", "Perch-0.1.0.spdx.json", "SHA256SUMS"]
+    sums = (tmp_path / "repo" / "dist" / "release" / "SHA256SUMS").read_text().splitlines()
+    assert [line.split("  ")[1] for line in sums] == ["Perch-0.1.0.dmg", "appcast.xml", "Perch-0.1.0.spdx.json"]
+
+
+def test_cli_release_uploads_pkg_when_built(monkeypatch, tmp_path, paths):
+    published = _release_env(monkeypatch, tmp_path, paths, [])
+    (tmp_path / "repo" / "dist" / "Perch-0.1.0.pkg").write_text("pkg")
+    assert cli.main(["release"]) == 0
+    names = [p.name for p in published[0][1]]
+    assert names == ["Perch-0.1.0.dmg", "Perch-0.1.0.pkg", "appcast.xml", "Perch-0.1.0.spdx.json", "SHA256SUMS"]
 
 
 def test_cli_release_needs_package_first(monkeypatch, tmp_path, paths, capsys):

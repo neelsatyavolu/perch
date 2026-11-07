@@ -1,0 +1,30 @@
+caption: "Highest permission mode"
+default: skip
+desc: "The highest mode users and outside clients can choose: ask, guard or skip. A chat or client set higher drops to this mode before its next action."
+example_value: guard
+features:
+  can_be_recommended: false
+  dynamic_refresh: true
+  per_profile: false
+items:
+- caption: ask
+  name: ask
+  value: ask
+- caption: guard
+  name: guard
+  value: guard
+- caption: skip
+  name: skip
+  value: skip
+owners:
+- file://chrome/browser/perch/OWNERS
+schema:
+  enum:
+  - ask
+  - guard
+  - skip
+  type: string
+supported_on:
+- chrome.*:158-
+tags: []
+type: string-enum

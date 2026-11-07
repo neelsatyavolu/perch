@@ -1,0 +1,18 @@
+caption: "Delay updates by days"
+default: 0
+desc: "Perch offers an update only once it has been public for this many days, from 0 to 30."
+example_value: 7
+features:
+  can_be_recommended: false
+  dynamic_refresh: true
+  per_profile: false
+owners:
+- file://chrome/browser/perch/OWNERS
+schema:
+  maximum: 30
+  minimum: 0
+  type: integer
+supported_on:
+- chrome.*:158-
+tags: []
+type: int

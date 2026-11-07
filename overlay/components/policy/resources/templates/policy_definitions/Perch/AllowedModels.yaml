@@ -1,0 +1,20 @@
+caption: "Models users can pick"
+desc: "Model ids in the form provider/model, for example anthropic/claude-sonnet-5-5. Models not listed are hidden, and a chat on one stops with \"Your organization doesn't allow this model.\" When unset, every model of an allowed provider is allowed."
+example_value:
+- anthropic/claude-sonnet-5-5
+- openai/gpt-6.1-sol
+features:
+  can_be_recommended: false
+  dynamic_refresh: true
+  per_profile: false
+owners:
+- file://chrome/browser/perch/OWNERS
+schema:
+  items:
+    pattern: "^[a-z0-9-]+/.+$"
+    type: string
+  type: array
+supported_on:
+- chrome.*:158-
+tags: []
+type: list

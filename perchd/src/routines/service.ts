@@ -18,6 +18,7 @@ import { macKeychain, type KeyStore } from "../memory/keychain";
 import { hasRecords } from "../memory/records";
 import type { Embedder } from "../memory/search";
 import type { SetupInputs } from "../memory/setup";
+import { memoryAllowed, type PolicyView } from "../policy/policy";
 import { MemoryStore } from "../memory/store";
 import type { Model } from "../models/types";
 import { createRoutinesApi } from "./api";
@@ -37,6 +38,8 @@ export type PerchDataOptions = {
   embedder?: Embedder;
   runTask?: (opts: TaskOptions) => AsyncIterable<StepEvent>;
   now?: () => Date;
+  /** Company policy: the agent and memory on or off, the mode cap and site rules. */
+  policy?: PolicyView;
 };
 
 /** Local hour after which the day's dreaming pass may run. */
@@ -52,14 +55,16 @@ export async function openPerchData(opts: PerchDataOptions) {
   const createKey = !(await hasRecords(memoryDir)) && !(await hasRecords(routinesDir));
   const memory = await MemoryStore.open({ dir: memoryDir, keys, profile: opts.profile, now, embedder: opts.embedder, createKey });
   const routines = await RoutineStore.open(routinesDir, keys, opts.profile, { createKey: false });
+  const memoryOn = () => !opts.policy || memoryAllowed(opts.policy.current());
   const runner: RunnerDeps = {
     store: routines,
     audit: opts.audit,
     browser: opts.browser,
     model: opts.models.forRoutine,
-    memory: (_routine, run) => chatMemory(memory, { unattended: !run.attended }),
+    memory: (_routine, run) => (memoryOn() ? chatMemory(memory, { unattended: !run.attended }) : undefined),
     runTask: opts.runTask,
     now,
+    ...(opts.policy ? { policy: opts.policy } : {}),
   };
   const scheduler = new Scheduler({ store: routines, now, run: (routine, trigger, scheduledFor) => runRoutine(routine, trigger, runner, { scheduledFor }) });
   let lastDream = "";
@@ -70,7 +75,7 @@ export async function openPerchData(opts: PerchDataOptions) {
     const t = now();
     const today = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
     const settings = memory.settings();
-    if (lastDream === today || t.getHours() < DREAM_HOUR || settings.paused || !settings.extraction || !settings.dreaming) return null;
+    if (!memoryOn() || lastDream === today || t.getHours() < DREAM_HOUR || settings.paused || !settings.extraction || !settings.dreaming) return null;
     lastDream = today;
     const model = await opts.models.fast().catch(() => undefined);
     return dream({ store: memory, model, now: t });
@@ -89,7 +94,7 @@ export async function openPerchData(opts: PerchDataOptions) {
       runAttended: (approve) => (routine, trigger, scheduledFor) => runRoutine(routine, trigger, runner, { approve, scheduledFor }),
     }),
     /** Memory for a sidebar chat; undefined for incognito. Extraction uses the fast model. */
-    chatMemory: async (chat: { incognito?: boolean } = {}) => chatMemory(memory, { incognito: chat.incognito, extractWith: chat.incognito ? undefined : await opts.models.fast().catch(() => undefined) }),
+    chatMemory: async (chat: { incognito?: boolean } = {}) => !memoryOn() ? undefined : chatMemory(memory, { incognito: chat.incognito, extractWith: chat.incognito ? undefined : await opts.models.fast().catch(() => undefined) }),
     start(): void {
       scheduler.start();
       dreamTimer ??= setInterval(() => void dreamIfDue().catch(() => null), DREAM_CHECK_MS);

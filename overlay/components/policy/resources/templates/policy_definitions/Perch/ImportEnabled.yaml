@@ -1,0 +1,43 @@
+caption: "Browsers and data users can import"
+desc: "browsers lists the browsers users can import from, by key (chrome, safari, arc, firefox and so on). data lists the data types. An empty list allows nothing; a missing key allows everything."
+example_value:
+  browsers:
+  - chrome
+  - safari
+  data:
+  - bookmarks
+  - history
+  - tabs
+features:
+  can_be_recommended: false
+  dynamic_refresh: true
+  per_profile: false
+owners:
+- file://chrome/browser/perch/OWNERS
+schema:
+  properties:
+    browsers:
+      items:
+        type: string
+      type: array
+    data:
+      items:
+        enum:
+        - bookmarks
+        - history
+        - tabs
+        - searchEngines
+        - passwords
+        - addresses
+        - cookies
+        - extensions
+        - memory
+        - skills
+        - chats
+        type: string
+      type: array
+  type: object
+supported_on:
+- chrome.*:158-
+tags: []
+type: dict

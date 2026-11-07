@@ -1,0 +1,26 @@
+caption: "Update channel"
+default: stable
+desc: "stable or beta."
+example_value: stable
+features:
+  can_be_recommended: false
+  dynamic_refresh: true
+  per_profile: false
+items:
+- caption: stable
+  name: stable
+  value: stable
+- caption: beta
+  name: beta
+  value: beta
+owners:
+- file://chrome/browser/perch/OWNERS
+schema:
+  enum:
+  - stable
+  - beta
+  type: string
+supported_on:
+- chrome.*:158-
+tags: []
+type: string-enum

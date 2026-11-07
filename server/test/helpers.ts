@@ -14,11 +14,20 @@ export const freshEmail = (name = "person") => `${name}.${Date.now()}.${counter+
 export type CallOptions = { body?: unknown; token?: string; ip?: string; headers?: Record<string, string>; raw?: BodyInit };
 export type Called = { status: number; data: any; res: Response };
 
-/** The app with a capture mailer and a clock tests can move. */
-export function harness(start = Date.now()) {
+/** Tests never reach the network; a fake identity provider replaces this where one is needed. */
+const noNetwork = (async (input: RequestInfo | URL) => {
+  throw new Error(`No network in tests: ${input instanceof Request ? input.url : String(input)}`);
+}) as typeof fetch;
+
+export type HarnessOptions = { env?: Partial<AppEnv>; fetch?: typeof fetch };
+
+/** The app with a capture mailer and a clock tests can move. `env` overrides settings such as AUTH_MODE. */
+export function harness(start = Date.now(), options: HarnessOptions = {}) {
   const clock = { now: start };
   const mailer = captureMailer();
-  const app = createApp({ mailer, now: () => clock.now });
+  const app = createApp({ mailer, now: () => clock.now, fetch: options.fetch ?? noNetwork });
+  // The shared env itself unless overridden, so a test that changes appEnv mid-way still works.
+  const env: AppEnv = options.env ? { ...appEnv, ...options.env } : appEnv;
   const ip = freshIp();
   async function call(method: string, path: string, options: CallOptions = {}): Promise<Called> {
     const headers = new Headers(options.headers);
@@ -26,12 +35,12 @@ export function harness(start = Date.now()) {
     if (options.token) headers.set("authorization", `Bearer ${options.token}`);
     headers.set("cf-connecting-ip", options.ip ?? ip);
     const body = options.raw ?? (options.body === undefined ? undefined : JSON.stringify(options.body));
-    const res = await app.fetch(new Request(`https://api.perchbrowser.com${path}`, { method, headers, body }), appEnv);
+    const res = await app.fetch(new Request(`https://api.perchbrowser.com${path}`, { method, headers, body }), env);
     const type = res.headers.get("content-type") ?? "";
     const data = res.status === 101 ? null : type.includes("json") ? await res.json() : type.includes("octet-stream") ? new Uint8Array(await res.arrayBuffer()) : await res.text();
     return { status: res.status, data, res };
   }
-  return { app, mailer, clock, call, ip };
+  return { app, mailer, clock, call, ip, env };
 }
 export type Harness = ReturnType<typeof harness>;
 

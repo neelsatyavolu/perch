@@ -14,7 +14,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
-import { AuditLog } from "./agent/audit";
+import { homeAuditLog } from "./agent/audit-home";
 import { runTask } from "./agent/loop";
 import type { Mode } from "./agent/permissions";
 import { Browser } from "./browser/browser";
@@ -81,7 +81,7 @@ export async function main(argv: string[]): Promise<number> {
   const profile = mkdtempSync(join(tmpdir(), "perchd-dev-"));
   const browser = await Browser.launch({ userDataDir: profile, headless: !show });
   const terminal = createInterface({ input: process.stdin, output: process.stderr });
-  const audit = new AuditLog(join(settingsDir(homedir()), "dev-audit.jsonl"));
+  const audit = homeAuditLog();
   // Servers connect at once, so their questions are queued: one prompt on the terminal at a time.
   let asking: Promise<unknown> = Promise.resolve();
   const ask = (question: string): Promise<boolean> => {

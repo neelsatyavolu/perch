@@ -3,16 +3,8 @@
  * until the person acts. The page asks them to type the number their device shows. Blackletter
  * styling (DESIGN.md): near-black canvas, one blue accent, hairlines, 8px radii, no web fonts.
  */
-export function confirmPage(nonce: string): string {
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="referrer" content="no-referrer">
-<title>Sign in to Perch</title>
-<style nonce="${nonce}">
-:root { --canvas:#0B0B0C; --surface:#141416; --line:#26262A; --text:#F2F2F3; --muted:#9A9AA2; --accent:#4C8DFF; --danger:#FF6B6B; }
+/** Shared with the company sign-in pages (oidc-pages.ts). */
+export const PAGE_STYLE = `:root { --canvas:#0B0B0C; --surface:#141416; --line:#26262A; --text:#F2F2F3; --muted:#9A9AA2; --accent:#4C8DFF; --danger:#FF6B6B; }
 @media (prefers-color-scheme: light) { :root { --canvas:#FAFAF9; --surface:#FFFFFF; --line:#E4E4E7; --text:#111113; --muted:#5F5F67; } }
 * { box-sizing:border-box; }
 body { margin:0; min-height:100vh; display:grid; place-items:center; padding:16px; background:var(--canvas); color:var(--text);
@@ -28,7 +20,18 @@ button { height:56px; padding:0 20px; border-radius:8px; border:1px solid var(--
   font:500 15px Geist, -apple-system, BlinkMacSystemFont, sans-serif; cursor:pointer; }
 button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 .error { color:var(--danger); }
-</style>
+`;
+
+export function confirmPage(nonce: string): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Sign in to Perch</title>
+<style nonce="${nonce}">
+${PAGE_STYLE}</style>
 </head>
 <body>
 <main>

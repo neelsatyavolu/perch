@@ -1,5 +1,7 @@
 import type { BuiltInName } from "../../api";
+import { MANAGED_NOTE } from "../../lib/managed";
 import { useAction, useApi, useLoad } from "../../ui/frame";
+import { useManaged } from "../../ui/useManaged";
 import { Group, Row } from "../../ui/Row";
 import { Switch } from "../../ui/Switch";
 
@@ -15,17 +17,20 @@ export function BuiltIn() {
   const api = useApi();
   const act = useAction();
   const list = useLoad((a) => a.listBuiltInExtensions());
+  const { locked } = useManaged();
   if (!list.data) return <p class="mute">{list.error ?? ""}</p>;
+  const isLocked = (name: BuiltInName) => (name === "backrow" || name === "lulltab") && locked(`built-in-${name}`);
   return (
     <div class="sec">
       <Group label="Built in" id="built-in">
         <div class="card">
           {list.data.map((b) => (
-            <Row key={b.name} id={`built-in-${b.name}`} title={ABOUT[b.name].title} detail={ABOUT[b.name].detail}>
+            <Row key={b.name} id={`built-in-${b.name}`} title={ABOUT[b.name].title} detail={isLocked(b.name) ? MANAGED_NOTE : ABOUT[b.name].detail}>
               <Switch
                 label={ABOUT[b.name].title}
                 describedBy={`built-in-${b.name}-d`}
                 checked={b.enabled}
+                disabled={isLocked(b.name)}
                 onChange={async (v) => {
                   const next = await act(() => api.setBuiltInExtension(b.name, v), `${ABOUT[b.name].title} ${v ? "is on" : "is off"}`);
                   if (next) list.set(next);

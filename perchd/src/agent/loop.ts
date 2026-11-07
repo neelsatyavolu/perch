@@ -5,6 +5,7 @@ import type { Browser } from "../browser/browser";
 import { actExtra, type ExtraTools } from "../mcp-client/extra-tools";
 import { memoryCall, type MemoryAccess } from "../memory/agent";
 import type { Effort, Message, Model, ToolCall, TurnRequest } from "../models/types";
+import { AGENT_OFF, agentAllowed, capMode, siteRuleFor, type PolicyView } from "../policy/policy";
 import type { AuditLog } from "./audit";
 import type { Mode, SiteRule } from "./permissions";
 import { finalTurn } from "./finish";
@@ -40,6 +41,8 @@ export type TaskOptions = {
   extraTools?: ExtraTools;
   /** The chat's memory (src/memory/agent.ts). Left out for incognito chats. */
   memory?: MemoryAccess;
+  /** Company policy (spec 12.2), read again before every action so a change applies mid-chat. */
+  policy?: PolicyView;
 };
 
 const DEFAULT_MAX_STEPS = 40;
@@ -55,6 +58,10 @@ export const CHECK_BEFORE_DONE = [
 ].join("\n");
 
 export async function* runTask(opts: TaskOptions): AsyncIterable<StepEvent> {
+  if (opts.policy && !agentAllowed(opts.policy.current())) {
+    yield { type: "error", message: AGENT_OFF };
+    return;
+  }
   const ctx = await newToolContext(opts.browser);
   const messages: Message[] = [{ role: "user", text: opts.task }];
   const signal = opts.signal ?? new AbortController().signal;
@@ -100,6 +107,10 @@ export async function* runTask(opts: TaskOptions): AsyncIterable<StepEvent> {
           messages.push({ role: "tool", callId: call.id, name: call.name, content: TIME_UP });
           continue;
         }
+        if (opts.policy && !agentAllowed(opts.policy.current())) {
+          yield { type: "error", message: AGENT_OFF };
+          return;
+        }
         const outcome = yield* act(ctx, opts, call, progress);
         if (signal.aborted) {
           yield { type: "error", message: "Cancelled." };
@@ -140,7 +151,19 @@ export async function* runTask(opts: TaskOptions): AsyncIterable<StepEvent> {
 
 type Outcome = { final?: string; message: Extract<Message, { role: "tool" }> };
 
-async function* act(ctx: ToolContext, opts: TaskOptions, call: ToolCall, progress: Progress): AsyncGenerator<StepEvent, Outcome> {
+/**
+ * The task's rules for its next action under the current company policy: the mode lowered to the
+ * cap, and the company's site rules over the person's.
+ */
+export function governed(opts: TaskOptions): TaskOptions {
+  if (!opts.policy) return opts;
+  const policy = opts.policy.current();
+  const own = opts.siteRule;
+  return { ...opts, mode: capMode(opts.mode, policy), siteRule: (host) => siteRuleFor(host, own?.(host), policy) };
+}
+
+async function* act(ctx: ToolContext, task: TaskOptions, call: ToolCall, progress: Progress): AsyncGenerator<StepEvent, Outcome> {
+  const opts = governed(task);
   const reply = (content: string, image?: string): Outcome => ({ message: { role: "tool", callId: call.id, name: call.name, content, image } });
   if (opts.extraTools?.handles(call.name)) {
     const result = yield* actExtra(opts, opts.extraTools, call, opts.signal ?? new AbortController().signal);

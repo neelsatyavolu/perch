@@ -121,8 +121,44 @@ describe("Activity log", () => {
     expect(rows[0]!.textContent).toContain("Approved");
     expect(within(table).getByText("Blocked by a site rule")).toBeTruthy();
     expect(within(table).getByText("Chase - Accounts")).toBeTruthy();
-    fireEvent.click(within(log).getByRole("button", { name: "Export" }));
-    expect(await r.findByText("Saved 5 actions to perch-audit-log.jsonl")).toBeTruthy();
+    const saved: Blob[] = [];
+    const create = URL.createObjectURL;
+    URL.createObjectURL = (blob: Blob) => (saved.push(blob), "blob:perch-test");
+    try {
+      fireEvent.click(within(log).getByRole("button", { name: "Export CSV" }));
+      expect(await r.findByText(/^Saved 5 actions to perch-activity-.*\.csv$/)).toBeTruthy();
+      expect(saved[0]!.type).toBe("text/csv");
+      expect((await saved[0]!.text()).split("\r\n")[0]).toBe("at,client,tab,site,action,outcome");
+      fireEvent.click(within(log).getByRole("button", { name: "Export JSON lines" }));
+      expect(await r.findByText(/^Saved 5 actions to perch-activity-.*\.jsonl$/)).toBeTruthy();
+    } finally {
+      URL.createObjectURL = create;
+    }
+  });
+});
+
+describe("Settings under a company policy", () => {
+  test("locked rows show their value, are disabled and say so; About links to the policies", async () => {
+    window.location.hash = "#memory";
+    const policy = { MemoryEnabled: false, AutoUpdateEnabled: false, BuiltInExtensions: { backrow: false } };
+    const r = renderWithApi(<Settings />, { policy });
+    const learn = (await r.findByRole("switch", { name: "Learn from chats" })) as HTMLButtonElement;
+    await waitFor(() => expect(learn.disabled).toBe(true));
+    expect(r.getAllByText("Managed by your organization").length).toBe(3);
+    cleanup();
+    window.location.hash = "#about";
+    const about = renderWithApi(<Settings />, { policy });
+    await waitFor(async () => expect(((await about.findByRole("switch", { name: "Update automatically" })) as HTMLButtonElement).disabled).toBe(true));
+    expect((await about.findByRole("link", { name: "Open policies" })).getAttribute("href")).toBe("perch://policy");
+    expect(about.getByText("Your organization manages some settings")).toBeTruthy();
+  });
+
+  test("an unmanaged Mac shows no managed rows", async () => {
+    window.location.hash = "#about";
+    const r = renderWithApi(<Settings />);
+    expect(((await r.findByRole("switch", { name: "Update automatically" })) as HTMLButtonElement).disabled).toBe(false);
+    expect(r.queryByText("Your organization manages some settings")).toBeNull();
+    expect(r.queryByText("Managed by your organization")).toBeNull();
   });
 });
 

@@ -112,7 +112,23 @@ describe("fake backend: the contract the review asked for", () => {
     expect(all.map((e) => e.at)).toEqual([...all.map((e) => e.at)].sort().reverse());
     const older = await a.listAuditLog({ limit: 2, before: all[1]!.at });
     expect(older.map((e) => e.id)).toEqual([all[2]!.id, all[3]!.id]);
-    expect(await a.exportAuditLog()).toEqual({ name: "perch-audit-log.jsonl", entries: all.length });
+    const jsonl = await a.exportAuditLog();
+    expect(jsonl).toMatchObject({ type: "application/x-ndjson", entries: all.length });
+    expect(jsonl.name).toEndWith(".jsonl");
+    expect(jsonl.text.trim().split("\n").map((l) => JSON.parse(l).at)).toEqual([...all.map((e) => e.at)].reverse());
+    const csv = await a.exportAuditLog("csv");
+    expect(csv.text.split("\r\n")[0]).toBe("at,client,tab,site,action,outcome");
+    await expect(a.exportAuditLog("xml" as never)).rejects.toThrow("jsonl, csv");
     expect((await a.listDreamLogs(1))[0]?.lines.length).toBeGreaterThan(0);
+  });
+
+  test("policy: nothing is managed by default, and a capped mode is refused", async () => {
+    expect(await api().getPolicy()).toEqual({ managed: false, values: {}, errors: [] });
+    const a = api({ policy: { MaxPermissionMode: "guard", MemoryEnabled: false } });
+    expect((await a.getPolicy()).managed).toBe(true);
+    expect((await a.getPermissions()).maxMode).toBe("guard");
+    await expect(a.setPermissionMode("skip")).rejects.toThrow("Managed by your organization");
+    await expect(a.setMemorySettings({ extraction: true })).rejects.toThrow("Managed by your organization");
+    await a.setMemorySettings({ extraction: false });
   });
 });

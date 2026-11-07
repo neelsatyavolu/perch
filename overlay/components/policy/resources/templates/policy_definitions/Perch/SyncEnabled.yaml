@@ -1,0 +1,21 @@
+caption: "Turn sync on or off"
+default: true
+desc: "When true or unset, users can turn sync on in Settings &gt; Sync. When false, Perch does not sync and Settings &gt; Sync cannot turn it on. Chrome's SyncDisabled set to true has the same effect."
+example_value: false
+features:
+  can_be_recommended: false
+  dynamic_refresh: true
+  per_profile: false
+items:
+- caption: Enabled
+  value: true
+- caption: Disabled
+  value: false
+owners:
+- file://chrome/browser/perch/OWNERS
+schema:
+  type: boolean
+supported_on:
+- chrome.*:158-
+tags: []
+type: main

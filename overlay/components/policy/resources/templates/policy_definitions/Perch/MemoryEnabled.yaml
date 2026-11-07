@@ -1,0 +1,21 @@
+caption: "Turn memory on or off"
+default: true
+desc: "When true or unset, memory works as usual. When false, Perch does not pull facts out of chats or browsing, the nightly pass does not run, and the agent's memory tools are unavailable."
+example_value: false
+features:
+  can_be_recommended: false
+  dynamic_refresh: true
+  per_profile: false
+items:
+- caption: Enabled
+  value: true
+- caption: Disabled
+  value: false
+owners:
+- file://chrome/browser/perch/OWNERS
+schema:
+  type: boolean
+supported_on:
+- chrome.*:158-
+tags: []
+type: main

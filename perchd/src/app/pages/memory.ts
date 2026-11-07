@@ -10,7 +10,8 @@ import type { Change } from "../../memory/store";
 import type { PerchData } from "../../routines/service";
 import { AppError } from "../runs";
 import * as v from "../validate";
-import { gone, notYet, ok, plainly, type Methods } from "./common";
+import { historyExtractionAllowed, memoryAllowed } from "../../policy/policy";
+import { gone, managed, notYet, ok, plainly, policyOf, type Methods } from "./common";
 import type { PagesDeps } from "./deps";
 import { editedPage, pageBody, pageBytes } from "./memory-doc";
 
@@ -56,7 +57,9 @@ export function memoryPages(deps: PagesDeps, onWipe: () => void): Methods<
     const d = await data();
     const s = d.memory.settings();
     const lastDream = (await d.memory.changes(CHANGES_READ)).find((c) => c.source === "dreaming")?.time;
-    return { extraction: s.extraction && !s.paused, historyExtraction: false, dreaming: s.dreaming, ...(lastDream ? { lastDream } : {}) };
+    // With memory off by policy the page shows it off, whatever the person chose before.
+    const on = memoryAllowed(policyOf(deps));
+    return { extraction: on && s.extraction && !s.paused, historyExtraction: false, dreaming: on && s.dreaming, ...(lastDream ? { lastDream } : {}) };
   }
 
   return {
@@ -66,6 +69,10 @@ export function memoryPages(deps: PagesDeps, onWipe: () => void): Methods<
       v.onlyKeys(o, ["extraction", "historyExtraction", "dreaming"]);
       const extraction = o.extraction === undefined ? undefined : v.bool(o.extraction, "extraction");
       const dreaming = o.dreaming === undefined ? undefined : v.bool(o.dreaming, "dreaming");
+      const history = o.historyExtraction === undefined ? undefined : v.bool(o.historyExtraction, "historyExtraction");
+      const policy = policyOf(deps);
+      if ((extraction || dreaming || history) && !memoryAllowed(policy)) managed();
+      if (history && !historyExtractionAllowed(policy)) managed();
       if (o.historyExtraction !== undefined && v.bool(o.historyExtraction, "historyExtraction")) notYet("Perch can't learn from your browsing history yet.");
       const patch = { ...(extraction === undefined ? {} : { extraction, ...(extraction ? { paused: false } : {}) }), ...(dreaming === undefined ? {} : { dreaming }) };
       ok(await (await data()).memoryApi.updateSettings(patch));

@@ -12,3 +12,4 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - run: uv sync
       - run: uv run pytest --cov=perchtools --cov-fail-under=80
+      - run: uv run perch-build policies check

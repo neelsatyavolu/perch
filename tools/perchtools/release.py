@@ -12,6 +12,7 @@ from pathlib import Path
 
 from .patching import export_series
 from .run import run as default_run
+from .sbom import KNOWN_VULNERABILITIES, Finding, SbomError, known_vulnerabilities, unlisted
 from .version import VersionInfo
 
 REPO_SLUG = "neelsatyavolu/perch"
@@ -38,6 +39,9 @@ def preflight(
     info: VersionInfo,
     tag_exists: Callable[[str], bool],
     published_build: Callable[[], int | None],
+    *,
+    stale_policies: Callable[[], Sequence[Path]],
+    vulnerabilities: Callable[[], Sequence[Finding]],
 ) -> list[str]:
     """Return every reason not to release; an empty list means go."""
     reasons: list[str] = []
@@ -54,7 +58,24 @@ def preflight(
     published = published_build()
     if published is not None and info.build <= published:
         reasons.append(f"build {info.build} is not higher than the published build {published}; Sparkle would skip it")
-    return reasons
+    stale = stale_policies()
+    if stale:
+        listed = ", ".join(str(path) for path in stale)
+        reasons.append(f"generated policy files are out of date ({listed}); run perch-build policies generate and commit")
+    return reasons + _vulnerability_reasons(repo, vulnerabilities)
+
+
+def _vulnerability_reasons(repo: Path, vulnerabilities: Callable[[], Sequence[Finding]]) -> list[str]:
+    try:
+        known = known_vulnerabilities(repo / KNOWN_VULNERABILITIES)
+        found = unlisted(vulnerabilities(), known)
+    except (SbomError, OSError, subprocess.CalledProcessError) as error:
+        return [f"could not check dependencies for known vulnerabilities: {error}"]
+    return [
+        f"osv-scanner found {finding}, which {KNOWN_VULNERABILITIES} does not list; update the dependency, "
+        "or list it there with a reason and date"
+        for finding in found
+    ]
 
 
 def published_build_from_appcast(xml: str) -> int | None:
@@ -64,7 +85,13 @@ def published_build_from_appcast(xml: str) -> int | None:
 
 def release_notes(info: VersionInfo, patches: Sequence[str]) -> str:
     listed = "\n".join(f"- {name}" for name in patches) or "- none"
-    return f"Perch {info.perch} on Chromium {info.chromium}.\n\nPatches applied to Chromium:\n{listed}\n"
+    docs = f"https://github.com/{REPO_SLUG}/blob/v{info.perch}/docs/enterprise"
+    return (
+        f"Perch {info.perch} on Chromium {info.chromium}.\n\nPatches applied to Chromium:\n{listed}\n\n"
+        f"The SBOM (Perch-{info.perch}.spdx.json) and SHA256SUMS are attached. "
+        f"For IT teams: which Chrome policies Perch supports is in {docs}/chrome-policies.md, "
+        f"and deploying Perch is in {docs}/deploying.md.\n"
+    )
 
 
 def appcast(dmg: Path, out: Path, key_ref: str, info: VersionInfo, sparkle_bin: Path, run=default_run) -> Path:
@@ -86,6 +113,11 @@ def appcast(dmg: Path, out: Path, key_ref: str, info: VersionInfo, sparkle_bin: 
     return target
 
 
-def publish(info: VersionInfo, dmg: Path, appcast_path: Path, notes: str, run=default_run) -> None:
+def release_assets(dmg: Path, pkg: Path | None, appcast_path: Path, sbom: Path) -> list[Path]:
+    """What a release uploads besides SHA256SUMS, in order. The pkg is optional until it is built."""
+    return [dmg, *([pkg] if pkg is not None and pkg.exists() else []), appcast_path, sbom]
+
+
+def publish(info: VersionInfo, assets: Sequence[Path], notes: str, run=default_run) -> None:
     run(["gh", "release", "create", f"v{info.perch}", "--repo", REPO_SLUG, "--title", f"Perch {info.perch}",
-         "--notes", notes, dmg, appcast_path])
+         "--notes", notes, *assets])

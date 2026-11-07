@@ -1,11 +1,13 @@
 import { Hono } from "hono";
-import type { Deps, HonoEnv } from "./env";
+import { authMode, type Deps, type HonoEnv } from "./env";
 import { clientIp, HttpError } from "./http";
 import { logEvent } from "./log";
 import { consume, RULES } from "./ratelimit";
 import { accountRoutes } from "./account";
+import { adminRoutes } from "./admin";
 import { confirmRoutes } from "./auth/confirm-action";
 import { emailRoutes } from "./auth/email";
+import { oidcRoutes } from "./auth/oidc";
 import { passkeyRoutes } from "./auth/passkey";
 import { deviceRoutes } from "./devices";
 import { keyRoutes } from "./keys";
@@ -23,6 +25,7 @@ const SECURITY_HEADERS: Record<string, string> = {
   "Cross-Origin-Resource-Policy": "same-origin",
 };
 const JSON_CSP = "default-src 'none'; frame-ancestors 'none'";
+const PUBLIC_SIGN_IN = /^\/v1\/auth\/(email|passkey\/(register|login))(\/|$)/;
 
 export function createApp(deps: Deps): Hono<HonoEnv> {
   const app = new Hono<HonoEnv>();
@@ -46,6 +49,19 @@ export function createApp(deps: Deps): Hono<HonoEnv> {
   });
 
   app.get("/health", (c) => c.json({ ok: true }));
+
+  // Company mode signs people in only through the company's identity provider: email and passkey
+  // sign-in are not there at all. Pairing stays, since it starts from a signed-in device.
+  app.use(async (c, next) => {
+    if (c.req.path !== "/health" && authMode(c.env) === "company" && PUBLIC_SIGN_IN.test(c.req.path)) {
+      throw new HttpError(404, "not_found", "There is nothing at this address.");
+    }
+    await next();
+  });
+  /** Which sign-in Perch should offer for this server (the SyncServerURL policy points here). */
+  app.get("/v1/server", (c) => c.json({ auth: authMode(c.env) === "company" ? ["oidc"] : ["email", "passkey"], name: c.env.RP_NAME }));
+  app.route("/v1/auth/oidc", oidcRoutes);
+  app.route("/v1/admin", adminRoutes);
   app.route("/v1/auth/email", emailRoutes);
   app.route("/v1/auth/passkey", passkeyRoutes);
   app.route("/v1/account/confirm", confirmRoutes);

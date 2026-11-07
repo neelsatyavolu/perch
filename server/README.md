@@ -18,12 +18,15 @@ Design and decisions: `docs/superpowers/plans/2026-11-05-perch-sync-server.md`. 
 | Sync | `POST /v1/sync/:collection/commit`, `GET /v1/sync/:collection/changes`, `GET /v1/sync/:collection/items/:id/blob`, `GET /v1/sync/usage` | Collections: bookmarks, history, settings, memory, skills, tabs, chats, artifacts. Per-item versions; a write applies only on the version it was based on. Items over 64 KB go to R2. |
 | Pairing | `POST /v1/pair/start`, `GET /v1/pair/lookup`, `POST /v1/pair/:id/approve`, `/deny`, `POST /v1/pair/poll` | The new device shows a 16-character code; the server sees only the first half, a commitment to the device's key and to the second half (a secret). The approving device checks the key against the whole code and leaves a grant sealed with the secret, which the server passes along but cannot read or forge. A request that is still waiting is never replaced. |
 | Relay | `GET /v1/relay` (WebSocket) | One `RelayRoom` Durable Object per account forwards `{t:"msg", to, d}` frames between online devices, with presence updates. |
+| Server info | `GET /v1/server` | `{ auth: ["email","passkey"] }`, or `["oidc"]` in company mode, and `name` (`RP_NAME`), so Perch knows which sign-in to show. |
+| Company sign-in | `POST /v1/auth/oidc/start`, `go/info`, `go`, `poll`; `GET /v1/auth/oidc/go`, `callback` | Company mode only (below). OpenID Connect authorization code flow with state, nonce and PKCE (S256). The go page asks for the number Perch shows, as the email link does. |
+| Company admin | `GET /v1/admin/devices`, `DELETE /v1/admin/devices/:id` | Company mode only. Lists every device (account email, name, kind, dates) and revokes any of them. Needs a browser session from company sign-in with `OIDC_ADMIN_GROUP`, made in the last 12 hours. |
 
 Only Perch browsers can change the account. A paired remote CLI (Grok Bot's computer, `perch login` elsewhere) can use the relay, read the account and device list, and remove itself.
 
 ## Security properties
 
-- No cookies and no CORS. API calls carry `Authorization: Bearer`, so a page on another site has no credential to use (CSRF). JSON bodies must be `application/json`, which an HTML form cannot send. The one HTML page (the sign-in confirm page) has a nonce-based CSP and takes its token from the fragment.
+- No CORS, and no cookies except one in company mode (below). API calls carry `Authorization: Bearer`, so a page on another site has no credential to use (CSRF). JSON bodies must be `application/json`, which an HTML form cannot send. The HTML pages (the email confirm page and the company sign-in pages) have a nonce-based CSP; the email confirm page takes its token from the fragment.
 - Tokens, codes and poll secrets are stored as SHA-256 hashes. Sessions last 90 days and extend while used.
 - Every endpoint has a rate limit: a token bucket per hashed IP, email, account or device, in the `RateLimiter` Durable Object (see `RULES` in `src/ratelimit.ts`). The relay also caps each socket at 200 frames per 10 seconds and 256 KB per frame.
 - Input is checked with zod at every route.
@@ -66,3 +69,27 @@ Before the first deploy:
 ## Self-hosting
 
 Anyone can run their own copy (spec 11.4 and 12.3): change the hostnames in `routes`, `API_ORIGIN`, `RP_ID`, `PASSKEY_ORIGINS` and `MAIL_FROM`, then follow the deploy steps. Point Perch at it with the `SyncServerURL` policy or Settings. Data stays end-to-end encrypted on a self-hosted server too.
+
+## Company mode
+
+A company server signs people in through the company's OpenID Connect provider instead of email and passkeys. Setup for Okta, Microsoft Entra ID and Google Workspace is in `docs/enterprise/company-server.md`. The settings, commented out in `wrangler.jsonc`:
+
+| Setting | Kind | Meaning |
+|---|---|---|
+| `AUTH_MODE` | var | `public` (the default) or `company`. Any other value makes every route answer 500, so a typo cannot leave email sign-up open. |
+| `OIDC_ISSUER` | var | The provider's issuer URL, exactly as its discovery document gives it. Must be https. |
+| `OIDC_CLIENT_ID` | var | The client id of the app registered with the provider. |
+| `OIDC_CLIENT_SECRET` | secret | `bunx wrangler secret put OIDC_CLIENT_SECRET`. Never a var. |
+| `OIDC_ADMIN_GROUP` | var | A value of the ID token's `groups` claim. Members may use the admin routes. Unset means no admins. |
+
+The redirect URI to register with the provider is `<API_ORIGIN>/v1/auth/oidc/callback`.
+
+How it behaves:
+
+- `/v1/auth/email/*` and passkey registration and sign-in answer 404. Pairing still works, since it starts from a signed-in device.
+- The account key is the ID token's `(iss, sub)` pair (`identities` table). The email on the account is for display only and follows the provider when it changes.
+- The ID token is checked with WebCrypto (`src/auth/jwt.ts`): RS256 or ES256, key found by `kid` with one JWKS refetch when the id is new, `iss`, `aud` (and `azp`), `exp`, `iat`, `nbf` and `nonce`, with 60 seconds of clock skew. Discovery and keys are cached for an hour. `groups` is asked for only when the provider lists it in `scopes_supported`.
+- The admin flag comes only from the verified ID token's `groups`. It is stored on that one session; pairing never passes it on.
+- The go page sets one cookie, `__Host-perch-oidc` (HttpOnly, Secure, SameSite=Lax, 15 minutes), and the callback requires it. With the typed number, this means neither a forwarded go link nor a forwarded provider URL can sign the sender's device in. The cookie holds a random value; only its hash is stored.
+- Stored per sign-in request: hashes of the poll secret, state and cookie, and the nonce and PKCE verifier until the callback uses them. Expired requests are deleted by the daily cron.
+- Admins see device names, kinds, dates and the account email. They never see keys or synced data, which stay ciphertext on the server.

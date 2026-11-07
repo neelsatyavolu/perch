@@ -41,7 +41,7 @@ export async function deleteAccount(env: AppEnv, accountId: string): Promise<voi
     if (listed.objects.length) await env.BLOBS.delete(listed.objects.map((o) => o.key));
     cursor = listed.truncated ? listed.cursor : undefined;
   } while (cursor);
-  const tables = ["items", "wrapped_keys", "passkeys", "sessions", "devices", "challenges", "confirmations"];
+  const tables = ["items", "wrapped_keys", "passkeys", "sessions", "devices", "challenges", "confirmations", "identities", "oidc_requests"];
   await env.DB.batch([
     ...tables.map((table) => env.DB.prepare(`DELETE FROM ${table} WHERE account_id = ?`).bind(accountId)),
     env.DB.prepare("DELETE FROM pairings WHERE account_id = ?").bind(accountId),

@@ -19,19 +19,22 @@ export function insertDevice(env: AppEnv, accountId: string, deviceId: string, d
   ).bind(deviceId, accountId, device.name, device.kind, device.publicKey, now, now);
 }
 
-/** Creates a session for an existing device. Only the hash of the token is stored. */
-export async function sessionStatement(env: AppEnv, accountId: string, deviceId: string, now: number) {
+/**
+ * Creates a session for an existing device. Only the hash of the token is stored. `admin` is set
+ * only by company sign-in, from a verified ID token's groups.
+ */
+export async function sessionStatement(env: AppEnv, accountId: string, deviceId: string, now: number, admin = false) {
   const sessionToken = randomToken("pst");
   const statement = env.DB.prepare(
-    "INSERT INTO sessions (token_hash, account_id, device_id, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
-  ).bind(await sha256Hex(sessionToken), accountId, deviceId, now, now + SESSION_LIFETIME);
+    "INSERT INTO sessions (token_hash, account_id, device_id, created_at, expires_at, admin) VALUES (?, ?, ?, ?, ?, ?)",
+  ).bind(await sha256Hex(sessionToken), accountId, deviceId, now, now + SESSION_LIFETIME, admin ? 1 : 0);
   return { sessionToken, statement };
 }
 
 /** Adds a device and its first session to an account in one transaction. */
-export async function createDeviceSession(env: AppEnv, accountId: string, device: DeviceInput, now: number, extra: D1PreparedStatement[] = []): Promise<NewSession> {
+export async function createDeviceSession(env: AppEnv, accountId: string, device: DeviceInput, now: number, extra: D1PreparedStatement[] = [], admin = false): Promise<NewSession> {
   const deviceId = randomToken("dev", 16);
-  const { sessionToken, statement } = await sessionStatement(env, accountId, deviceId, now);
+  const { sessionToken, statement } = await sessionStatement(env, accountId, deviceId, now, admin);
   await env.DB.batch([...extra, insertDevice(env, accountId, deviceId, device, now), statement]);
   return { sessionToken, accountId, deviceId };
 }
@@ -47,7 +50,7 @@ export async function accountForEmail(env: AppEnv, email: string, now: number): 
   return { id: row.id, created: row.id === id };
 }
 
-type SessionRow = { account_id: string; device_id: string; expires_at: number; last_seen_at: number; kind: string };
+type SessionRow = { account_id: string; device_id: string; created_at: number; expires_at: number; admin: number; last_seen_at: number; kind: string };
 
 /** Resolves a bearer token to its account and device, or null if it is unknown, expired or revoked. */
 export async function authenticate(env: AppEnv, header: string | undefined, now: number): Promise<Auth | null> {
@@ -55,7 +58,7 @@ export async function authenticate(env: AppEnv, header: string | undefined, now:
   if (!match?.[1]) return null;
   const hash = await sha256Hex(match[1]);
   const row = await env.DB.prepare(
-    `SELECT s.account_id, s.device_id, s.expires_at, d.last_seen_at, d.kind FROM sessions s
+    `SELECT s.account_id, s.device_id, s.created_at, s.expires_at, s.admin, d.last_seen_at, d.kind FROM sessions s
      JOIN devices d ON d.id = s.device_id
      WHERE s.token_hash = ? AND s.expires_at > ? AND d.revoked_at IS NULL`,
   ).bind(hash, now).first<SessionRow>();
@@ -68,7 +71,7 @@ export async function authenticate(env: AppEnv, header: string | undefined, now:
     updates.push(env.DB.prepare("UPDATE devices SET last_seen_at = ? WHERE id = ?").bind(now, row.device_id));
   }
   if (updates.length) await env.DB.batch(updates);
-  return { accountId: row.account_id, deviceId: row.device_id, kind: row.kind };
+  return { accountId: row.account_id, deviceId: row.device_id, kind: row.kind, admin: row.admin === 1, sessionCreatedAt: row.created_at };
 }
 
 /** Requires a valid session, then applies the per-account rate limit. */

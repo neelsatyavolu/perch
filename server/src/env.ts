@@ -1,7 +1,12 @@
 import type { RateLimiter } from "./ratelimit";
 import type { RelayRoom } from "./relay";
+import { HttpError } from "./http";
 
-/** Bindings and settings from wrangler.jsonc. RESEND_API_KEY is a Worker secret, never a var. */
+/**
+ * Bindings and settings from wrangler.jsonc. RESEND_API_KEY and OIDC_CLIENT_SECRET are Worker
+ * secrets, never vars. AUTH_MODE "company" turns on sign-in through the company's OpenID Connect
+ * provider and turns email and passkey sign-in off (docs/enterprise/company-server.md).
+ */
 export type AppEnv = {
   DB: D1Database;
   BLOBS: R2Bucket;
@@ -14,9 +19,16 @@ export type AppEnv = {
   MAIL_FROM: string;
   QUOTA_BYTES: string;
   RESEND_API_KEY?: string;
+  AUTH_MODE?: "public" | "company";
+  OIDC_ISSUER?: string;
+  OIDC_CLIENT_ID?: string;
+  OIDC_CLIENT_SECRET?: string;
+  /** A value of the ID token's `groups` claim whose members may use the admin routes. */
+  OIDC_ADMIN_GROUP?: string;
 };
 
-export type Auth = { accountId: string; deviceId: string; kind: string };
+/** `admin` and `sessionCreatedAt` gate the company admin routes (src/admin.ts). */
+export type Auth = { accountId: string; deviceId: string; kind: string; admin: boolean; sessionCreatedAt: number };
 
 /** Hono's environment type for this app. */
 export type HonoEnv = {
@@ -28,8 +40,15 @@ export type Mailer = {
   send(message: { to: string; subject: string; text: string; html: string }): Promise<void>;
 };
 
-/** Things the routes need that tests replace. */
-export type Deps = { mailer: Mailer; now: () => number };
+/** Things the routes need that tests replace. `fetch` reaches the identity provider. */
+export type Deps = { mailer: Mailer; now: () => number; fetch: typeof fetch };
+
+/** The sign-in mode. Anything other than unset, "public" or "company" is a setup mistake, refused. */
+export function authMode(env: AppEnv): "public" | "company" {
+  const mode = env.AUTH_MODE ?? "public";
+  if (mode !== "public" && mode !== "company") throw new HttpError(500, "misconfigured", "This server's AUTH_MODE setting is not valid.");
+  return mode;
+}
 
 export const quotaBytes = (env: AppEnv): number => {
   const value = Number(env.QUOTA_BYTES);

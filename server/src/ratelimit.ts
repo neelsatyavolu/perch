@@ -24,6 +24,10 @@ export const RULES = {
   pollIp: { name: "poll-ip", capacity: 240, seconds: 600 },
   confirmStart: { name: "confirm-start", capacity: 5, seconds: 3600 },
   relayConnect: { name: "relay-connect", capacity: 30, seconds: 60 },
+  // Company mode. A whole office can share one IP, so these are wider than the email rules.
+  oidcStartIp: { name: "oidc-start-ip", capacity: 60, seconds: 600 },
+  oidcBrowserIp: { name: "oidc-browser-ip", capacity: 120, seconds: 600 },
+  admin: { name: "admin", capacity: 60, seconds: 60 },
 } as const satisfies Record<string, Rule>;
 
 type Bucket = { tokens: number; at: number };

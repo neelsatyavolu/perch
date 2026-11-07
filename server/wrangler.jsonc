@@ -18,7 +18,14 @@
     "RP_NAME": "Perch",
     "PASSKEY_ORIGINS": "https://perchbrowser.com,https://api.perchbrowser.com",
     "MAIL_FROM": "Perch <sign-in@perchbrowser.com>",
-    "QUOTA_BYTES": "104857600"
+    "QUOTA_BYTES": "104857600",
+    // A company server (docs/enterprise/company-server.md) signs people in only through the
+    // company's OpenID Connect provider. Uncomment and fill these in, then
+    // `wrangler secret put OIDC_CLIENT_SECRET`. The hosted server stays in public mode.
+    // "AUTH_MODE": "company",
+    // "OIDC_ISSUER": "https://login.example.com",
+    // "OIDC_CLIENT_ID": "perch",
+    // "OIDC_ADMIN_GROUP": "perch-admins"
   },
   "d1_databases": [
     {

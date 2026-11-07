@@ -17,6 +17,11 @@ type Options = { baseUrl?: string; fetch?: FetchLike; token?: string };
 
 export type EmailStart = { requestId: string; pollSecret: string; matchNumber: number; expiresAt: number };
 export type SignInPoll = ({ status: "signed_in"; newAccount?: boolean } & SessionGrant) | { status: "pending" };
+/** Which sign-in a server offers: a company server (AUTH_MODE=company) offers only "oidc". */
+export type ServerInfo = { auth: ("email" | "passkey" | "oidc")[]; name: string };
+/** `url` is the go page to open in a Perch tab; it asks for `matchNumber`, which Perch shows. */
+export type OidcStart = { requestId: string; pollSecret: string; matchNumber: number; url: string; expiresAt: number };
+export type OidcPoll = ({ status: "signed_in"; admin: boolean } & SessionGrant) | { status: "pending" };
 export type Confirmation = { confirmationId: string; expiresAt: number };
 export type PairingStart = { pairingId: string; code: string; pollSecret: string; expiresAt: number };
 export type PairingLookup = { pairingId: string; code: string; publicKey: string; name: string; kind: string; expiresAt: number };
@@ -61,6 +66,10 @@ export class SyncApi {
   verifyEmailCode = (start: EmailStart, code: string) =>
     this.request<SignInPoll>("POST", "/v1/auth/email/verify", { requestId: start.requestId, pollSecret: start.pollSecret, code });
   pollEmail = (start: EmailStart) => this.request<SignInPoll>("POST", "/v1/auth/email/poll", { requestId: start.requestId, pollSecret: start.pollSecret });
+  serverInfo = () => this.request<ServerInfo>("GET", "/v1/server");
+  /** Company sign-in: open `url` in Perch and show `matchNumber`; poll until signed in (once, then 410). */
+  startOidc = (device: DeviceInfo) => this.request<OidcStart>("POST", "/v1/auth/oidc/start", { device });
+  pollOidc = (start: OidcStart) => this.request<OidcPoll>("POST", "/v1/auth/oidc/poll", { requestId: start.requestId, pollSecret: start.pollSecret });
   account = () => this.request<{ id: string; email: string; bytesUsed: number; quotaBytes: number; keyVersion: number; deviceId: string }>("GET", "/v1/account");
   /** Emails a code to the account address; deleting the account and adding a passkey need it. */
   confirmAction = (action: "delete_account" | "add_passkey") => this.request<Confirmation>("POST", "/v1/account/confirm", { action });

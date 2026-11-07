@@ -40,6 +40,7 @@ namespace {
 // The origins of Perch's pages that may call perchd's app API.
 constexpr char kSideChatOrigin[] =
     "chrome-untrusted://perch-side-chat.top-chrome";
+constexpr char kChatOrigin[] = "chrome://perch-chat";
 constexpr int64_t kLogRotateBytes = 5 * 1024 * 1024;
 // Chromium's pipe handler reads "<read>,<write>" from this switch
 // (content/browser/devtools/devtools_agent_host_impl.cc, Perch's POSIX branch).
@@ -222,6 +223,7 @@ void PerchdLauncher::Launch() {
   config.Set("dataDir", user_data_dir_.value());
   base::ListValue origins;
   origins.Append(kSideChatOrigin);
+  origins.Append(kChatOrigin);
   config.Set("origins", std::move(origins));
   std::string line = base::WriteJson(config).value_or("{}") + "\n";
   base::ThreadPool::PostTaskAndReplyWithResult(

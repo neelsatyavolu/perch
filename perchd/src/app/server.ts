@@ -78,6 +78,9 @@ export function startServer(opts: Options): Server {
   function serveUi(pathname: string): Response {
     const dir = opts.uiDir!;
     const rel = normalize(decodeURIComponent(pathname.slice("/ui/".length)) || "chat.html");
+    // Inside Perch the browser serves config.js; here the pages read their config from the
+    // address's fragment, so the script is empty.
+    if (rel === "config.js") return new Response("", { headers: { "content-type": "text/javascript", "x-content-type-options": "nosniff" } });
     const file = join(dir, rel);
     if (!file.startsWith(dir + sep) || !existsSync(file) || !statSync(file).isFile()) return new Response("not found", { status: 404 });
     return new Response(Bun.file(file), {

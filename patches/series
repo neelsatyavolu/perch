@@ -10,4 +10,6 @@ perch/agent/sidebar.patch
 perch/agent/perch-domain.patch
 perch/agent/tab-ids.patch
 perch/agent/chat-page.patch
+perch/shell/defaults-hooks.patch
+perch/shell/component-extensions.patch
 perch/build/thinlto-jobs.patch

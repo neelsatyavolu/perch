@@ -1,0 +1,87 @@
+{
+  "_comment": "Extensions Perch ships built in (spec 5.6, 5.7, 5.9). perch-build stage-extensions builds each one at the pinned commit into out/<config>/perch_extensions/<name>, and package copies them into the app. The keys are public keys that fix each extension's id; no private key exists.",
+  "extensions": [
+    {
+      "name": "perch",
+      "id": "ocjanjehckpdbcjamffmbeemoooamjpo",
+      "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzwCnzCfDL/RiTuHL+xwpDWDbx29UIt+nJ2knuZvcnLoADWU9v7YJLR369aRa1+fMl7Jkc7pDtkYB2JMjx6Vx3yrkD9Tzth/xyVUqUMFCcBtxVFfXoLzdWNL52cP+/rvDPXEKxE/0aUrni5ESAlWhalvNfJaARz8yp4ge1hUKb1POHm3/XG5YqbJIaG98vfXfTAuhEucqnD2XX6o7KIRGWLy2fCL1Rgxaf1P2tPFjrhAKTWMURsz6rL+/MOPfmg+C4SCjOobSqjsfwbJ6IIHhDzr5ju1JdAXXeTsV+ZHa+p5ublzLrwDwR8nCeHKGN4j7HN/CGrqfbfGkZb9oiTHwLQIDAQAB",
+      "source": "extension",
+      "build": [
+        "bun",
+        "run",
+        "build"
+      ],
+      "dist": "dist",
+      "incognito": true,
+      "install": [
+        "bun",
+        "install",
+        "--frozen-lockfile"
+      ]
+    },
+    {
+      "name": "backrow",
+      "id": "ajhempjobmeelmhloiiecnbljbpoohcc",
+      "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxhqm57xEjJ8ZtacoRHwEl5OKOhtz8E7ayseOcxDEURRSaRAsGNaVAHhwYnFNgMfRstXEASqAfplDuD4LpbaeT35kuInKntqoSPd5t7YQ2f5aYqjTjNaj7GhExCsLe+jox5tXUbgUXzBZY/h1g2D6xOeiFQxPAoX/02rx8J0eM1qPmrUppfV4ZjGxRPR25+yO0LFePNRhEq6AQYToXekpol8bVzLeSFqm/SBAkaO/88tPjo9ug13BqbTaR+1/GYAw0RJ72Oqflrt3oE1oIYngbymktz9hLowZ0ZklXT4v3pwA8AuYNz5AQwWgn1Vw9qbkl3gnXJfgpdcrb27rdKHdHQIDAQAB",
+      "repo": "https://github.com/neelsatyavolu/backrow.git",
+      "commit": "3a3ce297b8142101616149663df49934eb1b62ab",
+      "dist": "extension/dist",
+      "incognito": false
+    },
+    {
+      "name": "lulltab",
+      "id": "cajablldnlcmhamlhpbjdapikiakdjdm",
+      "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwcTojM/wrlErrnz/Jaan0g3NG40TB1ZiiCFKX11r7vIpkk0IouHVtbTzlIcYKDiyv8B4YG8UrOUT9RYZV4oR/EReB7fDe6RlvBw/8fKfW19vwfAeITBv97IPDJUR4Vj3vX/TQCYfQO39jRQIdMFbCwplmmQf5sWjemE/EnCAnPxESv27CD3he0fdrA/abs6u5z3Scbr/pdPb4qhiuEyKYvyQJepboQ1KJvlsnKIqUKuXnnh6VaZUg82NapQjkSpODKqaAK2uecev12IohwZ8fdujKrHpqELcK15TlvznBhpinKfr61FrAW7zg+r9wiAzMxbpy/WTaKkZ2RdgiW/nNQIDAQAB",
+      "repo": "https://github.com/neelsatyavolu/lulltab.git",
+      "commit": "524ee874dbe469a879b71ab9d5de57b89c701483",
+      "dist": ".",
+      "stubs": {
+        "lib/usage-ping.js": "lulltab-usage-ping.js"
+      },
+      "incognito": true,
+      "edits": [
+        {
+          "file": "options/options.html",
+          "find": "<label class=\"check\">\n            <input id=\"usage-stats\"",
+          "replace": "<label class=\"check\" hidden>\n            <input id=\"usage-stats\""
+        }
+      ],
+      "exclude": [
+        "site",
+        "store",
+        "tests",
+        "package.json",
+        "README.md",
+        "SECURITY.md"
+      ]
+    },
+    {
+      "name": "caveatly",
+      "id": "mefnjppdmliabfgljepbdgdalmgggmid",
+      "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAomVORwzaJvJVxrltfAALXklG5gciR4gfTRFSuPozomeHpFl8A7DD6QpOYRBqZqbylz3+RugL3gojbKkJftXqUTQTS0NbHNUe7TVcZEHlQ+9Wcwxw5D48V6zipOJRqpzQKRhzzjATdNfRGELj5b73S+MKfxX31K1V9E0uLX1UHq2JOKGMe1+4EZGXrBt66ylSWm3aCJ8dP4DSMDOl8Wo6BvYf+gOsQjI1iOBgtObKUulU/xS/EF9GA4Yd6gR52g1hNInmnHeTNiXBUTXntivLwTCjZhgtn23k/mrb3rXXA7Mt7CzYeVJ4VRAikK7K9I9XLABMLSxmQE5yV9pI7kH1OQIDAQAB",
+      "repo": "https://github.com/neelsatyavolu/caveatly.git",
+      "commit": "b4e2bf2cf96374f1fd1a055689517fa1eadbe8a7",
+      "install": [
+        "npm",
+        "ci"
+      ],
+      "build": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "dist": "dist",
+      "stubs": {
+        "src/lib/heartbeat.js": "caveatly-heartbeat.js"
+      },
+      "incognito": false,
+      "edits": [
+        {
+          "file": "src/screens/SettingsPanel.jsx",
+          "find": "      <Section title=\"Usage stats\">\n        <Toggle checked={settings.usageStats} onChange={v => onSettingChange('usageStats', v)} label=\"Share anonymous usage stats\" description=\"Sends a daily ping with a random install ID, extension version and Chrome version. No personal data.\" />\n      </Section>\n",
+          "replace": ""
+        }
+      ]
+    }
+  ]
+}

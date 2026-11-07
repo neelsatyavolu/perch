@@ -20,6 +20,7 @@ from .release import REPO_SLUG, appcast, preflight, publish, published_build_fro
 from .rename import rename_product_strings
 from .series import read_series
 from .sparkle import fetch_sparkle, load_pin
+from .stage import BUNDLED_FILE, StageError, load_bundled, stage_extensions
 from .run import run
 from .version import VersionInfo, bump, latest_stable_mac, read_version, write_version
 
@@ -89,6 +90,26 @@ def _cmd_build(args: argparse.Namespace) -> int:
     return 0
 
 
+def stage_bundled(paths: Paths, config: str) -> Path:
+    """Build the built-in extensions into out/<config>/perch_extensions."""
+    local_file = paths.repo / "perch-build.local.json"
+    local = json.loads(local_file.read_text()).get("extensions", {}) if local_file.exists() else {}
+    out = paths.out(config) / "perch_extensions"
+    stage_extensions(load_bundled(paths.repo / BUNDLED_FILE), repo=paths.repo, out=out,
+                     cache=paths.repo / "dist" / "cache" / "extensions", local=local, run=run)
+    return out
+
+
+def _cmd_stage(args: argparse.Namespace) -> int:
+    try:
+        out = stage_bundled(current_paths(), args.config)
+    except StageError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+    print(f"Staged the built-in extensions in {out}")
+    return 0
+
+
 def _cmd_package(args: argparse.Namespace) -> int:
     creds = None
     if args.mode == "release":
@@ -97,7 +118,13 @@ def _cmd_package(args: argparse.Namespace) -> int:
         except ValueError as error:
             print(error, file=sys.stderr)
             return 1
-    dmg = package(current_paths(), read_version(REPO / "version.json"), args.mode, creds, run)
+    paths = current_paths()
+    try:
+        stage_bundled(paths, "release")
+    except StageError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+    dmg = package(paths, read_version(REPO / "version.json"), args.mode, creds, run)
     print(f"Wrote {dmg}")
     return 0
 
@@ -211,6 +238,9 @@ def build_parser() -> argparse.ArgumentParser:
     reb.add_argument("version", nargs="?", help="Chromium version, e.g. 158.0.8127.30")
     reb.set_defaults(func=_cmd_rebase)
     sub.add_parser("export", help="write the perch branch's commits back to patches/").set_defaults(func=_cmd_export)
+    stage = sub.add_parser("stage-extensions", help="build the built-in extensions into out/<config>/perch_extensions")
+    stage.add_argument("--config", choices=["dev", "release"], default="dev")
+    stage.set_defaults(func=_cmd_stage)
     return parser
 
 

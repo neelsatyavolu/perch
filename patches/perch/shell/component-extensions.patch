@@ -1,0 +1,63 @@
+# Perch: load the extensions Perch ships built in (its own, Backrow, Lulltab, Caveatly) as component extensions. Hooks ComponentLoader::AddDefaultComponentExtensions and IsComponentExtensionAllowlisted.
+diff --git a/chrome/browser/extensions/BUILD.gn b/chrome/browser/extensions/BUILD.gn
+index aa70420081..d6db05af54 100644
+--- a/chrome/browser/extensions/BUILD.gn
++++ b/chrome/browser/extensions/BUILD.gn
+@@ -254,6 +254,10 @@ source_set("extensions") {
+     "commands/command_service.cc",
+     "commands/command_service.h",
+     "component_extensions_allowlist/allowlist.cc",
++
++    # Perch: the extensions it ships built in.
++    "//chrome/browser/perch/extensions/perch_component_extensions.cc",
++    "//chrome/browser/perch/extensions/perch_component_extensions.h",
+     "component_extensions_allowlist/allowlist.h",
+     "component_loader.cc",
+     "component_loader.h",
+diff --git a/chrome/browser/extensions/component_extensions_allowlist/allowlist.cc b/chrome/browser/extensions/component_extensions_allowlist/allowlist.cc
+index 720671265e..73334d7b8d 100644
+--- a/chrome/browser/extensions/component_extensions_allowlist/allowlist.cc
++++ b/chrome/browser/extensions/component_extensions_allowlist/allowlist.cc
+@@ -12,6 +12,7 @@
+ #include "build/branding_buildflags.h"
+ #include "build/build_config.h"
+ #include "build/chromeos_buildflags.h"
++#include "chrome/browser/perch/extensions/perch_component_extensions.h"
+ #include "chrome/common/buildflags.h"
+ #include "chrome/common/extensions/extension_constants.h"
+ #include "chrome/grit/aim_eligibility_extension_resources.h"
+@@ -39,6 +40,10 @@ static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
+ namespace extensions {
+ 
+ bool IsComponentExtensionAllowlisted(const std::string& extension_id) {
++  // Perch: the extensions it ships built in.
++  if (perch::IsPerchComponentExtension(extension_id)) {
++    return true;
++  }
+   constexpr auto kAllowed = base::MakeFixedFlatSet<std::string_view>({
+       extension_misc::kAimEligibilityExtensionId,
+       extension_misc::kContextualTasksExtensionId,
+diff --git a/chrome/browser/extensions/component_loader.cc b/chrome/browser/extensions/component_loader.cc
+index e6feac0151..47f8e9eef2 100644
+--- a/chrome/browser/extensions/component_loader.cc
++++ b/chrome/browser/extensions/component_loader.cc
+@@ -32,6 +32,7 @@
+ #include "chrome/browser/extensions/data_deleter.h"
+ #include "chrome/browser/extensions/glic_util.h"
+ #include "chrome/browser/extensions/profile_util.h"
++#include "chrome/browser/perch/extensions/perch_component_extensions.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/common/channel_info.h"
+ #include "chrome/common/chrome_features.h"
+@@ -728,6 +729,11 @@ void ComponentLoader::AddDefaultComponentExtensions(
+   }
+ 
+   AddDefaultComponentExtensionsWithBackgroundPages(skip_session_components);
++
++  // Perch: the extensions it ships built in.
++  if (!skip_session_components) {
++    perch::AddPerchComponentExtensions(profile_);
++  }
+ }
+ 
+ void ComponentLoader::AddDefaultComponentExtensionsForKioskMode(

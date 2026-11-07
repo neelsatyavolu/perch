@@ -1,0 +1,84 @@
+# Perch: hooks for Perch's own prefs (registered after Chromium's, then Perch's defaults for Chromium prefs) and its feature defaults, which rank below --enable-features/--disable-features.
+diff --git a/chrome/browser/metrics/chrome_feature_list_creator.cc b/chrome/browser/metrics/chrome_feature_list_creator.cc
+index dbf10a26ea..9b0b96e577 100644
+--- a/chrome/browser/metrics/chrome_feature_list_creator.cc
++++ b/chrome/browser/metrics/chrome_feature_list_creator.cc
+@@ -23,6 +23,7 @@
+ #include "chrome/browser/enterprise/browser_management/management_service_factory.h"
+ #include "chrome/browser/first_run/first_run.h"
+ #include "chrome/browser/metrics/chrome_metrics_services_manager_client.h"
++#include "chrome/browser/perch/perch_features.h"
+ #include "chrome/browser/prefs/browser_prefs.h"
+ #include "chrome/browser/prefs/chrome_pref_service_factory.h"
+ #include "chrome/common/chrome_paths.h"
+@@ -256,11 +257,15 @@ void ChromeFeatureListCreator::SetUpFieldTrials() {
+ 
+   variations::VariationsService* variations_service =
+       metrics_services_manager_->GetVariationsService();
+-  variations_service->SetUpFieldTrials(
+-      variation_ids,
++  // Perch: its feature defaults ride with the switch-dependent overrides, so
++  // --enable-features and --disable-features still win.
++  std::vector<base::FeatureList::FeatureOverrideInfo> overrides =
+       content::GetSwitchDependentFeatureOverrides(
+-          *base::CommandLine::ForCurrentProcess()),
+-      std::move(feature_list), browser_field_trials_.get());
++          *base::CommandLine::ForCurrentProcess());
++  perch::AppendFeatureOverrides(overrides);
++  variations_service->SetUpFieldTrials(variation_ids, overrides,
++                                       std::move(feature_list),
++                                       browser_field_trials_.get());
+   metrics_services_manager_client_->OnFieldTrialsInitialized();
+ 
+   initial_seed_.reset();
+diff --git a/chrome/browser/prefs/BUILD.gn b/chrome/browser/prefs/BUILD.gn
+index f73a22f476..b698c1fefc 100644
+--- a/chrome/browser/prefs/BUILD.gn
++++ b/chrome/browser/prefs/BUILD.gn
+@@ -49,6 +49,13 @@ source_set("impl") {
+   sources = [
+     "browser_prefs.cc",
+     "chrome_command_line_pref_store.cc",
++
++    # Perch: its own prefs and feature defaults.
++    "//chrome/browser/perch/perch_features.cc",
++    "//chrome/browser/perch/perch_features.h",
++    "//chrome/browser/perch/perch_pref_names.h",
++    "//chrome/browser/perch/perch_prefs.cc",
++    "//chrome/browser/perch/perch_prefs.h",
+     "chrome_pref_model_associator_client.cc",
+     "chrome_pref_service_factory.cc",
+     "incognito_mode_prefs.cc",
+diff --git a/chrome/browser/prefs/browser_prefs.cc b/chrome/browser/prefs/browser_prefs.cc
+index fdd05fad32..faa37f3b4f 100644
+--- a/chrome/browser/prefs/browser_prefs.cc
++++ b/chrome/browser/prefs/browser_prefs.cc
+@@ -61,6 +61,7 @@
+ #include "chrome/browser/permissions/quiet_notification_permission_ui_state.h"
+ #include "chrome/browser/platform_experience/prefs.h"
+ #include "chrome/browser/prefs/chrome_pref_service_factory.h"
++#include "chrome/browser/perch/perch_prefs.h"
+ #include "chrome/browser/prefs/incognito_mode_prefs.h"
+ #include "chrome/browser/prefs/session_startup_pref.h"
+ #include "chrome/browser/preloading/prefetch/prefetch_service/prefetch_origin_decider.h"
+@@ -2041,6 +2042,9 @@ void RegisterLocalState(PrefRegistrySimple* registry) {
+       policy::policy_prefs::kLocalNetworkAccessPermissionsPolicyDefaultEnabled,
+       false);
+ 
++  // Perch: its own browser-wide prefs.
++  perch::RegisterLocalStatePrefs(registry);
++
+   // This is intentionally last.
+   RegisterLocalStatePrefsForMigration(registry);
+ }
+@@ -2587,6 +2591,10 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry,
+ #endif  // BUILDFLAG(IS_ANDROID)
+ 
+   registry->RegisterBooleanPref(prefs::kStaticStorageQuotaEnabled, false);
++
++  // Perch: its own prefs, then its defaults for Chromium's.
++  perch::RegisterProfilePrefs(registry);
++  perch::OverrideChromiumDefaults(registry);
+ }
+ 
+ void RegisterUserProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {

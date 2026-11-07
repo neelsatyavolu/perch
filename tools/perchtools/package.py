@@ -80,6 +80,15 @@ def stage_agent(app: Path, repo: Path, run) -> Path:
     return perchd
 
 
+def stage_extensions_into(app: Path, staged: Path) -> None:
+    """Copy the built-in extensions (perch-build stage-extensions) into Resources/perch_extensions."""
+    if not (staged.is_dir() and any(staged.iterdir())):
+        raise ValueError(f"{staged} is empty; run perch-build stage-extensions --config release first")
+    dest = _framework_version(app) / "Resources" / "perch_extensions"
+    shutil.rmtree(dest, ignore_errors=True)
+    shutil.copytree(staged, dest)
+
+
 def _make_dmg(app: Path, dist: Path, info: VersionInfo, run) -> Path:
     folder = dist / "dmg"
     folder.mkdir(parents=True, exist_ok=True)
@@ -106,6 +115,7 @@ def package(
     stage = _stage(paths, dist)
     app = stage / APP
     perchd = stage_agent(app, paths.repo, run)
+    stage_extensions_into(app, paths.out("release") / "perch_extensions")
     if mode == "adhoc":
         update_plist(app / "Contents" / "Info.plist", bundle_versions(info))
         run(["codesign", "--force", "--deep", "--sign", "-", app])

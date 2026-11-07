@@ -20,6 +20,8 @@ def staged_build(paths, tmp_path):
     (framework / "Current").symlink_to("158.0.8127.18")
     (release / "Perch Packaging").mkdir()
     (release / "Perch Packaging" / "sign_chrome.py").write_text("")
+    (release / "perch_extensions" / "perch").mkdir(parents=True)
+    (release / "perch_extensions" / "perch" / "manifest.json").write_text("{}")
     sparkle = tmp_path / "sparkle"
     (sparkle / "Sparkle.framework" / "Versions" / "B").mkdir(parents=True)
     repo = tmp_path / "repo"
@@ -104,3 +106,18 @@ def test_creds_from_env_names_missing():
 def test_creds_from_env_reads_all(tmp_path):
     creds = creds_from_env({"APPLE_SIGNING_IDENTITY": "I", "APPLE_API_KEY": "K", "APPLE_API_ISSUER": "S", "APPLE_API_KEY_PATH": str(tmp_path / "k.p8")})
     assert creds == AppleCreds("I", "K", "S", tmp_path / "k.p8")
+
+
+def test_package_copies_the_built_in_extensions_into_resources(staged_build, recorder):
+    paths, sparkle = staged_build
+    package(paths, INFO, "adhoc", None, run=recorder, sparkle_root=sparkle, public_key="")
+    resources = paths.repo / "dist" / "stage" / "Perch.app" / "Contents" / "Frameworks" / "Perch Framework.framework" / "Versions" / "158.0.8127.18" / "Resources"
+    assert (resources / "perch_extensions" / "perch" / "manifest.json").read_text() == "{}"
+
+
+def test_package_refuses_without_staged_extensions(staged_build, recorder):
+    import shutil
+    paths, sparkle = staged_build
+    shutil.rmtree(paths.out("release") / "perch_extensions")
+    with pytest.raises(ValueError, match="stage-extensions"):
+        package(paths, INFO, "adhoc", None, run=recorder, sparkle_root=sparkle, public_key="")

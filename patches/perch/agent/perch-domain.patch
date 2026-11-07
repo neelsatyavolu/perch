@@ -1,0 +1,56 @@
+# Perch: the Perch CDP domain (tab groups, keeping agent tabs drawing) for perchd's trusted pipe.
+diff --git a/chrome/browser/devtools/BUILD.gn b/chrome/browser/devtools/BUILD.gn
+index 519b00f395..4b436ddaeb 100644
+--- a/chrome/browser/devtools/BUILD.gn
++++ b/chrome/browser/devtools/BUILD.gn
+@@ -126,6 +126,14 @@ static_library("devtools") {
+     "chrome_devtools_session_base.h",
+   ]
+ 
++  # Perch: the Perch CDP domain for perchd's pipe.
++  if (is_mac) {
++    sources += [
++      "//chrome/browser/perch/agent/perch_devtools.cc",
++      "//chrome/browser/perch/agent/perch_devtools.h",
++    ]
++  }
++
+   configs += [ "//build/config:precompiled_headers" ]
+ 
+   public_deps = [
+diff --git a/chrome/browser/devtools/chrome_devtools_session_base.cc b/chrome/browser/devtools/chrome_devtools_session_base.cc
+index 63e7d5fdb7..5c07fe0ccd 100644
+--- a/chrome/browser/devtools/chrome_devtools_session_base.cc
++++ b/chrome/browser/devtools/chrome_devtools_session_base.cc
+@@ -14,6 +14,7 @@
+ #include "base/memory/scoped_refptr.h"
+ #include "base/metrics/histogram_functions.h"
+ #include "base/metrics/metrics_hashes.h"
++#include "build/build_config.h"
+ #include "chrome/browser/devtools/devtools_availability_checker.h"
+ #include "chrome/browser/policy/developer_tools_policy_checker.h"
+ #include "chrome/browser/policy/developer_tools_policy_checker_factory.h"
+@@ -25,6 +26,10 @@
+ #include "content/public/browser/devtools_agent_host_client_channel.h"
+ #include "third_party/inspector_protocol/crdtp/dispatch.h"
+ 
++#if BUILDFLAG(IS_MAC)
++#include "chrome/browser/perch/agent/perch_devtools.h"
++#endif
++
+ namespace {
+ 
+ base::HistogramBase::Sample32 GetCommandUmaId(std::string_view command_name) {
+@@ -70,6 +75,12 @@ void ChromeDevToolsSessionBase::OnDevToolsPolicyChanged() {
+ void ChromeDevToolsSessionBase::HandleCommand(
+     base::span<const uint8_t> message,
+     content::DevToolsManagerDelegate::NotHandledCallback callback) {
++#if BUILDFLAG(IS_MAC)
++  // Perch: `Perch.*` commands, for perchd's trusted pipe only.
++  if (perch::MaybeHandleCommand(client_channel_, message)) {
++    return;
++  }
++#endif
+   crdtp::Dispatchable dispatchable(
+       crdtp::SpanFrom(message), std::string_view(),
+       [cb = std::move(callback)](int call_id, crdtp::span<uint8_t> method,

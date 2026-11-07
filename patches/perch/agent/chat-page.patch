@@ -1,0 +1,37 @@
+# Perch: the full-page chat at chrome://perch-chat/.
+diff --git a/chrome/browser/ui/browser_window/internal/BUILD.gn b/chrome/browser/ui/browser_window/internal/BUILD.gn
+index a4ca6bcca1..8e29449fd3 100644
+--- a/chrome/browser/ui/browser_window/internal/BUILD.gn
++++ b/chrome/browser/ui/browser_window/internal/BUILD.gn
+@@ -72,6 +72,10 @@ source_set("internal") {
+       "//chrome/browser/perch/side_panel/perch_tab_sync.h",
+       "//chrome/browser/perch/webui/perch_side_chat_ui.cc",
+       "//chrome/browser/perch/webui/perch_side_chat_ui.h",
++      "//chrome/browser/perch/webui/perch_chat_ui.cc",
++      "//chrome/browser/perch/webui/perch_chat_ui.h",
++      "//chrome/browser/perch/webui/perch_ui_source.cc",
++      "//chrome/browser/perch/webui/perch_ui_source.h",
+       "browser_window_interface_iterator_non_android.cc",
+       "create_browser_window_non_android.cc",
+       "desktop_browser_window_capabilities.cc",
+diff --git a/chrome/browser/ui/webui/chrome_web_ui_configs.cc b/chrome/browser/ui/webui/chrome_web_ui_configs.cc
+index 105d9e9726..efd15a01ab 100644
+--- a/chrome/browser/ui/webui/chrome_web_ui_configs.cc
++++ b/chrome/browser/ui/webui/chrome_web_ui_configs.cc
+@@ -144,6 +144,7 @@
+ #include "chrome/browser/ui/webui/web_app_internals/web_app_internals_ui.h"
+ #include "chrome/browser/ui/webui/webnn_internals/webnn_internals_ui.h"
+ #include "chrome/browser/ui/webui/webui_gallery/webui_gallery_ui.h"
++#include "chrome/browser/perch/webui/perch_chat_ui.h"
+ #include "chrome/browser/ui/webui/webui_js_error/webui_js_error_ui.h"
+ #else  // !BUILDFLAG(IS_ANDROID)
+ #include "chrome/browser/ui/webui/chrome_finds_internals/chrome_finds_internals_ui.h"
+@@ -424,6 +425,8 @@ void RegisterChromeWebUIConfigs() {
+   map.AddWebUIConfig(std::make_unique<WebuiGalleryUIConfig>());
+   map.AddWebUIConfig(std::make_unique<WebUIJsErrorUIConfig>());
+   map.AddWebUIConfig(std::make_unique<WebUIToolbarConfig>());
++  // Perch: the full-page chat.
++  map.AddWebUIConfig(std::make_unique<perch::PerchChatUIConfig>());
+ #endif  // BUILDFLAG(IS_ANDROID)
+ 
+ #if BUILDFLAG(ENABLE_WEBUI_TABSTRIP_NTB)

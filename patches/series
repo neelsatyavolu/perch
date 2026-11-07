@@ -7,4 +7,7 @@ perch/branding/no-api-keys-infobar.patch
 perch/updater/start-updater.patch
 perch/agent/devtools-io-fds.patch
 perch/agent/sidebar.patch
+perch/agent/perch-domain.patch
+perch/agent/tab-ids.patch
+perch/agent/chat-page.patch
 perch/build/thinlto-jobs.patch

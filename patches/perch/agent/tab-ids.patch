@@ -1,0 +1,59 @@
+# Perch: a tab keeps its side chat id across restarts, in the session file's tab extra data.
+diff --git a/chrome/browser/sessions/session_service_base.cc b/chrome/browser/sessions/session_service_base.cc
+index ee887add6a..0cf1f89c04 100644
+--- a/chrome/browser/sessions/session_service_base.cc
++++ b/chrome/browser/sessions/session_service_base.cc
+@@ -76,6 +76,10 @@
+ #include "ui/ozone/public/platform_session_manager.h"
+ #endif
+ 
++#if BUILDFLAG(IS_MAC)
++#include "chrome/browser/perch/side_panel/perch_tab_sync.h"
++#endif
++
+ using base::Time;
+ using content::NavigationEntry;
+ using content::WebContents;
+@@ -675,6 +679,16 @@ void SessionServiceBase::BuildCommandsForTab(
+         sessions::CreatePinnedStateCommand(session_id, true));
+   }
+ 
++#if BUILDFLAG(IS_MAC)
++  // Perch: rebuilding the session file keeps the tab's side chat id.
++  if (const std::string perch_id = perch::PersistedTabId(tab);
++      !perch_id.empty()) {
++    command_storage_manager()->AppendRebuildCommand(
++        sessions::CreateAddTabExtraDataCommand(
++            session_id, perch::kTabIdExtraDataKey, perch_id));
++  }
++#endif
++
+   // Record the association between the sessionStorage namespace and the tab.
+   content::SessionStorageNamespaceHandle* session_storage_namespace =
+       tab->GetController().GetDefaultSessionStorageNamespace();
+diff --git a/chrome/browser/ui/browser_tabrestore.cc b/chrome/browser/ui/browser_tabrestore.cc
+index f2a9542aea..6f794ee0b6 100644
+--- a/chrome/browser/ui/browser_tabrestore.cc
++++ b/chrome/browser/ui/browser_tabrestore.cc
+@@ -41,6 +41,10 @@
+ #include "ui/gfx/geometry/size.h"
+ #include "ui/gfx/range/range.h"
+ 
++#if BUILDFLAG(IS_MAC)
++#include "chrome/browser/perch/side_panel/perch_tab_sync.h"
++#endif
++
+ using content::NavigationEntry;
+ using content::RestoreType;
+ using content::WebContents;
+@@ -88,6 +92,10 @@ std::unique_ptr<WebContents> CreateRestoredTab(
+       web_contents.get(), extra_data);
+   send_tab_to_self::SendTabToSelfActivationTracker::RestoreFromExtraData(
+       web_contents.get(), extra_data);
++#if BUILDFLAG(IS_MAC)
++  // Perch: a restored tab keeps its side chat.
++  perch::RestoreTabId(web_contents.get(), extra_data);
++#endif
+ 
+   std::vector<std::unique_ptr<NavigationEntry>> entries =
+       ContentSerializedNavigationBuilder::ToNavigationEntries(

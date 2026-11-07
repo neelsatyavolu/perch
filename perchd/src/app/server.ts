@@ -21,7 +21,19 @@ export const PROTOCOL = "perch-app";
 const MAX_BODY = 12_000_000;
 const TOPIC = "events";
 
-type Options = { token: string; allowedOrigins: string[]; listen: Listen; uiDir?: string; ctx: RouteContext };
+type Options = {
+  token: string;
+  /**
+   * Inside Perch, the browser's own token for reporting tabs (activation, titles, closes). Pages
+   * never get it, so a page cannot tell perchd that some tab is the one the user is looking at.
+   * Without it (development), the page token reports tabs too.
+   */
+  browserToken?: string;
+  allowedOrigins: string[];
+  listen: Listen;
+  uiDir?: string;
+  ctx: RouteContext;
+};
 
 function json(data: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json", "cache-control": "no-store", ...headers } });
@@ -45,10 +57,14 @@ export function startServer(opts: Options): Server {
   async function handleApi(req: Request, url: URL, origin: string | null): Promise<Response> {
     const headers = cors(origin);
     const auth = req.headers.get("authorization") ?? "";
-    if (!auth.startsWith("Bearer ") || !same(auth.slice(7), opts.token)) return json({ error: "Not signed in to this Perch session" }, 401, headers);
+    const given = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+    const isBrowser = opts.browserToken !== undefined && same(given, opts.browserToken);
+    if (!isBrowser && !same(given, opts.token)) return json({ error: "Not signed in to this Perch session" }, 401, headers);
     const found = match(req.method, url.pathname);
     if (found === "method") return json({ error: "method not allowed" }, 405, headers);
     if (!found) return json({ error: "not found" }, 404, headers);
+    // The browser token reports tabs and does nothing else; pages never report tabs inside Perch.
+    if (opts.browserToken !== undefined && found.browser !== isBrowser) return json({ error: "Not allowed with this token" }, 403, headers);
     try {
       let body: unknown;
       if (req.method === "POST" || req.method === "PUT" || req.method === "PATCH") {

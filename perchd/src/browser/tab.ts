@@ -34,16 +34,18 @@ export class Tab {
   private pageErrors: string[] = [];
   private mainFrameId = "";
   private navigationPending = false;
+  private readonly unsubscribe: (() => void)[] = [];
   private loading = false;
   /** Cross-site iframes run in their own process and session: frame id → session id. */
   readonly frameSessions = new Map<string, string>();
 
   private constructor(readonly conn: CdpConnection, readonly id: string, readonly session: string) {
-    conn.on("Page.lifecycleEvent", (p: { loaderId: string; name: string; frameId: string }, sid) => {
+    const listen = (event: string, listener: Parameters<CdpConnection["on"]>[1]) => this.unsubscribe.push(conn.on(event, listener));
+    listen("Page.lifecycleEvent", (p: { loaderId: string; name: string; frameId: string }, sid) => {
       if (sid === session) this.lifecycle.push({ loaderId: p.loaderId, name: p.name });
     });
     // Dialogs block the page until answered, so answer at once and tell the model what happened.
-    conn.on("Page.javascriptDialogOpening", (p: { type: string; message: string }, sid) => {
+    listen("Page.javascriptDialogOpening", (p: { type: string; message: string }, sid) => {
       if (sid !== session) return;
       const accept = p.type === "alert" || p.type === "beforeunload";
       const kind = p.type === "alert" ? "an alert" : p.type === "beforeunload" ? "a leave-page prompt" : `a ${p.type} dialog`;
@@ -51,26 +53,26 @@ export class Tab {
       void conn.send("Page.handleJavaScriptDialog", { accept }, session).catch(() => undefined);
     });
     // Uncaught errors in the page's own script: a button whose handler throws does nothing visible.
-    conn.on("Runtime.exceptionThrown", (p: { exceptionDetails: { text: string; exception?: { description?: string } } }, sid) => {
+    listen("Runtime.exceptionThrown", (p: { exceptionDetails: { text: string; exception?: { description?: string } } }, sid) => {
       if (sid !== session || this.pageErrors.length >= 3) return;
       const d = p.exceptionDetails;
       this.pageErrors.push((d.exception?.description ?? d.text).split("\n")[0]!.slice(0, 200));
     });
-    conn.on("Target.attachedToTarget", (p: { sessionId: string; targetInfo: { targetId: string; type: string } }, sid) => {
+    listen("Target.attachedToTarget", (p: { sessionId: string; targetInfo: { targetId: string; type: string } }, sid) => {
       if (sid === session && p.targetInfo.type === "iframe") this.frameSessions.set(p.targetInfo.targetId, p.sessionId);
     });
-    conn.on("Target.detachedFromTarget", (p: { sessionId: string; targetId?: string }, sid) => {
+    listen("Target.detachedFromTarget", (p: { sessionId: string; targetId?: string }, sid) => {
       if (sid !== session) return;
       for (const [frameId, child] of this.frameSessions) if (child === p.sessionId) this.frameSessions.delete(frameId);
     });
     const main = (frameId: string) => frameId === this.mainFrameId;
-    conn.on("Page.frameRequestedNavigation", (p: { frameId: string }, sid) => {
+    listen("Page.frameRequestedNavigation", (p: { frameId: string }, sid) => {
       if (sid === session && main(p.frameId)) this.navigationPending = true;
     });
-    conn.on("Page.frameStartedLoading", (p: { frameId: string }, sid) => {
+    listen("Page.frameStartedLoading", (p: { frameId: string }, sid) => {
       if (sid === session && main(p.frameId)) [this.loading, this.navigationPending] = [true, false];
     });
-    conn.on("Page.frameStoppedLoading", (p: { frameId: string }, sid) => {
+    listen("Page.frameStoppedLoading", (p: { frameId: string }, sid) => {
       if (sid === session && main(p.frameId)) [this.loading, this.navigationPending] = [false, false];
     });
     const markClosed = () => {
@@ -78,8 +80,8 @@ export class Tab {
       this.isClosed = true;
       for (const reject of this.closedReject) reject(new TabClosedError());
     };
-    conn.on("Target.detachedFromTarget", (p: { sessionId: string }) => p.sessionId === session && markClosed());
-    conn.on("Target.targetDestroyed", (p: { targetId: string }) => p.targetId === id && markClosed());
+    listen("Target.detachedFromTarget", (p: { sessionId: string }) => p.sessionId === session && markClosed());
+    listen("Target.targetDestroyed", (p: { targetId: string }) => p.targetId === id && markClosed());
   }
 
   static async attach(conn: CdpConnection, targetId: string): Promise<Tab> {
@@ -204,6 +206,17 @@ export class Tab {
 
   title(): Promise<string> {
     return this.evaluate<string>("document.title");
+  }
+
+  /**
+   * Lets go of a tab without closing it: a user's tab an agent borrowed. Perch stops listening to
+   * it, so it no longer answers the page's dialogs.
+   */
+  async detach(): Promise<void> {
+    for (const off of this.unsubscribe.splice(0)) off();
+    if (this.isClosed) return;
+    this.isClosed = true;
+    await this.conn.send("Target.detachFromTarget", { sessionId: this.session }).catch(() => undefined);
   }
 
   async close(): Promise<void> {

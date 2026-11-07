@@ -24,6 +24,8 @@ export type ToolContext = {
   browser: Browser;
   tab: Tab | null;
   owned: Tab[];
+  /** The user's tabs this context attached to. They are detached, never closed, when let go. */
+  borrowedTabs: Tab[];
   lastSnapshot: WeakMap<Tab, string>;
   shotScale: number;
   /** The chat's own folder: write_file saves here, and it is removed when the chat ends. */
@@ -40,11 +42,12 @@ export async function newToolContext(browser: Browser): Promise<ToolContext> {
     browser,
     tab: null,
     owned: [],
+    borrowedTabs: [],
     lastSnapshot: new WeakMap(),
     shotScale: 1,
     workDir: mkdtempSync(join(tmpdir(), "perch-chat-")),
     close: async () => {
-      await Promise.all(ctx.owned.map((t) => t.close()));
+      await Promise.all([...ctx.owned.map((t) => t.close()), ...ctx.borrowedTabs.map((t) => t.detach())]);
       rmSync(ctx.workDir, { recursive: true, force: true });
     },
   };
@@ -374,10 +377,27 @@ async function listTabs(ctx: ToolContext): Promise<string> {
   return tabs.map((t) => `${t.id === ctx.tab?.id ? "* " : "  "}${t.id} ${t.title || "(untitled)"} · ${t.url}`).join("\n");
 }
 
+/** Attaches to a tab the context does not own, once; later switches reuse the attachment. */
+export async function attachBorrowed(ctx: ToolContext, id: string): Promise<Tab> {
+  const attached = ctx.borrowedTabs.find((t) => t.id === id && !t.closed);
+  if (attached) return attached;
+  const tab = await Tab.attach(ctx.browser.conn, id);
+  ctx.borrowedTabs = [...ctx.borrowedTabs.filter((t) => !t.closed), tab];
+  return tab;
+}
+
+/** Lets go of borrowed tabs: detached, never closed. The current tab moves to an owned one. */
+export async function releaseBorrowed(ctx: ToolContext, ids: string[]): Promise<void> {
+  const release = ctx.borrowedTabs.filter((t) => ids.includes(t.id));
+  ctx.borrowedTabs = ctx.borrowedTabs.filter((t) => !ids.includes(t.id));
+  if (ctx.tab && release.includes(ctx.tab)) ctx.tab = ctx.owned.filter((t) => !t.closed).at(-1) ?? null;
+  await Promise.all(release.map((t) => t.detach()));
+}
+
 async function switchTab(ctx: ToolContext, id: string): Promise<ToolResult> {
   const known = ctx.owned.find((t) => t.id === id && !t.closed);
   const tabs = await ctx.browser.tabs();
   if (!known && !tabs.some((t) => t.id === id)) return { content: `no tab with id ${id}; call tabs to list them`, isError: true };
-  ctx.tab = known ?? (await Tab.attach(ctx.browser.conn, id));
+  ctx.tab = known ?? (await attachBorrowed(ctx, id));
   return { content: `switched tabs\n\n${await page(ctx, ctx.tab)}` };
 }

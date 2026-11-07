@@ -242,7 +242,10 @@ void PerchSidePanelController::OnTabStripModelChanged(
     side_panel->Show(SidePanelEntryId::kPerch,
                      SidePanelOpenTrigger::kTabChanged);
   } else {
-    side_panel->Close();
+    // Without the animation the panel is hidden before `switching` ends, so
+    // OnEntryHidden does not clear this tab's remembered state.
+    side_panel->Close(SidePanelEntryHideReason::kSidePanelClosed,
+                      /*suppress_animations=*/true);
   }
 }
 

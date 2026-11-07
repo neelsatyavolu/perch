@@ -20,10 +20,12 @@ export type RouteContext = {
 };
 
 type Handler = (ctx: RouteContext, params: string[], body: unknown, query: URLSearchParams) => Promise<unknown> | unknown;
-type Route = { method: string; path: RegExp; handler: Handler };
+/** `browser`: only the browser reports tabs; pages read them. See `browserToken` in server.ts. */
+type Route = { method: string; path: RegExp; handler: Handler; browser?: boolean };
 
 const ID = "([\\w.:-]{1,128})";
 const route = (method: string, path: string, handler: Handler): Route => ({ method, path: new RegExp(`^${path.replaceAll(":id", ID)}$`), handler });
+const browserRoute = (method: string, path: string, handler: Handler): Route => ({ ...route(method, path, handler), browser: true });
 
 function chatOf(ctx: RouteContext, id: string): Chat {
   const chat = ctx.chats.get(id);
@@ -214,7 +216,7 @@ export const ROUTES: Route[] = [
     return { ok: true };
   }),
   route("GET", "/api/windows/:id", (ctx, [id]) => ctx.windows.state(id!)),
-  route("POST", "/api/windows/:id/active", (ctx, [id], body) => {
+  browserRoute("POST", "/api/windows/:id/active", (ctx, [id], body) => {
     const o = v.object(body);
     v.onlyKeys(o, ["tab"]);
     return ctx.windows.activate(id!, o.tab === null ? null : v.tabInfo({ ...v.object(o.tab, '"tab"'), windowId: id }));
@@ -224,12 +226,12 @@ export const ROUTES: Route[] = [
     return chat ? chatView(ctx, chat) : { chat: null, run: null, artifacts: [] };
   }),
   route("POST", "/api/tabs/:id/chat", (ctx, [id], body) => sideChat(ctx, id!, body)),
-  route("POST", "/api/tabs/:id/move", async (ctx, [id], body) => {
+  browserRoute("POST", "/api/tabs/:id/move", async (ctx, [id], body) => {
     const o = v.object(body);
     v.onlyKeys(o, ["windowId"]);
     return { chat: (await ctx.chats.moveTab(id!, v.id(o.windowId, "windowId"))) ?? null };
   }),
-  route("PUT", "/api/tabs", async (ctx, _, body) => {
+  browserRoute("PUT", "/api/tabs", async (ctx, _, body) => {
     const o = v.object(body);
     v.onlyKeys(o, ["tabs"]);
     if (!Array.isArray(o.tabs) || o.tabs.length > 10_000) throw new AppError('"tabs" must be a list of up to 10,000 tabs');
@@ -239,24 +241,24 @@ export const ROUTES: Route[] = [
     for (const chatId of released) ctx.runs.announce(chatId);
     return { released };
   }),
-  route("PATCH", "/api/tabs/:id", (ctx, [id], body) => {
+  browserRoute("PATCH", "/api/tabs/:id", (ctx, [id], body) => {
     const o = v.object(body);
     v.onlyKeys(o, ["windowId", "title", "url", "targetId"]);
     const tab = v.tabInfo({ ...o, id });
     return { state: ctx.windows.update(tab) };
   }),
-  route("DELETE", "/api/tabs/:id", async (ctx, [id]) => {
+  browserRoute("DELETE", "/api/tabs/:id", async (ctx, [id]) => {
     ctx.windows.forget(id!);
     return { chat: (await ctx.chats.releaseTab(id!)) ?? null };
   }),
 ];
 
-export function match(method: string, path: string): { handler: Handler; params: string[] } | "method" | null {
+export function match(method: string, path: string): { handler: Handler; params: string[]; browser: boolean } | "method" | null {
   let wrongMethod = false;
   for (const r of ROUTES) {
     const m = path.match(r.path);
     if (!m) continue;
-    if (r.method === method) return { handler: r.handler, params: m.slice(1) };
+    if (r.method === method) return { handler: r.handler, params: m.slice(1), browser: r.browser === true };
     wrongMethod = true;
   }
   return wrongMethod ? "method" : null;

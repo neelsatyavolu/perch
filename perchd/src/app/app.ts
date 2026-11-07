@@ -25,6 +25,8 @@ export type AppOptions = {
   uiDir?: string;
   /** The API token; Perch's browser picks it and hands it to its pages. Random when left out. */
   token?: string;
+  /** The browser's own token for reporting tabs, inside Perch (server.ts). */
+  browserToken?: string;
 };
 
 export type App = {
@@ -130,6 +132,7 @@ export async function startApp(opts: AppOptions): Promise<App> {
   const token = opts.token ?? Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url");
   const server = startServer({
     token,
+    ...(opts.browserToken ? { browserToken: opts.browserToken } : {}),
     allowedOrigins: opts.allowedOrigins,
     listen: opts.listen ?? { port: 0 },
     uiDir: opts.uiDir,

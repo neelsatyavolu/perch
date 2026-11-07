@@ -235,8 +235,10 @@ void PerchTabSync::ResyncAll(Profile* profile) {
   needs_resync_ = false;
   base::ListValue all;
   std::vector<std::pair<std::string, tabs::TabInterface*>> active;
+  // Every window of every profile: perchd replaces its whole list with this
+  // one, and lets go of the side chats of tabs that are not in it.
   for (BrowserWindowInterface* browser : GetAllBrowserWindowInterfaces()) {
-    if (browser->GetProfile() != profile) {
+    if (browser->GetType() != BrowserWindowInterface::TYPE_NORMAL) {
       continue;
     }
     TabStripModel* model = browser->GetTabStripModel();
@@ -284,7 +286,8 @@ void PerchTabSync::SendNext() {
   resource->url = GURL(launcher.ApiOrigin() + next->path);
   resource->method = next->method;
   resource->credentials_mode = network::mojom::CredentialsMode::kOmit;
-  resource->headers.SetHeader("Authorization", "Bearer " + launcher.token());
+  resource->headers.SetHeader("Authorization",
+                              "Bearer " + launcher.browser_token());
   std::unique_ptr<network::SimpleURLLoader> loader =
       network::SimpleURLLoader::Create(std::move(resource),
                                        kTrafficAnnotation);

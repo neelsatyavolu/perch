@@ -20,16 +20,17 @@ import { MacKeychain } from "../daemon/keychain";
 import { perchPaths } from "../daemon/paths";
 import type { CliIO } from "./io";
 
-export type BrowserSettings = { port: number; token: string; origins: string[]; dataDir: string };
+export type BrowserSettings = { port: number; token: string; browserToken: string; origins: string[]; dataDir: string };
 
 export function parseBrowserSettings(line: string): BrowserSettings {
   const o = JSON.parse(line) as Record<string, unknown>;
   const port = o.port;
   if (o.op !== "app" || typeof port !== "number" || !Number.isInteger(port) || port < 1 || port > 65535) throw new Error("bad port");
   if (typeof o.token !== "string" || o.token.length < 32) throw new Error("bad token");
+  if (typeof o.browserToken !== "string" || o.browserToken.length < 32 || o.browserToken === o.token) throw new Error("bad browser token");
   if (typeof o.dataDir !== "string" || !o.dataDir.startsWith("/")) throw new Error("bad data folder");
   const origins = Array.isArray(o.origins) ? o.origins.filter((x): x is string => typeof x === "string" && /^chrome(-untrusted)?:\/\/[a-z0-9.-]+$/.test(x)) : [];
-  return { port, token: o.token, origins, dataDir: o.dataDir };
+  return { port, token: o.token, browserToken: o.browserToken, origins, dataDir: o.dataDir };
 }
 
 /** The first line on fd 5, and a promise that settles when the browser closes it. */
@@ -92,6 +93,7 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
     allowedOrigins: settings.origins,
     listen: { port: settings.port },
     token: settings.token,
+    browserToken: settings.browserToken,
   });
   io.stderr(`perchd ${process.pid}: connected to browser; app API on 127.0.0.1:${settings.port}; socket in ${home}\n`);
   await Promise.race([closed, conn.closed]);

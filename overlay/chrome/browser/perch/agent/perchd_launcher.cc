@@ -26,6 +26,7 @@
 #include "base/rand_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/thread_pool.h"
+#include "base/time/time.h"
 #include "base/values.h"
 #include "chrome/browser/lifetime/browser_shutdown.h"
 #include "chrome/common/chrome_paths.h"
@@ -42,6 +43,8 @@ constexpr char kSideChatOrigin[] =
     "chrome-untrusted://perch-side-chat.top-chrome";
 constexpr char kChatOrigin[] = "chrome://perch-chat";
 constexpr int64_t kLogRotateBytes = 5 * 1024 * 1024;
+// How long a stopped agent's sockets stay open after the pipe handler stops.
+constexpr base::TimeDelta kRetireFdsAfter = base::Seconds(30);
 // Chromium's pipe handler reads "<read>,<write>" from this switch
 // (content/browser/devtools/devtools_agent_host_impl.cc, Perch's POSIX branch).
 constexpr char kRemoteDebuggingIoPipes[] = "remote-debugging-io-pipes";
@@ -195,6 +198,7 @@ void PerchdLauncher::MaybeStart() {
     return;
   }
   token_ = NewToken();
+  browser_token_ = NewToken();
   enabled_ = true;
   Launch();
 }
@@ -220,6 +224,7 @@ void PerchdLauncher::Launch() {
   config.Set("op", "app");
   config.Set("port", port_);
   config.Set("token", token_);
+  config.Set("browserToken", browser_token_);
   config.Set("dataDir", user_data_dir_.value());
   base::ListValue origins;
   origins.Append(kSideChatOrigin);
@@ -264,9 +269,17 @@ void PerchdLauncher::OnPipeClosed() {
   }
   LOG(WARNING) << "Perch: the agent stopped; starting it again";
   content::DevToolsAgentHost::StopRemoteDebuggingPipeHandler();
-  browser_read_.reset();
-  browser_write_.reset();
-  config_.reset();
+  // The pipe handler's reader and writer threads wind down on their own after
+  // a shutdown() of these sockets and may still hold the descriptor numbers.
+  // Closing them now could hand those numbers to the next launch's sockets
+  // while an old writer still writes, so close them well after.
+  base::ThreadPool::PostDelayedTask(
+      FROM_HERE, {base::MayBlock(), base::TaskPriority::BEST_EFFORT},
+      base::BindOnce([](base::ScopedFD read, base::ScopedFD write,
+                        base::ScopedFD config) {},
+                     std::move(browser_read_), std::move(browser_write_),
+                     std::move(config_)),
+      kRetireFdsAfter);
   if (process_.IsValid()) {
     base::EnsureProcessTerminated(std::move(process_));
   }

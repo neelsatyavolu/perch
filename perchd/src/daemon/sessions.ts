@@ -7,9 +7,8 @@
 import { chmodSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { callTool, type CallPolicy } from "../agent/session";
-import { newToolContext, type ToolContext, type ToolResult } from "../agent/tools";
+import { attachBorrowed, newToolContext, releaseBorrowed, type ToolContext, type ToolResult } from "../agent/tools";
 import type { Browser } from "../browser/browser";
-import { Tab } from "../browser/tab";
 import type { ToolCall } from "../models/types";
 import { groupLabel, type OnEnd } from "./protocol";
 
@@ -146,11 +145,12 @@ export class SessionManager {
   async borrow(session: AgentSession, targetId: string): Promise<void> {
     const owner = this.owner(targetId);
     if (owner && owner !== session) throw new Error(NOT_YOURS(owner.label));
-    const ctx = await this.context(session);
+    // Reserved before any await, so a second session sees the tab as taken.
     if (!owner) session.borrowed.add(targetId);
     try {
+      const ctx = await this.context(session);
       const known = ctx.owned.find((t) => t.id === targetId && !t.closed);
-      ctx.tab = known ?? (await Tab.attach(ctx.browser.conn, targetId));
+      ctx.tab = known ?? (await attachBorrowed(ctx, targetId));
       await ctx.browser.claim(targetId);
     } catch (error) {
       session.borrowed.delete(targetId);
@@ -194,10 +194,14 @@ export class SessionManager {
     session.endTimer = null;
     const released = [...session.borrowed];
     session.borrowed = new Set();
-    if (session.ctx) await Promise.all(released.map((id) => session.ctx!.browser.release(id)));
-    // A released borrowed tab is the user's again; the session must not keep acting on it.
+    // A released borrowed tab is the user's again: the session stops acting on it and listening
+    // to it, and the browser stops holding it drawing.
     const ctx = session.ctx;
-    if (ctx?.tab && !ctx.owned.includes(ctx.tab)) ctx.tab = ctx.owned.filter((t) => !t.closed).at(-1) ?? null;
+    if (ctx) {
+      await releaseBorrowed(ctx, released);
+      await Promise.all(released.map((id) => ctx.browser.release(id)));
+      if (ctx.tab && !ctx.owned.includes(ctx.tab)) ctx.tab = ctx.owned.filter((t) => !t.closed).at(-1) ?? null;
+    }
     if (how === "sleep") {
       await this.freeze(session, true);
       session.asleep = true;

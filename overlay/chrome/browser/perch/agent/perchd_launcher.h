@@ -39,6 +39,8 @@ class PerchdLauncher {
   bool enabled() const { return enabled_; }
   int port() const { return port_; }
   const std::string& token() const { return token_; }
+  // The browser's own token for reporting tabs to perchd. Pages never see it.
+  const std::string& browser_token() const { return browser_token_; }
   // "http://127.0.0.1:<port>", or empty when the agent is off.
   std::string ApiOrigin() const;
   // The folder with the built chat pages (ui/dist).
@@ -62,6 +64,7 @@ class PerchdLauncher {
   bool enabled_ = false;
   int port_ = 0;
   std::string token_;
+  std::string browser_token_;
   base::FilePath perchd_path_;
   base::FilePath user_data_dir_;
   base::Process process_;

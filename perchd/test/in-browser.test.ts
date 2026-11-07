@@ -2,7 +2,10 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { PassThrough } from "node:stream";
 import { connectStreams } from "../src/cdp/adopt";
 import { encode } from "../src/cdp/pipe";
+import { startApp } from "../src/app/app";
+import { memoryKeychain } from "../src/app/keychain";
 import { SidebarRuns, stepLabel } from "../src/app/sidebar-runner";
+import { Vault } from "../src/app/vault";
 import { connect } from "../src/cli/client";
 import { parseBrowserSettings, perchCommand } from "../src/cli/serve-browser";
 import { startDaemon, type Daemon } from "../src/daemon/daemon";
@@ -15,8 +18,10 @@ import { tempProfile } from "./helpers";
 const TOKEN = "t".repeat(43);
 
 test("the browser's settings line is checked before perchd uses it", () => {
-  const good = { op: "app", port: 50123, token: TOKEN, dataDir: "/Users/x/Library/Application Support/Perch", origins: ["chrome-untrusted://perch-side-chat.top-chrome", "https://evil.test"] };
-  expect(parseBrowserSettings(JSON.stringify(good))).toEqual({ port: 50123, token: TOKEN, dataDir: good.dataDir, origins: ["chrome-untrusted://perch-side-chat.top-chrome"] });
+  const good = { op: "app", port: 50123, token: TOKEN, browserToken: "b".repeat(43), dataDir: "/Users/x/Library/Application Support/Perch", origins: ["chrome-untrusted://perch-side-chat.top-chrome", "https://evil.test"] };
+  expect(parseBrowserSettings(JSON.stringify(good))).toEqual({ port: 50123, token: TOKEN, browserToken: "b".repeat(43), dataDir: good.dataDir, origins: ["chrome-untrusted://perch-side-chat.top-chrome"] });
+  expect(() => parseBrowserSettings(JSON.stringify({ ...good, browserToken: TOKEN }))).toThrow("bad browser token");
+  expect(() => parseBrowserSettings(JSON.stringify({ ...good, browserToken: undefined }))).toThrow("bad browser token");
   expect(() => parseBrowserSettings(JSON.stringify({ ...good, port: 0 }))).toThrow("bad port");
   expect(() => parseBrowserSettings(JSON.stringify({ ...good, token: "short" }))).toThrow("bad token");
   expect(() => parseBrowserSettings(JSON.stringify({ ...good, dataDir: "relative" }))).toThrow("bad data folder");
@@ -86,4 +91,21 @@ test("a sidebar run's agent connects with its one-off token and gets the chat's 
   await expect(connect({ socket: paths.socket, hello: sidebarHello("sidebar-other", TOKEN) })).rejects.toThrow("Perch did not accept this client's token.");
   runs.delete("sidebar-abc");
   await expect(connect({ socket: paths.socket, hello: sidebarHello("sidebar-abc", TOKEN) })).rejects.toThrow("Perch did not accept this client's token.");
+});
+
+test("inside Perch only the browser reports tabs, and its token does nothing else", async () => {
+  const dir = tempProfile();
+  const app = await startApp({ dataDir: dir.dir, vault: await Vault.open(memoryKeychain(), "Default"), runner: async function* () {}, models: [], allowedOrigins: [], token: TOKEN, browserToken: "b".repeat(43) });
+  const call = (token: string, method: string, path: string, json?: unknown) =>
+    fetch(`${app.server.url}${path}`, { method, headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: json === undefined ? undefined : JSON.stringify(json) });
+  const report = { windowId: "w1", title: "Bank", url: "https://bank.example", targetId: "T1" };
+  expect((await call(TOKEN, "PATCH", "/api/tabs/t1", report)).status).toBe(403);
+  expect((await call(TOKEN, "PUT", "/api/tabs", { tabs: [] })).status).toBe(403);
+  expect((await call(TOKEN, "POST", "/api/windows/w1/active", { tab: { id: "t1" } })).status).toBe(403);
+  expect((await call("b".repeat(43), "PATCH", "/api/tabs/t1", report)).status).toBe(200);
+  expect((await call("b".repeat(43), "GET", "/api/windows/w1")).status).toBe(403);
+  expect((await call("b".repeat(43), "GET", "/api/chats")).status).toBe(403);
+  expect((await call(TOKEN, "GET", "/api/windows/w1")).status).toBe(200);
+  await app.stop();
+  dir.cleanup();
 });

@@ -153,10 +153,17 @@ export async function startServer(opts: ServerOptions): Promise<Server> {
     // The client left while its token was being checked: open nothing it would never release.
     if (state.closed) return;
     const session = opts.manager.open({ client: hello.client, session: hello.session, agent: hello.agent, title: hello.title, persistent: hello.persistent, onEnd: hello.onEnd });
-    session.connections++;
     // A sidebar task on the tab the user is looking at works in that tab, not a copy of it. If the
     // tab is gone or another agent has it, the task still runs and opens its own tabs.
-    if (run?.tab && !session.borrowed.has(run.tab)) await opts.manager.borrow(session, run.tab).catch(() => undefined);
+    if (run?.tab && !session.borrowed.has(run.tab)) {
+      await opts.manager.borrow(session, run.tab).catch(() => undefined);
+      // The client left while the tab was borrowed: give it back unless another connection uses it.
+      if (state.closed) {
+        if (session.connections === 0) await opts.manager.end(session, "close");
+        return;
+      }
+    }
+    session.connections++;
     state.conn = new Connection(hello, verified, session, state.writer, opts);
     clearTimeout(state.timer);
     state.writer.send({ type: "welcome", client: hello.client, session: hello.session, label: session.label, mode: state.conn.policy().mode });

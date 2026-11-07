@@ -166,9 +166,9 @@ Reply SetTabGroup(const base::DictValue& params) {
         model->AddToExistingGroup(indices, *group, /*add_to_end=*/true);
       }
     } else {
-      const tab_groups::TabGroupId group = model->AddToNewGroup(indices);
+      const tab_groups::TabGroupId new_group = model->AddToNewGroup(indices);
       model->ChangeTabGroupVisuals(
-          group, tab_groups::TabGroupVisualData(
+          new_group, tab_groups::TabGroupVisualData(
                      title16, ColorFor(params.FindString("color"))));
     }
     grouped += static_cast<int>(indices.size());

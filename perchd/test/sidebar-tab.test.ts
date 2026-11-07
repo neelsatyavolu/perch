@@ -96,6 +96,22 @@ test("a sidebar task on the current tab starts in that tab and gives it back whe
   expect(page.content).toContain("Two items");
   await client.request("end", { onEnd: "close" });
   expect((await browser.tabs()).some((t) => t.id === userTab)).toBe(true);
+  // Let go entirely: nothing stays attached, so the page's own dialogs reach the user again.
+  const { targetInfo } = await browser.conn.send<{ targetInfo: { attached: boolean } }>("Target.getTargetInfo", { targetId: userTab });
+  expect(targetInfo.attached).toBe(false);
   client.close();
   runs.delete("sidebar-cart");
+});
+
+test("two sidebar tasks cannot both take the same tab", async () => {
+  const { targetId: userTab } = await browser.conn.send<{ targetId: string }>("Target.createTarget", { url: `http://127.0.0.1:${site.port}/other` });
+  for (const id of ["sidebar-one", "sidebar-two"]) runs.add(id, { token: TOKEN, mode: "skip", approve: async () => true, tab: userTab });
+  const [one, two] = await Promise.all(["sidebar-one", "sidebar-two"].map((id) => connect({ socket: paths.socket, hello: hello(id) })));
+  const lines = await Promise.all([one!, two!].map(async (c) => (await c.request<string>("tabs")).split("\n").find((l) => l.includes(userTab))!));
+  expect(lines.filter((l) => l.includes("(yours)")).length).toBe(1);
+  for (const c of [one!, two!]) {
+    await c.request("end", { onEnd: "close" });
+    c.close();
+  }
+  for (const id of ["sidebar-one", "sidebar-two"]) runs.delete(id);
 });

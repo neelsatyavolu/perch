@@ -4,7 +4,7 @@ import type { ArtifactServer } from "./artifact-server";
 import type { ArtifactStore } from "./artifacts";
 import type { Windows } from "./app";
 import type { ChatStore } from "./chats";
-import type { AppInfo, ArtifactKind, Chat, ChatSettings } from "./protocol";
+import type { AppInfo, ArtifactKind, Chat, ChatSettings, TabInfo } from "./protocol";
 import { AppError, type RunManager } from "./runs";
 import * as v from "./validate";
 
@@ -51,6 +51,13 @@ async function sideChat(ctx: RouteContext, tabId: string, body: unknown) {
   }
   const settings = o.settings === undefined ? {} : v.settingsPatch(o.settings, ctx.models);
   return announced(ctx, await ctx.chats.create({ tab, settings: { ...ctx.defaults, ...settings } }));
+}
+
+/** A page's tab with the target id the browser reported for it; a page never picks the target. */
+function reported(ctx: RouteContext, tab: TabInfo): TabInfo {
+  const { targetId: _, ...rest } = tab;
+  const targetId = ctx.windows.tab(tab.id)?.targetId;
+  return targetId ? { ...rest, targetId } : rest;
 }
 
 const MARKER = /\[\[artifact:([^\]]+)\]\]/g;
@@ -154,7 +161,7 @@ export const ROUTES: Route[] = [
   route("POST", "/api/chats/:id/messages", (ctx, [id], body) => {
     const o = v.object(body);
     v.onlyKeys(o, ["text", "context"]);
-    return ctx.runs.send(id!, v.text(o.text, "text", 50_001), o.context === undefined ? undefined : v.tabInfo(o.context, "context"));
+    return ctx.runs.send(id!, v.text(o.text, "text", 50_001), o.context === undefined ? undefined : reported(ctx, v.tabInfo(o.context, "context")));
   }),
   route("POST", "/api/chats/:id/cancel", (ctx, [id]) => ({ stopped: ctx.runs.cancel(chatOf(ctx, id!).id) })),
   route("POST", "/api/chats/:id/branch", (ctx, [id], body) => {
@@ -234,7 +241,7 @@ export const ROUTES: Route[] = [
   }),
   route("PATCH", "/api/tabs/:id", (ctx, [id], body) => {
     const o = v.object(body);
-    v.onlyKeys(o, ["windowId", "title", "url"]);
+    v.onlyKeys(o, ["windowId", "title", "url", "targetId"]);
     const tab = v.tabInfo({ ...o, id });
     return { state: ctx.windows.update(tab) };
   }),

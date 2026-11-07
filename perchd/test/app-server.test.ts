@@ -15,7 +15,10 @@ let dir: string;
 let app: App;
 const sendReq: ApprovalRequest = { call: { id: "c", name: "type", args: { ref: "e2", text: "On my way", submit: true } }, target: { role: "textbox", name: "Message" }, kind: "risky", site: "chat.example", summary: "" };
 
+const inputs: RunnerInput[] = [];
+
 async function* runner(input: RunnerInput): AsyncIterable<StepEvent> {
+  inputs.push(input);
   yield { type: "text", delta: "Drafting. " };
   yield { type: "step", label: "Opened chat.example" };
   if (input.task.includes("needs approval")) {
@@ -286,4 +289,34 @@ test("a navigation updates the tab, and the window showing it hears about it", a
   expect(app.windows.tab("t40")).toEqual({ id: "t40", windowId: "w8", title: "Re: Lunch", url: "https://mail.example/m/1" });
   expect(app.windows.state("w8").tab?.url).toBe("https://mail.example/m/1");
   ws.close();
+});
+
+test("a side chat task works in the user's tab, by the target the browser reported", async () => {
+  // What the browser's tab sync sends (overlay/chrome/browser/perch/side_panel/perch_tab_sync.cc).
+  await api("/api/windows/w9/active", { method: "POST", json: { tab: { id: "t50", title: "Shop", url: "https://shop.example", targetId: "A1B2C3" } } });
+  expect((await api("/api/tabs/t50", { method: "PATCH", json: { windowId: "w9", title: "Cart", url: "https://shop.example/cart", targetId: "A1B2C3" } })).status).toBe(200);
+  expect(app.windows.tab("t50")?.targetId).toBe("A1B2C3");
+  const chat = (await (await api("/api/tabs/t50/chat", { method: "POST", json: { windowId: "w9" } })).json()) as Chat;
+  const before = inputs.length;
+  // A page that names another target is ignored: the target comes from the browser.
+  const context = { id: "t50", windowId: "w9", title: "Cart", url: "https://shop.example/cart", targetId: "EVIL" };
+  const sent = await api(`/api/chats/${chat.id}/messages`, { method: "POST", json: { text: "What is in my cart?", context } });
+  expect(sent.status).toBe(200);
+  await until(() => inputs.length > before);
+  const input = inputs[inputs.length - 1]!;
+  expect(input.tab?.targetId).toBe("A1B2C3");
+  expect(input.task).toContain("you are already in it");
+  const stored = (await (await api(`/api/chats/${chat.id}`)).json()) as { chat: Chat } | Chat;
+  const messages = ("chat" in stored ? stored.chat : stored).messages;
+  expect(messages.at(-1)?.context).toEqual({ id: "t50", windowId: "w9", title: "Cart", url: "https://shop.example/cart" });
+});
+
+test("a tab the browser never reported gets no target, and the task opens it instead", async () => {
+  const chat = (await (await api("/api/tabs/t51/chat", { method: "POST", json: { windowId: "w9" } })).json()) as Chat;
+  const before = inputs.length;
+  await api(`/api/chats/${chat.id}/messages`, { method: "POST", json: { text: "Summarize", context: { id: "t51", windowId: "w9", title: "Blog", url: "https://blog.example", targetId: "EVIL" } } });
+  await until(() => inputs.length > before);
+  const input = inputs[inputs.length - 1]!;
+  expect(input.tab).toBeUndefined();
+  expect(input.task).toContain("which you may open and use");
 });

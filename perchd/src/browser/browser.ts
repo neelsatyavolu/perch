@@ -13,6 +13,12 @@ export class Browser {
   /** Pages opened by another page (target=_blank links, window.open), newest last. */
   private readonly popups: { id: string; opener: string; at: number }[] = [];
 
+  /**
+   * True inside Perch, whose patches add the `Perch` CDP domain: agent tabs then open in the
+   * user's window and are held drawing (`Perch.claimTab`) instead of getting windows of their own.
+   */
+  perch = false;
+
   private constructor(readonly conn: CdpConnection) {
     conn.on("Target.targetCreated", (p: { targetInfo: { targetId: string; type: string; openerId?: string } }) => {
       const t = p.targetInfo;
@@ -41,23 +47,35 @@ export class Browser {
   static async adopt(conn: CdpConnection): Promise<Browser> {
     await conn.send("Browser.getVersion");
     await conn.send("Target.setDiscoverTargets", { discover: true });
-    return new Browser(conn);
+    const browser = new Browser(conn);
+    browser.perch = await conn.send<{ perch?: boolean }>("Perch.getInfo").then((r) => r.perch === true, () => false);
+    return browser;
+  }
+
+  /** Keeps a tab drawing and awake while it is in the background. Only inside Perch. */
+  async claim(targetId: string): Promise<void> {
+    if (this.perch) await this.conn.send("Perch.claimTab", { targetId }).catch(() => undefined);
+  }
+
+  async release(targetId: string): Promise<void> {
+    if (this.perch) await this.conn.send("Perch.releaseTab", { targetId }).catch(() => undefined);
   }
 
   /**
    * Opens an agent tab without taking focus from the user's tab. Chromium does not draw hidden
    * background tabs, and input events wait for a drawn frame, so a plain background tab never
-   * receives clicks; an unfocused window of its own stays visible to the renderer. (Inside Perch,
-   * plan 3b keeps agent tabs drawing in the "Agent" tab group instead.)
+   * receives clicks; an unfocused window of its own stays visible to the renderer. Inside Perch
+   * the tab opens in the background of the user's window instead, held drawing by
+   * `Perch.claimTab`, and the session puts it in its tab group.
    */
   async newTab(url?: string): Promise<Tab> {
-    const { targetId } = await this.conn.send<{ targetId: string }>("Target.createTarget", {
-      url: "about:blank",
-      newWindow: true,
-      background: true,
-      width: AGENT_WINDOW.width,
-      height: AGENT_WINDOW.height,
-    });
+    const { targetId } = await this.conn.send<{ targetId: string }>(
+      "Target.createTarget",
+      this.perch
+        ? { url: "about:blank", background: true }
+        : { url: "about:blank", newWindow: true, background: true, width: AGENT_WINDOW.width, height: AGENT_WINDOW.height },
+    );
+    await this.claim(targetId);
     const tab = await Tab.attach(this.conn, targetId);
     if (url) await tab.navigate(url);
     return tab;

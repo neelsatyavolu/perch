@@ -12,7 +12,14 @@ import type { ChatStore } from "./chats";
 import type { AppEvent, ApprovalCard, ArtifactMeta, Chat, ChatMessage, ChatSettings, ChatStatus, ChatSummary, RunSnapshot, TabInfo } from "./protocol";
 import { buildTask } from "./transcript";
 
-export type RunnerInput = { task: string; settings: ChatSettings; approve: (req: ApprovalRequest) => Promise<boolean>; signal: AbortSignal };
+export type RunnerInput = {
+  task: string;
+  settings: ChatSettings;
+  approve: (req: ApprovalRequest) => Promise<boolean>;
+  signal: AbortSignal;
+  /** The user's tab the task works in, for the "current tab" scope when the browser named its target. */
+  tab?: TabInfo;
+};
 export type Runner = (input: RunnerInput) => AsyncIterable<StepEvent>;
 
 export type RunDeps = {
@@ -77,8 +84,9 @@ export class RunManager {
     if (!text.trim()) throw new AppError("The message is empty");
     if (text.length > MAX_MESSAGE) throw new AppError("The message is too long (50,000 characters at most)");
     if (this.runs.has(chatId)) throw new AppError("A task is still running in this chat. Wait for it or stop it first", 409);
-    const message: ChatMessage = { id: crypto.randomUUID(), role: "user", text, time: new Date().toISOString(), ...(context ? { context } : {}) };
-    const task = buildTask({ history: chat.messages, text, scope: chat.settings.scope, tab: context, tabs: this.deps.tabs() });
+    const message: ChatMessage = { id: crypto.randomUUID(), role: "user", text, time: new Date().toISOString(), ...(context ? { context: withoutTarget(context) } : {}) };
+    const tab = chat.settings.scope === "current" && context?.targetId ? context : undefined;
+    const task = buildTask({ history: chat.messages, text, scope: chat.settings.scope, tab: context, tabs: this.deps.tabs(), inTab: Boolean(tab) });
     const run: Run = { runId: crypto.randomUUID(), chatId, controller: new AbortController(), text: "", steps: [], pending: null, done: Promise.resolve() };
     this.runs.set(chatId, run);
     try {
@@ -94,7 +102,7 @@ export class RunManager {
       this.runs.delete(chatId);
       throw error;
     }
-    run.done = this.drive(run, task, chat.settings);
+    run.done = this.drive(run, task, chat.settings, tab);
     return { runId: run.runId, message };
   }
 
@@ -145,11 +153,11 @@ export class RunManager {
     };
   }
 
-  private async drive(run: Run, task: string, settings: ChatSettings): Promise<void> {
+  private async drive(run: Run, task: string, settings: ChatSettings, tab?: TabInfo): Promise<void> {
     let final: string | undefined;
     let error: string | undefined;
     try {
-      const events = this.deps.runner({ task, settings, approve: this.approve(run), signal: run.controller.signal });
+      const events = this.deps.runner({ task, settings, approve: this.approve(run), signal: run.controller.signal, ...(tab ? { tab } : {}) });
       for await (const event of events) {
         if (event.type === "text") {
           run.text += event.delta;
@@ -217,4 +225,10 @@ export class RunManager {
 function titleFrom(text: string): string {
   const line = text.replace(/\s+/g, " ").trim();
   return line.length <= 60 ? line : `${line.slice(0, 59).trimEnd()}…`;
+}
+
+/** A tab as kept in chat history: the browser's target id is only good for this run. */
+function withoutTarget(tab: TabInfo): TabInfo {
+  const { targetId: _, ...rest } = tab;
+  return rest;
 }

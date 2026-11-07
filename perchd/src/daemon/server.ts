@@ -24,7 +24,13 @@ export const SIDEBAR_CLIENT = "perch-sidebar";
  * A task the user started in Perch's sidebar and handed to an outside agent (Codex, Claude Code).
  * Its session gets a one-off token, the chat's permission mode, and the sidebar's approval card.
  */
-export type SidebarRun = { token: string; mode: Mode; approve: (request: ApprovalRequest) => Promise<boolean> };
+export type SidebarRun = {
+  token: string;
+  mode: Mode;
+  approve: (request: ApprovalRequest) => Promise<boolean>;
+  /** The CDP target id of the user's tab the task starts in ("current tab" scope), if any. */
+  tab?: string;
+};
 
 function sameToken(a: string, b: string): boolean {
   const x = Buffer.from(a);
@@ -148,6 +154,9 @@ export async function startServer(opts: ServerOptions): Promise<Server> {
     if (state.closed) return;
     const session = opts.manager.open({ client: hello.client, session: hello.session, agent: hello.agent, title: hello.title, persistent: hello.persistent, onEnd: hello.onEnd });
     session.connections++;
+    // A sidebar task on the tab the user is looking at works in that tab, not a copy of it. If the
+    // tab is gone or another agent has it, the task still runs and opens its own tabs.
+    if (run?.tab && !session.borrowed.has(run.tab)) await opts.manager.borrow(session, run.tab).catch(() => undefined);
     state.conn = new Connection(hello, verified, session, state.writer, opts);
     clearTimeout(state.timer);
     state.writer.send({ type: "welcome", client: hello.client, session: hello.session, label: session.label, mode: state.conn.policy().mode });

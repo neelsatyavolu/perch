@@ -9,6 +9,7 @@ import { dirname } from "node:path";
 import { callTool, type CallPolicy } from "../agent/session";
 import { newToolContext, type ToolContext, type ToolResult } from "../agent/tools";
 import type { Browser } from "../browser/browser";
+import { Tab } from "../browser/tab";
 import type { ToolCall } from "../models/types";
 import { groupLabel, type OnEnd } from "./protocol";
 
@@ -129,11 +130,33 @@ export class SessionManager {
     const before = new Set(session.tabIds());
     const result = await callTool(ctx, policy, call);
     if (borrowing && result.isError) session.borrowed.delete(borrowing);
+    else if (borrowing) await ctx.browser.claim(borrowing);
     const added = session.tabIds().filter((id) => !before.has(id));
     if (added.length) await this.group(session, added);
     this.writeFile();
     if (call.name === "tabs" && !result.isError) return { content: await this.tabs(session) };
     return result;
+  }
+
+  /**
+   * Starts a session in the user's own tab, as a sidebar task on the tab the user is looking at:
+   * the session borrows the tab until it ends, and acts on it without opening a copy. Fails when
+   * another session has the tab.
+   */
+  async borrow(session: AgentSession, targetId: string): Promise<void> {
+    const owner = this.owner(targetId);
+    if (owner && owner !== session) throw new Error(NOT_YOURS(owner.label));
+    const ctx = await this.context(session);
+    if (!owner) session.borrowed.add(targetId);
+    try {
+      const known = ctx.owned.find((t) => t.id === targetId && !t.closed);
+      ctx.tab = known ?? (await Tab.attach(ctx.browser.conn, targetId));
+      await ctx.browser.claim(targetId);
+    } catch (error) {
+      session.borrowed.delete(targetId);
+      throw error;
+    }
+    this.writeFile();
   }
 
   /** Every open tab, marked with the session that owns it. */
@@ -169,7 +192,9 @@ export class SessionManager {
   async end(session: AgentSession, how: OnEnd = session.info.onEnd): Promise<void> {
     if (session.endTimer) clearTimeout(session.endTimer);
     session.endTimer = null;
+    const released = [...session.borrowed];
     session.borrowed = new Set();
+    if (session.ctx) await Promise.all(released.map((id) => session.ctx!.browser.release(id)));
     // A released borrowed tab is the user's again; the session must not keep acting on it.
     const ctx = session.ctx;
     if (ctx?.tab && !ctx.owned.includes(ctx.tab)) ctx.tab = ctx.owned.filter((t) => !t.closed).at(-1) ?? null;

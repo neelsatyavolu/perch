@@ -10,7 +10,14 @@ export type Scope = "current" | "all" | "agent";
 export type ChatStatus = "idle" | "running" | "waiting";
 
 /** A tab as the browser reports it. */
-export type TabInfo = { id: string; windowId: string; title: string; url: string };
+export type TabInfo = {
+  id: string;
+  windowId: string;
+  title: string;
+  url: string;
+  /** The tab's CDP target id, sent by the browser only; pages never set it. */
+  targetId?: string;
+};
 /** The tab a side chat belongs to. */
 export type TabRef = { id: string; windowId: string };
 

@@ -54,7 +54,12 @@ export function tabRef(value: unknown, name = "tab"): TabRef {
 
 export function tabInfo(value: unknown, name = "tab"): TabInfo {
   const o = object(value, `"${name}"`);
-  return { ...tabRef(o, name), title: text(o.title ?? "", `${name}.title`, 1000), url: text(o.url ?? "", `${name}.url`, 8000) };
+  return {
+    ...tabRef(o, name),
+    title: text(o.title ?? "", `${name}.title`, 1000),
+    url: text(o.url ?? "", `${name}.url`, 8000),
+    ...(o.targetId === undefined ? {} : { targetId: id(o.targetId, `${name}.targetId`) }),
+  };
 }
 
 export function settingsPatch(value: unknown, models: string[]): Partial<ChatSettings> {

@@ -14,7 +14,15 @@ export const ARTIFACT_FORMAT = [
 const MAX_TURN = 2_000;
 const MAX_HISTORY = 24_000;
 
-export type TaskInput = { history: ChatMessage[]; text: string; scope: Scope; tab?: TabInfo; tabs: TabInfo[] };
+export type TaskInput = {
+  history: ChatMessage[];
+  text: string;
+  scope: Scope;
+  tab?: TabInfo;
+  tabs: TabInfo[];
+  /** The agent starts in the user's tab itself rather than having to open it. */
+  inTab?: boolean;
+};
 
 export function buildTask(input: TaskInput): string {
   const parts: string[] = [];
@@ -42,6 +50,9 @@ function earlierTurns(history: ChatMessage[]): string {
 
 function tabContext(input: TaskInput): string {
   const line = (t: TabInfo) => `- ${oneLine(t.title) || "(untitled)"} (${oneLine(t.url)})`;
+  if (input.scope === "current" && input.tab && input.inTab) {
+    return `The user is looking at this tab, and you are already in it: read and act on it directly instead of opening it again.\n${line(input.tab)}`;
+  }
   if (input.scope === "current" && input.tab) {
     return `The user is looking at this tab, which you may open and use:\n${line(input.tab)}`;
   }

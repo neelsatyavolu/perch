@@ -94,7 +94,7 @@ export function sidebarRunner(opts: SidebarRunnerOptions): Runner {
     }
     const session = `sidebar-${randomBytes(12).toString("hex")}`;
     const token = randomBytes(32).toString("base64url");
-    opts.runs.add(session, { token, mode: input.settings.mode, approve: input.approve });
+    opts.runs.add(session, { token, mode: input.settings.mode, approve: input.approve, ...(input.tab?.targetId ? { tab: input.tab.targetId } : {}) });
     const mcp: McpServer = {
       command: opts.perch.command,
       args: [...opts.perch.args, "mcp", "--agent", "Perch", "--title", "Sidebar"],

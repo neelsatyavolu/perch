@@ -1,0 +1,35 @@
+# Perch: Runs and enables Perch's own menu commands.
+diff --git a/chrome/browser/ui/browser_command_controller.cc b/chrome/browser/ui/browser_command_controller.cc
+index afc3f64a97..13177b64ca 100644
+--- a/chrome/browser/ui/browser_command_controller.cc
++++ b/chrome/browser/ui/browser_command_controller.cc
+@@ -2,6 +2,7 @@
+ // Use of this source code is governed by a BSD-style license that can be
+ // found in the LICENSE file.
+ 
++#include "chrome/browser/perch/perch_commands.h"
+ #include "chrome/browser/ui/browser_command_controller.h"
+ 
+ #include <stddef.h>
+@@ -686,6 +687,11 @@ void BrowserCommandController::HandleCommandWithDisposition(
+     base::TimeTicks time_stamp) {
+   DCHECK(IsCommandEnabled(id)) << "Invalid/disabled command " << id;
+ 
++  // Perch: its own commands.
++  if (perch::ExecutePerchCommand(browser_, id)) {
++    return;
++  }
++
+   // LINT.IfChange
+   // ===========================================================================
+   // When adding a new command below, you MUST also create a corresponding
+@@ -1809,6 +1815,9 @@ void BrowserCommandController::InitCommandState() {
+     return;
+   }
+ 
++  // Perch: its own commands.
++  perch::EnablePerchCommands(command_updater_.get());
++
+   // Navigation commands
+   const bool can_reload = CanReload(browser_);
+   command_updater_->UpdateCommandEnabled(IDC_RELOAD, can_reload);

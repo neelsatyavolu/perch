@@ -1,0 +1,55 @@
+# Perch: Hide-chrome mode hides the tab strip, toolbar and bookmarks bar; Cmd-L brings them back.
+diff --git a/chrome/browser/ui/views/frame/browser_view.cc b/chrome/browser/ui/views/frame/browser_view.cc
+index 7b568f6de7..d4ad05fb44 100644
+--- a/chrome/browser/ui/views/frame/browser_view.cc
++++ b/chrome/browser/ui/views/frame/browser_view.cc
+@@ -55,6 +55,7 @@
+ #include "chrome/browser/feature_engagement/tracker_factory.h"
+ #include "chrome/browser/glic/public/features.h"
+ #include "chrome/browser/headless/headless_mode_util.h"
++#include "chrome/browser/perch/hide_chrome/hide_chrome.h"
+ #include "chrome/browser/platform_util.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/profiles/profile_attributes_entry.h"
+@@ -1437,6 +1438,10 @@ bool BrowserView::ShouldDrawTabStrokes() const {
+ }
+ 
+ bool BrowserView::ShouldDrawTabStrip() const {
++  // Perch: hide-chrome mode.
++  if (perch::IsChromeHidden(browser_)) {
++    return false;
++  }
+   // Return false if this window does not normally display a tabstrip or if the
+   // tabstrip is currently hidden, e.g. because we're in fullscreen.
+   if (!WindowFeatureController::From(browser_)->SupportsWindowFeature(
+@@ -2363,6 +2368,8 @@ PinnedToolbarActions* BrowserView::GetPinnedToolbarActions() {
+ }
+ 
+ void BrowserView::SetFocusToLocationBar(bool is_user_initiated) {
++  // Perch: ⌘L brings hidden bars back while the address bar has focus.
++  perch::SetChromeRevealed(browser(), true);
+   // On Windows, changing focus to the location bar causes the browser window to
+   // become active. This can steal focus if the user has another window open
+   // already. On Chrome OS, changing focus makes a view believe it has a focus
+@@ -3040,6 +3047,10 @@ void BrowserView::MaybeShowReadingListInSidePanelIPH() {
+ }
+ 
+ bool BrowserView::IsBookmarkBarVisible() const {
++  // Perch: hide-chrome mode.
++  if (perch::IsChromeHidden(browser_)) {
++    return false;
++  }
+   if (!WindowFeatureController::From(browser_)->SupportsWindowFeature(
+           WindowFeatureController::WindowFeature::kFeatureBookmarkBar)) {
+     return false;
+@@ -3078,6 +3089,10 @@ void BrowserView::DisableTabStripEditingForTesting() {
+ }
+ 
+ bool BrowserView::IsToolbarVisible() const {
++  // Perch: hide-chrome mode.
++  if (perch::IsChromeHidden(browser())) {
++    return false;
++  }
+ #if BUILDFLAG(IS_MAC)
+   // Immersive full screen makes it possible to display the toolbar when
+   // kShowFullscreenToolbar is not set.

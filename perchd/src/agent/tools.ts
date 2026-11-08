@@ -1,5 +1,6 @@
 /** Runs the model's tool calls against the browser. Errors come back as text; nothing throws. */
 
+import { FILL_TOOLS, runFillTool, type FillSites } from "./fill-tools";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
@@ -30,6 +31,8 @@ export type ToolContext = {
   shotScale: number;
   /** The chat's own folder: write_file saves here, and it is removed when the chat ends. */
   workDir: string;
+  /** Sites where the user let the agent sign in (fill-tools.ts); a shared default when unset. */
+  fillSites?: FillSites;
   close(): Promise<void>;
 };
 
@@ -297,6 +300,7 @@ async function dispatch(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
   if (call.name === "done") return { content: String(a.answer), done: true };
   const app = appTool(call.name);
   if (app) return app.run(call.args);
+  if (FILL_TOOLS.has(call.name)) return runFillTool(ctx, call.name);
   if (call.name === "tabs") return { content: await listTabs(ctx) };
   if (call.name === "write_file") {
     // Only a plain file name: no folders, so nothing can be written outside the chat's folder.

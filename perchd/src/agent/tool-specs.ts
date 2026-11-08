@@ -2,6 +2,7 @@
 
 import { APP_TOOLS } from "../apps/index";
 import type { ToolSpec } from "../models/types";
+import { FILL_TOOL_SPECS } from "./fill-tools";
 
 type Prop = { type: "string" | "number" | "boolean" | "array"; description?: string; items?: { type: "string" } };
 
@@ -32,6 +33,7 @@ export const TOOL_SPECS: ToolSpec[] = [
   spec("open_tab", "Open a URL in a new agent tab and make it current.", { url: { type: "string" } }, ["url"]),
   spec("switch_tab", "Make another tab current, by id from tabs.", { id: { type: "string" } }, ["id"]),
   spec("done", "Finish the task with a short answer for the user.", { answer: { type: "string" } }, ["answer"]),
+  ...FILL_TOOL_SPECS,
 ];
 
 const BY_NAME = new Map([...TOOL_SPECS, ...APP_TOOLS.map((t) => t.spec)].map((s) => [s.name, s]));

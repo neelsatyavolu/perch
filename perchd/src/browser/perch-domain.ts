@@ -143,7 +143,30 @@ export async function listLogins(conn: CdpConnection, targetId: string): Promise
 }
 
 export async function fillLogin(conn: CdpConnection, targetId: string, loginId: string): Promise<FillResult> {
-  return fillResult(await conn.send("Perch.fillLogin", { targetId, loginId }));
+  return withFilledFields(conn, targetId, fillResult(await conn.send("Perch.fillLogin", { targetId, loginId })));
+}
+
+/**
+ * The browser marks what it filled with `data-perch-filled` instead of naming node ids; read those
+ * inputs' backend node ids from the tab so the next snapshot hides their values.
+ */
+async function withFilledFields(conn: CdpConnection, targetId: string, filled: FillResult): Promise<FillResult> {
+  if (filled.fields.length || (filled.result !== "filled" && filled.result !== "needs-user")) return filled;
+  const { sessionId } = await conn.send<{ sessionId: string }>("Target.attachToTarget", { targetId, flatten: true });
+  try {
+    const { root } = await conn.send<{ root: { nodeId: number } }>("DOM.getDocument", { depth: 0 }, sessionId);
+    const { nodeIds } = await conn.send<{ nodeIds: number[] }>("DOM.querySelectorAll", { nodeId: root.nodeId, selector: "[data-perch-filled]" }, sessionId);
+    const fields: number[] = [];
+    for (const nodeId of nodeIds.slice(0, 20)) {
+      const { node } = await conn.send<{ node: { backendNodeId: number } }>("DOM.describeNode", { nodeId }, sessionId);
+      if (Number.isInteger(node.backendNodeId)) fields.push(node.backendNodeId);
+    }
+    return { ...filled, fields };
+  } catch {
+    return filled;
+  } finally {
+    await conn.send("Target.detachFromTarget", { sessionId }).catch(() => undefined);
+  }
 }
 
 export async function listCards(conn: CdpConnection, targetId: string): Promise<SavedCard[]> {
@@ -159,7 +182,7 @@ export async function listCards(conn: CdpConnection, targetId: string): Promise<
 }
 
 export async function fillCard(conn: CdpConnection, targetId: string, cardId: string): Promise<FillResult> {
-  return fillResult(await conn.send("Perch.fillCard", { targetId, cardId }));
+  return withFilledFields(conn, targetId, fillResult(await conn.send("Perch.fillCard", { targetId, cardId })));
 }
 
 /** The `chrome.tabs` id of a tab, which the extension needs; CDP only knows target ids. */

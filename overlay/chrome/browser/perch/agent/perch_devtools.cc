@@ -18,6 +18,7 @@
 #include "base/no_destructor.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
+#include "chrome/browser/perch/agent/credential_fill.h"
 #include "chrome/browser/perch/agent/import_bundle.h"
 #include "chrome/browser/perch/agent/perch_domain_data.h"
 #include "chrome/browser/perch/agent/task_status.h"
@@ -139,7 +140,8 @@ Reply GetInfo() {
   for (const char* feature :
        {"setTaskStatus", "revealChat", "askRequested", "getBookmarks",
         "applyBookmarkChanges", "getHistory", "addHistory", "getOpenTabs",
-        "getExtensionTabId", "applyImportBundle"}) {
+        "getExtensionTabId", "applyImportBundle", "listLogins", "fillLogin",
+        "listCards", "fillCard"}) {
     features.Append(feature);
   }
   result.Set("features", std::move(features));
@@ -284,6 +286,9 @@ Reply Dispatch(std::string_view method, const base::DictValue& params) {
   if (method == "getOpenTabs") {
     return FromData(GetOpenTabs(AgentProfile()));
   }
+  if (method == "listCards") {
+    return FromData(ListCards(params));
+  }
   if (method == "getExtensionTabId") {
     return FromData(GetExtensionTabId(params));
   }
@@ -368,21 +373,28 @@ bool MaybeHandleCommand(content::DevToolsAgentHostClientChannel* channel,
   const int call_id = dispatchable.CallId();
   // Methods that answer later; the reply goes out only while the channel is
   // still perchd's.
+  auto later = base::BindOnce(
+      [](content::DevToolsAgentHostClientChannel* from, int id,
+         DataResult result) {
+        if (g_channel == from) {
+          Send(from, id, FromData(std::move(result)));
+        }
+      },
+      channel, call_id);
   if (name == "getHistory" || name == "applyImportBundle") {
     if (!AgentProfile()) {
       Send(channel, call_id, Fail(kServerError, "No profile"));
       return true;
     }
     auto run = name == "getHistory" ? &GetHistory : &ApplyImportBundle;
-    run(AgentProfile(), params,
-               base::BindOnce(
-                   [](content::DevToolsAgentHostClientChannel* from, int id,
-                      DataResult result) {
-                     if (g_channel == from) {
-                       Send(from, id, FromData(std::move(result)));
-                     }
-                   },
-                   channel, call_id));
+    run(AgentProfile(), params, std::move(later));
+    return true;
+  }
+  if (name == "listLogins" || name == "fillLogin" || name == "fillCard") {
+    auto run = name == "listLogins"  ? &ListLogins
+               : name == "fillLogin" ? &FillLogin
+                                     : &FillCard;
+    run(params, std::move(later));
     return true;
   }
   Send(channel, call_id, Dispatch(name, params));

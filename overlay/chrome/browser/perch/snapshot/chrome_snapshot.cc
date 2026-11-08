@@ -26,7 +26,13 @@
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
 #include "chrome/browser/performance_manager/policies/memory_saver_mode_policy.h"
+#include "chrome/browser/perch/agent/credential_fill.h"
 #include "chrome/browser/perch/agent/import_bundle.h"
+#include "chrome/browser/autofill/personal_data_manager_factory.h"
+#include "components/autofill/core/browser/data_manager/payments/payments_data_manager.h"
+#include "components/autofill/core/browser/data_manager/personal_data_manager.h"
+#include "components/autofill/core/browser/data_model/payments/credit_card.h"
+#include "content/public/browser/render_frame_host.h"
 #include "chrome/browser/perch/agent/perch_domain_data.h"
 #include "chrome/browser/perch/agent/task_status.h"
 #include "chrome/browser/perch/command_bar/command_bar.h"
@@ -216,6 +222,63 @@ class Snapshotter {
                          << (result.has_value() ? result->DebugString()
                                                 : result.error());
           }));
+    } else if (state == "fill-open") {
+      browser_->GetTabStripModel()->GetActiveWebContents()->GetController()
+          .LoadURL(GURL("data:text/html,<form><input autocomplete=cc-number>"
+                        "<input autocomplete=cc-exp>"
+                        "<input autocomplete=cc-csc></form>"),
+                   content::Referrer(), ui::PAGE_TRANSITION_TYPED,
+                   std::string());
+    } else if (state == "fill") {
+      // A saved card, listed by last four and filled into the page.
+      content::WebContents* page =
+          browser_->GetTabStripModel()->GetActiveWebContents();
+      autofill::CreditCard card;
+      card.SetRawInfo(autofill::CREDIT_CARD_NUMBER, u"4111111111111111");
+      card.SetRawInfo(autofill::CREDIT_CARD_NAME_FULL, u"Test Person");
+      card.SetExpirationMonth(12);
+      card.SetExpirationYear(2030);
+      autofill::PersonalDataManagerFactory::GetForBrowserContext(
+          page->GetBrowserContext())
+          ->payments_data_manager()
+          .AddCreditCard(card);
+    } else if (state == "fill-run") {
+      content::WebContents* page =
+          browser_->GetTabStripModel()->GetActiveWebContents();
+      const std::string target =
+          content::DevToolsAgentHost::GetOrCreateFor(page)->GetId();
+      DataResult cards = ListCards(base::DictValue().Set("targetId", target));
+      const std::string* id =
+          cards.has_value() && !cards->FindList("cards")->empty()
+              ? (*cards->FindList("cards"))[0].GetDict().FindString("cardId")
+              : nullptr;
+      LOG(WARNING) << "Perch snapshot: cards "
+                   << (cards.has_value() ? cards->DebugString() : cards.error());
+      if (id) {
+        FillCard(base::DictValue().Set("targetId", target).Set("cardId", *id),
+                 base::BindOnce(
+                     [](base::WeakPtr<content::WebContents> page,
+                        DataResult result) {
+                       LOG(WARNING) << "Perch snapshot: fill "
+                                    << (result.has_value()
+                                            ? result->DebugString()
+                                            : result.error());
+                       if (page) {
+                         page->GetPrimaryMainFrame()
+                             ->ExecuteJavaScriptForTests(
+                                 u"[...document.querySelectorAll('input')]"
+                                 u".map(i => i.value.length + ':' + "
+                                 u"i.hasAttribute('data-perch-filled'))"
+                                 u".join(' ')",
+                                 base::BindOnce([](base::Value v) {
+                                   LOG(WARNING) << "Perch snapshot: fields "
+                                                << v.DebugString();
+                                 }),
+                                 content::ISOLATED_WORLD_ID_GLOBAL);
+                       }
+                     },
+                     page->GetWeakPtr()));
+      }
     } else if (state == "command-bar") {
       ExecutePerchCommand(browser_, IDC_PERCH_COMMAND_BAR);
       QueryCommandBar(browser_->GetProfile(), "histor",

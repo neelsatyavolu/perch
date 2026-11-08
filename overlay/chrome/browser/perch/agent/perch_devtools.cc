@@ -18,6 +18,7 @@
 #include "base/no_destructor.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
+#include "chrome/browser/perch/agent/import_bundle.h"
 #include "chrome/browser/perch/agent/perch_domain_data.h"
 #include "chrome/browser/perch/agent/task_status.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
@@ -138,7 +139,7 @@ Reply GetInfo() {
   for (const char* feature :
        {"setTaskStatus", "revealChat", "askRequested", "getBookmarks",
         "applyBookmarkChanges", "getHistory", "addHistory", "getOpenTabs",
-        "getExtensionTabId"}) {
+        "getExtensionTabId", "applyImportBundle"}) {
     features.Append(feature);
   }
   result.Set("features", std::move(features));
@@ -367,12 +368,13 @@ bool MaybeHandleCommand(content::DevToolsAgentHostClientChannel* channel,
   const int call_id = dispatchable.CallId();
   // Methods that answer later; the reply goes out only while the channel is
   // still perchd's.
-  if (name == "getHistory") {
+  if (name == "getHistory" || name == "applyImportBundle") {
     if (!AgentProfile()) {
       Send(channel, call_id, Fail(kServerError, "No profile"));
       return true;
     }
-    GetHistory(AgentProfile(), params,
+    auto run = name == "getHistory" ? &GetHistory : &ApplyImportBundle;
+    run(AgentProfile(), params,
                base::BindOnce(
                    [](content::DevToolsAgentHostClientChannel* from, int id,
                       DataResult result) {

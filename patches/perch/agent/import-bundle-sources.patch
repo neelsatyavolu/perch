@@ -1,0 +1,14 @@
+# Perch: builds the import bundle applier.
+diff --git a/chrome/browser/ui/browser_window/internal/BUILD.gn b/chrome/browser/ui/browser_window/internal/BUILD.gn
+index 4dda2b800f..2a3456e161 100644
+--- a/chrome/browser/ui/browser_window/internal/BUILD.gn
++++ b/chrome/browser/ui/browser_window/internal/BUILD.gn
+@@ -98,6 +98,8 @@ source_set("internal") {
+       "//chrome/browser/perch/perch_commands.h",
+       "//chrome/browser/perch/perch_menu_mac.h",
+       "//chrome/browser/perch/perch_menu_mac.mm",
++      "//chrome/browser/perch/agent/import_bundle.cc",
++      "//chrome/browser/perch/agent/import_bundle.h",
+       "//chrome/browser/perch/agent/perch_domain_data.cc",
+       "//chrome/browser/perch/agent/perch_domain_data.h",
+       "//chrome/browser/perch/agent/task_status.cc",

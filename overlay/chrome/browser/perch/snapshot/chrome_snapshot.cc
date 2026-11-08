@@ -21,10 +21,12 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
+#include "base/threading/thread_restrictions.h"
 #include "base/time/time.h"
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
 #include "chrome/browser/performance_manager/policies/memory_saver_mode_policy.h"
+#include "chrome/browser/perch/agent/import_bundle.h"
 #include "chrome/browser/perch/agent/perch_domain_data.h"
 #include "chrome/browser/perch/agent/task_status.h"
 #include "chrome/browser/perch/command_bar/command_bar.h"
@@ -189,6 +191,31 @@ class Snapshotter {
                            ->GetId()},
                       std::string());
       }
+    } else if (state == "import") {
+      // A small bundle in the folder perchd uses, applied as perchd would.
+      base::FilePath dir = browser_->GetProfile()->GetPath().DirName()
+                               .AppendASCII("Perch Import")
+                               .AppendASCII("applying");
+      base::ScopedAllowBlockingForTesting allow;
+      base::CreateDirectory(dir);
+      const base::FilePath file = dir.AppendASCII("test.json");
+      base::WriteFile(file, R"({"version":1,"id":"t","created":0,
+        "source":{"browser":"Safari","profile":"Default"},
+        "data":{"bookmarks":{"bar":[{"kind":"url","title":"Example",
+        "url":"https://example.com/"}],"other":[],"mobile":[]},
+        "history":[{"url":"https://example.org/","title":"Org",
+        "visitCount":3,"typedCount":1,"lastVisit":1700000000000}],
+        "searchEngines":[{"name":"Kagi","keyword":"kagi",
+        "url":"https://kagi.com/search?q={searchTerms}","isDefault":false}],
+        "extensions":[{"id":"x","name":"X","version":"1"}]}})");
+      ApplyImportBundle(
+          browser_->GetProfile(),
+          base::DictValue().Set("path", file.value()),
+          base::BindOnce([](DataResult result) {
+            LOG(WARNING) << "Perch snapshot: import "
+                         << (result.has_value() ? result->DebugString()
+                                                : result.error());
+          }));
     } else if (state == "command-bar") {
       ExecutePerchCommand(browser_, IDC_PERCH_COMMAND_BAR);
       QueryCommandBar(browser_->GetProfile(), "histor",

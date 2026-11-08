@@ -23,6 +23,7 @@
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "components/sessions/content/session_tab_helper.h"
 #include "components/tabs/public/tab_interface.h"
+#include "content/public/browser/browser_context.h"
 #include "content/public/browser/devtools_agent_host.h"
 #include "content/public/browser/storage_partition.h"
 #include "content/public/browser/web_contents.h"
@@ -137,6 +138,10 @@ base::DictValue TabInfo(const std::string& window_id,
   if (contents) {
     info.Set("targetId",
              content::DevToolsAgentHost::GetOrCreateFor(contents)->GetId());
+    // Private tabs get private chats, which end with the last of them.
+    if (contents->GetBrowserContext()->IsOffTheRecord()) {
+      info.Set("incognito", true);
+    }
   }
   return info;
 }

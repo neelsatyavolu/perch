@@ -14,6 +14,7 @@ import { allowsModel, MODEL_NOT_ALLOWED, type PolicyError } from "../../policy/p
 import type { PolicyWatcher } from "../../policy/watch";
 import { providerAllowed } from "./models";
 import type { Browser } from "../../browser/browser";
+import { PerchDomain } from "../../browser/perch-domain";
 import type { CdpConnection } from "../../cdp/connection";
 import { systemKeychain } from "../../config/keychain";
 import { SettingsStore } from "../../config/store";
@@ -155,7 +156,7 @@ export function openPageServices(opts: PageServicesOptions): PageServices {
         ...(opts.policy ? { policy: opts.policy } : {}),
         ...(opts.policyProblems ? { policyProblems: opts.policyProblems } : {}),
         data: () => data.catch((error: Error) => Promise.reject(new AppError(`Perch couldn't open memory and routines: ${error.message}`, 503))),
-        importer: { home, target: { userDataDir: opts.userDataDir }, keychain: importKeychain(), running: opts.conn },
+        importer: { home, target: { userDataDir: opts.userDataDir }, keychain: importKeychain(), running: opts.conn, browser: new PerchDomain(opts.conn) },
       }),
     async stop() {
       await manager.close();

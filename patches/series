@@ -23,4 +23,11 @@ perch/shell/new-tab-page.patch
 perch/policy/no-test-policies-in-release.patch
 perch/policy/ignored-google-policies.patch
 perch/policy/update-policy.patch
+perch/shell/layout-constants.patch
+perch/shell/tab-strip.patch
+perch/shell/browser-window-sources.patch
+perch/shell/hide-chrome.patch
+perch/shell/perch-commands.patch
+perch/shell/incognito-downloads.patch
+perch/shell/component-extension-rulesets.patch
 perch/build/thinlto-jobs.patch

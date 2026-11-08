@@ -43,7 +43,9 @@ export function fakeClient(): FakeClient {
       return record("patchChat", [id, patch], next);
     },
     deleteChat: (id: string) => record("deleteChat", [id], { removed: id }),
-    send: (id: string, text: string, context?: TabInfo) => record("send", [id, text, context], { runId: "r1", message: { id: `m${++n}`, role: "user" as const, text, time: new Date().toISOString() } }),
+    send: (id: string, text: string, context?: TabInfo, extras?: { files?: string[]; mentions?: string[] }) =>
+      record("send", extras ? [id, text, context, extras] : [id, text, context], { runId: "r1", message: { id: `m${++n}`, role: "user" as const, text, time: new Date().toISOString() } }),
+    tabs: () => record("tabs", [], [...windows.values()].flatMap((w) => (w.tab ? [w.tab] : []))),
     cancel: (id: string) => record("cancel", [id], { stopped: true }),
     branch: (id: string, messageId: string) => record("branch", [id, messageId], newChat({ title: "Branch" })),
     exportChat: (id: string) => record("exportChat", [id], "# chat"),

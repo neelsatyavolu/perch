@@ -142,6 +142,15 @@ button.artifact-card:hover { background: var(--hover); }
 .ib.send:not(:disabled) { background: var(--btn-bg); color: var(--btn-fg); }
 .ib.send:hover:not(:disabled) { background: var(--btn-bg); color: var(--btn-fg); opacity: 0.86; }
 .under { display: flex; align-items: center; gap: 4px; padding: 0 12px 12px; color: var(--mute); font-size: 12px; min-width: 0; }
+.composer { position: relative; }
+.me-files { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.composer .menu.mentions { left: 0; right: 0; max-width: none; }
+.files { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip.file { padding-left: 8px; padding-right: 2px; max-width: 220px; }
+.chip.file .ib.x { width: 20px; height: 20px; }
+.cnote { color: var(--mute); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* The live thumbnail: what the agent's tab shows now, small and quiet above the composer. */
+.live-thumb { display: block; width: 120px; max-height: 90px; object-fit: cover; object-position: top; margin: 0 12px 8px auto; border: 1px solid var(--hair-strong); border-radius: var(--r-chip); background: var(--raised); }
 
 /* Sidebar */
 .side { height: 100%; display: flex; flex-direction: column; background: var(--canvas); min-height: 0; }

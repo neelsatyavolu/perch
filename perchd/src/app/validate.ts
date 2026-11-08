@@ -100,6 +100,7 @@ export function tabInfo(value: unknown, name = "tab"): TabInfo {
     title: text(o.title ?? "", `${name}.title`, 1000),
     url: text(o.url ?? "", `${name}.url`, 8000),
     ...(o.targetId === undefined ? {} : { targetId: id(o.targetId, `${name}.targetId`) }),
+    ...(o.incognito === true ? { incognito: true } : {}),
   };
 }
 

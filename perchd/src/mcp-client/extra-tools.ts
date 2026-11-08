@@ -3,7 +3,7 @@
  * classified, approved when the mode asks for it, and written to the audit log.
  */
 
-import type { AuditLog } from "../agent/audit";
+import type { AuditWriter } from "../agent/audit";
 import { needsApproval, type Kind, type Mode } from "../agent/permissions";
 import { DECLINED, type ApprovalRequest } from "../agent/session";
 import type { ToolResult } from "../agent/tools";
@@ -33,7 +33,7 @@ export type ExtraTools = {
   run(call: ToolCall, signal: AbortSignal): Promise<ToolResult>;
 };
 
-export type ExtraPolicy = { mode: Mode; approve: (request: ApprovalRequest) => Promise<boolean>; audit: AuditLog; client?: string };
+export type ExtraPolicy = { mode: Mode; approve: (request: ApprovalRequest) => Promise<boolean>; audit: AuditWriter; client?: string };
 
 export type ExtraEvent = { type: "approval"; request: ApprovalRequest } | { type: "step"; label: string };
 

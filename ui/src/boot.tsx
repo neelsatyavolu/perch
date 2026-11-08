@@ -6,13 +6,13 @@
 import { render } from "preact";
 import { createClient } from "./api/client";
 import { readConfig, type AccentId, type HostConfig, type ThemeId } from "./api/config";
-import type { SidebarHost } from "./pages/sidebar";
+import { createFrameHost, type PageHost } from "./host/frame-host";
 import { applyTheme } from "./theme/theme";
 
 declare global {
   interface Window {
     perchApp?: HostConfig;
-    perchHost?: SidebarHost;
+    perchHost?: PageHost;
   }
 }
 
@@ -31,10 +31,12 @@ export async function boot(page: "sidebar" | "chat"): Promise<void> {
     cleanup = applyTheme(document.documentElement, detail.theme, detail.accent);
   });
   const client = createClient(config.api, config.token);
+  // Framed by Perch's trusted shell, host calls go to it over postMessage; otherwise config.js may set one.
+  const host = window.perchHost ?? createFrameHost(window);
   if (page === "sidebar") {
     const { Sidebar } = await import("./pages/sidebar");
     const fallbackTab = config.tabId ? { id: config.tabId, windowId: config.windowId, title: "", url: "" } : null;
-    render(<Sidebar client={client} windowId={config.windowId} fallbackTab={fallbackTab} host={window.perchHost} />, root);
+    render(<Sidebar client={client} windowId={config.windowId} fallbackTab={fallbackTab} host={host} />, root);
   } else {
     const { FullChat } = await import("./pages/full-chat");
     const params = new URLSearchParams(location.search);
@@ -45,6 +47,6 @@ export async function boot(page: "sidebar" | "chat"): Promise<void> {
       url.searchParams.delete("ask");
       history.replaceState(null, "", url);
     };
-    render(<FullChat client={client} initialChat={params.get("chat")} initialAsk={params.get("ask")} onNavigate={navigate} />, root);
+    render(<FullChat client={client} initialChat={params.get("chat")} initialAsk={params.get("ask")} onNavigate={navigate} host={host} />, root);
   }
 }

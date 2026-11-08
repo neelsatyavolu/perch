@@ -1,11 +1,13 @@
 /** The app API's routes. Each handler gets checked input and returns JSON (or text for export). */
 
 import type { ArtifactServer } from "./artifact-server";
+import type { FileRegistry } from "./attachments";
 import type { ArtifactStore } from "./artifacts";
 import type { Windows } from "./app";
 import type { ChatStore } from "./chats";
 import type { PagesApi } from "./pages-api";
 import type { AppInfo, ArtifactKind, Chat, ChatSettings, TabInfo } from "./protocol";
+import { checkSameKind, endPrivateChats, isPrivateTab } from "./incognito";
 import { AppError, type RunManager } from "./runs";
 import * as v from "./validate";
 
@@ -20,6 +22,8 @@ export type RouteContext = {
   readonly defaults: ChatSettings;
   /** Perch's own pages (pages-api.ts); null when this app does not serve them. */
   pages: PagesApi | null;
+  /** Files the user attached through the browser's open panel. */
+  files: FileRegistry;
 };
 
 type Handler = (ctx: RouteContext, params: string[], body: unknown, query: URLSearchParams) => Promise<unknown> | unknown;
@@ -50,12 +54,13 @@ async function sideChat(ctx: RouteContext, tabId: string, body: unknown) {
   const o = v.object(body);
   v.onlyKeys(o, ["chatId", "windowId", "settings"]);
   const tab = { id: tabId, windowId: v.id(o.windowId, "windowId") };
+  const incognito = isPrivateTab(ctx.windows, tabId);
   if (o.chatId !== undefined) {
-    chatOf(ctx, v.id(o.chatId, "chatId"));
+    checkSameKind(chatOf(ctx, v.id(o.chatId, "chatId")), incognito);
     return announced(ctx, await ctx.chats.attach(String(o.chatId), tab));
   }
   const settings = o.settings === undefined ? {} : v.settingsPatch(o.settings, ctx.models);
-  return announced(ctx, await ctx.chats.create({ tab, settings: { ...ctx.defaults, ...settings } }));
+  return announced(ctx, await ctx.chats.create({ tab, settings: { ...ctx.defaults, ...settings }, incognito }));
 }
 
 /** A page's tab with the target id the browser reported for it; a page never picks the target. */
@@ -165,9 +170,24 @@ export const ROUTES: Route[] = [
   }),
   route("POST", "/api/chats/:id/messages", (ctx, [id], body) => {
     const o = v.object(body);
-    v.onlyKeys(o, ["text", "context"]);
-    return ctx.runs.send(id!, v.text(o.text, "text", 50_001), o.context === undefined ? undefined : reported(ctx, v.tabInfo(o.context, "context")));
+    v.onlyKeys(o, ["text", "context", "files", "mentions"]);
+    const files = o.files === undefined ? [] : v.list(o.files, "files", 20).map((f, i) => ctx.files.resolve(v.id(f, `files[${i}]`)));
+    // A mention names a tab the browser reported; a page never invents one.
+    const mentions = o.mentions === undefined ? [] : v.list(o.mentions, "mentions", 10).map((t, i) => {
+      const tab = ctx.windows.tab(v.id(t, `mentions[${i}]`));
+      if (!tab) throw new AppError("That tab is closed. Pick it again with @");
+      return tab;
+    });
+    return ctx.runs.send(id!, v.text(o.text, "text", 50_001), o.context === undefined ? undefined : reported(ctx, v.tabInfo(o.context, "context")), { files, mentions });
   }),
+  // The browser registers the files the user picked in its open panel; the page gets ids only.
+  browserRoute("POST", "/api/files", (ctx, _, body) => {
+    const o = v.object(body);
+    v.onlyKeys(o, ["paths"]);
+    return { files: ctx.files.register(v.list(o.paths, "paths", 20).map((p, i) => v.text(p, `paths[${i}]`, 4096))) };
+  }),
+  // The @ menu: every tab the browser reported, without its CDP target.
+  route("GET", "/api/tabs", (ctx) => ctx.windows.tabs().map(({ targetId: _, ...tab }) => tab)),
   route("POST", "/api/chats/:id/cancel", (ctx, [id]) => ({ stopped: ctx.runs.cancel(chatOf(ctx, id!).id) })),
   route("POST", "/api/chats/:id/branch", (ctx, [id], body) => {
     const o = v.object(body);
@@ -223,6 +243,8 @@ export const ROUTES: Route[] = [
     if (!ctx.pages) throw new AppError("not found", 404);
     return ctx.pages.call(method!, body);
   }),
+  // The browser's perch-artifact:// loader (plan 3b task 12): perch-artifact://<id>/<version>.
+  browserRoute("GET", "/api/artifact-frames/:id/(\\d{1,5})", (ctx, [id, version]) => ctx.artifactServer.serve(id!, Number(version))),
   browserRoute("POST", "/api/windows/:id/active", (ctx, [id], body) => {
     const o = v.object(body);
     v.onlyKeys(o, ["tab"]);
@@ -246,6 +268,7 @@ export const ROUTES: Route[] = [
     ctx.windows.replace(tabs);
     const released = await ctx.chats.keepTabs(new Set(tabs.map((t) => t.id)));
     for (const chatId of released) ctx.runs.announce(chatId);
+    await endPrivateChats(ctx);
     return { released };
   }),
   browserRoute("PATCH", "/api/tabs/:id", (ctx, [id], body) => {
@@ -256,7 +279,9 @@ export const ROUTES: Route[] = [
   }),
   browserRoute("DELETE", "/api/tabs/:id", async (ctx, [id]) => {
     ctx.windows.forget(id!);
-    return { chat: (await ctx.chats.releaseTab(id!)) ?? null };
+    const chat = (await ctx.chats.releaseTab(id!)) ?? null;
+    await endPrivateChats(ctx);
+    return { chat: chat && ctx.chats.get(chat.id) ? chat : null };
   }),
 ];
 

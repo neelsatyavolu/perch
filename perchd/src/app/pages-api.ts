@@ -19,6 +19,7 @@ import { capMode } from "../policy/policy";
 import { profilePages } from "./pages/profile";
 import { routinesPages } from "./pages/routines";
 import { skillsPages } from "./pages/skills";
+import { syncPages } from "./pages/sync";
 import { policyOf, type ApiMethod, type Methods } from "./pages/common";
 import { AppError } from "./runs";
 import * as v from "./validate";
@@ -29,6 +30,9 @@ export const BROWSER_METHODS = [
   "openPage", "chooseFile", "openFullDiskAccess", "getAbout", "checkForUpdates", "installUpdate", "setAutoUpdate",
   "submitQuery", "openChat", "newChat",
   "listBuiltInExtensions", "setBuiltInExtension",
+  "getMemorySaver", "setMemorySaver", "addSleepRule", "listTabMemory",
+  "queryCommandBar", "runCommandBarItem", "closeCommandBar",
+  "revealRecoveryKey",
 ] as const satisfies readonly ApiMethod[];
 
 export type PerchdMethod = Exclude<(typeof API_METHODS)[number], (typeof BROWSER_METHODS)[number]>;
@@ -44,6 +48,7 @@ const ARITY: Partial<Record<PerchdMethod, number>> = {
   startProfileBuild: 2, saveProfileDraft: 1,
   saveRoutine: 1, setRoutineEnabled: 2, deleteRoutine: 1, runRoutine: 1, acceptProposal: 1, dismissProposal: 1,
   startImport: 1, getJob: 1, completeOnboardingStep: 1,
+  checkSyncPairing: 1, removeSyncDevice: 1,
 };
 
 export type PagesApi = { call(method: string, args: unknown): Promise<unknown> };
@@ -63,6 +68,7 @@ export function createPagesApi(deps: PagesDeps): PagesApi {
     ...profileMethods,
     ...routinesPages(deps),
     ...importPages(deps),
+    ...syncPages(deps),
     getJob: async ([id]) => deps.jobs.get(v.text(id, "id", 100)),
   } satisfies Methods<PerchdMethod>;
   const known = new Set<string>(PERCHD_METHODS);

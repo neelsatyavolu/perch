@@ -11,10 +11,11 @@ import { Permissions } from "./Permissions";
 import { Privacy } from "./Privacy";
 import { SECTIONS, type SectionId, isSection, searchSettings, sectionLabel } from "./sections";
 import { SkillsMcp } from "./SkillsMcp";
+import { Sync } from "./Sync";
 import "./settings.css";
 
 const PAGES: Readonly<Record<SectionId, ComponentType>> = {
-  appearance: Appearance, models: Models, skills: SkillsMcp, permissions: Permissions, privacy: Privacy, performance: Performance, builtin: BuiltIn,
+  appearance: Appearance, models: Models, skills: SkillsMcp, permissions: Permissions, privacy: Privacy, performance: Performance, sync: Sync, builtin: BuiltIn,
   memory: MemorySection, routines: RoutinesSection, import: ImportSection, about: About,
 };
 

@@ -22,6 +22,10 @@ export type TaskInput = {
   tabs: TabInfo[];
   /** The agent starts in the user's tab itself rather than having to open it. */
   inTab?: boolean;
+  /** Tabs the user named with @ in this message. */
+  mentions?: TabInfo[];
+  /** Files the user attached to this message: names and paths on this Mac. */
+  files?: { name: string; path: string }[];
 };
 
 export function buildTask(input: TaskInput): string {
@@ -30,8 +34,10 @@ export function buildTask(input: TaskInput): string {
   if (earlier) parts.push(`Earlier in this chat:\n${earlier}`);
   const tabs = tabContext(input);
   if (tabs) parts.push(tabs);
+  const extra = [mentionContext(input.mentions ?? []), fileContext(input.files ?? [])].filter(Boolean).join("\n\n");
+  if (extra) parts.push(extra);
   parts.push(ARTIFACT_FORMAT);
-  parts.push(earlier || tabs ? `Now the user asks:\n${input.text}` : input.text);
+  parts.push(earlier || tabs || extra ? `Now the user asks:\n${input.text}` : input.text);
   return parts.join("\n\n");
 }
 
@@ -60,6 +66,16 @@ function tabContext(input: TaskInput): string {
     return `The user's open tabs, which you may open and use:\n${input.tabs.slice(0, 50).map(line).join("\n")}`;
   }
   return "";
+}
+
+function mentionContext(tabs: TabInfo[]): string {
+  if (!tabs.length) return "";
+  return `The user points you to these tabs, which you may open and use:\n${tabs.map((t) => `- ${oneLine(t.title) || "(untitled)"} (${oneLine(t.url)})`).join("\n")}`;
+}
+
+function fileContext(files: { name: string; path: string }[]): string {
+  if (!files.length) return "";
+  return `The user attached these files from their Mac (read them, or upload them where the task needs it):\n${files.map((f) => `- ${oneLine(f.name)}: ${oneLine(f.path)}`).join("\n")}`;
 }
 
 function oneLine(text: string): string {

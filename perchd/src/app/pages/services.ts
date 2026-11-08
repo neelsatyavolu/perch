@@ -8,11 +8,13 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { AuditLog, type AuditSink } from "../../agent/audit";
+import { vaultAuditSealer } from "../../agent/audit-seal";
 import type { PerchPaths } from "../../daemon/paths";
 import { allowsModel, MODEL_NOT_ALLOWED, type PolicyError } from "../../policy/policy";
 import type { PolicyWatcher } from "../../policy/watch";
 import { providerAllowed } from "./models";
 import type { Browser } from "../../browser/browser";
+import { PerchDomain } from "../../browser/perch-domain";
 import type { CdpConnection } from "../../cdp/connection";
 import { systemKeychain } from "../../config/keychain";
 import { SettingsStore } from "../../config/store";
@@ -31,10 +33,12 @@ import type { Model } from "../../models/types";
 import { openPerchData, type PerchData } from "../../routines/service";
 import { MacKeychain, type SecretStore } from "../../secure/keychain";
 import { SkillStore } from "../../skills/store";
+import { startBrowserSync } from "../../sync/browser-sync";
 import type { PagesCore, Windows } from "../app";
 import type { ChatStore } from "../chats";
 import { createPagesApi, type PagesApi } from "../pages-api";
-import { AppError } from "../runs";
+import { wakeChat } from "../heartbeat";
+import { AppError, type RunManager } from "../runs";
 import type { Vault } from "../vault";
 import { Jobs } from "./jobs";
 import { PagesState } from "./state";
@@ -64,12 +68,16 @@ export type ServiceSecrets = {
   importer: ImportKeychain;
 };
 
-/** The profile's audit log, with every older log merged in on first use (spec 7.4). */
-export function profileAuditLog(userDataDir: string, home: PerchPaths, mirror?: AuditSink): AuditLog {
+/**
+ * The profile's audit log, with every older log merged in on first use (spec 7.4). With the
+ * profile's vault, each record is sealed on its own (spec 11.1).
+ */
+export function profileAuditLog(userDataDir: string, home: PerchPaths, mirror?: AuditSink, vault?: Vault): AuditLog {
   const base = join(userDataDir, "Perch Agent");
   return new AuditLog(join(base, "audit.jsonl"), {
     legacy: [join(base, "sidebar-audit.jsonl"), home.auditFile, ...home.legacyAuditFiles],
     ...(mirror ? { mirror } : {}),
+    ...(vault ? { sealer: vaultAuditSealer(vault) } : {}),
   });
 }
 
@@ -81,7 +89,7 @@ export type PageServices = {
   /** Memory for a sidebar chat. */
   chatMemory: () => Promise<Awaited<ReturnType<PerchData["chatMemory"]>>>;
   /** Hands over the app's chats and windows, for building the memory profile. */
-  attach(app: { chats: ChatStore; windows: Windows }): void;
+  attach(app: { chats: ChatStore; windows: Windows; runs?: RunManager }): void;
   stop(): Promise<void>;
 };
 
@@ -100,7 +108,7 @@ export function openPageServices(opts: PageServicesOptions): PageServices {
   let registry: Promise<ModelRegistry> | null = null;
   const models = () => (registry ??= SettingsStore.open({ dir: base, keychain: settingsKeychain }).then((store) => createModelRegistry({ store, keychain: settingsKeychain })));
 
-  let app: { chats: ChatStore; windows: Windows } | null = null;
+  let app: { chats: ChatStore; windows: Windows; runs?: RunManager } | null = null;
   const data = openPerchData({
     dataDir: base,
     profile: opts.profile,
@@ -118,6 +126,8 @@ export function openPageServices(opts: PageServicesOptions): PageServices {
     },
     browser: async () => opts.browser,
     audit: opts.audit,
+    wakeChat: async (chatId, task, signal) =>
+      app?.runs ? wakeChat({ chats: app.chats, runs: app.runs }, chatId, task, signal) : { status: "error", answer: "Perch's chats aren't open yet." },
     ...(opts.policy ? { policy: opts.policy } : {}),
     setupInputs: () => ({
       history: () => readChromiumHistory(profileDir, { now: new Date() }),
@@ -136,6 +146,9 @@ export function openPageServices(opts: PageServicesOptions): PageServices {
   const manager = new McpManager({ store: mcpStore, keychain: secrets, env: opts.env, openUrl, approveLaunch: (r) => confirm(describeLaunch(r)) });
   void manager.start().catch((error: Error) => process.stderr.write(`perchd: MCP servers did not start: ${error.message}\n`));
   const home = opts.env.HOME || homedir();
+  const domain = new PerchDomain(opts.conn);
+  // Bookmarks, history and open tabs sync every 15 minutes while sync is on (plan 3b task 14).
+  const browserSync = startBrowserSync({ domain, dataDir: base, ...(opts.policy ? { policy: opts.policy } : {}) });
 
   return {
     sidebarAudit: opts.audit.path,
@@ -158,9 +171,11 @@ export function openPageServices(opts: PageServicesOptions): PageServices {
         ...(opts.policy ? { policy: opts.policy } : {}),
         ...(opts.policyProblems ? { policyProblems: opts.policyProblems } : {}),
         data: () => data.catch((error: Error) => Promise.reject(new AppError(`Perch couldn't open memory and routines: ${error.message}`, 503))),
-        importer: { home, target: { userDataDir: opts.userDataDir }, keychain: opts.secrets?.importer ?? importKeychain(), running: opts.conn },
+        importer: { home, target: { userDataDir: opts.userDataDir }, keychain: opts.secrets?.importer ?? importKeychain(), running: opts.conn, browser: domain },
+        sync: browserSync.sync,
       }),
     async stop() {
+      browserSync.stop();
       await manager.close();
       (await data.catch(() => null))?.stop();
       if (registry) (await registry.catch(() => null))?.dispose();

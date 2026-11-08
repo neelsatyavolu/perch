@@ -18,6 +18,11 @@ export class Browser {
    * user's window and are held drawing (`Perch.claimTab`) instead of getting windows of their own.
    */
   perch = false;
+  /**
+   * What this Perch build supports beyond the domain's commands, from `Perch.getInfo`'s
+   * `features`: "perch-artifact" (the artifact scheme and its loader), for example.
+   */
+  features: ReadonlySet<string> = new Set();
 
   private constructor(readonly conn: CdpConnection) {
     conn.on("Target.targetCreated", (p: { targetInfo: { targetId: string; type: string; openerId?: string } }) => {
@@ -48,7 +53,9 @@ export class Browser {
     await conn.send("Browser.getVersion");
     await conn.send("Target.setDiscoverTargets", { discover: true });
     const browser = new Browser(conn);
-    browser.perch = await conn.send<{ perch?: boolean }>("Perch.getInfo").then((r) => r.perch === true, () => false);
+    const info = await conn.send<{ perch?: boolean; features?: unknown }>("Perch.getInfo").catch(() => null);
+    browser.perch = info?.perch === true;
+    browser.features = new Set(Array.isArray(info?.features) ? info.features.filter((f): f is string => typeof f === "string") : []);
     return browser;
   }
 

@@ -14,9 +14,10 @@ import { Menu } from "../components/menu";
 import { Thread } from "../components/thread";
 import { applyToList } from "../state/chat";
 import { useChat } from "../state/use-chat";
+import type { PageHost } from "../host/frame-host";
 
 /** What the browser offers the sidebar page; absent in development. */
-export type SidebarHost = { close?: () => void; openTab?: (url: string) => void };
+export type SidebarHost = PageHost;
 
 type Props = { client: Client; windowId: string; fallbackTab?: TabInfo | null; host?: SidebarHost };
 
@@ -130,7 +131,10 @@ export function Sidebar({ client, windowId, fallbackTab = null, host }: Props) {
       <Composer
         draft={chat.draft}
         onDraft={chat.setDraft}
-        onSend={(text) => void chat.send(text, tab ?? undefined, () => attach())}
+        onSend={(text, extras) => void chat.send(text, tab ?? undefined, () => attach(), extras)}
+        host={host}
+        listTabs={() => client.tabs()}
+        frame={chat.frame}
         onStop={() => void chat.stop()}
         running={Boolean(view.run)}
         tab={tab}

@@ -75,3 +75,12 @@ test("config comes from the host object or the URL fragment, and the token leave
   expect(readConfig({ href: "http://127.0.0.1:5000/ui/chat.html", replace: () => {} })).toBeNull();
   expect(readConfig({ href: "http://x/#token=t&theme=neon", replace: () => {} })!.theme).toBe("ink");
 });
+
+test("a card held for an outside agent shows in an idle chat and leaves when answered", () => {
+  let v: ChatView = { ...emptyView, chat };
+  const held = { ...card, runId: "held-1" };
+  v = applyToView(v, { type: "run.approval", chatId: "c1", runId: "held-1", card: held });
+  expect(v.run).toEqual({ runId: "held-1", chatId: "c1", text: "", steps: [], approval: held });
+  v = applyToView(v, { type: "run.approval.resolved", chatId: "c1", runId: "held-1", approvalId: "p1", approved: false });
+  expect(v.run).toBeNull();
+});

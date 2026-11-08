@@ -43,7 +43,16 @@ export function createClient(api: string, token: string, deps: Deps = {}) {
     chat: (id: string) => call<ChatPayload>("GET", `/api/chats/${encodeURIComponent(id)}`),
     patchChat: (id: string, patch: { title?: string; draft?: string; scrollTop?: number; settings?: Partial<ChatSettings> }) => call<Chat>("PATCH", `/api/chats/${encodeURIComponent(id)}`, patch),
     deleteChat: (id: string) => call<{ removed: string }>("DELETE", `/api/chats/${encodeURIComponent(id)}`),
-    send: (id: string, text: string, context?: TabInfo) => call<{ runId: string; message: ChatMessage }>("POST", `/api/chats/${encodeURIComponent(id)}/messages`, context ? { text, context } : { text }),
+    /** `files` are attachment ids from the browser's file panel; `mentions` are tab ids picked with @. */
+    send: (id: string, text: string, context?: TabInfo, extras: { files?: string[]; mentions?: string[] } = {}) =>
+      call<{ runId: string; message: ChatMessage }>("POST", `/api/chats/${encodeURIComponent(id)}/messages`, {
+        text,
+        ...(context ? { context } : {}),
+        ...(extras.files?.length ? { files: extras.files } : {}),
+        ...(extras.mentions?.length ? { mentions: extras.mentions } : {}),
+      }),
+    /** Every open tab the browser reported, for @. */
+    tabs: () => call<TabInfo[]>("GET", "/api/tabs"),
     cancel: (id: string) => call<{ stopped: boolean }>("POST", `/api/chats/${encodeURIComponent(id)}/cancel`, {}),
     branch: (id: string, messageId: string) => call<Chat>("POST", `/api/chats/${encodeURIComponent(id)}/branch`, { messageId }),
     exportChat: (id: string) => call<string>("GET", `/api/chats/${encodeURIComponent(id)}/export`),

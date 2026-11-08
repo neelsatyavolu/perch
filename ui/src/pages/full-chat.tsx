@@ -15,11 +15,12 @@ import { Thread } from "../components/thread";
 import { applyToList } from "../state/chat";
 import { readPref, writePref } from "../state/prefs";
 import { useChat } from "../state/use-chat";
+import type { PageHost } from "../host/frame-host";
 
 const LIST_BREAKPOINT = 1100;
 export const EMPTY ="Ask Perch to do something on the web. It works in its own tabs and asks before it sends, buys or deletes anything.";
 
-type Props = { client: Client; initialChat?: string | null; initialAsk?: string | null; onNavigate?: (chatId: string | null) => void };
+type Props = { client: Client; initialChat?: string | null; initialAsk?: string | null; onNavigate?: (chatId: string | null) => void; host?: PageHost };
 
 function saveFile(name: string, text: string): void {
   const a = document.createElement("a");
@@ -29,7 +30,7 @@ function saveFile(name: string, text: string): void {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-export function FullChat({ client, initialChat = null, initialAsk = null, onNavigate }: Props) {
+export function FullChat({ client, initialChat = null, initialAsk = null, onNavigate, host }: Props) {
   const chat = useChat(client);
   const [info, setInfo] = useState<AppInfo | null>(null);
   const [list, setList] = useState<ChatSummary[]>([]);
@@ -171,7 +172,10 @@ export function FullChat({ client, initialChat = null, initialAsk = null, onNavi
         <Composer
           draft={chat.draft}
           onDraft={chat.setDraft}
-          onSend={(text) => void chat.send(text, undefined, create)}
+          onSend={(text, extras) => void chat.send(text, undefined, create, extras)}
+          host={host}
+          listTabs={() => client.tabs()}
+          frame={chat.frame}
           onStop={() => void chat.stop()}
           running={Boolean(view.run)}
           tab={null}

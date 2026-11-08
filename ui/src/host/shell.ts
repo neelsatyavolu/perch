@@ -1,0 +1,82 @@
+/**
+ * The trusted shell around a chat page (plan 3b task 8). It runs at chrome://perch-chat or
+ * chrome://perch-side-chat, frames the untrusted chat page, and relays a fixed list of host calls
+ * from that frame to the browser with `chrome.send("perchHost", [id, method, args])`. Answers come
+ * back through `cr.webUIResponse`, and dictation text through
+ * `cr.webUIListenerCallback("perch-dictation", {text, final})`. Anything else from the frame is
+ * dropped, and `openTab` takes only web pages and artifacts.
+ */
+
+import { FRAME_ORIGINS, HOST_EVENT, HOST_METHODS, HOST_REPLY, HOST_REQUEST, openableUrl, type HostMethod } from "./protocol";
+
+type Send = (message: string, args: unknown[]) => void;
+type Reply = { type: string; id?: string; ok?: boolean; result?: unknown; error?: string; event?: string; data?: unknown };
+
+export type Relay = {
+  /** A message the shell window received. */
+  onMessage(source: unknown, origin: string, data: unknown): void;
+  /** The browser's answer to a relayed call (cr.webUIResponse). */
+  onResponse(id: string, ok: boolean, response: unknown): void;
+  /** A browser event (cr.webUIListenerCallback). */
+  onEvent(name: string, data: unknown): void;
+};
+
+export function createRelay(opts: { send: Send; frameOrigin: string; isFrame: (source: unknown) => boolean; post: (msg: Reply) => void }): Relay {
+  const calls = new Map<string, string>();
+  let next = 0;
+  const reply = (id: string, ok: boolean, payload: unknown) =>
+    opts.post(ok ? { type: HOST_REPLY, id, ok: true, result: payload } : { type: HOST_REPLY, id, ok: false, error: typeof payload === "string" ? payload : "Perch couldn't do that" });
+  return {
+    onMessage(source, origin, data) {
+      if (!opts.isFrame(source) || origin !== opts.frameOrigin || typeof data !== "object" || data === null) return;
+      const msg = data as { type?: unknown; id?: unknown; method?: unknown; args?: unknown };
+      if (msg.type !== HOST_REQUEST || typeof msg.id !== "string" || msg.id.length > 64) return;
+      if (!(HOST_METHODS as readonly unknown[]).includes(msg.method)) return reply(msg.id, false, "Perch can't do that from the chat");
+      const method = msg.method as HostMethod;
+      let args: unknown[] = [];
+      if (method === "openTab") {
+        const url = openableUrl(Array.isArray(msg.args) ? msg.args[0] : undefined);
+        if (!url) return reply(msg.id, false, "The chat can open web pages and artifacts only");
+        args = [url];
+      }
+      const callId = `shell-${++next}`;
+      calls.set(callId, msg.id);
+      opts.send("perchHost", [callId, method, args]);
+    },
+    onResponse(id, ok, response) {
+      const frameId = calls.get(id);
+      if (!frameId) return;
+      calls.delete(id);
+      const message = (response as { message?: unknown } | null)?.message;
+      reply(frameId, ok, ok ? response : typeof message === "string" ? message : response);
+    },
+    onEvent(name, data) {
+      if (name === "perch-dictation") opts.post({ type: HOST_EVENT, event: "dictation", data });
+    },
+  };
+}
+
+type ShellWindow = Window & { chrome?: { send?: Send }; cr?: Record<string, unknown> };
+
+/** Starts the shell page: frames `page` from the matching untrusted origin and relays its host calls. */
+export function startShell(win: ShellWindow, page: "chat.html" | "sidebar.html"): void {
+  const frameOrigin = page === "sidebar.html" ? FRAME_ORIGINS[1]! : FRAME_ORIGINS[0]!;
+  const send = win.chrome?.send;
+  const frame = win.document.createElement("iframe");
+  frame.title = "Perch chat";
+  frame.src = `${frameOrigin}/${page}${win.location.search}`;
+  win.document.body.append(frame);
+  if (typeof send !== "function") return;
+  const relay = createRelay({
+    send: (m, a) => send.call(win.chrome, m, a),
+    frameOrigin,
+    isFrame: (source) => source !== null && source === frame.contentWindow,
+    post: (msg) => frame.contentWindow?.postMessage(msg, frameOrigin),
+  });
+  win.addEventListener("message", (e) => relay.onMessage(e.source, e.origin, e.data));
+  win.cr = {
+    ...win.cr,
+    webUIResponse: (id: string, ok: boolean, response: unknown) => relay.onResponse(id, ok, response),
+    webUIListenerCallback: (name: string, data: unknown) => relay.onEvent(name, data),
+  };
+}

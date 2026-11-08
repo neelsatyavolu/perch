@@ -6,7 +6,7 @@
 
 import type {
   AboutInfo, Appearance, BuiltInExtension, ChatSummary, CommandBarResult, DetectedBrowser, DraftFact, FileChoice, FileKind, JobId, JobProgress, McpImportCandidate, McpServer,
-  MemoryDoc, MemorySaverSettings, MemorySettings, NtpLayout, Onboarding, PerchApi, PermissionMode, Permissions, PolicyProblem, PrivacySettings, Provider, Routine, RoutineInput,
+  MemoryDoc, MemorySaverSettings, SyncStatus, MemorySettings, NtpLayout, Onboarding, PerchApi, PermissionMode, Permissions, PolicyProblem, PrivacySettings, Provider, Routine, RoutineInput,
   RoutineProposal, SiteData, SleepRule, Skill, SystemAccess, TaskModel,
 } from "../api";
 import { DEFAULT_APPEARANCE } from "../theme/apply";
@@ -34,6 +34,8 @@ type State = {
   siteData: readonly SiteData[];
   builtIns: readonly BuiltInExtension[];
   memorySaver: MemorySaverSettings;
+  sync: SyncStatus;
+  pairing: { readonly id: string; polls: number } | null;
   memorySettings: MemorySettings;
   docs: readonly MemoryDoc[];
   draft: readonly DraftFact[];
@@ -54,6 +56,10 @@ export type FakeOptions = {
   /** Records navigation calls (submitQuery, openPage, …) so tests and the dev build can show them. */
   readonly onNavigate?: (what: string, detail: unknown) => void;
   readonly permissions?: Partial<Permissions>;
+  /** Whether this Mac already syncs; on by default, with two devices. */
+  readonly sync?: "on" | "off";
+  /** What revealRecoveryKey does: show the key (default), or refuse as a build without the key helper. */
+  readonly recoveryKey?: "shown" | "unavailable";
   readonly access?: SystemAccess;
   /** Makes every job fail at its last step with this message. */
   readonly failJobs?: string;
@@ -147,6 +153,8 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     siteData: seed.SITE_DATA,
     builtIns: (["perch", "backrow", "caveatly"] as const).map((name) => ({ name, enabled: true })),
     memorySaver: seed.MEMORY_SAVER,
+    sync: options.sync === "off" ? seed.SYNC_OFF : seed.SYNC_ON,
+    pairing: null,
     memorySettings: seed.MEMORY_SETTINGS,
     docs: seed.MEMORY_DOCS,
     draft: [],
@@ -461,6 +469,45 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
       if (!state.builtIns.some((b) => b.name === name)) throw new Error("Unknown built-in extension");
       set({ builtIns: state.builtIns.map((b) => (b.name === name ? { ...b, enabled } : b)) });
       return state.builtIns;
+    },
+
+    async getSync() {
+      return state.sync;
+    },
+    async startSyncPairing() {
+      if (state.sync.on) throw new Error("Sync is already on for this Mac.");
+      const id = newId("pair");
+      set({ pairing: { id, polls: 0 } });
+      return { pairingId: id, qr: "perch://pair?code=K7QD2M9XHT4W", code: "K7QD-2M9X-HT4W", expiresAt: new Date(Date.now() + 10 * 60_000).toISOString() };
+    },
+    async checkSyncPairing(pairingId) {
+      const p = state.pairing;
+      if (!p || p.id !== pairingId) throw new Error("This pairing has ended. Start again.");
+      p.polls++;
+      if (p.polls < 2) return null;
+      set({ pairing: null, sync: { ...seed.SYNC_ON, lastSync: null } });
+      return state.sync;
+    },
+    async syncNow() {
+      if (!state.sync.on) throw new Error("Sync is off.");
+      set({ sync: { ...state.sync, lastSync: new Date().toISOString(), lastError: null } });
+      return state.sync;
+    },
+    async removeSyncDevice(id) {
+      const device = state.sync.devices.find((d) => d.id === id);
+      if (!device) throw new Error("That device is no longer on your account.");
+      if (device.current) throw new Error("To stop syncing this Mac, turn sync off.");
+      set({ sync: { ...state.sync, devices: state.sync.devices.filter((d) => d.id !== id) } });
+      return state.sync;
+    },
+    async turnOffSync() {
+      set({ sync: seed.SYNC_OFF });
+      return state.sync;
+    },
+    async revealRecoveryKey() {
+      if (options.recoveryKey === "unavailable") throw Object.assign(new Error("This build of Perch can't show the recovery key."), { code: "unavailable" });
+      if (!state.sync.on) throw new Error("Sync is off.");
+      return "7KQ2D-M9XHT-4WB3N-PZ6RC-V8JFA";
     },
 
     async getMemorySaver() {

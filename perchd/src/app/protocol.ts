@@ -17,6 +17,8 @@ export type TabInfo = {
   url: string;
   /** The tab's CDP target id, sent by the browser only; pages never set it. */
   targetId?: string;
+  /** A private (incognito) window's tab, as the browser reports it (spec 5.8). */
+  incognito?: boolean;
 };
 /** The tab a side chat belongs to. */
 export type TabRef = { id: string; windowId: string };
@@ -31,6 +33,10 @@ export type ChatMessage = {
   time: string;
   /** The tab the user was looking at when they sent it. */
   context?: TabInfo;
+  /** Files the user attached, by name; their paths stay in perchd. */
+  attachments?: { id: string; name: string }[];
+  /** Tabs the user named with @. */
+  mentions?: TabInfo[];
   steps?: string[];
   artifacts?: string[];
   error?: string;
@@ -49,6 +55,11 @@ export type Chat = {
   draft: string;
   scrollTop: number;
   branchOf?: { chatId: string; messageId: string };
+  /**
+   * A private chat (spec 5.8): it began in an incognito tab, runs without memory, is never
+   * written to disk, and is deleted when the last private window closes.
+   */
+  incognito?: true;
 };
 
 export type ChatSummary = {
@@ -108,6 +119,8 @@ export type AppEvent =
   | { type: "run.finished"; chatId: string; runId: string; message: ChatMessage }
   | { type: "artifact.saved"; chatId: string; artifact: ArtifactMeta }
   | { type: "window.active"; state: WindowState }
+  /** The live thumbnail of the tab a running chat drives: a JPEG in base64; null when the run ends. */
+  | { type: "run.frame"; chatId: string; tabId: string | null; data: string | null }
   /** For Perch's own pages (ui-pages): `job:<id>` carries a job's progress; `appearance` the theme. */
   | { type: "pages.event"; event: string; data: unknown };
 

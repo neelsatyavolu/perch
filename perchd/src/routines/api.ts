@@ -34,6 +34,15 @@ function scheduleFrom(input: unknown, now: Date): Schedule {
   return schedule;
 }
 
+const CHAT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** `wakeChatId` makes a heartbeat routine: it wakes that chat (app/heartbeat.ts). */
+function wakeFrom(i: Record<string, unknown>): { wake?: { chatId: string } } {
+  if (i.wakeChatId === undefined || i.wakeChatId === null) return {};
+  if (typeof i.wakeChatId !== "string" || !CHAT_ID.test(i.wakeChatId)) throw new Error("wakeChatId is not a chat id.");
+  return { wake: { chatId: i.wakeChatId } };
+}
+
 function view(r: Routine): RoutineView {
   return { ...r, description: describeSchedule(r.schedule) };
 }
@@ -75,6 +84,7 @@ export function createRoutinesApi(deps: RoutinesApiDeps) {
           mode: oneOf(i, "mode", MODES, "guard"),
           ...(model ? { model } : {}),
           missed: oneOf(i, "missed", MISSED, "run_once"),
+          ...wakeFrom(i),
           createdAt: at,
           updatedAt: at,
           lastRunAt: null,

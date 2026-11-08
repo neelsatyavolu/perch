@@ -59,6 +59,9 @@ export function Message({ message, artifact, onBranch }: MessageProps) {
     return (
       <div class="me" data-id={message.id}>
         {message.text}
+        {message.attachments?.length ? (
+          <span class="me-files">{message.attachments.map((f) => <span class="chip file" key={f.id}><span class="chip-t">{f.name}</span></span>)}</span>
+        ) : null}
       </div>
     );
   }

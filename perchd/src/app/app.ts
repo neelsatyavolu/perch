@@ -5,11 +5,12 @@
 
 import { join } from "node:path";
 import { startArtifactServer, type ArtifactServer } from "./artifact-server";
+import { FileRegistry } from "./attachments";
 import { ArtifactStore } from "./artifacts";
 import { ChatStore, DEFAULT_SETTINGS } from "./chats";
 import type { PagesApi } from "./pages-api";
 import type { AppEvent, AppInfo, ChatSettings, ModelInfo, TabInfo, WindowState } from "./protocol";
-import { RunManager, type Runner } from "./runs";
+import { RunManager, type RunDeps, type Runner } from "./runs";
 import { startServer, type Listen, type Server } from "./server";
 import type { Vault } from "./vault";
 
@@ -30,6 +31,10 @@ export type AppOptions = {
   browserToken?: string;
   /** Perch's own pages (ui-pages) through `POST /api/pages/<method>`; left out, those routes are not found. */
   pages?: (core: PagesCore) => PagesApi;
+  /** Every chat status change (RunDeps.onStatus): the browser's perch dot. */
+  onStatus?: RunDeps["onStatus"];
+  /** Artifacts on `perch-artifact://`, when the browser that runs perchd serves that scheme. */
+  artifactScheme?: boolean;
 };
 
 /** What the pages API gets from the app: its chats, runs, an event to the pages, and the new-chat defaults. */
@@ -125,12 +130,12 @@ export class Windows {
 
 export async function startApp(opts: AppOptions): Promise<App> {
   const chats = await ChatStore.load(join(opts.dataDir, "chats"), opts.vault);
-  const artifacts = await ArtifactStore.load(join(opts.dataDir, "artifacts"), opts.vault);
+  const artifacts = await ArtifactStore.load(join(opts.dataDir, "artifacts"), opts.vault, (chatId) => chats.get(chatId)?.incognito === true);
   let publish: (event: AppEvent) => void = () => {};
   const windows = new Windows(chats, (event) => publish(event));
   let ownOrigin: string | null = null;
   // Perch's pages may frame artifacts; so may the development pages this server itself serves.
-  const artifactServer = startArtifactServer({ store: artifacts, frameAncestors: () => [...opts.allowedOrigins, ...(opts.uiDir && ownOrigin ? [ownOrigin] : [])] });
+  const artifactServer = startArtifactServer({ store: artifacts, frameAncestors: () => [...opts.allowedOrigins, ...(opts.uiDir && ownOrigin ? [ownOrigin] : [])], browserScheme: opts.artifactScheme === true });
   const runs = new RunManager({
     chats,
     artifacts,
@@ -138,6 +143,7 @@ export async function startApp(opts: AppOptions): Promise<App> {
     emit: (event) => publish(event),
     artifactUrl: artifactServer.urlFor,
     tabs: () => windows.tabs(),
+    ...(opts.onStatus ? { onStatus: opts.onStatus } : {}),
   });
   let defaults: ChatSettings = { ...DEFAULT_SETTINGS, model: opts.models[0]?.id ?? "", ...opts.defaults };
   const info = (): AppInfo => ({ models: opts.models, defaults, artifactOrigin: artifactServer.origin });
@@ -149,6 +155,7 @@ export async function startApp(opts: AppOptions): Promise<App> {
       defaults = { ...defaults, ...patch };
     },
   }) ?? null;
+  const files = new FileRegistry();
   const token = opts.token ?? Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url");
   const server = startServer({
     token,
@@ -157,7 +164,7 @@ export async function startApp(opts: AppOptions): Promise<App> {
     listen: opts.listen ?? { port: 0 },
     uiDir: opts.uiDir,
     ctx: {
-      chats, artifacts, runs, windows, info, artifactServer, pages, models: opts.models.map((m) => m.id),
+      chats, artifacts, runs, windows, info, artifactServer, pages, files, models: opts.models.map((m) => m.id),
       get defaults() {
         return defaults;
       },

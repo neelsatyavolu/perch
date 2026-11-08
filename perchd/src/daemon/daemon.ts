@@ -15,7 +15,7 @@ import { macConfirm, type Confirm } from "./confirm";
 import { MemoryKeychain, type Keychain } from "./keychain";
 import type { PerchPaths } from "./paths";
 import { SESSION_ID, type OnEnd } from "./protocol";
-import { startServer, type Connection, type Handler, type SidebarRun } from "./server";
+import { startServer, type Connection, type Handler, type ServerOptions, type SidebarRun } from "./server";
 import { cdpTabGroups, SessionManager, type AgentSession, type TabGroups } from "./sessions";
 
 export const VERSION = "0.1.0";
@@ -41,6 +41,8 @@ export type DaemonOptions = {
   policy?: PolicyView & { onChange?: (listener: () => void) => () => void };
   /** The audit log to write; inside Perch, the profile's one log. Defaults to the Perch folder's. */
   audit?: AuditLog;
+  /** Inside Perch: the browser asks the user for clients that cannot ask themselves. */
+  browser?: ServerOptions["browser"];
 };
 
 export type Daemon = { manager: SessionManager; registry: ClientRegistry; stop(): Promise<void> };
@@ -173,6 +175,7 @@ export async function startDaemon(opts: DaemonOptions): Promise<Daemon> {
     approvalTimeoutMs: opts.approvalTimeoutMs,
     sidebar: opts.sidebar,
     ...(opts.policy ? { policy: opts.policy } : {}),
+    ...(opts.browser ? { browser: opts.browser } : {}),
   });
   const stopWatching = opts.policy?.onChange?.(() => server.enforce());
 

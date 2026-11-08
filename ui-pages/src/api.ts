@@ -252,6 +252,14 @@ export type MemorySaverSettings = { readonly timeoutMinutes: number; readonly ru
 /** A loaded tab's memory; a sleeping tab reports bytes 0. */
 export type TabMemory = { readonly title: string; readonly url: string; readonly bytes: number; readonly asleep: boolean };
 
+/* ---------- Sync ---------- */
+
+export type SyncDevice = { readonly id: string; readonly name: string; readonly kind: string; readonly lastSeen: string; readonly current: boolean };
+/** Sync is on when this Mac has joined an account. lastError is a sentence for the page. */
+export type SyncStatus = { readonly on: boolean; readonly lastSync: string | null; readonly lastError: string | null; readonly devices: readonly SyncDevice[] };
+/** What this Mac shows to join: `qr` is the text the QR code encodes, `code` what a person types. */
+export type SyncPairing = { readonly pairingId: string; readonly qr: string; readonly code: string; readonly expiresAt: string };
+
 /* ---------- Command bar (⌘K) ---------- */
 
 export type CommandBarKind = "tab" | "history" | "bookmark";
@@ -460,6 +468,22 @@ export interface PerchApi {
   runCommandBarItem(item: CommandBarItem): Promise<void>;
   closeCommandBar(): Promise<void>;
 
+  // Sync (bookmarks, history and open tabs; passwords and extensions later)
+  getSync(): Promise<SyncStatus>;
+  /** This Mac asks to join: show the QR and code; a Perch that already syncs approves it. */
+  startSyncPairing(): Promise<SyncPairing>;
+  /** Polls once: the new status when the other device approved, null while it waits. Rejects when the code expired. */
+  checkSyncPairing(pairingId: string): Promise<SyncStatus | null>;
+  syncNow(): Promise<SyncStatus>;
+  removeSyncDevice(id: string): Promise<SyncStatus>;
+  turnOffSync(): Promise<SyncStatus>;
+  /**
+   * The browser answers this after Touch ID (or the Mac's password); the one secret a page is
+   * shown, because the person must write it down. Rejects with code "unavailable" in builds
+   * without the key helper.
+   */
+  revealRecoveryKey(): Promise<string>;
+
   // Memory
   getMemorySettings(): Promise<MemorySettings>;
   setMemorySettings(patch: Partial<MemorySettings>): Promise<MemorySettings>;
@@ -537,6 +561,7 @@ export const API_METHODS = [
   "listBuiltInExtensions", "setBuiltInExtension",
   "getMemorySaver", "setMemorySaver", "addSleepRule", "listTabMemory",
   "queryCommandBar", "runCommandBarItem", "closeCommandBar",
+  "getSync", "startSyncPairing", "checkSyncPairing", "syncNow", "removeSyncDevice", "turnOffSync", "revealRecoveryKey",
   "getMemorySettings", "setMemorySettings", "listMemoryPages", "readMemoryPage", "writeMemoryPage", "deleteMemoryPage", "wipeMemory",
   "listDreamLogs", "listSetupSources", "startProfileBuild", "getProfileBuild", "getProfileDraft", "saveProfileDraft", "discardProfileDraft",
   "listRoutines", "saveRoutine", "setRoutineEnabled", "deleteRoutine", "runRoutine", "findRoutineProposals", "acceptProposal", "dismissProposal",

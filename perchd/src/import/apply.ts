@@ -2,14 +2,18 @@
  * Put read data into Perch. Bookmarks and history go straight into the profile's Chromium files
  * when Perch is closed (and History already exists). Cookies go straight into a running Perch
  * over the DevTools pipe perchd holds. Everything else, and those types when they cannot be
- * written now, goes into one sealed bundle. The browser does not apply bundles yet (plan 2/3b),
- * so results say the data is saved for a later version, not that it is in Perch.
+ * written now, goes into one sealed bundle. Inside Perch the browser applies that bundle at once
+ * (`Perch.applyImportBundle`, plan 3b task 14): perchd unseals it into a 0600 temp file the browser
+ * reads, and deletes the file after the call. What the browser does not apply stays sealed, and
+ * results say it is saved for a later version, not that it is in Perch.
  */
 
-import { existsSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { chmodSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import type { ImportApplied, PerchDomainApi } from "../browser/perch-domain";
 import type { CdpConnection } from "../cdp/connection";
-import { sealReplacingBundle } from "./bundle";
+import { bundleDir, discardBundle, openBundle, sealBundle, sealReplacingBundle } from "./bundle";
 import { applyCookies } from "./cookies-cdp";
 import type { Keychain } from "./keychain";
 import { countBookmarks, ImportError, type DataType, type ImportData } from "./types";
@@ -75,7 +79,44 @@ export type ApplyInput = {
   readonly now?: number;
   /** The DevTools pipe to the running Perch, when perchd holds one; cookies are applied through it. */
   readonly running?: CdpConnection;
+  /** Perch's browser, which applies the sealed bundle itself when it has `Perch.applyImportBundle`. */
+  readonly browser?: Pick<PerchDomainApi, "applyImportBundle">;
 };
+
+/** The types the browser writes from a bundle; the rest wait in it. */
+const BROWSER_TYPES = ["bookmarks", "history", "passwords", "cookies", "tabs", "searchEngines"] as const satisfies readonly (keyof ImportApplied & DataType)[];
+
+type BrowserOutcome = { applied: ImportApplied; skipped: readonly string[] };
+
+/**
+ * Hands one sealed bundle to the browser: its plain JSON goes into a fresh 0600 file in a 0700
+ * folder beside the bundles, and that file is deleted when the call ends, however it ends.
+ * Null when the browser lacks the method or the call failed; the bundle then stays as it is.
+ */
+async function applyInBrowser(userDataDir: string, keychain: Keychain, id: string, browser: NonNullable<ApplyInput["browser"]>): Promise<BrowserOutcome | null> {
+  const bundle = await openBundle(userDataDir, keychain, id);
+  const dir = join(bundleDir(userDataDir), "applying");
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  chmodSync(dir, 0o700);
+  const path = join(dir, `${randomUUID()}.json`);
+  try {
+    writeFileSync(path, JSON.stringify(bundle), { mode: 0o600, flag: "wx" });
+    return await browser.applyImportBundle({ path });
+  } catch {
+    return null;
+  } finally {
+    rmSync(path, { force: true });
+  }
+}
+
+/** Reseals what the browser left (or discards the bundle when nothing is left). */
+async function keepUnapplied(userDataDir: string, keychain: Keychain, id: string, done: ReadonlySet<DataType>, now?: number): Promise<{ id: string; path: string } | undefined> {
+  const bundle = await openBundle(userDataDir, keychain, id);
+  const left = Object.fromEntries(Object.entries(bundle.data).filter(([type]) => !done.has(type as DataType))) as ImportData;
+  const kept = Object.keys(left).length ? await sealBundle(userDataDir, keychain, bundle.source, left, now) : undefined;
+  await discardBundle(userDataDir, keychain, id);
+  return kept;
+}
 
 async function writeLive(type: DataType, data: ImportData, running: CdpConnection | undefined, closed: boolean): Promise<TypeResult | undefined> {
   if (closed || !running || type !== "cookies" || !data.cookies) return undefined;
@@ -110,7 +151,17 @@ export async function applyImport(input: ApplyInput): Promise<{ results: TypeRes
     const data = Object.assign({}, ...toBundle.map((p) => p.data)) as ImportData;
     const bundle = await sealReplacingBundle(input.target.userDataDir, input.keychain, input.source, data, input.now);
     const bundled = toBundle.map((p): TypeResult => ({ type: p.type, status: "bundled", count: itemCount(p.type, p.data), ...(p.skipped ? { skipped: p.skipped } : {}), message: BUNDLED_MESSAGE }));
-    return { results: sorted([...results, ...bundled]), bundle };
+    const outcome = input.browser ? await applyInBrowser(input.target.userDataDir, input.keychain, bundle.id, input.browser) : null;
+    if (!outcome) return { results: sorted([...results, ...bundled]), bundle };
+    const done = new Set<DataType>(BROWSER_TYPES.filter((t) => typeof outcome.applied[t] === "number" && !outcome.skipped.includes(t)));
+    const written = bundled.map((r): TypeResult => {
+      if (!done.has(r.type)) return r;
+      const count = outcome.applied[r.type as (typeof BROWSER_TYPES)[number]];
+      const left = r.count - count + (r.skipped ?? 0);
+      return { type: r.type, status: "written", count, ...(left > 0 ? { skipped: left } : {}) };
+    });
+    const kept = await keepUnapplied(input.target.userDataDir, input.keychain, bundle.id, done, input.now);
+    return { results: sorted([...results, ...written]), ...(kept ? { bundle: kept } : {}) };
   } catch (error) {
     return { results: sorted([...results, ...toBundle.map((p) => failure(p.type, error))]) };
   }

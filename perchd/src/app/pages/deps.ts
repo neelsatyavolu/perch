@@ -6,6 +6,8 @@ import type { CdpConnection } from "../../cdp/connection";
 import type { Keychain as SettingsKeychain } from "../../config/keychain";
 import type { ClientRegistry } from "../../daemon/clients";
 import type { Target } from "../../import/apply";
+import type { ImportInput } from "../../import/wizard";
+import type { BrowserSync } from "../../sync/browser-sync";
 import type { Keychain as ImportKeychain } from "../../import/keychain";
 import type { Found } from "../../mcp-client/importers/sources";
 import type { McpManager } from "../../mcp-client/manager";
@@ -54,7 +56,10 @@ export type PagesDeps = {
     target: Target;
     keychain: ImportKeychain;
     running?: CdpConnection;
+    browser?: ImportInput["browser"];
   };
+  /** Sync over the browser's data (Settings › Sync); left out where perchd runs without Perch. */
+  sync?: BrowserSync;
   now?: () => Date;
   /** Company policy (spec 12.2); left out on an unmanaged Mac and in most tests. */
   policy?: PolicyView & { errors?: () => readonly PolicyError[] };

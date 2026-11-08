@@ -20,7 +20,16 @@ import type { ArtifactStore } from "./artifacts";
 
 export const ARTIFACT_CDNS = ["https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://unpkg.com"];
 
-export type ArtifactServer = { origin: string; urlFor(id: string, version: number): string; stop(): void };
+export type ArtifactServer = {
+  origin: string;
+  urlFor(id: string, version: number): string;
+  /** A version's response with its CSP, for the browser's `perch-artifact://` loader (no capability needed). */
+  serve(id: string, version: number): Response;
+  stop(): void;
+};
+
+/** The scheme Perch's browser serves artifacts on (plan 3b task 12). */
+export const ARTIFACT_SCHEME = "perch-artifact";
 
 export function artifactCsp(frameAncestors: string[]): string {
   const cdns = ARTIFACT_CDNS.join(" ");
@@ -48,10 +57,35 @@ const TEXT_TYPES: Record<string, string> = {
   json: "text/plain; charset=utf-8",
 };
 
-export function startArtifactServer(opts: { store: ArtifactStore; frameAncestors: string[] | (() => string[]); port?: number }): ArtifactServer {
+export function startArtifactServer(opts: {
+  store: ArtifactStore;
+  frameAncestors: string[] | (() => string[]);
+  port?: number;
+  /**
+   * Inside Perch: addresses are `perch-artifact://<id>/<version>`, which the browser loads through
+   * the app API's browser-only route (`serve`), so no capability ever shows in an address.
+   */
+  browserScheme?: boolean;
+}): ArtifactServer {
   const secret = crypto.getRandomValues(new Uint8Array(32));
   const sign = (id: string, version: number) => createHmac("sha256", secret).update(`${id}/${version}`).digest("base64url");
   const ancestors = typeof opts.frameAncestors === "function" ? opts.frameAncestors : () => opts.frameAncestors as string[];
+  const serve = (id: string, version: number): Response => {
+    const record = opts.store.get(id);
+    const content = version >= 1 ? opts.store.content(id, version) : undefined;
+    if (!record || !content) return new Response("not found", { status: 404 });
+    const headers = {
+      "content-security-policy": artifactCsp(ancestors()),
+      "x-content-type-options": "nosniff",
+      "referrer-policy": "no-referrer",
+      "cross-origin-resource-policy": "cross-origin",
+      "cache-control": "no-store",
+    };
+    if (record.kind === "image") {
+      return new Response(Buffer.from(content.content, "base64"), { headers: { ...headers, "content-type": content.mime ?? "application/octet-stream" } });
+    }
+    return new Response(content.content, { headers: { ...headers, "content-type": TEXT_TYPES[record.kind] ?? "text/plain; charset=utf-8" } });
+  };
   const server = Bun.serve({
     hostname: "127.0.0.1",
     port: opts.port ?? 0,
@@ -66,28 +100,12 @@ export function startArtifactServer(opts: { store: ArtifactStore; frameAncestors
       const version = Number(v);
       const expected = Buffer.from(sign(id!, version));
       const given = Buffer.from(key);
-      const record = opts.store.get(id!);
-      const content = opts.store.content(id!, version);
-      if (given.length !== expected.length || !timingSafeEqual(given, expected) || !record || !content || version < 1) {
-        return new Response("not found", { status: 404 });
-      }
-      const headers = {
-        "content-security-policy": artifactCsp(ancestors()),
-        "x-content-type-options": "nosniff",
-        "referrer-policy": "no-referrer",
-        "cross-origin-resource-policy": "cross-origin",
-        "cache-control": "no-store",
-      };
-      if (record.kind === "image") {
-        return new Response(Buffer.from(content.content, "base64"), { headers: { ...headers, "content-type": content.mime ?? "application/octet-stream" } });
-      }
-      return new Response(content.content, { headers: { ...headers, "content-type": TEXT_TYPES[record.kind] ?? "text/plain; charset=utf-8" } });
+      if (given.length !== expected.length || !timingSafeEqual(given, expected)) return new Response("not found", { status: 404 });
+      return serve(id!, version);
     },
   });
-  const origin = `http://127.0.0.1:${server.port}`;
-  return {
-    origin,
-    urlFor: (id, version) => `${origin}/a/${id}/${version}?k=${sign(id, version)}`,
-    stop: () => server.stop(true),
-  };
+  const loopback = `http://127.0.0.1:${server.port}`;
+  return opts.browserScheme
+    ? { origin: `${ARTIFACT_SCHEME}:`, urlFor: (id, version) => `${ARTIFACT_SCHEME}://${id}/${version}`, serve, stop: () => server.stop(true) }
+    : { origin: loopback, urlFor: (id, version) => `${loopback}/a/${id}/${version}?k=${sign(id, version)}`, serve, stop: () => server.stop(true) };
 }

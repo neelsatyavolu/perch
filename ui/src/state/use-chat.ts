@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import type { ChatPayload, Client } from "../api/client";
 import type { AppEvent, ChatSettings, TabInfo } from "../api/types";
+import type { SendExtras } from "../components/composer";
 import { applyToView, emptyView, type ChatView } from "./chat";
 
 const DRAFT_SAVE_MS = 400;
@@ -34,6 +35,7 @@ export function useChat(client: Client) {
       current.current = { chatId: next.chat?.id ?? null, draft, saved: draft };
       setDraftState(draft);
       setError(null);
+      setFrame(null);
       setView(next);
     },
     [saveDraft],
@@ -42,7 +44,15 @@ export function useChat(client: Client) {
   /** The chat shown now and its unsent draft, read at call time. */
   const unsent = useCallback(() => ({ chatId: current.current.chatId, draft: current.current.draft }), []);
 
-  const onEvent = useCallback((event: AppEvent) => setView((v) => applyToView(v, event)), []);
+  /** The live thumbnail of the open chat's running task. */
+  const [frame, setFrame] = useState<string | null>(null);
+  const onEvent = useCallback((event: AppEvent) => {
+    if (event.type === "run.frame") {
+      if (event.chatId === current.current.chatId) setFrame(event.data);
+      return;
+    }
+    setView((v) => applyToView(v, event));
+  }, []);
 
   const setDraft = useCallback(
     (text: string) => {
@@ -65,7 +75,7 @@ export function useChat(client: Client) {
   };
 
   /** Sends to the open chat, or to the chat `ensure` creates when none is open. */
-  const send = (text: string, context: TabInfo | undefined, ensure: () => Promise<string>) =>
+  const send = (text: string, context: TabInfo | undefined, ensure: () => Promise<string>, extras?: SendExtras) =>
     guard(async () => {
       const chatId = view.chat?.id ?? (await ensure());
       const c = current.current;
@@ -73,7 +83,7 @@ export function useChat(client: Client) {
       c.saved = "";
       clearTimeout(c.timer);
       setDraftState("");
-      await client.send(chatId, text, context);
+      await client.send(chatId, text, context, { files: extras?.files.map((f) => f.id), mentions: extras?.mentions.map((t) => t.id) });
     });
 
   const stop = () => guard(async () => view.chat && client.cancel(view.chat.id));
@@ -87,5 +97,5 @@ export function useChat(client: Client) {
 
   useEffect(() => () => void saveDraft(), [saveDraft]);
 
-  return { view, setView, show, unsent, onEvent, draft, setDraft, saveDraft, send, stop, decide, setSettings, error, setError };
+  return { view, setView, show, unsent, onEvent, draft, setDraft, saveDraft, send, stop, decide, setSettings, error, setError, frame };
 }

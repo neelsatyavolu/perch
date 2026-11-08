@@ -115,7 +115,7 @@ export function importPages(deps: PagesDeps): Methods<"detectBrowsers" | "getSys
         let base = 0;
         for (const part of parts) {
           const report = await importSource({
-            home, source: part.source, types: part.types, target, keychain: deps.importer.keychain, running: deps.importer.running,
+            home, source: part.source, types: part.types, target, keychain: deps.importer.keychain, running: deps.importer.running, browser: deps.importer.browser,
             onProgress: (p) => job.step(`Importing ${nounOf(p.type)}`, base + p.index),
           });
           results.push(...report.results);

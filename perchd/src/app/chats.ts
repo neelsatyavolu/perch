@@ -16,7 +16,8 @@ import type { Vault } from "./vault";
 export const DEFAULT_SETTINGS: ChatSettings = Object.freeze({ mode: "guard", model: "", effort: "medium", scope: "current" });
 const EXT = ".chat";
 
-export type NewChat = { title?: string; tab?: TabRef | null; settings?: Partial<ChatSettings> };
+/** `incognito`: a private chat, kept in memory only (spec 5.8). */
+export type NewChat = { title?: string; tab?: TabRef | null; settings?: Partial<ChatSettings>; incognito?: boolean };
 
 export class ChatStore {
   private chats = new Map<string, Chat>();
@@ -64,6 +65,7 @@ export class ChatStore {
       tab: null,
       draft: "",
       scrollTop: 0,
+      ...(init.incognito ? { incognito: true as const } : {}),
     };
     await this.save(chat);
     return init.tab ? this.attach(chat.id, init.tab) : chat;
@@ -93,7 +95,7 @@ export class ChatStore {
     if (!source) throw new Error(`no chat ${id}`);
     const at = source.messages.findIndex((m) => m.id === messageId);
     if (at < 0) throw new Error(`no message ${messageId} in this chat`);
-    const created = await this.create({ title: source.title, settings: source.settings });
+    const created = await this.create({ title: source.title, settings: source.settings, incognito: source.incognito === true });
     return this.update(created.id, (c) => ({ ...c, messages: source.messages.slice(0, at + 1), branchOf: { chatId: id, messageId } }));
   }
 
@@ -127,9 +129,14 @@ export class ChatStore {
     return stale.map((c) => c.id);
   }
 
+  /** Private (incognito) chats, which live in memory only. */
+  privateChats(): Chat[] {
+    return [...this.chats.values()].filter((c) => c.incognito);
+  }
+
   private async save(chat: Chat): Promise<void> {
     if (!UUID.test(chat.id)) throw new Error("chat ids are UUIDs");
-    await writePrivate(this.dir, `${chat.id}${EXT}`, await this.vault.sealJson(chat.id, chat));
+    if (!chat.incognito) await writePrivate(this.dir, `${chat.id}${EXT}`, await this.vault.sealJson(chat.id, chat));
     this.chats.set(chat.id, chat);
   }
 }

@@ -30,6 +30,11 @@ export class SidebarRuns {
   delete(session: string): void {
     this.runs.delete(session);
   }
+
+  /** The daemon sessions working for a chat now. */
+  sessionsFor(chatId: string): string[] {
+    return [...this.runs].filter(([, run]) => run.chatId === chatId).map(([session]) => session);
+  }
 }
 
 type Agent = "codex" | "claude-code";
@@ -118,12 +123,18 @@ export function sidebarRunner(opts: SidebarRunnerOptions): Runner {
       yield { type: "error", message: refused };
       return;
     }
-    const memory = await opts.memory?.().catch(() => undefined);
+    // A private chat (spec 5.8) neither reads nor teaches memory.
+    const memory = input.incognito ? undefined : await opts.memory?.().catch(() => undefined);
     const known = memory ? await memory.context(input.task).catch(() => "") : "";
     const session = `sidebar-${randomBytes(12).toString("hex")}`;
     const token = randomBytes(32).toString("base64url");
     const mode = capMode(input.settings.mode, policy);
-    opts.runs.add(session, { token, mode, approve: input.approve, ...(input.tab?.targetId ? { tab: input.tab.targetId } : {}) });
+    opts.runs.add(session, {
+      token, mode, approve: input.approve,
+      ...(input.tab?.targetId ? { tab: input.tab.targetId } : {}),
+      ...(input.chatId ? { chatId: input.chatId } : {}),
+      ...(input.incognito ? { private: true } : {}),
+    });
     const mcp: McpServer = {
       command: opts.perch.command,
       args: [...opts.perch.args, "mcp", "--agent", "Perch", "--title", "Sidebar"],

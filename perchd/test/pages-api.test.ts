@@ -456,7 +456,7 @@ test("setting up memory: a build job, a draft kept until saved", async () => {
   expect((await raw("discardProfileDraft", [1])).status).toBe(400);
 });
 
-test("routines: daily and interval schedules; event triggers and proposals are not built yet", async () => {
+test("routines: daily and interval schedules, proposals from repeated chats; event triggers are not built yet", async () => {
   const daily = await api.saveRoutine({ title: "Morning inbox", prompt: "Summarize my inbox", schedule: { kind: "daily", time: "08:30", days: ["mon", "fri"] } });
   expect(daily).toMatchObject({ title: "Morning inbox", prompt: "Summarize my inbox", schedule: { kind: "daily", time: "08:30", days: ["mon", "fri"] }, enabled: true, nextRun: expect.any(String) });
   const every = await api.saveRoutine({ title: "Prices", prompt: "Check prices", schedule: { kind: "interval", hours: 6 } });
@@ -479,10 +479,28 @@ test("routines: daily and interval schedules; event triggers and proposals are n
 
   await api.deleteRoutine(every.id);
   expect((await fails(api.deleteRoutine(every.id))).status).toBe(404);
-  expect((await fails(api.findRoutineProposals())).status).toBe(501);
-  expect((await fails(api.acceptProposal("p1"))).status).toBe(501);
+  expect(await api.findRoutineProposals()).toEqual([]);
+  const asked = async (text: string, daysAgo: number) => {
+    const chat = await app.chats.create({ title: text });
+    const time = new Date(Date.now() - daysAgo * 86_400_000).toISOString();
+    await app.chats.update(chat.id, (c) => ({ ...c, messages: [{ id: crypto.randomUUID(), role: "user", text, time }] }));
+  };
+  await asked("Check the weather in Oslo", 1);
+  await asked("check the weather in Oslo", 3);
+  await asked("Summarise Hacker News", 2);
+  await asked("Summarise Hacker News", 4);
+  const found = await api.findRoutineProposals();
+  expect(found.map((p) => p.prompt).sort()).toEqual(["Check the weather in Oslo", "Summarise Hacker News"]);
+  expect(found[0]!.evidence).toContain("2 times");
+  expect((await api.listRoutines()).some((r) => r.prompt === "Summarise Hacker News")).toBe(false);
+
+  const news = found.find((p) => p.prompt === "Summarise Hacker News")!;
+  const weather = found.find((p) => p.prompt !== news.prompt)!;
+  expect(await api.acceptProposal(news.id)).toMatchObject({ prompt: "Summarise Hacker News", schedule: news.schedule });
+  await api.dismissProposal(weather.id);
+  expect(await api.findRoutineProposals()).toEqual([]);
+  expect((await fails(api.acceptProposal(weather.id))).status).toBe(404);
   expect((await fails(api.acceptProposal(""))).status).toBe(400);
-  expect((await fails(api.dismissProposal("p1"))).status).toBe(501);
   expect((await fails(api.dismissProposal(""))).status).toBe(400);
 });
 

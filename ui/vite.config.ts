@@ -14,7 +14,13 @@ export default defineConfig({
     emptyOutDir: true,
     modulePreload: { polyfill: false },
     rollupOptions: {
-      input: { sidebar: resolve(import.meta.dirname, "sidebar.html"), chat: resolve(import.meta.dirname, "chat.html") },
+      input: {
+        sidebar: resolve(import.meta.dirname, "sidebar.html"),
+        chat: resolve(import.meta.dirname, "chat.html"),
+        // The trusted shells that frame the two pages inside Perch (src/host/shell.ts).
+        "shell-chat": resolve(import.meta.dirname, "shell-chat.html"),
+        "shell-side": resolve(import.meta.dirname, "shell-side.html"),
+      },
     },
   },
 });

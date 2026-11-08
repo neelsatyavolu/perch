@@ -32,10 +32,15 @@ export class ArtifactStore {
   private records = new Map<string, ArtifactRecord>();
   private queue = new KeyedQueue();
 
-  private constructor(private readonly dir: string, private readonly vault: Vault) {}
+  private constructor(
+    private readonly dir: string,
+    private readonly vault: Vault,
+    private readonly inMemory: (chatId: string) => boolean,
+  ) {}
 
-  static async load(dir: string, vault: Vault): Promise<ArtifactStore> {
-    const store = new ArtifactStore(dir, vault);
+  /** `inMemory`: chats whose artifacts are never written to disk (private chats, spec 5.8). */
+  static async load(dir: string, vault: Vault, inMemory: (chatId: string) => boolean = () => false): Promise<ArtifactStore> {
+    const store = new ArtifactStore(dir, vault, inMemory);
     await ensurePrivateDir(dir);
     for (const name of await readdir(dir)) {
       if (!name.endsWith(EXT)) continue;
@@ -75,8 +80,7 @@ export class ArtifactStore {
       const next: ArtifactRecord = current
         ? { ...current, versions: [...current.versions, version] }
         : { id, chatId: input.chatId, title: input.title.trim(), kind: input.kind, ...(input.language ? { language: input.language } : {}), versions: [version] };
-      await writePrivate(this.dir, `${id}${EXT}`, await this.vault.sealJson(id, next));
-      this.records.set(id, next);
+      await this.write(next);
       return next;
     });
   }
@@ -88,10 +92,14 @@ export class ArtifactStore {
     if (!UUID.test(toChatId)) throw new Error("artifacts belong to a chat id");
     const next: ArtifactRecord = { ...source, id: crypto.randomUUID(), chatId: toChatId, versions: [...source.versions] };
     return this.queue.run(next.id, async () => {
-      await writePrivate(this.dir, `${next.id}${EXT}`, await this.vault.sealJson(next.id, next));
-      this.records.set(next.id, next);
+      await this.write(next);
       return next;
     });
+  }
+
+  private async write(record: ArtifactRecord): Promise<void> {
+    if (!this.inMemory(record.chatId)) await writePrivate(this.dir, `${record.id}${EXT}`, await this.vault.sealJson(record.id, record));
+    this.records.set(record.id, record);
   }
 
   async removeForChat(chatId: string): Promise<void> {

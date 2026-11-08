@@ -31,7 +31,7 @@ test("every case is well formed, and ignored cases are the Google-only ones", ()
     expect(c.policies.length).toBeGreaterThan(0);
     expect(["navigation", "download", "proxy", "policy"]).toContain(c.check.kind);
   }
-  expect(cases.filter((c) => c.expect === "ignored").flatMap((c) => c.policies.map((p) => p.name)).sort()).toEqual(["BrowserSignin", "CloudManagementEnrollmentToken"]);
+  expect(cases.filter((c) => c.expect === "ignored").flatMap((c) => c.policies.map((p) => p.name)).sort()).toEqual(["BrowserSignin", "CloudManagementEnrollmentToken", "MetricsReportingEnabled"]);
   // Chromium's sensitive policies cannot come from test policies; each such case says why.
   for (const c of cases.filter((x) => x.expect === "mdm-only")) expect(c.note).toContain("managed Mac");
 });

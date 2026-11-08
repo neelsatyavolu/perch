@@ -1,0 +1,68 @@
+# Perch: the profile button opens Perch's profile menu instead of Chromium's profile bubble.
+diff --git a/chrome/browser/ui/browser_window/internal/BUILD.gn b/chrome/browser/ui/browser_window/internal/BUILD.gn
+index f75ef91245..e403b2b9cd 100644
+--- a/chrome/browser/ui/browser_window/internal/BUILD.gn
++++ b/chrome/browser/ui/browser_window/internal/BUILD.gn
+@@ -99,6 +99,8 @@ source_set("internal") {
+       "//chrome/browser/perch/perch_menu_mac.h",
+       "//chrome/browser/perch/perch_menu_mac.mm",
+       "//chrome/browser/perch/tab_tools/tab_tools.cc",
++      "//chrome/browser/perch/toolbar/perch_profile_menu.cc",
++      "//chrome/browser/perch/toolbar/perch_profile_menu.h",
+       "//chrome/browser/perch/tab_tools/tab_tools.h",
+       "//chrome/browser/perch/memory_saver/memory_saver_settings.cc",
+       "//chrome/browser/perch/memory_saver/memory_saver_settings.h",
+diff --git a/chrome/browser/ui/views/profiles/avatar_toolbar_button.cc b/chrome/browser/ui/views/profiles/avatar_toolbar_button.cc
+index e3ee47741f..1051fde418 100644
+--- a/chrome/browser/ui/views/profiles/avatar_toolbar_button.cc
++++ b/chrome/browser/ui/views/profiles/avatar_toolbar_button.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "chrome/browser/ui/views/profiles/avatar_toolbar_button.h"
+ 
++#include "chrome/browser/perch/toolbar/perch_profile_menu.h"
++
+ #include "base/check.h"
+ #include "base/check_is_test.h"
+ #include "base/feature_list.h"
+@@ -55,6 +57,7 @@ AvatarToolbarButton::AvatarToolbarButton(BrowserWindowInterface* browser)
+     : ToolbarButton(base::BindRepeating(&AvatarToolbarButton::ButtonPressed,
+                                         base::Unretained(this),
+                                         /*is_source_accelerator=*/false)),
++      perch_browser_(browser),
+       state_manager_(*this, browser),
+       slide_animation_(this) {
+   state_manager_.InitializeStates();
+@@ -447,6 +450,11 @@ void AvatarToolbarButton::OnThemeChanged() {
+ }
+ 
+ void AvatarToolbarButton::ButtonPressed(bool is_source_accelerator) {
++  // Perch: the profile button opens Perch's profile menu.
++  if (perch_browser_) {
++    perch::ShowPerchProfileMenu(perch_browser_, this);
++    return;
++  }
+   // The Views toolbar pops the button out once the profile menu is shown (see
+   // ToolbarController's PopOutHandler), so no token is needed.
+   state_manager_.HandleButtonPressed(is_source_accelerator,
+diff --git a/chrome/browser/ui/views/profiles/avatar_toolbar_button.h b/chrome/browser/ui/views/profiles/avatar_toolbar_button.h
+index 7dca7fe1a1..134169d431 100644
+--- a/chrome/browser/ui/views/profiles/avatar_toolbar_button.h
++++ b/chrome/browser/ui/views/profiles/avatar_toolbar_button.h
+@@ -8,6 +8,7 @@
+ #include "base/callback_list.h"
+ #include "base/functional/callback.h"
+ #include "base/gtest_prod_util.h"
++#include "base/memory/raw_ptr.h"
+ #include "base/memory/weak_ptr.h"
+ #include "chrome/browser/ui/views/profiles/avatar_toolbar_button_state_manager.h"
+ #include "chrome/browser/ui/views/profiles/avatar_toolbar_button_types.h"
+@@ -121,6 +122,8 @@ class AvatarToolbarButton : public ToolbarButton,
+   void AnimationProgressed(const gfx::Animation* animation) override;
+   void AnimationEnded(const gfx::Animation* animation) override;
+ 
++  // Perch: the window whose profile menu this button opens.
++  raw_ptr<BrowserWindowInterface> perch_browser_;
+   AvatarToolbarButtonStateManager state_manager_;
+ 
+   // Cached icons for the placeholder avatar in forced-colors mode, to avoid

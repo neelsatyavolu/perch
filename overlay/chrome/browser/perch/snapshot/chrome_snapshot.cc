@@ -16,9 +16,11 @@
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
+#include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
+#include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
 #include "chrome/browser/performance_manager/policies/memory_saver_mode_policy.h"
 #include "chrome/browser/perch/memory_saver/sleep_controller.h"
@@ -26,6 +28,7 @@
 #include "chrome/browser/perch/perch_commands.h"
 #include "chrome/browser/perch/perch_pref_names.h"
 #include "chrome/browser/perch/tab_tools/tab_tools.h"
+#include "chrome/browser/perch/toolbar/perch_profile_menu.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
@@ -114,6 +117,20 @@ class Snapshotter {
                                     base::Time::Now() + base::Days(2))
                           .size()
                    << " of " << tabs->count() << " tabs older than a day";
+    } else if (state == "profile-menu") {
+      // The profile menu's items, then New Tab run from it.
+      PerchProfileMenuModel menu(browser_);
+      std::string items;
+      for (size_t i = 0; i < menu.GetItemCount(); ++i) {
+        items += menu.GetTypeAt(i) == ui::MenuModel::TYPE_SEPARATOR
+                     ? std::string(" |")
+                     : " " + base::UTF16ToUTF8(menu.GetLabelAt(i));
+      }
+      const int before = browser_->GetTabStripModel()->count();
+      menu.ExecuteCommand(IDC_NEW_TAB, 0);
+      LOG(WARNING) << "Perch snapshot: profile menu:" << items
+                   << " / tabs " << before << " -> "
+                   << browser_->GetTabStripModel()->count();
     } else if (state == "sleep-open") {
       Open("chrome://version");
       Open("chrome://history");

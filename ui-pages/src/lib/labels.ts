@@ -1,7 +1,7 @@
 /** Plain words for the values in api.ts, shared by the pages and the fake backend. */
 
 import type {
-  AuditOutcome, Effort, FactGroup, ImportKind, ImportNeed, McpImportSource, PermissionMode, Schedule, SiteRuleKind, TaskRole, TriggerEvent, Weekday,
+  AuditOutcome, Effort, FactGroup, ImportKind, ImportNeed, McpImportSource, PermissionMode, Schedule, SiteRuleKind, SleepRule, SleepRuleKind, TaskRole, TriggerEvent, Weekday,
 } from "../api";
 
 /** Routine triggers. `match` describes the field that narrows the event, when it has one. */
@@ -54,6 +54,21 @@ export const MODES: Readonly<Record<PermissionMode, { label: string; detail: str
 };
 
 export const SITE_RULES: Readonly<Record<SiteRuleKind, string>> = { allow: "Always allow", ask: "Always ask", never: "Never touch" };
+
+/** Never-sleep rules (spec 5.6), in the form the person types them. */
+export const SLEEP_RULES: Readonly<Record<SleepRuleKind, string>> = {
+  domain: "This site and its subdomains",
+  host: "Only this host",
+  wildcard: "Subdomains, not the site itself",
+  prefix: "Pages under this address",
+  url: "This page only",
+};
+
+export function sleepRuleText(r: SleepRule): string {
+  if (r.kind === "host") return r.pattern.startsWith("=") ? r.pattern : `=${r.pattern}`;
+  if (r.kind === "wildcard") return r.pattern.startsWith("*.") ? r.pattern : `*.${r.pattern}`;
+  return r.pattern;
+}
 
 export const ROLES: Readonly<Record<TaskRole, { label: string; detail: string }>> = {
   default: { label: "Default model", detail: "New chats. The last model you use becomes the default" },

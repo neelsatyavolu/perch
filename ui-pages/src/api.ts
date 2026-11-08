@@ -238,9 +238,19 @@ export type PrivacySettings = {
 };
 export type PrivacyPatch = Partial<Omit<PrivacySettings, "backgroundConnections" | "blockerExceptions">>;
 /** An extension Perch ships built in: it can be turned off but not removed (spec 5.6, 5.7, 5.9). */
-export type BuiltInName = "perch" | "backrow" | "lulltab" | "caveatly";
+export type BuiltInName = "perch" | "backrow" | "caveatly";
 export type BuiltInExtension = { readonly name: BuiltInName; readonly enabled: boolean };
 export type SiteData = { readonly host: string; readonly bytes: number; readonly cookies: number; readonly lastUsed: Iso };
+
+/* ---------- Memory saver (spec 5.6) ---------- */
+
+/** Lulltab's never-sleep forms: `example.com`, `=host`, `*.example.com`, a path prefix, or one page. */
+export type SleepRuleKind = "domain" | "host" | "wildcard" | "prefix" | "url";
+export type SleepRule = { readonly kind: SleepRuleKind; readonly pattern: string };
+/** timeoutMinutes 0 means memory saver is off. */
+export type MemorySaverSettings = { readonly timeoutMinutes: number; readonly rules: readonly SleepRule[] };
+/** A loaded tab's memory; a sleeping tab reports bytes 0. */
+export type TabMemory = { readonly title: string; readonly url: string; readonly bytes: number; readonly asleep: boolean };
 
 /* ---------- Memory (spec 8) ---------- */
 
@@ -428,6 +438,14 @@ export interface PerchApi {
   listBuiltInExtensions(): Promise<readonly BuiltInExtension[]>;
   setBuiltInExtension(name: BuiltInName, enabled: boolean): Promise<readonly BuiltInExtension[]>;
 
+  // Performance
+  getMemorySaver(): Promise<MemorySaverSettings>;
+  /** Any field left out stays as it is. Rejects with a sentence for a timeout below 0 or above 1440. */
+  setMemorySaver(patch: { readonly timeoutMinutes?: number; readonly rules?: readonly SleepRule[] }): Promise<MemorySaverSettings>;
+  /** Parses what the person typed (Lulltab's forms) and adds it; rejects with a sentence when it can't be read. */
+  addSleepRule(input: string): Promise<MemorySaverSettings>;
+  listTabMemory(): Promise<readonly TabMemory[]>;
+
   // Memory
   getMemorySettings(): Promise<MemorySettings>;
   setMemorySettings(patch: Partial<MemorySettings>): Promise<MemorySettings>;
@@ -503,6 +521,7 @@ export const API_METHODS = [
   "getPermissions", "setPermissionMode", "addSiteRule", "removeSiteRule", "setClientMode", "listAuditLog", "exportAuditLog", "getPolicy",
   "getPrivacy", "setPrivacy", "setBackgroundConnection", "removeBlockerException", "listSiteData", "forgetSite",
   "listBuiltInExtensions", "setBuiltInExtension",
+  "getMemorySaver", "setMemorySaver", "addSleepRule", "listTabMemory",
   "getMemorySettings", "setMemorySettings", "listMemoryPages", "readMemoryPage", "writeMemoryPage", "deleteMemoryPage", "wipeMemory",
   "listDreamLogs", "listSetupSources", "startProfileBuild", "getProfileBuild", "getProfileDraft", "saveProfileDraft", "discardProfileDraft",
   "listRoutines", "saveRoutine", "setRoutineEnabled", "deleteRoutine", "runRoutine", "findRoutineProposals", "acceptProposal", "dismissProposal",

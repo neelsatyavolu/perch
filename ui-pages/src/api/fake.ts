@@ -6,12 +6,12 @@
 
 import type {
   AboutInfo, Appearance, BuiltInExtension, ChatSummary, DetectedBrowser, DraftFact, FileChoice, FileKind, JobId, JobProgress, McpImportCandidate, McpServer,
-  MemoryDoc, MemorySettings, NtpLayout, Onboarding, PerchApi, PermissionMode, Permissions, PolicyProblem, PrivacySettings, Provider, Routine, RoutineInput,
-  RoutineProposal, SiteData, Skill, SystemAccess, TaskModel,
+  MemoryDoc, MemorySaverSettings, MemorySettings, NtpLayout, Onboarding, PerchApi, PermissionMode, Permissions, PolicyProblem, PrivacySettings, Provider, Routine, RoutineInput,
+  RoutineProposal, SiteData, SleepRule, Skill, SystemAccess, TaskModel,
 } from "../api";
 import { DEFAULT_APPEARANCE } from "../theme/apply";
 import { ACCENT_NAMES, THEME_NAMES } from "../theme/tokens";
-import { IMPORT_KINDS, countOf } from "../lib/labels";
+import { IMPORT_KINDS, countOf, sleepRuleText } from "../lib/labels";
 import { redactTarget } from "../lib/redact";
 import {
   type Check, checkApiKey, checkCommand, checkDohUrl, checkEndpointUrl, checkMcpUrl, checkSecretName, checkSitePattern, checkSkillLocation,
@@ -33,6 +33,7 @@ type State = {
   privacy: PrivacySettings;
   siteData: readonly SiteData[];
   builtIns: readonly BuiltInExtension[];
+  memorySaver: MemorySaverSettings;
   memorySettings: MemorySettings;
   docs: readonly MemoryDoc[];
   draft: readonly DraftFact[];
@@ -82,6 +83,38 @@ const must = <T>(check: Check<T>): T => {
   return check.value;
 };
 
+const SLEEP_RULE_ERROR = "Use a domain like example.com, *.example.com, or a full URL.";
+/** A dotted host name: "localhost" and bare words are not sites. */
+const SITE_HOST = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$/;
+
+/** As the browser reads a never-sleep rule: Lulltab's forms (spec 5.6). */
+function parseSleepRule(input: string): SleepRule {
+  const raw = input.trim();
+  if (!raw || raw.length > 500 || /\s/.test(raw)) throw new Error(SLEEP_RULE_ERROR);
+  if (/^https?:\/\//i.test(raw)) {
+    let url: URL;
+    try {
+      url = new URL(raw);
+    } catch {
+      throw new Error(SLEEP_RULE_ERROR);
+    }
+    if (!SITE_HOST.test(url.hostname)) throw new Error(SLEEP_RULE_ERROR);
+    // As the browser (memory_saver/sleep_rules.cc): a bare site is a host rule, anything longer a prefix.
+    if ((url.pathname === "/" || url.pathname === "") && !url.search) {
+      return { kind: "host", pattern: url.hostname.toLowerCase().replace(/^www\./, "") };
+    }
+    return { kind: "prefix", pattern: `${url.origin}${url.pathname}${url.search}`.replace(/\/$/, "") };
+  }
+  const exact = raw.startsWith("=");
+  const wild = raw.startsWith("*.");
+  const rest = raw.slice(exact ? 1 : wild ? 2 : 0);
+  const slash = rest.indexOf("/");
+  const host = (slash === -1 ? rest : rest.slice(0, slash)).toLowerCase();
+  if (!SITE_HOST.test(host) || (slash !== -1 && (exact || wild))) throw new Error(SLEEP_RULE_ERROR);
+  if (slash !== -1) return { kind: "prefix", pattern: `${host}${rest.slice(slash)}` };
+  return { kind: exact ? "host" : wild ? "wildcard" : "domain", pattern: host };
+}
+
 let counter = 0;
 const newId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${(counter++).toString(36)}`;
 const MODE_ORDER: readonly PermissionMode[] = ["ask", "guard", "skip"];
@@ -103,7 +136,8 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     permissions: { ...seed.PERMISSIONS, ...policyMaxMode(options.policy), ...options.permissions },
     privacy: seed.PRIVACY,
     siteData: seed.SITE_DATA,
-    builtIns: (["perch", "backrow", "lulltab", "caveatly"] as const).map((name) => ({ name, enabled: true })),
+    builtIns: (["perch", "backrow", "caveatly"] as const).map((name) => ({ name, enabled: true })),
+    memorySaver: seed.MEMORY_SAVER,
     memorySettings: seed.MEMORY_SETTINGS,
     docs: seed.MEMORY_DOCS,
     draft: [],
@@ -115,6 +149,7 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     files: [],
     buildJob: null,
   };
+  const memorySaverLocked = () => (options.policy?.BuiltInExtensions as { memorySaver?: unknown } | undefined)?.memorySaver !== undefined;
   const set = (patch: Partial<State>) => {
     state = { ...state, ...patch };
   };
@@ -417,6 +452,29 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
       if (!state.builtIns.some((b) => b.name === name)) throw new Error("Unknown built-in extension");
       set({ builtIns: state.builtIns.map((b) => (b.name === name ? { ...b, enabled } : b)) });
       return state.builtIns;
+    },
+
+    async getMemorySaver() {
+      return state.memorySaver;
+    },
+    async setMemorySaver(patch) {
+      if (memorySaverLocked()) throw new Error(MANAGED);
+      const t = patch.timeoutMinutes;
+      if (t !== undefined && !(Number.isInteger(t) && t >= 0 && t <= 1440)) throw new Error("Choose a time between 0 minutes and a day");
+      const rules = patch.rules?.map((r) => parseSleepRule(sleepRuleText(r)));
+      set({ memorySaver: { timeoutMinutes: t ?? state.memorySaver.timeoutMinutes, rules: rules ?? state.memorySaver.rules } });
+      return state.memorySaver;
+    },
+    async addSleepRule(input) {
+      if (memorySaverLocked()) throw new Error(MANAGED);
+      const rule = parseSleepRule(input);
+      const known = state.memorySaver.rules.some((r) => r.kind === rule.kind && r.pattern === rule.pattern);
+      if (known) throw new Error("That site is already on the list.");
+      set({ memorySaver: { ...state.memorySaver, rules: [...state.memorySaver.rules, rule] } });
+      return state.memorySaver;
+    },
+    async listTabMemory() {
+      return seed.TAB_MEMORY;
     },
 
     async getMemorySettings() {

@@ -20,7 +20,7 @@ describe("Settings shell", () => {
     expect(await r.findByRole("heading", { level: 1, name: "Appearance" })).toBeTruthy();
     const nav = r.getByRole("navigation", { name: "Settings" });
     const names = within(nav).getAllByRole("link").map((a) => a.textContent);
-    expect(names).toEqual(["Appearance", "Models", "Skills and MCP", "Permissions", "Privacy and security", "Built-in extensions", "Memory", "Routines", "Import", "About and updates"]);
+    expect(names).toEqual(["Appearance", "Models", "Skills and MCP", "Permissions", "Privacy and security", "Performance", "Built-in extensions", "Memory", "Routines", "Import", "About and updates"]);
     expect(within(nav).getByRole("link", { name: "Appearance" }).getAttribute("aria-current")).toBe("page");
   });
 
@@ -125,11 +125,11 @@ describe("Models", () => {
 });
 
 describe("Built-in extensions", () => {
-  test("lists the four extensions and turns one off", async () => {
+  test("lists the three extensions and turns one off", async () => {
     window.location.hash = "#builtin";
     const r = renderWithApi(<Settings />);
     expect(await r.findByRole("heading", { level: 1, name: "Built-in extensions" })).toBeTruthy();
-    for (const name of ["Perch tools", "Lulltab", "Backrow", "Caveatly"]) expect(await r.findByRole("switch", { name })).toBeTruthy();
+    for (const name of ["Perch tools", "Backrow", "Caveatly"]) expect(await r.findByRole("switch", { name })).toBeTruthy();
     const backrow = r.getByRole("switch", { name: "Backrow" });
     expect(backrow.getAttribute("aria-checked")).toBe("true");
     fireEvent.click(backrow);

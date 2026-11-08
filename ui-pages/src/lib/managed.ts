@@ -12,7 +12,7 @@ export const MANAGED_NOTE = "Managed by your organization";
 export type RowId =
   | "permission-mode" | "client-rules" | "providers"
   | "memory-extraction" | "history-extraction" | "dreaming"
-  | "import-browsers" | "built-in-backrow" | "built-in-lulltab" | "auto-update";
+  | "import-browsers" | "built-in-backrow" | "memory-saver" | "auto-update";
 
 type Values = PolicyState["values"];
 
@@ -25,7 +25,7 @@ const RULES: readonly [RowId, (v: Values) => boolean][] = [
   ["dreaming", (v) => v.MemoryEnabled === false],
   ["import-browsers", (v) => v.ImportEnabled !== undefined],
   ["built-in-backrow", (v) => (v.BuiltInExtensions as { backrow?: unknown } | undefined)?.backrow !== undefined],
-  ["built-in-lulltab", (v) => (v.BuiltInExtensions as { memorySaver?: unknown } | undefined)?.memorySaver !== undefined],
+  ["memory-saver", (v) => (v.BuiltInExtensions as { memorySaver?: unknown } | undefined)?.memorySaver !== undefined],
   ["auto-update", (v) => v.AutoUpdateEnabled !== undefined || v.UpdateChannel !== undefined || v.UpdateDelayDays !== undefined || v.MinimumVersion !== undefined],
 ];
 

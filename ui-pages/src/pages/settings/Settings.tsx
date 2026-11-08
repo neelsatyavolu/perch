@@ -6,6 +6,7 @@ import { BuiltIn } from "./BuiltIn";
 import { Appearance } from "./Appearance";
 import { ImportSection, MemorySection, RoutinesSection } from "./Links";
 import { Models } from "./Models";
+import { Performance } from "./Performance";
 import { Permissions } from "./Permissions";
 import { Privacy } from "./Privacy";
 import { SECTIONS, type SectionId, isSection, searchSettings, sectionLabel } from "./sections";
@@ -13,7 +14,7 @@ import { SkillsMcp } from "./SkillsMcp";
 import "./settings.css";
 
 const PAGES: Readonly<Record<SectionId, ComponentType>> = {
-  appearance: Appearance, models: Models, skills: SkillsMcp, permissions: Permissions, privacy: Privacy, builtin: BuiltIn,
+  appearance: Appearance, models: Models, skills: SkillsMcp, permissions: Permissions, privacy: Privacy, performance: Performance, builtin: BuiltIn,
   memory: MemorySection, routines: RoutinesSection, import: ImportSection, about: About,
 };
 

@@ -21,7 +21,7 @@ test.each<[string, Record<string, unknown>, RowId[]]>([
   ["ModelEndpoints", { ModelEndpoints: [] }, ["providers"]],
   ["ImportEnabled", { ImportEnabled: { data: ["bookmarks"] } }, ["import-browsers"]],
   ["BuiltInExtensions", { BuiltInExtensions: { backrow: false } }, ["built-in-backrow"]],
-  ["BuiltInExtensions memory saver", { BuiltInExtensions: { memorySaver: false } }, ["built-in-lulltab"]],
+  ["BuiltInExtensions memory saver", { BuiltInExtensions: { memorySaver: false } }, ["memory-saver"]],
   ["AutoUpdateEnabled", { AutoUpdateEnabled: false }, ["auto-update"]],
   ["UpdateDelayDays", { UpdateDelayDays: 7 }, ["auto-update"]],
 ])("%s locks its rows", (_name, values, expected) => {

@@ -2,7 +2,7 @@
 
 import type {
   AboutInfo, AuditEntry, ChatSummary, DetectedBrowser, DraftFact, DreamLog, McpImportCandidate, McpServer, MemoryDoc, MemorySettings, Model,
-  Permissions, PrivacySettings, Provider, Routine, RoutineProposal, SetupSource, SiteData, Skill, Suggestion, TaskModel,
+  MemorySaverSettings, Permissions, PrivacySettings, Provider, Routine, RoutineProposal, SetupSource, SiteData, Skill, Suggestion, TabMemory, TaskModel,
 } from "../api";
 
 export const SEED_NOW = "2026-11-05T09:46:00.000Z";
@@ -119,6 +119,22 @@ export const SITE_DATA: readonly SiteData[] = [
   { host: "mail.example.com", bytes: 48_200_000, cookies: 14, lastUsed: "2026-11-05T09:40:00.000Z" },
   { host: "github.com", bytes: 12_400_000, cookies: 9, lastUsed: "2026-11-05T08:30:00.000Z" },
   { host: "news.example.com", bytes: 3_100_000, cookies: 41, lastUsed: "2026-10-30T07:00:00.000Z" },
+];
+
+export const MEMORY_SAVER: MemorySaverSettings = {
+  timeoutMinutes: 15,
+  rules: [
+    { kind: "domain", pattern: "music.example.com" },
+    { kind: "host", pattern: "mail.example.com" },
+  ],
+};
+
+export const TAB_MEMORY: readonly TabMemory[] = [
+  { title: "Inbox (12) - Example Mail", url: "https://mail.example.com/inbox", bytes: 182_400_000, asleep: false },
+  { title: "perch/ui-pages at main", url: "https://github.com/example/perch", bytes: 96_300_000, asleep: false },
+  { title: "Quarterly plan - Example Docs", url: "https://docs.example.com/d/plan", bytes: 0, asleep: true },
+  { title: "Weekend playlist", url: "https://music.example.com/playlist/7", bytes: 241_800_000, asleep: false },
+  { title: "Morning headlines", url: "https://news.example.com/", bytes: 0, asleep: true },
 ];
 
 export const MEMORY_SETTINGS: MemorySettings = { extraction: true, historyExtraction: false, dreaming: true, lastDream: "2026-11-05T03:00:00.000Z" };

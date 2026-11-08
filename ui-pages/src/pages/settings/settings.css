@@ -71,3 +71,8 @@
 .dream-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; }
 .dream-list h3 { font-size: 12px; font-weight: 500; color: var(--ink); }
 .dream-list ul { margin: 6px 0 0; padding-left: 18px; color: var(--body); display: grid; gap: 4px; }
+
+/* Memory by tab: long titles end in an ellipsis; sizes are mono (tabular). */
+#tab-memory .srow > div:first-of-type { min-width: 0; }
+.tab-title { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tab-memory-foot { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }

@@ -7,7 +7,6 @@ import { Switch } from "../../ui/Switch";
 
 const ABOUT: Readonly<Record<BuiltInName, { title: string; detail: string }>> = {
   perch: { title: "Perch tools", detail: "Ad and tracker blocking, cookie banners, tracking parameters, reader view, video keys, link preview and screenshots" },
-  lulltab: { title: "Lulltab", detail: "Puts tabs you haven't used for a while to sleep, so they stop using memory. They wake when you click them" },
   backrow: { title: "Backrow", detail: "Watch Netflix, YouTube and other services in sync with friends, with an encrypted chat beside the video" },
   caveatly: { title: "Caveatly", detail: "Reads a site's terms of service and privacy policy and grades what they say. Uses your own Gemini API key" },
 };
@@ -19,7 +18,7 @@ export function BuiltIn() {
   const list = useLoad((a) => a.listBuiltInExtensions());
   const { locked } = useManaged();
   if (!list.data) return <p class="mute">{list.error ?? ""}</p>;
-  const isLocked = (name: BuiltInName) => (name === "backrow" || name === "lulltab") && locked(`built-in-${name}`);
+  const isLocked = (name: BuiltInName) => name === "backrow" && locked("built-in-backrow");
   return (
     <div class="sec">
       <Group label="Built in" id="built-in">

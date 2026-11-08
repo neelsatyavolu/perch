@@ -1,0 +1,19 @@
+# Perch: Private windows ask where to save each download.
+diff --git a/chrome/browser/download/download_prefs.cc b/chrome/browser/download/download_prefs.cc
+index 2c70b38cd1..dd41d1797f 100644
+--- a/chrome/browser/download/download_prefs.cc
++++ b/chrome/browser/download/download_prefs.cc
+@@ -468,6 +468,13 @@ bool DownloadPrefs::PromptForDownload() const {
+   CHECK(!download_path_.IsManaged() || !prompt_for_download_.GetValue(),
+         base::NotFatalUntil::M161);
+ 
++  // Perch: a private window asks where to save every download, so nothing
++  // lands in Downloads unseen (spec 5.8). A company's download folder still
++  // wins.
++  if (profile_ && profile_->IsOffTheRecord() && !download_path_.IsManaged()) {
++    return true;
++  }
++
+ #if BUILDFLAG(IS_ANDROID)
+   if (base::android::device_info::is_desktop() &&
+       base::FeatureList::IsEnabled(

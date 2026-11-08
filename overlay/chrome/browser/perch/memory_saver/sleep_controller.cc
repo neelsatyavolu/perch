@@ -12,6 +12,7 @@
 #include "base/unguessable_token.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/performance_manager/policies/memory_saver_mode_policy.h"
+#include "chrome/browser/perch/perch_built_in_policy.h"
 #include "chrome/browser/perch/perch_pref_names.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/tab_list/tab_list_interface.h"
@@ -55,6 +56,12 @@ void WatchTimeout() {
   static base::NoDestructor<PrefChangeRegistrar> registrar;
   if (!registrar->IsEmpty() || !g_browser_process->local_state()) {
     return;
+  }
+  // An administrator turned the memory saver off (BuiltInExtensions).
+  if (ForcedBuiltIn("memorySaver") == false) {
+    g_browser_process->local_state()->SetInteger(
+        tuning_prefs::kMemorySaverModeState,
+        static_cast<int>(tuning_prefs::MemorySaverModeState::kDisabled));
   }
   registrar->Init(g_browser_process->local_state());
   registrar->Add(tuning_prefs::kMemorySaverModeTimeBeforeDiscardInMinutes,
@@ -110,7 +117,7 @@ void SetSleepRules(Profile* profile, const std::vector<SleepRule>& rules) {
 
 int GetSleepTimeoutMinutes() {
   const PrefService* local_state = g_browser_process->local_state();
-  if (!local_state ||
+  if (!local_state || ForcedBuiltIn("memorySaver") == false ||
       local_state->GetInteger(tuning_prefs::kMemorySaverModeState) !=
           static_cast<int>(tuning_prefs::MemorySaverModeState::kEnabled)) {
     return 0;
@@ -119,9 +126,13 @@ int GetSleepTimeoutMinutes() {
       tuning_prefs::kMemorySaverModeTimeBeforeDiscardInMinutes);
 }
 
+bool IsMemorySaverManaged() {
+  return ForcedBuiltIn("memorySaver").has_value();
+}
+
 void SetSleepTimeoutMinutes(int minutes) {
   PrefService* local_state = g_browser_process->local_state();
-  if (!local_state) {
+  if (!local_state || IsMemorySaverManaged()) {
     return;
   }
   const auto state = minutes > 0 ? tuning_prefs::MemorySaverModeState::kEnabled

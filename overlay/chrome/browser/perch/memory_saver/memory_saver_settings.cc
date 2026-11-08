@@ -37,6 +37,9 @@ base::expected<base::DictValue, std::string> SetMemorySaverSettings(
     Profile* profile,
     const base::DictValue& patch) {
   const base::Value* timeout = patch.Find("timeoutMinutes");
+  if (timeout && IsMemorySaverManaged()) {
+    return base::unexpected("Managed by your organization");
+  }
   if (timeout && (!timeout->is_int() || timeout->GetInt() < 0 ||
                   timeout->GetInt() > kMaxTimeoutMinutes)) {
     return base::unexpected("Choose a time between 0 minutes and a day");

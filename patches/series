@@ -23,6 +23,7 @@ perch/shell/new-tab-page.patch
 perch/policy/no-test-policies-in-release.patch
 perch/policy/ignored-google-policies.patch
 perch/policy/update-policy.patch
+perch/policy/built-in-policy.patch
 perch/shell/layout-constants.patch
 perch/shell/tab-strip.patch
 perch/shell/browser-window-sources.patch

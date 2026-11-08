@@ -22,6 +22,7 @@
 #include "base/supports_user_data.h"
 #include "base/values.h"
 #include "chrome/browser/extensions/component_loader.h"
+#include "chrome/browser/perch/perch_built_in_policy.h"
 #include "chrome/browser/perch/perch_pref_names.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_observer.h"
@@ -61,6 +62,15 @@ constexpr BuiltIn kBuiltIns[] = {
 };
 
 constexpr char kWatcherKey[] = "perch.component_extensions";
+
+// The pref, unless the BuiltInExtensions policy decides (only "backrow" has a
+// key there).
+bool IsEnabled(Profile* profile, const BuiltIn& builtin) {
+  if (std::optional<bool> forced = ForcedBuiltIn(builtin.name)) {
+    return *forced;
+  }
+  return profile->GetPrefs()->GetBoolean(builtin.pref);
+}
 
 base::FilePath ExtensionsDir() {
   base::FilePath dir =
@@ -248,7 +258,7 @@ class Watcher : public base::SupportsUserData::Data, public ProfileObserver {
     if (!loader) {
       return;
     }
-    if (!profile_->GetPrefs()->GetBoolean(builtin.pref)) {
+    if (!IsEnabled(profile_, builtin)) {
       if (loader->Exists(builtin.id)) {
         loader->Remove(std::string(builtin.id));
       }
@@ -273,7 +283,7 @@ class Watcher : public base::SupportsUserData::Data, public ProfileObserver {
         extensions::ComponentLoader::Get(profile_);
     // The pref may have changed while the files were prepared.
     if (!prepared || !loader || loader->Exists(builtin.id) ||
-        !profile_->GetPrefs()->GetBoolean(builtin.pref)) {
+        !IsEnabled(profile_, builtin)) {
       return;
     }
     RecordRulesetChecksums(profile_, builtin.id, prepared->checksums);
@@ -310,7 +320,7 @@ std::vector<BuiltInExtensionState> ListBuiltInExtensions(Profile* profile) {
   std::vector<BuiltInExtensionState> result;
   for (const BuiltIn& builtin : kBuiltIns) {
     result.push_back(
-        {builtin.name, profile->GetPrefs()->GetBoolean(builtin.pref)});
+        {builtin.name, IsEnabled(profile, builtin)});
   }
   return result;
 }
@@ -320,6 +330,10 @@ bool SetBuiltInExtensionEnabled(Profile* profile,
                                 bool enabled) {
   for (const BuiltIn& builtin : kBuiltIns) {
     if (name == builtin.name) {
+      // A setting the BuiltInExtensions policy sets is locked.
+      if (ForcedBuiltIn(builtin.name)) {
+        return false;
+      }
       profile->GetPrefs()->SetBoolean(builtin.pref, enabled);
       return true;
     }

@@ -37,6 +37,8 @@ void SetSleepRules(Profile* profile, const std::vector<SleepRule>& rules);
 // Minutes a background tab waits before it sleeps; 0 when memory saver is off.
 int GetSleepTimeoutMinutes();
 void SetSleepTimeoutMinutes(int minutes);
+// The BuiltInExtensions policy sets the memory saver; its setting is locked.
+bool IsMemorySaverManaged();
 
 // Puts `tab` to sleep now, unless it is still loading. An active tab hands
 // focus to its neighbour first.

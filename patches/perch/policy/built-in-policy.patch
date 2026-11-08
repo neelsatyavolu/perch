@@ -1,0 +1,14 @@
+# Perch: builds the BuiltInExtensions policy reader.
+diff --git a/chrome/browser/BUILD.gn b/chrome/browser/BUILD.gn
+index 61b9f5b964..7667853719 100644
+--- a/chrome/browser/BUILD.gn
++++ b/chrome/browser/BUILD.gn
+@@ -1811,6 +1811,8 @@ source_set("core") {
+       "fullscreen_mac.mm",
+       "global_keyboard_shortcuts_mac.mm",
+       "icon_loader_mac.mm",
++      "perch/perch_built_in_policy.h",
++      "perch/perch_built_in_policy.mm",
+       "perch/perch_update_policy.h",
+       "perch/perch_update_policy.mm",
+       "perch/perch_updater_mac.h",

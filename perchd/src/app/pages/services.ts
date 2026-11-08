@@ -34,7 +34,8 @@ import { SkillStore } from "../../skills/store";
 import type { PagesCore, Windows } from "../app";
 import type { ChatStore } from "../chats";
 import { createPagesApi, type PagesApi } from "../pages-api";
-import { AppError } from "../runs";
+import { wakeChat } from "../heartbeat";
+import { AppError, type RunManager } from "../runs";
 import type { Vault } from "../vault";
 import { Jobs } from "./jobs";
 import { PagesState } from "./state";
@@ -76,7 +77,7 @@ export type PageServices = {
   /** Memory for a sidebar chat. */
   chatMemory: () => Promise<Awaited<ReturnType<PerchData["chatMemory"]>>>;
   /** Hands over the app's chats and windows, for building the memory profile. */
-  attach(app: { chats: ChatStore; windows: Windows }): void;
+  attach(app: { chats: ChatStore; windows: Windows; runs?: RunManager }): void;
   stop(): Promise<void>;
 };
 
@@ -95,7 +96,7 @@ export function openPageServices(opts: PageServicesOptions): PageServices {
   let registry: Promise<ModelRegistry> | null = null;
   const models = () => (registry ??= SettingsStore.open({ dir: base, keychain: settingsKeychain }).then((store) => createModelRegistry({ store, keychain: settingsKeychain })));
 
-  let app: { chats: ChatStore; windows: Windows } | null = null;
+  let app: { chats: ChatStore; windows: Windows; runs?: RunManager } | null = null;
   const data = openPerchData({
     dataDir: base,
     profile: opts.profile,
@@ -112,6 +113,8 @@ export function openPageServices(opts: PageServicesOptions): PageServices {
     },
     browser: async () => opts.browser,
     audit: opts.audit,
+    wakeChat: async (chatId, task, signal) =>
+      app?.runs ? wakeChat({ chats: app.chats, runs: app.runs }, chatId, task, signal) : { status: "error", answer: "Perch's chats aren't open yet." },
     ...(opts.policy ? { policy: opts.policy } : {}),
     setupInputs: () => ({
       history: () => readChromiumHistory(profileDir, { now: new Date() }),

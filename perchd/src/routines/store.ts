@@ -20,6 +20,8 @@ export type Routine = {
   /** A model id such as "anthropic:claude-sonnet-5-5"; empty means the profile's default model. */
   readonly model?: string;
   readonly missed: MissedPolicy;
+  /** A heartbeat: each run sends the task into this existing chat instead of starting a new one. */
+  readonly wake?: { readonly chatId: string };
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly lastRunAt: string | null;
@@ -39,6 +41,8 @@ export type RunRecord = {
   /** What the run wanted to do but could not without the user. */
   readonly declined: readonly string[];
   readonly chatId: string | null;
+  /** The person's chat a heartbeat run answered in. */
+  readonly wokeChat?: string;
   readonly note?: string;
 };
 export type RoutineChat = {

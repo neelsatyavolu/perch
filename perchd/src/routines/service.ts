@@ -40,6 +40,8 @@ export type PerchDataOptions = {
   now?: () => Date;
   /** Company policy: the agent and memory on or off, the mode cap and site rules. */
   policy?: PolicyView;
+  /** Heartbeat routines: sends a task into one of the person's chats (app/heartbeat.ts). */
+  wakeChat?: RunnerDeps["wakeChat"];
 };
 
 /** Local hour after which the day's dreaming pass may run. */
@@ -65,6 +67,7 @@ export async function openPerchData(opts: PerchDataOptions) {
     runTask: opts.runTask,
     now,
     ...(opts.policy ? { policy: opts.policy } : {}),
+    ...(opts.wakeChat ? { wakeChat: opts.wakeChat } : {}),
   };
   const scheduler = new Scheduler({ store: routines, now, run: (routine, trigger, scheduledFor) => runRoutine(routine, trigger, runner, { scheduledFor }) });
   let lastDream = "";

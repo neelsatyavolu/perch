@@ -28,7 +28,10 @@ export type RunnerDeps = {
   timeoutMs?: number;
   /** Company policy: turns the agent off, caps the mode, adds site rules. */
   policy?: PolicyView;
+  /** Sends a heartbeat routine's task into its chat and waits for the answer (app/heartbeat.ts). */
+  wakeChat?: (chatId: string, task: string, signal?: AbortSignal) => Promise<WakeResult>;
 };
+export type WakeResult = { status: RunStatus; answer: string };
 export type RunOptions = { approve?: (request: ApprovalRequest) => Promise<boolean>; scheduledFor?: Date | null; signal?: AbortSignal };
 
 const DEFAULT_TIMEOUT_MS = 20 * 60_000;
@@ -41,7 +44,47 @@ export function unattendedNote(routine: Routine): string {
   ].join(" ");
 }
 
+const NO_CHATS = "This routine wakes a chat, and Perch's chats aren't open in this process.";
+
+/**
+ * A heartbeat run: the task goes into the person's own chat, where its approvals show as cards,
+ * so the run counts as attended there.
+ */
+async function wakeRoutineChat(routine: Routine & { wake: { chatId: string } }, trigger: RunTrigger, deps: RunnerDeps, opts: RunOptions): Promise<RunRecord> {
+  const now = deps.now ?? (() => new Date());
+  const startedAt = now().toISOString();
+  const timer = new AbortController();
+  const timeout = setTimeout(() => timer.abort(), deps.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  const signal = opts.signal ? AbortSignal.any([opts.signal, timer.signal]) : timer.signal;
+  let result: WakeResult;
+  try {
+    result = deps.wakeChat ? await deps.wakeChat(routine.wake.chatId, routine.task, signal) : { status: "error", answer: NO_CHATS };
+  } catch (error) {
+    result = { status: "error", answer: error instanceof Error ? error.message : String(error) };
+  } finally {
+    clearTimeout(timeout);
+  }
+  if (timer.signal.aborted && result.status === "cancelled") result = { status: "cancelled", answer: TIMED_OUT };
+  const record: RunRecord = {
+    id: newId(),
+    routineId: routine.id,
+    trigger,
+    scheduledFor: opts.scheduledFor?.toISOString() ?? null,
+    startedAt,
+    finishedAt: now().toISOString(),
+    status: result.status,
+    answer: result.answer,
+    declined: [],
+    chatId: null,
+    wokeChat: routine.wake.chatId,
+  };
+  await deps.store.addRun(record);
+  await deps.store.update(routine.id, (latest) => ({ ...latest, lastRunAt: startedAt }));
+  return record;
+}
+
 export async function runRoutine(routine: Routine, trigger: RunTrigger, deps: RunnerDeps, opts: RunOptions = {}): Promise<RunRecord> {
+  if (routine.wake) return wakeRoutineChat({ ...routine, wake: routine.wake }, trigger, deps, opts);
   const now = deps.now ?? (() => new Date());
   const startedAt = now().toISOString();
   const attended = trigger === "manual" ? opts.approve : undefined;

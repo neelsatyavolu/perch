@@ -1,0 +1,50 @@
+# Perch: a sleeping tab shows a moon in the title's colour instead of Chromium's dimmed ring; builds the memory saver settings and icon sources.
+diff --git a/chrome/browser/ui/browser_window/internal/BUILD.gn b/chrome/browser/ui/browser_window/internal/BUILD.gn
+index 0f9dc3bf67..f75ef91245 100644
+--- a/chrome/browser/ui/browser_window/internal/BUILD.gn
++++ b/chrome/browser/ui/browser_window/internal/BUILD.gn
+@@ -100,6 +100,10 @@ source_set("internal") {
+       "//chrome/browser/perch/perch_menu_mac.mm",
+       "//chrome/browser/perch/tab_tools/tab_tools.cc",
+       "//chrome/browser/perch/tab_tools/tab_tools.h",
++      "//chrome/browser/perch/memory_saver/memory_saver_settings.cc",
++      "//chrome/browser/perch/memory_saver/memory_saver_settings.h",
++      "//chrome/browser/perch/memory_saver/sleeping_tab_icon.cc",
++      "//chrome/browser/perch/memory_saver/sleeping_tab_icon.h",
+       "//chrome/browser/perch/memory_saver/sleep_controller.cc",
+       "//chrome/browser/perch/memory_saver/sleep_controller.h",
+       "//chrome/browser/perch/memory_saver/sleep_rules.cc",
+diff --git a/chrome/browser/ui/views/tabs/tab/tab_icon.cc b/chrome/browser/ui/views/tabs/tab/tab_icon.cc
+index 191b1b5156..edb9a083a8 100644
+--- a/chrome/browser/ui/views/tabs/tab/tab_icon.cc
++++ b/chrome/browser/ui/views/tabs/tab/tab_icon.cc
+@@ -13,6 +13,7 @@
+ #include "base/trace_event/trace_event.h"
+ #include "chrome/browser/browser_process.h"
+ #include "chrome/browser/favicon/favicon_utils.h"
++#include "chrome/browser/perch/memory_saver/sleeping_tab_icon.h"
+ #include "chrome/browser/ui/browser_element_identifiers.h"
+ #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+ #include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
+@@ -126,7 +127,8 @@ void TabIcon::SetData(const tabs::TabData& data) {
+   SetIcon(data.favicon, data.should_themify_favicon);
+   SetNetworkState(data.network_state);
+   SetCrashed(data.is_crashed);
+-  SetDiscarded(data.should_show_discard_status);
++  // Perch: every sleeping tab shows the moon, however it went to sleep.
++  SetDiscarded(data.should_show_discard_status || data.is_tab_discarded);
+   has_tab_data_ = true;
+ 
+   UpdateThrobber();
+@@ -242,6 +244,11 @@ void TabIcon::OnPaint(gfx::Canvas* canvas) {
+   if (!GetShowingLoadingAnimation() && GetShowingAttentionIndicator() &&
+       !should_display_crashed_favicon_) {
+     PaintAttentionIndicatorAndIcon(canvas, GetIconToPaint(), icon_bounds);
++  } else if (is_discarded_ && !GetShowingLoadingAnimation()) {
++    // Perch: a sleeping tab shows a moon in the title's mute colour.
++    perch::PaintSleepingMoon(
++        canvas, icon_bounds,
++        GetColorProvider()->GetColor(kColorTabForegroundInactiveFrameActive));
+   } else if (was_discard_indicator_shown_) {
+     PaintDiscardRingAndIcon(canvas, GetIconToPaint(), icon_bounds);
+   } else {

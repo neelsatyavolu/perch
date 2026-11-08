@@ -33,5 +33,6 @@ perch/shell/component-extension-rulesets.patch
 perch/shell/tab-tools.patch
 perch/shell/incognito-spelling.patch
 perch/shell/memory-saver.patch
+perch/shell/sleeping-tab-icon.patch
 perch/build/thinlto-jobs.patch
 perch/build/perch-unittests.patch

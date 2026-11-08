@@ -18,6 +18,7 @@
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/perch/extensions/perch_component_extensions.h"
+#include "chrome/browser/perch/memory_saver/memory_saver_settings.h"
 #include "chrome/browser/perch/perch_pref_names.h"
 #include "chrome/browser/perch/settings/appearance.h"
 #include "chrome/browser/perch/settings/privacy.h"
@@ -304,6 +305,23 @@ void PerchPageHandler::Dispatch(const std::string& method,
       return;
     }
     Resolve(std::move(id), base::Value(BuiltIns(profile())));
+  } else if (method == "getMemorySaver") {
+    Resolve(std::move(id), base::Value(GetMemorySaverSettings(profile())));
+  } else if (method == "setMemorySaver" || method == "addSleepRule") {
+    base::expected<base::DictValue, std::string> result =
+        base::unexpected("Send the settings to change");
+    if (method == "setMemorySaver" && arg0 && arg0->is_dict()) {
+      result = SetMemorySaverSettings(profile(), arg0->GetDict());
+    } else if (method == "addSleepRule" && arg0 && arg0->is_string()) {
+      result = AddSleepRule(profile(), arg0->GetString());
+    }
+    if (!result.has_value()) {
+      Reject(std::move(id), "invalid", result.error());
+      return;
+    }
+    Resolve(std::move(id), base::Value(std::move(*result)));
+  } else if (method == "listTabMemory") {
+    Resolve(std::move(id), base::Value(ListTabMemory(profile())));
   } else {
     Reject(std::move(id), "unavailable",
            "This part of Perch isn't available in this build yet");

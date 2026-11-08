@@ -20,6 +20,7 @@
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_service.h"
 #include "components/tabs/public/tab_interface.h"
+#include "content/public/browser/invalidate_type.h"
 #include "content/public/browser/web_contents.h"
 #include "url/gurl.h"
 
@@ -158,7 +159,11 @@ void SleepTab(tabs::TabInterface* tab) {
     tabs->ActivateTab(
         tabs->GetTab(index + 1 < count ? index + 1 : index - 1)->GetHandle());
   }
-  tabs->DiscardTab(tab->GetHandle());
+  content::WebContents* asleep = tabs->DiscardTab(tab->GetHandle());
+  // Chromium redraws a tab it put to sleep itself; ask for the moon here.
+  if (asleep) {
+    asleep->NotifyNavigationStateChanged(content::INVALIDATE_TYPE_TAB);
+  }
 }
 
 void NeverSleepSite(Profile* profile, const GURL& url) {

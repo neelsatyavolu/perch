@@ -1,6 +1,10 @@
 // Copyright 2026 The Perch Authors
 // Use of this source code is governed by the MIT license in Perch's LICENSE file.
 
+#include "chrome/browser/perch/hide_chrome/hide_chrome.h"
+#include "chrome/browser/perch/perch_menu_mac.h"
+#include "chrome/browser/perch/snapshot/chrome_snapshot.h"
+#include "chrome/browser/perch/theme/perch_theme.h"
 #include "chrome/browser/perch/side_panel/perch_side_panel_controller.h"
 
 #include <map>
@@ -324,9 +328,14 @@ void InitWindowFeatures(BrowserWindowInterface* browser,
   PerchdLauncher::Get().MaybeStart();
   Controllers()[browser] =
       std::make_unique<PerchSidePanelController>(browser, registry);
+  ApplyPerchTheme(browser->GetProfile());
+  WatchHideChrome(browser);
+  AddPerchMenuItems();
+  MaybeStartChromeSnapshot(browser);
 }
 
 void TearDownWindowFeatures(BrowserWindowInterface* browser) {
+  UnwatchHideChrome(browser);
   Controllers().erase(browser);
 }
 

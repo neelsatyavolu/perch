@@ -1,11 +1,15 @@
 /**
  * The Routines page over the routines API (src/routines). A daily schedule is a cron line, an
- * interval is the store's own interval schedule; routines that start on an event, and proposals
- * found from repeated chats, are not built yet.
+ * interval is the store's own interval schedule. Proposals come from repeated chats
+ * (routines/suggest.ts) and are saved only when the person accepts one. Routines that start on an
+ * event are not built yet.
  */
 
-import type { Routine as PageRoutine, RoutineRun, Schedule as PageSchedule, Weekday } from "../../../../ui-pages/src/api";
+import { createHash } from "node:crypto";
+import type { Routine as PageRoutine, RoutineProposal, RoutineRun, Schedule as PageSchedule, Weekday } from "../../../../ui-pages/src/api";
 import { parseCron, type Schedule } from "../../routines/schedule";
+import { findProposals, type Ask } from "../../routines/suggest";
+import type { Chat } from "../protocol";
 import type { RunRecord } from "../../routines/store";
 import type { RoutineView } from "../../routines/api";
 import { AppError } from "../runs";
@@ -14,7 +18,6 @@ import { gone, notYet, ok, type Methods } from "./common";
 import type { PagesDeps } from "./deps";
 
 const WEEKDAYS: readonly Weekday[] = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
-const PROPOSALS = "Perch can't suggest routines from your chats yet. Make one with New routine.";
 const TRIGGERS = "Routines that start on an event aren't available yet. Pick a time of day or an interval.";
 const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -67,6 +70,8 @@ export function routinesPages(deps: PagesDeps): Methods<
   "listRoutines" | "saveRoutine" | "setRoutineEnabled" | "deleteRoutine" | "runRoutine" | "findRoutineProposals" | "acceptProposal" | "dismissProposal"
 > {
   const data = () => deps.data();
+  /** The proposals the page was last shown; accepting one takes it from here. */
+  let proposals = new Map<string, RoutineProposal>();
 
   async function view(r: RoutineView): Promise<PageRoutine> {
     const runs = ok(await (await data()).routinesApi.runs({ id: r.id, limit: 10 }));
@@ -113,15 +118,44 @@ export function routinesPages(deps: PagesDeps): Methods<
       void (await data()).routinesApi.runNow({ id: r.id });
     },
     async findRoutineProposals() {
-      return notYet(PROPOSALS);
+      const d = await data();
+      const model = await d.fastModel().catch(() => undefined);
+      const drafts = await findProposals({ asks: firstAsks(deps.chats.list()), now: deps.now?.() ?? new Date(), ...(model ? { model } : {}) });
+      const { dismissed } = await deps.state.get();
+      const tasks = new Set(ok(await d.routinesApi.list()).map((r) => sameTask(r.task)));
+      const found = drafts
+        .map((p) => ({ id: proposalId(p.task), title: p.title, prompt: p.task, schedule: p.schedule as PageSchedule, evidence: p.evidence }))
+        .filter((p) => !dismissed.includes(`proposal:${p.id}`) && !tasks.has(sameTask(p.prompt)));
+      proposals = new Map(found.map((p) => [p.id, p]));
+      return found;
     },
     async acceptProposal([id]) {
-      v.id(id, "id");
-      return notYet(PROPOSALS);
+      const proposal = proposals.get(v.id(id, "id")) ?? gone("That suggestion is no longer offered");
+      const api = (await data()).routinesApi;
+      const routine = await view(ok(await api.create({ name: proposal.title, task: proposal.prompt, schedule: scheduleInput(proposal.schedule) })));
+      proposals = new Map([...proposals].filter(([key]) => key !== proposal.id));
+      return routine;
     },
     async dismissProposal([id]) {
-      v.id(id, "id");
-      return notYet(PROPOSALS);
+      const key = `proposal:${v.id(id, "id")}`;
+      await deps.state.update((s) => (s.dismissed.includes(key) ? s : { ...s, dismissed: [...s.dismissed, key] }));
+      proposals = new Map([...proposals].filter(([pid]) => pid !== id));
     },
   };
+}
+
+/** The first thing the person asked in each saved chat. Private chats never count. */
+function firstAsks(chats: readonly Chat[]): Ask[] {
+  return chats.flatMap((c) => {
+    if (c.incognito) return [];
+    const first = c.messages.find((m) => m.role === "user");
+    return first ? [{ chatId: c.id, text: first.text, time: first.time }] : [];
+  });
+}
+
+const sameTask = (text: string) => text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+
+/** Stable for the same task, so a dismissed proposal stays dismissed when it is found again. */
+function proposalId(task: string): string {
+  return createHash("sha256").update(sameTask(task)).digest("hex").slice(0, 32);
 }

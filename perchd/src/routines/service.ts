@@ -87,6 +87,8 @@ export async function openPerchData(opts: PerchDataOptions) {
     scheduler,
     dreamIfDue,
     memoryApi: createMemoryApi({ store: memory, model: opts.models.fast, setupInputs: opts.setupInputs, now }),
+    /** The fast role's model, for small calls such as grouping routine proposals. */
+    fastModel: opts.models.fast,
     routinesApi: createRoutinesApi({
       store: routines,
       scheduler,

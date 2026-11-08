@@ -1,0 +1,26 @@
+# Perch: the browser answers the co.xanom.perch.keys native host itself, for the Perch extension only.
+diff --git a/chrome/browser/extensions/api/messaging/native_message_process_host.cc b/chrome/browser/extensions/api/messaging/native_message_process_host.cc
+index 14562bbd56..b0c4b622bf 100644
+--- a/chrome/browser/extensions/api/messaging/native_message_process_host.cc
++++ b/chrome/browser/extensions/api/messaging/native_message_process_host.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "chrome/browser/extensions/api/messaging/native_message_process_host.h"
+ 
++#include "chrome/browser/perch/keys/perch_keys_host.h"
++
+ #include <stddef.h>
+ #include <stdint.h>
+ 
+@@ -109,6 +111,11 @@ std::unique_ptr<NativeMessageHost> NativeMessageHost::Create(
+     const std::string& native_host_name,
+     bool allow_user_level,
+     std::string* error_message) {
++  // Perch: the browser answers its own host for the Perch extension.
++  if (native_host_name == perch::kPerchKeysHostName) {
++    return perch::CreatePerchKeysHost(browser_context, source_extension_id,
++                                      error_message);
++  }
+   return NativeMessageProcessHost::CreateWithLauncher(
+       source_extension_id, native_host_name,
+       NativeProcessLauncher::CreateDefault(

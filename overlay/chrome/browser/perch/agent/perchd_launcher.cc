@@ -4,6 +4,7 @@
 #include "chrome/browser/perch/agent/perchd_launcher.h"
 
 #include "chrome/browser/perch/agent/perch_devtools.h"
+#include "chrome/browser/perch/keys/key_broker.h"
 
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -20,6 +21,7 @@
 #include "base/base64url.h"
 #include "base/command_line.h"
 #include "base/files/file_util.h"
+#include "base/posix/eintr_wrapper.h"
 #include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "base/logging.h"
@@ -268,6 +270,23 @@ void PerchdLauncher::OnLaunched(std::unique_ptr<Launched> launched) {
       base::StringPrintf("%d,%d", browser_read_.get(), browser_write_.get()));
   content::DevToolsAgentHost::StartRemoteDebuggingPipeHandler(base::BindOnce(
       &PerchdLauncher::OnPipeClosed, weak_factory_.GetWeakPtr()));
+  // Profile keys follow the settings line on the same pipe (plan 3b task 3).
+  KeyBroker::Get().OnPerchdLaunched(base::BindRepeating(
+      [](int fd, std::string line) {
+        base::ScopedFD copy(HANDLE_EINTR(dup(fd)));
+        if (!copy.is_valid()) {
+          return;
+        }
+        base::ThreadPool::PostTask(
+            FROM_HERE,
+            {base::MayBlock(), base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN},
+            base::BindOnce(
+                [](base::ScopedFD out, std::string text) {
+                  base::WriteFileDescriptor(out.get(), text);
+                },
+                std::move(copy), std::move(line)));
+      },
+      config_.get()));
 }
 
 void PerchdLauncher::OnPipeClosed() {

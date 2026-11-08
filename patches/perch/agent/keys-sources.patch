@@ -1,0 +1,16 @@
+# Perch: builds the key broker and the Perch keys native host.
+diff --git a/chrome/browser/ui/browser_window/internal/BUILD.gn b/chrome/browser/ui/browser_window/internal/BUILD.gn
+index 2a3456e161..9d75d269f2 100644
+--- a/chrome/browser/ui/browser_window/internal/BUILD.gn
++++ b/chrome/browser/ui/browser_window/internal/BUILD.gn
+@@ -104,6 +104,10 @@ source_set("internal") {
+       "//chrome/browser/perch/agent/perch_domain_data.h",
+       "//chrome/browser/perch/agent/task_status.cc",
+       "//chrome/browser/perch/agent/task_status.h",
++      "//chrome/browser/perch/keys/key_broker.cc",
++      "//chrome/browser/perch/keys/key_broker.h",
++      "//chrome/browser/perch/keys/perch_keys_host.cc",
++      "//chrome/browser/perch/keys/perch_keys_host.h",
+       "//chrome/browser/perch/command_bar/command_bar.cc",
+       "//chrome/browser/perch/command_bar/command_bar.h",
+       "//chrome/browser/perch/spaces/spaces.cc",

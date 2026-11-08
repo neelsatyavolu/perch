@@ -3,6 +3,7 @@
 
 #include "chrome/browser/perch/command_bar/command_bar.h"
 #include "chrome/browser/perch/hide_chrome/hide_chrome.h"
+#include "chrome/browser/perch/keys/key_broker.h"
 #include "chrome/browser/perch/memory_saver/sleep_controller.h"
 #include "chrome/browser/perch/perch_menu_mac.h"
 #include "chrome/browser/perch/snapshot/chrome_snapshot.h"
@@ -332,6 +333,7 @@ void InitWindowFeatures(BrowserWindowInterface* browser,
       std::make_unique<PerchSidePanelController>(browser, registry);
   ApplyPerchTheme(browser->GetProfile());
   WatchMemorySaver(browser->GetProfile());
+  KeyBroker::Get().EnsureProfile(browser->GetProfile());
   WatchHideChrome(browser);
   AddPerchMenuItems();
   MaybeStartChromeSnapshot(browser);

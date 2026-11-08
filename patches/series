@@ -41,5 +41,7 @@ perch/shell/translate-on-device.patch
 perch/agent/perch-dot.patch
 perch/agent/agent-hooks-sources.patch
 perch/agent/import-bundle-sources.patch
+perch/agent/perch-keys-host.patch
+perch/agent/keys-sources.patch
 perch/build/thinlto-jobs.patch
 perch/build/perch-unittests.patch

@@ -1,9 +1,10 @@
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
 
-from perchtools.stage import Bundled, StageError, apply_edits, load_bundled, stage_extensions, write_manifest
+from perchtools.stage import Bundled, StageError, apply_edits, load_bundled, stage_extensions, stage_keyhelper, write_manifest
 
 
 def _entry(**over):
@@ -104,3 +105,38 @@ def test_stage_leaves_out_excluded_files(tmp_path: Path):
     b = Bundled.from_json(_entry(name="e", source="ext", dist=".", exclude=["site"]))
     stage_extensions([b], repo=repo, out=tmp_path / "out", cache=tmp_path / "c", local={}, run=lambda *a, **k: None)
     assert not (tmp_path / "out" / "e" / "site").exists()
+
+
+def _keyhelper_repo(tmp_path: Path) -> Path:
+    package = tmp_path / "repo" / "helpers" / "keyhelper"
+    package.mkdir(parents=True)
+    (package / "Info.plist").write_text("<plist/>")
+    return tmp_path / "repo"
+
+
+def test_stage_keyhelper_builds_for_arm64_and_assembles_the_app(tmp_path: Path):
+    repo = _keyhelper_repo(tmp_path)
+    package = repo / "helpers" / "keyhelper"
+    calls = []
+
+    bin_dir = package / ".build" / "out" / "Products" / "Release"
+    build = ["swift", "build", "-c", "release", "--arch", "arm64", "--package-path", str(package)]
+
+    def fake_run(cmd, **_):
+        calls.append([str(c) for c in cmd])
+        bin_dir.mkdir(parents=True, exist_ok=True)
+        (bin_dir / "PerchKeys").write_text("bin")
+        return subprocess.CompletedProcess(cmd, 0, stdout=f"{bin_dir}\n", stderr="")
+
+    app = stage_keyhelper(repo=repo, out=tmp_path / "out", run=fake_run)
+    assert calls == [build, build + ["--show-bin-path"]]
+    assert app == tmp_path / "out" / "Perch Keys.app"
+    assert (app / "Contents" / "Info.plist").read_text() == "<plist/>"
+    assert (app / "Contents" / "MacOS" / "PerchKeys").read_text() == "bin"
+
+
+def test_stage_keyhelper_fails_when_the_build_made_nothing(tmp_path: Path):
+    repo = _keyhelper_repo(tmp_path)
+    with pytest.raises(StageError, match="PerchKeys"):
+        stage_keyhelper(repo=repo, out=tmp_path / "out",
+                        run=lambda cmd, **_: subprocess.CompletedProcess(cmd, 0, stdout=str(tmp_path / "none"), stderr=""))

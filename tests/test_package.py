@@ -22,6 +22,9 @@ def staged_build(paths, tmp_path):
     (release / "Perch Packaging" / "sign_chrome.py").write_text("")
     (release / "perch_extensions" / "perch").mkdir(parents=True)
     (release / "perch_extensions" / "perch" / "manifest.json").write_text("{}")
+    (release / "Perch Keys.app" / "Contents" / "MacOS").mkdir(parents=True)
+    (release / "Perch Keys.app" / "Contents" / "MacOS" / "PerchKeys").write_text("bin")
+    (release / "Perch Keys.app" / "Contents" / "Info.plist").write_text("plist")
     sparkle = tmp_path / "sparkle"
     (sparkle / "Sparkle.framework" / "Versions" / "B").mkdir(parents=True)
     repo = tmp_path / "repo"
@@ -30,6 +33,8 @@ def staged_build(paths, tmp_path):
     (repo / "ui" / "dist" / "assets" / "a.js").write_text("1")
     (repo / "ui-pages" / "dist").mkdir(parents=True)
     (repo / "ui-pages" / "dist" / "settings.html").write_text("<!doctype html>")
+    (repo / "build").mkdir()
+    (repo / "build" / "keys.provisionprofile").write_bytes(b"profile")
     paths = type(paths)(repo=repo, chromium=paths.chromium, src=paths.src, depot_tools=paths.depot_tools)
     return paths, sparkle
 
@@ -43,7 +48,7 @@ def test_package_release_runs_steps_in_order(staged_build, recorder):
     dmg = package(paths, INFO, "release", CREDS, run=recorder, sparkle_root=sparkle, public_key="PUB")
     assert dmg == paths.repo / "dist" / "Perch-0.1.0.dmg"
     assert _names(recorder.calls)[:3] == ["bun", "bun", "bun"]
-    assert _names(recorder.calls)[3:] == ["codesign"] * 6 + [
+    assert _names(recorder.calls)[3:] == ["codesign"] * 7 + [
         "python3", "ditto", "hdiutil", "codesign", "xcrun notarytool submit", "xcrun stapler staple",
         "codesign", "spctl", "xcrun stapler validate",
     ]
@@ -54,7 +59,7 @@ def test_package_release_runs_steps_in_order(staged_build, recorder):
     assert recorder.calls[8][:2] == ["codesign", "--force"] and recorder.calls[8][-1] == str(perchd)
     assert "--entitlements" in recorder.calls[8] and "runtime" in recorder.calls[8]
     assert (framework / "Resources" / "perch_ui" / "assets" / "a.js").read_text() == "1"
-    assert recorder.calls[9] == [
+    assert recorder.calls[10] == [
         "python3", str(dist / "stage" / "Perch Packaging" / "sign_chrome.py"),
         "--input", str(dist / "stage"), "--output", str(dist / "signed"),
         "--identity", CREDS.identity, "--disable-packaging", "--notarize", "none",
@@ -93,8 +98,8 @@ def test_adhoc_skips_notarize_and_sparkle(staged_build, recorder):
     paths, sparkle = staged_build
     package(paths, INFO, "adhoc", None, run=recorder, sparkle_root=sparkle, public_key="")
     names = _names(recorder.calls)
-    assert names == ["bun", "bun", "bun", "codesign", "ditto", "hdiutil"]
-    assert recorder.calls[3][-2:] == ["-", str(paths.repo / "dist" / "stage" / "Perch.app")]
+    assert names == ["bun", "bun", "bun", "codesign", "codesign", "ditto", "hdiutil"]
+    assert recorder.calls[4][-2:] == ["-", str(paths.repo / "dist" / "stage" / "Perch.app")]
     assert not (paths.repo / "dist" / "stage" / "Perch.app" / "Contents" / "Frameworks" / "Sparkle.framework").exists()
 
 
@@ -130,3 +135,48 @@ def test_package_stages_perch_pages(staged_build, recorder):
     package(paths, INFO, "adhoc", None, run=recorder, sparkle_root=sparkle, public_key="")
     resources = paths.repo / "dist" / "stage" / "Perch.app" / "Contents" / "Frameworks" / "Perch Framework.framework" / "Versions" / "158.0.8127.18" / "Resources"
     assert (resources / "perch_pages" / "settings.html").read_text() == "<!doctype html>"
+
+
+HELPER = ("dist", "stage", "Perch.app", "Contents", "Frameworks", "Perch Framework.framework", "Versions", "158.0.8127.18",
+          "Helpers", "Perch Keys.app")
+
+
+def test_release_signs_the_key_helper_with_its_entitlements_before_sign_chrome(staged_build, recorder):
+    paths, sparkle = staged_build
+    package(paths, INFO, "release", CREDS, run=recorder, sparkle_root=sparkle, public_key="PUB")
+    helper = paths.repo.joinpath(*HELPER)
+    signs = [i for i, c in enumerate(recorder.calls) if c[0] == "codesign" and c[-1] == str(helper)]
+    chrome = next(i for i, c in enumerate(recorder.calls) if c[0] == "python3")
+    assert len(signs) == 1 and signs[0] < chrome
+    call = recorder.calls[signs[0]]
+    assert call[call.index("--entitlements") + 1] == str(paths.repo / "helpers" / "keyhelper" / "entitlements.plist")
+    assert call[call.index("--sign") + 1] == CREDS.identity and "runtime" in call
+    assert (helper / "Contents" / "embedded.provisionprofile").read_bytes() == b"profile"
+    assert (helper / "Contents" / "MacOS" / "PerchKeys").read_text() == "bin"
+
+
+def test_release_refuses_without_the_keys_profile(staged_build, recorder):
+    paths, sparkle = staged_build
+    (paths.repo / "build" / "keys.provisionprofile").unlink()
+    with pytest.raises(ValueError, match="keys.provisionprofile"):
+        package(paths, INFO, "release", CREDS, run=recorder, sparkle_root=sparkle, public_key="PUB")
+    assert recorder.calls == []
+
+
+def test_adhoc_signs_the_helper_ad_hoc_without_entitlements_or_profile(staged_build, recorder):
+    paths, sparkle = staged_build
+    (paths.repo / "build" / "keys.provisionprofile").unlink()
+    package(paths, INFO, "adhoc", None, run=recorder, sparkle_root=sparkle, public_key="")
+    helper = paths.repo.joinpath(*HELPER)
+    [call] = [c for c in recorder.calls if c[0] == "codesign" and c[-1] == str(helper)]
+    assert call[call.index("--sign") + 1] == "-" and "--entitlements" not in call
+    assert recorder.calls.index(call) < next(i for i, c in enumerate(recorder.calls) if "--deep" in c)
+    assert not (helper / "Contents" / "embedded.provisionprofile").exists()
+
+
+def test_package_refuses_without_the_staged_helper(staged_build, recorder):
+    import shutil
+    paths, sparkle = staged_build
+    shutil.rmtree(paths.out("release") / "Perch Keys.app")
+    with pytest.raises(ValueError, match="Perch Keys.app"):
+        package(paths, INFO, "adhoc", None, run=recorder, sparkle_root=sparkle, public_key="")

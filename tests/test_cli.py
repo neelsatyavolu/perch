@@ -92,6 +92,7 @@ def test_cli_package_adhoc_needs_no_creds(monkeypatch, paths):
     seen = {}
     monkeypatch.setattr(cli, "current_paths", lambda: paths)
     monkeypatch.setattr(cli, "package", lambda p, info, mode, creds, run: seen.update(mode=mode, creds=creds) or p.repo / "x.dmg")
+    monkeypatch.setattr(cli, "stage_bundled", lambda p, config: p.out(config) / "perch_extensions")
     assert cli.main(["package", "--mode", "adhoc"]) == 0
     assert seen == {"mode": "adhoc", "creds": None}
 

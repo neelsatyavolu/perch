@@ -58,8 +58,10 @@ std::string ConfigScript(PageKind kind) {
   if (kind == PageKind::kSidePanel) {
     // The panel view closes the panel on this same-document navigation
     // (perch_side_panel_controller.cc), and opens window.open in a tab.
+    // Framed by the side shell, the page asks the shell instead.
     script +=
-        "(() => { let n = 0; window.perchHost = Object.freeze({"
+        "if (window.top === window) (() => { let n = 0; "
+        "window.perchHost = Object.freeze({"
         "close() { location.replace('#perch-close-' + (++n)); },"
         "openTab(url) { window.open(url, '_blank', 'noopener'); }}); })();\n";
   }

@@ -5,9 +5,9 @@ export const HOST_REPLY = "perch-host-reply";
 export const HOST_EVENT = "perch-host-event";
 
 /** The trusted shells that frame the chat pages. */
-export const SHELL_ORIGINS: readonly string[] = ["chrome://perch-chat", "chrome://perch-side-chat"];
+export const SHELL_ORIGINS: readonly string[] = ["chrome://perch-chat", "chrome://perch-side-chat.top-chrome"];
 /** The untrusted chat pages a shell frames. */
-export const FRAME_ORIGINS: readonly string[] = ["chrome-untrusted://perch-chat", "chrome-untrusted://perch-side-chat"];
+export const FRAME_ORIGINS: readonly string[] = ["chrome-untrusted://perch-chat", "chrome-untrusted://perch-side-chat.top-chrome"];
 
 /** Every call a frame may make. The shell relays these and nothing else. */
 export const HOST_METHODS = ["close", "openTab", "chooseFiles", "startDictation", "stopDictation"] as const;

@@ -52,9 +52,9 @@
 #include "ui/base/window_open_disposition.h"
 #include "url/gurl.h"
 
-using SidePanelWebUIViewT_PerchSideChatUI =
-    SidePanelWebUIViewT<perch::PerchSideChatUI>;
-BEGIN_TEMPLATE_METADATA(SidePanelWebUIViewT_PerchSideChatUI,
+using SidePanelWebUIViewT_PerchSideShellUI =
+    SidePanelWebUIViewT<perch::PerchSideShellUI>;
+BEGIN_TEMPLATE_METADATA(SidePanelWebUIViewT_PerchSideShellUI,
                         SidePanelWebUIViewT)
 END_METADATA
 
@@ -101,16 +101,16 @@ class CloseWatcher : public content::WebContentsObserver {
 
 // Links in the side chat open in a new tab of the same window; the panel
 // itself never leaves the chat page.
-class PerchSidePanelWebView : public SidePanelWebUIViewT<PerchSideChatUI> {
-  using SidePanelWebUIViewT_PerchSideChatUI =
-      SidePanelWebUIViewT<PerchSideChatUI>;
-  METADATA_HEADER(PerchSidePanelWebView, SidePanelWebUIViewT_PerchSideChatUI)
+class PerchSidePanelWebView : public SidePanelWebUIViewT<PerchSideShellUI> {
+  using SidePanelWebUIViewT_PerchSideShellUI =
+      SidePanelWebUIViewT<PerchSideShellUI>;
+  METADATA_HEADER(PerchSidePanelWebView, SidePanelWebUIViewT_PerchSideShellUI)
 
  public:
   PerchSidePanelWebView(
       SidePanelEntryScope& scope,
       BrowserWindowInterface* browser,
-      std::unique_ptr<WebUIContentsWrapperT<PerchSideChatUI>> contents_wrapper)
+      std::unique_ptr<WebUIContentsWrapperT<PerchSideShellUI>> contents_wrapper)
       : SidePanelWebUIViewT(scope,
                             base::RepeatingClosure(),
                             base::RepeatingClosure(),
@@ -284,11 +284,10 @@ void PerchSidePanelController::OnEntryHidden(SidePanelEntry* entry) {
 std::unique_ptr<views::View> PerchSidePanelController::CreateView(
     SidePanelEntryScope& scope) {
   PerchdLauncher::Get().MaybeStart();
-  const GURL url(std::string(kSideChatURL) + "sidebar.html?window=" +
-                 window_id_);
+  const GURL url(std::string(kSideShellURL) + "?window=" + window_id_);
   auto view = std::make_unique<PerchSidePanelWebView>(
       scope, browser_,
-      std::make_unique<WebUIContentsWrapperT<PerchSideChatUI>>(
+      std::make_unique<WebUIContentsWrapperT<PerchSideShellUI>>(
           url, browser_->GetProfile(), IDS_TOOLTIP_SIDE_PANEL,
           /*esc_closes_ui=*/false));
   // The page needs no handshake to be shown.

@@ -4,7 +4,7 @@ import { HOST_EVENT, HOST_REPLY, HOST_REQUEST, openableUrl } from "../src/host/p
 import { createRelay } from "../src/host/shell";
 import { applyMention, keptMentions, matchTabs, mentionQuery } from "../src/components/mentions";
 
-const FRAME = "chrome-untrusted://perch-side-chat";
+const FRAME = "chrome-untrusted://perch-side-chat.top-chrome";
 
 function relay() {
   const sent: { message: string; args: unknown[] }[] = [];
@@ -69,11 +69,11 @@ function framed(ancestor: string) {
 
 test("the frame host talks only to a Perch shell, matches replies by id, and ignores strangers", async () => {
   expect(createFrameHost(framed("https://evil.test").win)).toBeUndefined();
-  const { win, posted, deliver } = framed("chrome://perch-side-chat");
+  const { win, posted, deliver } = framed("chrome://perch-side-chat.top-chrome");
   const host = createFrameHost(win)!;
   const files = host.chooseFiles!();
-  expect(posted[0]).toEqual({ msg: { type: HOST_REQUEST, id: "h1", method: "chooseFiles", args: [] } as never, origin: "chrome://perch-side-chat" });
-  deliver({ type: HOST_REPLY, id: "h1", ok: true, result: [{ id: "x", name: "fake", size: 1 }] }, {}, "chrome://perch-side-chat");
+  expect(posted[0]).toEqual({ msg: { type: HOST_REQUEST, id: "h1", method: "chooseFiles", args: [] } as never, origin: "chrome://perch-side-chat.top-chrome" });
+  deliver({ type: HOST_REPLY, id: "h1", ok: true, result: [{ id: "x", name: "fake", size: 1 }] }, {}, "chrome://perch-side-chat.top-chrome");
   deliver({ type: HOST_REPLY, id: "h1", ok: true, result: [{ id: "f1", name: "a.pdf", size: 3 }, { path: "/etc" }] });
   expect(await files).toEqual([{ id: "f1", name: "a.pdf", size: 3 }]);
 

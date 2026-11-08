@@ -1,0 +1,26 @@
+# Perch: builds the side shell and artifact loader, and names the side shell for top-chrome metrics.
+diff --git a/chrome/browser/ui/browser_window/internal/BUILD.gn b/chrome/browser/ui/browser_window/internal/BUILD.gn
+index 4baf6736ea..ef9f2de478 100644
+--- a/chrome/browser/ui/browser_window/internal/BUILD.gn
++++ b/chrome/browser/ui/browser_window/internal/BUILD.gn
+@@ -100,6 +100,8 @@ source_set("internal") {
+       "//chrome/browser/perch/perch_commands.h",
+       "//chrome/browser/perch/perch_menu_mac.h",
+       "//chrome/browser/perch/perch_menu_mac.mm",
++      "//chrome/browser/perch/agent/artifact_scheme.cc",
++      "//chrome/browser/perch/agent/artifact_scheme.h",
+       "//chrome/browser/perch/agent/credential_fill.cc",
+       "//chrome/browser/perch/agent/credential_fill.h",
+       "//chrome/browser/perch/agent/import_bundle.cc",
+diff --git a/tools/metrics/histograms/metadata/page/histograms.xml b/tools/metrics/histograms/metadata/page/histograms.xml
+index 5163d1cba1..b35f86f10c 100644
+--- a/tools/metrics/histograms/metadata/page/histograms.xml
++++ b/tools/metrics/histograms/metadata/page/histograms.xml
+@@ -1099,6 +1099,7 @@ chromium-metrics-reviews@google.com.
+   <variant name=".PerformanceSidePanel"/>
+   <variant name=".PerchCommandBar"/>
+   <variant name=".PerchSideChat"/>
++  <variant name=".PerchSideShell"/>
+   <variant name=".ReadAnythingUntrusted"/>
+   <variant name=".ReadingList"/>
+   <variant name=".ReloadButtonUI"/>

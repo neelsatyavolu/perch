@@ -11,6 +11,8 @@
 #include "chrome/browser/perch/agent/perchd_launcher.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+#include "chrome/browser/ui/side_panel/side_panel_ui.h"
+#include "chrome/browser/ui/webui/webui_embedding_context.h"
 #include "chrome/browser/ui/select_file_policy/chrome_select_file_policy.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "components/tabs/public/tab_interface.h"
@@ -96,10 +98,18 @@ void PerchShellHandler::HandleHost(const base::ListValue& args) {
   content::WebContents* contents = web_ui()->GetWebContents();
   tabs::TabInterface* tab = tabs::TabInterface::MaybeGetFromContents(contents);
   BrowserWindowInterface* browser =
-      tab ? tab->GetBrowserWindowInterface() : nullptr;
+      tab ? tab->GetBrowserWindowInterface()
+          : webui::GetBrowserWindowInterface(contents);
 
   if (method == "close") {
     Reply(id, true, base::Value());
+    // The side chat closes its panel; the full chat closes its tab.
+    if (!tab && browser) {
+      if (SidePanelUI* panel = SidePanelUI::From(browser)) {
+        panel->Close();
+      }
+      return;
+    }
     if (browser) {
       TabStripModel* model = browser->GetTabStripModel();
       const int index = model->GetIndexOfWebContents(contents);

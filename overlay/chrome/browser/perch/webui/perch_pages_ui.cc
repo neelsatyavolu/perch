@@ -8,6 +8,7 @@
 
 #include "chrome/browser/perch/command_bar/command_bar.h"
 #include "chrome/browser/perch/webui/perch_page_handler.h"
+#include "chrome/browser/perch/webui/perch_side_chat_ui.h"
 #include "chrome/browser/perch/webui/perch_ui_source.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_ui.h"
@@ -59,6 +60,7 @@ void RegisterPerchPagesWebUIConfigs(content::WebUIConfigMap& map) {
     map.AddWebUIConfig(std::make_unique<PerchPagesUIConfig>(host, page));
   }
   map.AddWebUIConfig(std::make_unique<PerchCommandBarUIConfig>());
+  map.AddWebUIConfig(std::make_unique<PerchSideShellUIConfig>());
 }
 
 bool IsPerchPageHost(std::string_view host) {

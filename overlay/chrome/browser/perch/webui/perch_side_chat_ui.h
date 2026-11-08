@@ -6,6 +6,7 @@
 
 #include <string_view>
 
+#include "chrome/browser/ui/webui/top_chrome/top_chrome_web_ui_controller.h"
 #include "chrome/browser/ui/webui/top_chrome/top_chrome_webui_config.h"
 #include "chrome/browser/ui/webui/top_chrome/untrusted_top_chrome_web_ui_controller.h"
 
@@ -19,7 +20,33 @@ inline constexpr char kSideChatHost[] = "perch-side-chat.top-chrome";
 inline constexpr char kSideChatURL[] =
     "chrome-untrusted://perch-side-chat.top-chrome/";
 
+inline constexpr char kSideShellHost[] = "perch-side-chat.top-chrome";
+inline constexpr char kSideShellURL[] = "chrome://perch-side-chat.top-chrome/";
+
 class PerchSideChatUI;
+class PerchSideShellUI;
+
+class PerchSideShellUIConfig
+    : public DefaultTopChromeWebUIConfig<PerchSideShellUI> {
+ public:
+  PerchSideShellUIConfig();
+  ~PerchSideShellUIConfig() override;
+};
+
+// The side panel's trusted shell (ui/ shell-side.html): it frames the side
+// chat and relays its host calls (PerchShellHandler), such as attaching files.
+class PerchSideShellUI : public TopChromeWebUIController {
+ public:
+  explicit PerchSideShellUI(content::WebUI* web_ui);
+  PerchSideShellUI(const PerchSideShellUI&) = delete;
+  PerchSideShellUI& operator=(const PerchSideShellUI&) = delete;
+  ~PerchSideShellUI() override;
+
+  static constexpr std::string_view GetWebUIName() { return "PerchSideShell"; }
+
+ private:
+  WEB_UI_CONTROLLER_TYPE_DECL();
+};
 
 class PerchSideChatUIConfig
     : public DefaultTopChromeWebUIConfig<PerchSideChatUI> {

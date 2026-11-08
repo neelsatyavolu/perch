@@ -141,7 +141,7 @@ Reply GetInfo() {
        {"setTaskStatus", "revealChat", "askRequested", "getBookmarks",
         "applyBookmarkChanges", "getHistory", "addHistory", "getOpenTabs",
         "getExtensionTabId", "applyImportBundle", "listLogins", "fillLogin",
-        "listCards", "fillCard"}) {
+        "listCards", "fillCard", "perch-artifact"}) {
     features.Append(feature);
   }
   result.Set("features", std::move(features));

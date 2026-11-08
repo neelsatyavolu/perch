@@ -1,0 +1,59 @@
+# Perch: perch-artifact://<id>/<version> is a secure standard scheme whose loader forwards to perchd.
+diff --git a/chrome/browser/chrome_content_browser_client.cc b/chrome/browser/chrome_content_browser_client.cc
+index 701df73c39..a67b1a69e7 100644
+--- a/chrome/browser/chrome_content_browser_client.cc
++++ b/chrome/browser/chrome_content_browser_client.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "chrome/browser/chrome_content_browser_client.h"
+ 
++#include "chrome/browser/perch/agent/artifact_scheme.h"
++
+ #include <algorithm>
+ #include <iterator>
+ #include <map>
+@@ -6396,6 +6398,11 @@ ChromeContentBrowserClient::CreateNonNetworkNavigationURLLoaderFactory(
+       content::WebContents::FromFrameTreeNodeId(frame_tree_node_id);
+   content::BrowserContext* browser_context = web_contents->GetBrowserContext();
+ 
++  // Perch: artifacts load from perchd.
++  if (scheme == perch::kArtifactScheme) {
++    return perch::CreateArtifactURLLoaderFactory(browser_context);
++  }
++
+ #if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
+   if (scheme == extensions::kExtensionScheme) {
+     if (!ChromeContentBrowserClientExtensionsPart::
+@@ -6917,6 +6924,17 @@ void ChromeContentBrowserClient::
+                        site_token_provider::SiteTokenURLLoaderFactory::Create(
+                            render_process_id));
+   }
++
++  // Perch: an artifact's own files (scripts, images) load from perchd too.
++  if (request_initiator_origin &&
++      request_initiator_origin->scheme() == perch::kArtifactScheme) {
++    if (content::RenderProcessHost* process =
++            content::RenderProcessHost::FromID(render_process_id)) {
++      factories->emplace(
++          perch::kArtifactScheme,
++          perch::CreateArtifactURLLoaderFactory(process->GetBrowserContext()));
++    }
++  }
+ }
+ 
+ void ChromeContentBrowserClient::WillCreateURLLoaderFactory(
+diff --git a/chrome/common/chrome_content_client.cc b/chrome/common/chrome_content_client.cc
+index 634d6841cd..3775dec613 100644
+--- a/chrome/common/chrome_content_client.cc
++++ b/chrome/common/chrome_content_client.cc
+@@ -207,6 +207,10 @@ void ChromeContentClient::AddAdditionalSchemes(Schemes* schemes) {
+     schemes->standard_schemes.push_back(standard_scheme);
+   // Perch: perch:// addresses, rewritten to chrome:// before they load.
+   schemes->standard_schemes.push_back("perch");
++  // Perch: perch-artifact://<id>/<version>, served by perchd; each artifact
++  // is its own secure origin.
++  schemes->standard_schemes.push_back("perch-artifact");
++  schemes->secure_schemes.push_back("perch-artifact");
+ 
+ #if BUILDFLAG(IS_ANDROID)
+   schemes->referrer_schemes.push_back(content::kAndroidAppScheme);

@@ -46,5 +46,7 @@ perch/agent/keys-sources.patch
 perch/agent/credential-fill-sources.patch
 perch/agent/chat-shell.patch
 perch/agent/omnibox-ask.patch
+perch/agent/artifact-scheme.patch
+perch/agent/side-shell.patch
 perch/build/thinlto-jobs.patch
 perch/build/perch-unittests.patch

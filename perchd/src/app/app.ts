@@ -9,7 +9,7 @@ import { ArtifactStore } from "./artifacts";
 import { ChatStore, DEFAULT_SETTINGS } from "./chats";
 import type { PagesApi } from "./pages-api";
 import type { AppEvent, AppInfo, ChatSettings, ModelInfo, TabInfo, WindowState } from "./protocol";
-import { RunManager, type Runner } from "./runs";
+import { RunManager, type RunDeps, type Runner } from "./runs";
 import { startServer, type Listen, type Server } from "./server";
 import type { Vault } from "./vault";
 
@@ -30,6 +30,8 @@ export type AppOptions = {
   browserToken?: string;
   /** Perch's own pages (ui-pages) through `POST /api/pages/<method>`; left out, those routes are not found. */
   pages?: (core: PagesCore) => PagesApi;
+  /** Every chat status change (RunDeps.onStatus): the browser's perch dot. */
+  onStatus?: RunDeps["onStatus"];
 };
 
 /** What the pages API gets from the app: its chats, runs, an event to the pages, and the new-chat defaults. */
@@ -138,6 +140,7 @@ export async function startApp(opts: AppOptions): Promise<App> {
     emit: (event) => publish(event),
     artifactUrl: artifactServer.urlFor,
     tabs: () => windows.tabs(),
+    ...(opts.onStatus ? { onStatus: opts.onStatus } : {}),
   });
   let defaults: ChatSettings = { ...DEFAULT_SETTINGS, model: opts.models[0]?.id ?? "", ...opts.defaults };
   const info = (): AppInfo => ({ models: opts.models, defaults, artifactOrigin: artifactServer.origin });

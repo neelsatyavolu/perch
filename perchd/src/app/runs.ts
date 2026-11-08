@@ -19,6 +19,8 @@ export type RunnerInput = {
   signal: AbortSignal;
   /** The user's tab the task works in, for the "current tab" scope when the browser named its target. */
   tab?: TabInfo;
+  /** The chat this run belongs to, so the browser can mark the tabs it works in (the perch dot). */
+  chatId?: string;
 };
 export type Runner = (input: RunnerInput) => AsyncIterable<StepEvent>;
 
@@ -30,6 +32,8 @@ export type RunDeps = {
   artifactUrl: (id: string, version: number) => string;
   /** The tabs the browser reported, for the "all tabs" scope. */
   tabs: () => TabInfo[];
+  /** Every status change of a chat, with its card while one waits: the browser's perch dot and notices. */
+  onStatus?: (chatId: string, status: ChatStatus, card: ApprovalCard | null) => void;
 };
 
 export class AppError extends Error {
@@ -38,24 +42,59 @@ export class AppError extends Error {
   }
 }
 
-type Pending = { card: ApprovalCard; resolve: (approved: boolean) => void };
+type Pending = { card: ApprovalCard; resolve: (approved: boolean) => void; done?: Promise<void> };
 type Run = { runId: string; chatId: string; controller: AbortController; text: string; steps: string[]; pending: Pending | null; done: Promise<void> };
 
 const MAX_MESSAGE = 50_000;
 
 export class RunManager {
   private runs = new Map<string, Run>();
+  /** Cards for work that runs outside a chat's own run: an outside agent's action, a new client. */
+  private held = new Map<string, Pending>();
 
   constructor(private readonly deps: RunDeps) {}
 
   status(chatId: string): ChatStatus {
     const run = this.runs.get(chatId);
-    return !run ? "idle" : run.pending ? "waiting" : "running";
+    if (!run) return this.held.has(chatId) ? "waiting" : "idle";
+    return run.pending ? "waiting" : "running";
   }
 
   snapshot(chatId: string): RunSnapshot | null {
     const run = this.runs.get(chatId);
-    return run ? { runId: run.runId, chatId, text: run.text, steps: run.steps, approval: run.pending?.card ?? null } : null;
+    if (run) return { runId: run.runId, chatId, text: run.text, steps: run.steps, approval: run.pending?.card ?? null };
+    const held = this.held.get(chatId);
+    return held ? { runId: held.card.runId, chatId, text: "", steps: [], approval: held.card } : null;
+  }
+
+  /**
+   * Shows a card in a chat that has no run of its own going, and waits for the user's answer.
+   * Outside agents without their own prompt (Codex) and new clients ask the user this way.
+   * One card per chat at a time: a second waits for the first.
+   */
+  async hold(chatId: string, card: Omit<ApprovalCard, "id" | "chatId" | "runId">, signal?: AbortSignal): Promise<boolean> {
+    if (!this.deps.chats.get(chatId)) throw new AppError(`no chat ${chatId}`, 404);
+    while (this.held.has(chatId)) await this.held.get(chatId)!.done;
+    if (signal?.aborted) return false;
+    const full: ApprovalCard = { ...card, id: crypto.randomUUID(), chatId, runId: `held-${crypto.randomUUID()}` };
+    let settle!: () => void;
+    const done = new Promise<void>((r) => (settle = r));
+    return new Promise<boolean>((resolve) => {
+      const finish = (approved: boolean) => {
+        if (this.held.get(chatId)?.card.id !== full.id) return;
+        this.held.delete(chatId);
+        signal?.removeEventListener("abort", onAbort);
+        this.deps.emit({ type: "run.approval.resolved", chatId, runId: full.runId, approvalId: full.id, approved });
+        this.announce(chatId);
+        settle();
+        resolve(approved);
+      };
+      const onAbort = () => finish(false);
+      this.held.set(chatId, { card: full, resolve: finish, done });
+      signal?.addEventListener("abort", onAbort, { once: true });
+      this.deps.emit({ type: "run.approval", chatId, runId: full.runId, card: full });
+      this.announce(chatId);
+    });
   }
 
   summary(chat: Chat): ChatSummary {
@@ -98,6 +137,7 @@ export class RunManager {
       }));
       this.deps.emit({ type: "run.started", chatId, runId: run.runId, message });
       this.deps.emit({ type: "chat.updated", chat: this.summary(updated) });
+      this.deps.onStatus?.(chatId, "running", null);
     } catch (error) {
       this.runs.delete(chatId);
       throw error;
@@ -108,6 +148,11 @@ export class RunManager {
 
   /** The user's answer to an approval card. False when the card is not waiting any more. */
   decide(approvalId: string, approved: boolean): boolean {
+    const held = [...this.held.values()].find((p) => p.card.id === approvalId);
+    if (held) {
+      held.resolve(approved);
+      return true;
+    }
     const run = [...this.runs.values()].find((r) => r.pending?.card.id === approvalId);
     if (!run?.pending) return false;
     run.pending.resolve(approved);
@@ -157,7 +202,7 @@ export class RunManager {
     let final: string | undefined;
     let error: string | undefined;
     try {
-      const events = this.deps.runner({ task, settings, approve: this.approve(run), signal: run.controller.signal, ...(tab ? { tab } : {}) });
+      const events = this.deps.runner({ task, settings, approve: this.approve(run), signal: run.controller.signal, chatId: run.chatId, ...(tab ? { tab } : {}) });
       for await (const event of events) {
         if (event.type === "text") {
           run.text += event.delta;
@@ -217,6 +262,8 @@ export class RunManager {
 
   /** Tells every page a chat's title, status or binding changed. */
   announce(chatId: string): void {
+    const card = this.runs.get(chatId)?.pending?.card ?? this.held.get(chatId)?.card ?? null;
+    this.deps.onStatus?.(chatId, this.status(chatId), card);
     const chat = this.deps.chats.get(chatId);
     if (chat) this.deps.emit({ type: "chat.updated", chat: this.summary(chat) });
   }

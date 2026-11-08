@@ -30,6 +30,11 @@ export class SidebarRuns {
   delete(session: string): void {
     this.runs.delete(session);
   }
+
+  /** The daemon sessions working for a chat now. */
+  sessionsFor(chatId: string): string[] {
+    return [...this.runs].filter(([, run]) => run.chatId === chatId).map(([session]) => session);
+  }
 }
 
 type Agent = "codex" | "claude-code";
@@ -123,7 +128,7 @@ export function sidebarRunner(opts: SidebarRunnerOptions): Runner {
     const session = `sidebar-${randomBytes(12).toString("hex")}`;
     const token = randomBytes(32).toString("base64url");
     const mode = capMode(input.settings.mode, policy);
-    opts.runs.add(session, { token, mode, approve: input.approve, ...(input.tab?.targetId ? { tab: input.tab.targetId } : {}) });
+    opts.runs.add(session, { token, mode, approve: input.approve, ...(input.tab?.targetId ? { tab: input.tab.targetId } : {}), ...(input.chatId ? { chatId: input.chatId } : {}) });
     const mcp: McpServer = {
       command: opts.perch.command,
       args: [...opts.perch.args, "mcp", "--agent", "Perch", "--title", "Sidebar"],

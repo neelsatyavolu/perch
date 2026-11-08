@@ -24,7 +24,7 @@ from .rename import rename_product_strings
 from .sbom import KNOWN_VULNERABILITIES, SbomError, checksums, known_vulnerabilities, unlisted, vulnerability_check, write_sbom
 from .series import read_series
 from .sparkle import fetch_sparkle, load_pin
-from .stage import BUNDLED_FILE, StageError, load_bundled, stage_extensions
+from .stage import BUNDLED_FILE, StageError, load_bundled, stage_extensions, stage_keyhelper
 from .netaudit import AllowedHosts, netaudit
 from .run import run
 from .version import VersionInfo, bump, latest_stable_mac, read_version, write_version
@@ -99,12 +99,14 @@ def _cmd_build(args: argparse.Namespace) -> int:
 
 
 def stage_bundled(paths: Paths, config: str) -> Path:
-    """Build the built-in extensions into out/<config>/perch_extensions."""
+    """Build the built-in extensions into out/<config>/perch_extensions and the key helper into
+    out/<config>/Perch Keys.app."""
     local_file = paths.repo / "perch-build.local.json"
     local = json.loads(local_file.read_text()).get("extensions", {}) if local_file.exists() else {}
     out = paths.out(config) / "perch_extensions"
     stage_extensions(load_bundled(paths.repo / BUNDLED_FILE), repo=paths.repo, out=out,
                      cache=paths.repo / "dist" / "cache" / "extensions", local=local, run=run)
+    stage_keyhelper(repo=paths.repo, out=paths.out(config), run=run)
     return out
 
 
@@ -114,7 +116,7 @@ def _cmd_stage(args: argparse.Namespace) -> int:
     except StageError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
-    print(f"Staged the built-in extensions in {out}")
+    print(f"Staged the built-in extensions in {out} and Perch Keys.app in {out.parent}")
     return 0
 
 

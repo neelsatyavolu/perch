@@ -1,12 +1,9 @@
 /** QR import and code fill for the authenticator. */
 
+import { fillOneTimeCode, siteMatches } from "../totp/site-fill";
 import { codeFor, type VaultEntry } from "../totp/vault";
 
-/** A code fills only on its site or that site's subdomains; anywhere else it can only be copied. */
-export function siteMatches(site: string | null, host: string): boolean {
-  if (!site) return false;
-  return host === site || host.endsWith(`.${site}`);
-}
+export { siteMatches };
 
 /** Captures the visible part of the tab and reads the first otpauth:// QR code in it. */
 export async function scanTabForSetupCode(tab: chrome.tabs.Tab): Promise<string> {
@@ -35,23 +32,4 @@ export async function fillCode(tabId: number, entry: VaultEntry): Promise<void> 
   const code = await codeFor(entry);
   const [result] = await chrome.scripting.executeScript({ target: { tabId }, func: fillOneTimeCode, args: [code, host] });
   if (result?.result !== true) throw new Error("No code field found on this page. Click into the field, then try Fill again.");
-}
-
-// Runs inside the page.
-function fillOneTimeCode(code: string, expectedHost: string): boolean {
-  if (location.hostname !== expectedHost) return false;
-  const isField = (el: Element | null): el is HTMLInputElement =>
-    el instanceof HTMLInputElement && !el.disabled && !el.readOnly && ["text", "tel", "number", "password", ""].includes(el.type);
-  const candidates = [
-    document.activeElement,
-    document.querySelector('input[autocomplete="one-time-code"]'),
-    document.querySelector('input[name*="otp" i], input[name*="totp" i], input[id*="otp" i], input[name*="code" i][inputmode="numeric"]'),
-  ];
-  const field = candidates.find(isField);
-  if (!field) return false;
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-  setter?.call(field, code);
-  field.dispatchEvent(new Event("input", { bubbles: true }));
-  field.dispatchEvent(new Event("change", { bubbles: true }));
-  return true;
 }

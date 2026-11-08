@@ -73,3 +73,24 @@ export function memorySecretStore(): SecretStore {
     },
   };
 }
+
+/** The same store, kept in the profile's sealed secrets file (plan 3b, task 3) instead of the Keychain. */
+export function sealedSecretStore(secrets: import("../secure/sealed-secrets").SealedSecrets): SecretStore {
+  const check = (name: string) => {
+    if (!NAME.test(name)) throw new Error("Bad Keychain item name");
+  };
+  return {
+    async get(name) {
+      check(name);
+      return secrets.get(name);
+    },
+    async set(name, value) {
+      check(name);
+      await secrets.set(name, value);
+    },
+    async delete(name) {
+      check(name);
+      await secrets.delete(name);
+    },
+  };
+}

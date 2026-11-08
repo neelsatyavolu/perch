@@ -18,6 +18,9 @@ from .version import VersionInfo, bundle_versions
 FEED_URL = "https://github.com/neelsatyavolu/perch/releases/latest/download/appcast.xml"
 APP = "Perch.app"
 PACKAGING = "Perch Packaging"
+KEYS_APP = "Perch Keys.app"
+KEYS_PROFILE = Path("build") / "keys.provisionprofile"
+KEYS_ENTITLEMENTS = Path("helpers") / "keyhelper" / "entitlements.plist"
 CRED_VARS = ("APPLE_SIGNING_IDENTITY", "APPLE_API_KEY", "APPLE_API_ISSUER", "APPLE_API_KEY_PATH")
 
 Mode = Literal["release", "adhoc"]
@@ -95,6 +98,30 @@ def stage_extensions_into(app: Path, staged: Path) -> None:
     shutil.copytree(staged, dest)
 
 
+def stage_keyhelper_into(app: Path, staged: Path) -> Path:
+    """Copy Perch Keys.app (perch-build stage-extensions) into the framework's Helpers, next to perchd."""
+    if not (staged / "Contents" / "MacOS" / "PerchKeys").is_file():
+        raise ValueError(f"{staged} is missing; run perch-build stage-extensions --config release first")
+    dest = _framework_version(app) / "Helpers" / KEYS_APP
+    shutil.rmtree(dest, ignore_errors=True)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(staged, dest)
+    return dest
+
+
+def embed_keys_profile(helper: Path, repo: Path) -> bool:
+    """Embed build/keys.provisionprofile (git-ignored) in the helper when it is present.
+
+    The owner saves the Developer ID profile for co.xanom.perch.keyhelper there first, e.g.
+    `op read --out-file build/keys.provisionprofile "op://<vault>/<keys profile item>/<file>"`.
+    """
+    profile = repo / KEYS_PROFILE
+    if not profile.is_file():
+        return False
+    shutil.copyfile(profile, helper / "Contents" / "embedded.provisionprofile")
+    return True
+
+
 def _make_dmg(app: Path, dist: Path, info: VersionInfo, run) -> Path:
     folder = dist / "dmg"
     folder.mkdir(parents=True, exist_ok=True)
@@ -117,13 +144,19 @@ def package(
     sparkle_root: Path | None = None,
     public_key: str | None = None,
 ) -> Path:
+    if mode == "release" and not (paths.repo / KEYS_PROFILE).is_file():
+        raise ValueError(f"{KEYS_PROFILE} is missing; save the Perch Keys provisioning profile there first")
     dist = paths.repo / "dist"
     stage = _stage(paths, dist)
     app = stage / APP
     perchd = stage_agent(app, paths.repo, run)
     stage_extensions_into(app, paths.out("release") / "perch_extensions")
+    helper = stage_keyhelper_into(app, paths.out("release") / KEYS_APP)
+    embed_keys_profile(helper, paths.repo)
     if mode == "adhoc":
         update_plist(app / "Contents" / "Info.plist", bundle_versions(info))
+        # Ad hoc: no restricted entitlements, so the helper falls back to a software key (protected: false).
+        run(["codesign", "--force", "--options", "runtime", "--sign", "-", helper])
         run(["codesign", "--force", "--deep", "--sign", "-", app])
         return _make_dmg(app, dist, info, run)
 
@@ -139,6 +172,11 @@ def package(
     # Bun's JIT needs these under the hardened runtime; sign_chrome.py then seals the framework around it.
     run(["codesign", "--force", "--timestamp", "--options", "runtime",
          "--entitlements", paths.repo / "build" / "perchd.entitlements", "--sign", creds.identity, perchd],
+        secrets=secrets)
+    # The key helper's Keychain access group needs its own profile and entitlements; signed before
+    # sign_chrome.py seals the framework around it.
+    run(["codesign", "--force", "--timestamp", "--options", "runtime",
+         "--entitlements", paths.repo / KEYS_ENTITLEMENTS, "--sign", creds.identity, helper],
         secrets=secrets)
     update_plist(app / "Contents" / "Info.plist", bundle_versions(info) | sparkle_keys(FEED_URL, key))
     signed = dist / "signed"

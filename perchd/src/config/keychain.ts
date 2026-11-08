@@ -88,3 +88,22 @@ export function memoryKeychain(): Keychain & { names(): string[] } {
     names: () => [...items.keys()].sort(),
   };
 }
+
+/** The same store, kept in the profile's sealed secrets file (plan 3b, task 3) instead of the Keychain. */
+export function sealedKeychain(secrets: import("../secure/sealed-secrets").SealedSecrets): Keychain {
+  return {
+    async get(name) {
+      checkName(name);
+      return secrets.get(name);
+    },
+    async set(name, value) {
+      checkName(name);
+      checkValue(value);
+      await secrets.set(name, value);
+    },
+    async delete(name) {
+      checkName(name);
+      return secrets.delete(name);
+    },
+  };
+}

@@ -79,3 +79,30 @@ export class MemoryKeychain implements Keychain {
     this.items = next;
   }
 }
+
+/**
+ * The same store, kept in the profile's sealed secrets file (plan 3b, task 3) instead of the
+ * Keychain. `service` keeps the client tokens apart from the registry's seal key.
+ */
+export class SealedKeychain implements Keychain {
+  constructor(
+    private readonly secrets: import("../secure/sealed-secrets").SealedSecrets,
+    readonly service = "Perch clients",
+  ) {}
+
+  async get(account: string): Promise<string | null> {
+    checkAccount(account);
+    return this.secrets.get(`${this.service}/${account}`);
+  }
+
+  async set(account: string, secret: string): Promise<void> {
+    checkAccount(account);
+    if (!SECRET.test(secret)) throw new Error("A client token must be 16 to 128 URL-safe characters");
+    await this.secrets.set(`${this.service}/${account}`, secret);
+  }
+
+  async delete(account: string): Promise<void> {
+    checkAccount(account);
+    await this.secrets.delete(`${this.service}/${account}`);
+  }
+}

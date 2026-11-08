@@ -55,6 +55,12 @@ export function describeApproval(req: ApprovalRequest, ids: Ids): ApprovalCard {
       return card(`Click at ${a.x}, ${a.y} on the page`, `Click at ${a.x}, ${a.y}`);
     case "repl":
       return card("Run a script on the page", "Run script", { body: String(a.code ?? "") });
+    case "sign_in":
+      return card(req.summary || `Sign in to ${req.site}`, "Sign in");
+    case "fill_card":
+      return card(req.summary || `Fill a saved card on ${req.site}`, "Fill card");
+    case "fill_code":
+      return card(req.summary || `Fill a one-time code on ${req.site}`, "Fill code");
     default:
       return card(req.summary || `Use ${req.call.name}`, `Allow ${req.call.name}`);
   }

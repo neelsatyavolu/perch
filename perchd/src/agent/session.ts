@@ -6,6 +6,7 @@
 import { appTool } from "../apps/index";
 import type { ToolCall } from "../models/types";
 import type { AuditLog } from "./audit";
+import { FILL_TOOLS, fillKind, fillSummary } from "./fill-tools";
 import { classify, needsApproval, type Kind, type Mode, type SiteRule, type Target } from "./permissions";
 import { approvalDetail, checkCall, describeTarget, focusedTarget, liveTarget, pageContext, runTool, type ToolContext, type ToolResult } from "./tools";
 
@@ -35,11 +36,12 @@ export async function prepareCall(ctx: ToolContext, opts: CallPolicy, call: Tool
 
   const target = call.name === "press" ? await focusedTarget(ctx) : describeTarget(ctx, call) ?? (await liveTarget(ctx, call));
   const app = appTool(call.name);
-  const page = READS.has(call.name) || app ? {} : await pageContext(ctx);
+  const fill = FILL_TOOLS.has(call.name);
+  const page = READS.has(call.name) || app || fill ? {} : await pageContext(ctx);
   const drop = await dropTarget(ctx, call);
-  const kind = classify(call, target, page, drop);
   const destination = call.name === "navigate" || call.name === "open_tab" ? String(call.args.url) : undefined;
   const site = app ? app.site : destination ? hostOf(destination) : await currentHost(ctx);
+  const kind = fill ? fillKind(call.name, site, ctx) : classify(call, target, page, drop);
   const ruled = needsApproval(opts.mode, kind, opts.siteRule?.(site));
   const decision = ruled === "run" && app?.alwaysAsks(call.args) ? "ask" : ruled;
   const what = [target ? `${target.role} "${target.name}"` : summarizeArgs(call), drop ? `onto ${drop.role} "${drop.name}"` : ""].filter(Boolean).join(" ");
@@ -53,7 +55,9 @@ export async function prepareCall(ctx: ToolContext, opts: CallPolicy, call: Tool
     await opts.audit.append({ ...entry, approved: null, result: "blocked" });
     return { kind: "answer", result: { content: `Blocked: the user does not allow the agent to act on ${site}.`, isError: true } };
   }
-  const request: ApprovalRequest = { call, target, kind, site, summary: `${verb(call)} ${detail} on ${site}` };
+  // A fill's card names the login or card (masked); it goes to the user only, never into the audit detail or the model.
+  const summary = fill ? (decision === "ask" ? await fillSummary(ctx, call.name, site) : "") : `${verb(call)} ${detail} on ${site}`;
+  const request: ApprovalRequest = { call, target, kind, site, summary };
   return { kind: "run", call, target, site, decision, request, entry };
 }
 
@@ -108,6 +112,9 @@ function summarizeArgs(call: ToolCall): string {
   if (call.name === "click_at") return `the point ${call.args.x}, ${call.args.y}`;
   if (call.name === "repl") return `(${String(call.args.code ?? "").length} characters of code)`;
   if (appTool(call.name)) return [call.args.command, ...((call.args.args as string[] | undefined) ?? [])].join(" ");
+  if (call.name === "sign_in") return "a saved login";
+  if (call.name === "fill_card") return "a saved card";
+  if (call.name === "fill_code") return "an authenticator code";
   return "";
 }
 
@@ -137,6 +144,9 @@ export function label(call: ToolCall, target: Target | undefined, site: string):
     case "wait_for": return `Waited for "${call.args.text}"`;
     case "tabs": return "Listed tabs";
     case "switch_tab": return "Switched tabs";
+    case "sign_in": return `Signed in to ${site}`;
+    case "fill_card": return `Filled a saved card on ${site}`;
+    case "fill_code": return `Filled a code on ${site}`;
     default: return call.name;
   }
 }

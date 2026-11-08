@@ -8,7 +8,7 @@ import { errorText, h } from "./dom";
 import { fillCode, scanTabForSetupCode, siteMatches } from "./codes";
 
 export async function renderCodes(root: HTMLElement, tab: chrome.tabs.Tab | undefined, url: URL | null): Promise<void> {
-  const vault = browserVault();
+  const vault = (await browserVault())?.vault;
   if (!vault) {
     root.append(h("div", { class: "section" }, [h("p", { class: "empty", text: AUTHENTICATOR_OFF })]));
     return;

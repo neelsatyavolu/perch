@@ -89,8 +89,35 @@ describe("Vault", () => {
 });
 
 describe("browserVault", () => {
-  test("release builds have no vault: the key would sit in the profile next to the records", () => {
-    expect(browserVault()).toBeNull();
-    expect(AUTHENTICATOR_OFF).toContain("Keychain");
+  const noPerchKey: KeyStore = { get: async () => Promise.reject(new Error("Specified native messaging host not found.")), put: async () => {} };
+  const legacy = () => {
+    const m = memory();
+    return { ...m, legacy: { ...m.keys, remove: async () => {} } };
+  };
+
+  test("uses Perch's key when the browser answers, and moves records made under a development key", async () => {
+    const m = legacy();
+    await new Vault(m.legacy, m.records).add(account, "example.com");
+    const perchKey = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+    const keys: KeyStore = { get: async () => perchKey, put: async () => {} };
+    const open = await browserVault({ keys, legacy: m.legacy, records: m.records, unpacked: async () => true });
+    expect(open!.keyInProfile).toBe(false);
+    expect(await new Vault(keys, m.records).list()).toEqual(await open!.vault.list());
+    expect((await open!.vault.list())[0]).toMatchObject({ ...account, site: "example.com" });
+  });
+
+  test("without Perch's key an unpacked (development) install keeps its key in the profile", async () => {
+    const m = legacy();
+    const open = await browserVault({ keys: noPerchKey, legacy: m.legacy, records: m.records, unpacked: async () => true });
+    expect(open!.keyInProfile).toBe(true);
+    await open!.vault.add(account, null);
+    expect(await m.keys.get()).not.toBeNull();
+  });
+
+  test("without Perch's key any other install has no vault: the key would sit in the profile next to the records", async () => {
+    const m = legacy();
+    expect(await browserVault({ keys: noPerchKey, legacy: m.legacy, records: m.records, unpacked: async () => false })).toBeNull();
+    expect(await browserVault({ keys: noPerchKey, legacy: m.legacy, records: m.records })).toBeNull();
+    expect(AUTHENTICATOR_OFF).toContain("Perch's own key");
   });
 });

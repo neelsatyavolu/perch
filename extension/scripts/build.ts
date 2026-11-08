@@ -4,7 +4,6 @@
  *
  *   bun scripts/build.ts            uses lists in .cache/lists, downloading them if missing
  *   bun scripts/build.ts --refresh  downloads fresh lists first
- *   bun scripts/build.ts --profile-key  development build with the authenticator on (key in the profile)
  */
 
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -23,11 +22,6 @@ export type BuildOptions = {
   /** Filter list files by ruleset id; defaults to the downloaded EasyList and EasyPrivacy. */
   lists?: Record<string, string>;
   minify?: boolean;
-  /**
-   * Keep the authenticator's key in the profile (IndexedDB). For development and tests only: release
-   * builds leave the authenticator off until its key can live in the Keychain.
-   */
-  profileKey?: boolean;
 };
 
 export type BuildReport = { outDir: string; rules: Record<string, number>; skipped: Record<string, Record<string, number>> };
@@ -41,10 +35,9 @@ export async function build(opts: BuildOptions = {}): Promise<BuildReport> {
   rmSync(outDir, { recursive: true, force: true });
   mkdirSync(join(outDir, "rules"), { recursive: true });
 
-  const define = { PERCH_PROFILE_KEY: String(opts.profileKey === true) };
-  await bundle(ESM_ENTRIES, "esm", outDir, minify, define);
+  await bundle(ESM_ENTRIES, "esm", outDir, minify);
   // Content scripts are classic scripts: one self-contained file each, no imports at run time.
-  await bundle(CONTENT_ENTRIES, "iife", outDir, minify, define);
+  await bundle(CONTENT_ENTRIES, "iife", outDir, minify);
 
   cpSync(join(ROOT, "static"), outDir, { recursive: true });
   copyIcons(join(outDir, "icons"));
@@ -74,7 +67,7 @@ export async function build(opts: BuildOptions = {}): Promise<BuildReport> {
   };
 }
 
-async function bundle(entries: string[], format: "esm" | "iife", outDir: string, minify: boolean, define: Record<string, string>): Promise<void> {
+async function bundle(entries: string[], format: "esm" | "iife", outDir: string, minify: boolean): Promise<void> {
   const result = await Bun.build({
     entrypoints: entries.map((e) => join(ROOT, e)),
     root: join(ROOT, "src"),
@@ -84,7 +77,6 @@ async function bundle(entries: string[], format: "esm" | "iife", outDir: string,
     minify,
     splitting: false,
     naming: "[dir]/[name].[ext]",
-    define,
   });
   if (!result.success) throw new Error(`bundle failed:\n${result.logs.map(String).join("\n")}`);
 }
@@ -117,7 +109,7 @@ function checkManifest(outDir: string, ids: string[]): void {
 }
 
 if (import.meta.main) {
-  const report = await build({ profileKey: process.argv.includes("--profile-key") });
+  const report = await build();
   process.stdout.write(`built ${report.outDir}\n`);
   for (const [id, n] of Object.entries(report.rules)) process.stdout.write(`  ${id}: ${n} rules\n`);
   for (const [id, s] of Object.entries(report.skipped)) process.stdout.write(`  ${id} skipped: ${JSON.stringify(s)}\n`);

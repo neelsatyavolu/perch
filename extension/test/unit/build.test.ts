@@ -9,21 +9,35 @@ const lists = { easylist: join(LISTS, "easylist.txt"), easyprivacy: join(LISTS, 
 const dirs: string[] = [];
 afterAll(() => dirs.forEach((d) => rmSync(d, { recursive: true, force: true })));
 
-async function optionsScript(profileKey?: boolean): Promise<string> {
-  const outDir = mkdtempSync(join(tmpdir(), "perch-ext-build-"));
-  dirs.push(outDir);
-  await build({ outDir, lists, ...(profileKey === undefined ? {} : { profileKey }) });
-  return readFileSync(join(outDir, "ui", "options.js"), "utf8");
+let built: Promise<string> | null = null;
+function buildOnce(): Promise<string> {
+  built ??= (async () => {
+    const outDir = mkdtempSync(join(tmpdir(), "perch-ext-build-"));
+    dirs.push(outDir);
+    await build({ outDir, lists });
+    return outDir;
+  })();
+  return built;
 }
 
+const read = async (path: string) => readFileSync(join(await buildOnce(), path), "utf8");
+
 describe("build", () => {
-  test("a release build leaves the authenticator's profile key store out entirely", async () => {
-    const release = await optionsScript();
-    expect(release).not.toContain("perch-vault");
-    expect(release).toContain("Keychain");
+  test("one build for every channel: no profile-key gate is compiled in", async () => {
+    const options = await read("ui/options.js");
+    expect(options).not.toContain("PERCH_PROFILE_KEY");
+    // The authenticator asks Perch for its key; the IndexedDB key stays for unpacked installs and migration.
+    expect(options).toContain("co.xanom.perch.keys");
+    expect(options).toContain("perch-vault");
   });
 
-  test("a development build with --profile-key includes it", async () => {
-    expect(await optionsScript(true)).toContain("perch-vault");
+  test("the service worker carries the native key path for perchFillCode", async () => {
+    const worker = await read("background/index.js");
+    expect(worker).toContain("perchFillCode");
+    expect(worker).toContain("co.xanom.perch.keys");
+  });
+
+  test("the manifest asks for native messaging", async () => {
+    expect(JSON.parse(await read("manifest.json")).permissions).toContain("nativeMessaging");
   });
 });

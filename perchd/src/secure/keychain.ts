@@ -83,3 +83,21 @@ export class MacKeychain implements SecretStore {
     deletePassword(this.keychain, this.service, account);
   }
 }
+
+/** The same store, kept in the profile's sealed secrets file (plan 3b, task 3) instead of the Keychain. */
+export function sealedSecretStore(secrets: import("./sealed-secrets").SealedSecrets): SecretStore {
+  return {
+    get: (account) => secrets.get(account),
+    async set(account, value) {
+      checkAccount(account);
+      await secrets.set(account, value);
+    },
+    async add(account, value) {
+      checkAccount(account);
+      return secrets.add(account, value);
+    },
+    async delete(account) {
+      await secrets.delete(account);
+    },
+  };
+}

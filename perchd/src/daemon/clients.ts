@@ -54,6 +54,11 @@ function readRecords(file: string): { clients: ClientRecord[]; seal?: string } {
   }
 }
 
+/** The client names in the clients file, for moving their tokens out of the Keychain (plan 3b). */
+export function readRecordNames(file: string): string[] {
+  return readRecords(file).clients.map((c) => c.name);
+}
+
 export class ClientRegistry {
   private records: ClientRecord[] | null = null;
   private key: string | null = null;

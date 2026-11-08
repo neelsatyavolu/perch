@@ -2,6 +2,7 @@
 
 import { parseContentMessage, parsePageMessage, senderOrigin, type ContentMessage, type PageMessage } from "../shared/messages";
 import { SETTINGS_KEY, isSiteOff, loadSettings } from "../shared/settings";
+import { fillCodeInFrame, type FillResult } from "../totp/fill-code";
 import { createMenus, onCommand, onMenuClick, toggleReader } from "./menus";
 import { fetchPreview } from "./preview";
 import { applySettings } from "./protection";
@@ -12,6 +13,12 @@ async function setUp(): Promise<void> {
   createMenus();
   await applySettings(await loadSettings());
 }
+
+declare global {
+  /** For perchd's agent, over CDP on this service worker: fills a one-time code, never returns it. */
+  var perchFillCode: (tabId: number, frameUrl: string) => Promise<FillResult>;
+}
+globalThis.perchFillCode = (tabId, frameUrl) => fillCodeInFrame(tabId, frameUrl);
 
 chrome.runtime.onInstalled.addListener(() => void setUp().catch(report));
 chrome.runtime.onStartup.addListener(() => void setUp().catch(report));

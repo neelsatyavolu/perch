@@ -84,3 +84,22 @@ export function mockKeychain(): KeyStore & { accounts(): IterableIterator<string
     },
   };
 }
+
+/** The same store, kept in the profile's sealed secrets file (plan 3b, task 3) instead of the Keychain. */
+export function sealedKeyStore(secrets: import("../secure/sealed-secrets").SealedSecrets): KeyStore {
+  return {
+    async get(account) {
+      checkAccount(account);
+      return secrets.get(account);
+    },
+    async set(account, secret) {
+      checkAccount(account);
+      if (!SECRET.test(secret)) throw new Error("Keychain secrets must be base64 or hex text");
+      await secrets.set(account, secret);
+    },
+    async delete(account) {
+      checkAccount(account);
+      await secrets.delete(account);
+    },
+  };
+}

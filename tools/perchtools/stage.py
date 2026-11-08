@@ -114,3 +114,24 @@ def stage_extensions(
         write_manifest(dest, b)
         staged.append(dest)
     return staged
+
+
+KEYHELPER = Path("helpers") / "keyhelper"
+KEYS_APP = "Perch Keys.app"
+
+
+def stage_keyhelper(*, repo: Path, out: Path, run: Run) -> Path:
+    """Build the Swift key helper and assemble out/Perch Keys.app (Contents/Info.plist and
+    Contents/MacOS/PerchKeys). package.py copies it into the framework's Helpers and signs it."""
+    package = repo / KEYHELPER
+    build = ["swift", "build", "-c", "release", "--arch", "arm64", "--package-path", package]
+    run(build)
+    binary = Path(run([*build, "--show-bin-path"], capture=True).stdout.strip()) / "PerchKeys"
+    if not binary.is_file():
+        raise StageError(f"swift build did not produce {binary}")
+    app = out / KEYS_APP
+    shutil.rmtree(app, ignore_errors=True)
+    (app / "Contents" / "MacOS").mkdir(parents=True)
+    shutil.copyfile(package / "Info.plist", app / "Contents" / "Info.plist")
+    shutil.copy2(binary, app / "Contents" / "MacOS" / "PerchKeys")
+    return app

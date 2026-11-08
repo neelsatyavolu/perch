@@ -160,6 +160,12 @@ export class RunManager {
   }
 
   cancel(chatId: string): boolean {
+    // Stop on a chat that only holds a card declines the card.
+    const held = this.held.get(chatId);
+    if (held && !this.runs.has(chatId)) {
+      held.resolve(false);
+      return true;
+    }
     const run = this.runs.get(chatId);
     if (!run || run.controller.signal.aborted) return false;
     run.controller.abort();

@@ -16,9 +16,11 @@ export function applyToView(view: ChatView, event: AppEvent): ChatView {
     case "run.step":
       return view.run ? { ...view, run: { ...view.run, steps: [...view.run.steps, event.label] } } : view;
     case "run.approval":
-      return view.run ? { ...view, run: { ...view.run, approval: event.card } } : view;
+      // A card with no run of this chat's own: an outside agent or a new client asking (held in perchd).
+      return { ...view, run: view.run ? { ...view.run, approval: event.card } : { runId: event.runId, chatId: chat.id, text: "", steps: [], approval: event.card } };
     case "run.approval.resolved":
-      return view.run?.approval?.id === event.approvalId ? { ...view, run: { ...view.run, approval: null } } : view;
+      if (view.run?.approval?.id !== event.approvalId) return view;
+      return { ...view, run: view.run.runId.startsWith("held-") ? null : { ...view.run, approval: null } };
     case "run.finished":
       return { ...view, run: null, chat: { ...chat, messages: [...chat.messages, event.message] } };
     case "artifact.saved":

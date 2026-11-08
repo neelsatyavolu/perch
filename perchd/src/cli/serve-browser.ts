@@ -1,14 +1,15 @@
 /**
  * `perch serve --browser-fds`: perchd inside Perch (spec 7.1). The browser starts it with CDP on
- * fds 3 and 4 and one line of settings on fd 5: the loopback port and token for the sidebar's app
- * API, the page origins allowed to call it, and the profile folder. perchd then serves the sidebar,
+ * fds 3 and 4 and lines on fd 5 (secure/key-channel.ts): first the loopback port and token for the
+ * sidebar's app API, the page origins allowed to call it and the profile folder, then each profile's
+ * root key. perchd keeps its secrets in files sealed under keys derived from that root key, moving
+ * them out of the older Keychain items on first run. perchd then serves the sidebar,
  * and its socket lets outside agents (`perch mcp`) work in the same browser. It exits when the
  * browser closes fd 5 or the CDP connection.
  */
 
 import { createReadStream } from "node:fs";
 import { join } from "node:path";
-import { createInterface } from "node:readline";
 import { Browser } from "../browser/browser";
 import { adoptBrowserFds } from "../cdp/adopt";
 import { startApp } from "../app/app";
@@ -21,43 +22,18 @@ import { Vault } from "../app/vault";
 import { startDaemon, type Daemon } from "../daemon/daemon";
 import { MacKeychain } from "../daemon/keychain";
 import { perchPaths } from "../daemon/paths";
+import { parseBrowserSettings as parseSettingsObject, readKeyChannel, type BrowserSettings } from "../secure/key-channel";
+import { browserSecrets } from "./browser-keys";
 import type { CliIO } from "./io";
 
 /** perchd serves one profile inside Perch for now. */
 const PROFILE = "Default";
 
-export type BrowserSettings = { port: number; token: string; browserToken: string; origins: string[]; dataDir: string };
+export type { BrowserSettings } from "../secure/key-channel";
 
+/** The app line's checks, for a line given as text. */
 export function parseBrowserSettings(line: string): BrowserSettings {
-  const o = JSON.parse(line) as Record<string, unknown>;
-  const port = o.port;
-  if (o.op !== "app" || typeof port !== "number" || !Number.isInteger(port) || port < 1 || port > 65535) throw new Error("bad port");
-  if (typeof o.token !== "string" || o.token.length < 32) throw new Error("bad token");
-  if (typeof o.browserToken !== "string" || o.browserToken.length < 32 || o.browserToken === o.token) throw new Error("bad browser token");
-  if (typeof o.dataDir !== "string" || !o.dataDir.startsWith("/")) throw new Error("bad data folder");
-  const origins = Array.isArray(o.origins) ? o.origins.filter((x): x is string => typeof x === "string" && /^chrome(-untrusted)?:\/\/[a-z0-9.-]+$/.test(x)) : [];
-  return { port, token: o.token, browserToken: o.browserToken, origins, dataDir: o.dataDir };
-}
-
-/** The first line on fd 5, and a promise that settles when the browser closes it. */
-function readSettings(fd = 5): Promise<{ settings: BrowserSettings; closed: Promise<void> }> {
-  const stream = createReadStream("", { fd });
-  const closed = new Promise<void>((resolve) => {
-    stream.once("close", () => resolve());
-    stream.once("end", () => resolve());
-    stream.once("error", () => resolve());
-  });
-  const lines = createInterface({ input: stream });
-  return new Promise((resolve, reject) => {
-    lines.once("line", (line) => {
-      try {
-        resolve({ settings: parseBrowserSettings(line), closed });
-      } catch (error) {
-        reject(error);
-      }
-    });
-    void closed.then(() => reject(new Error("the browser closed the settings pipe")));
-  });
+  return parseSettingsObject(JSON.parse(line) as Record<string, unknown>);
 }
 
 /** How an agent starts `perch mcp`: this compiled binary, or bun with the CLI's source in development. */
@@ -67,11 +43,14 @@ export function perchCommand(execPath = process.execPath, dir = import.meta.dir)
 }
 
 export async function serveInBrowser(io: CliIO): Promise<number> {
-  const { settings, closed } = await readSettings();
+  const channel = readKeyChannel(createReadStream("", { fd: 5 }), { onProblem: (m) => io.stderr(`${m}\n`) });
+  const settings = await channel.settings;
+  const closed = channel.closed;
   const conn = adoptBrowserFds();
   const browser = await Browser.adopt(conn);
   const base = join(settings.dataDir, "Perch Agent");
-  const keychain = io.keychain ?? new MacKeychain();
+  const secrets = io.keychain ? null : await browserSecrets(channel, { profile: PROFILE, dataDir: settings.dataDir, clientsFile: perchPaths(io.env).clientsFile, log: io.stderr });
+  const keychain = io.keychain ?? secrets?.clients() ?? new MacKeychain();
   const runs = new SidebarRuns();
   // Company policy (spec 12.2) and the profile's one audit log, shared by the daemon, the sidebar and routines.
   const policy = startPolicyWatcher();
@@ -85,7 +64,7 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
     startDaemon({
       paths: perchPaths(env),
       keychain,
-      sealKeychain: io.keychain ? undefined : new MacKeychain("Perch registry"),
+      sealKeychain: io.keychain ? undefined : (secrets?.clientSeal() ?? new MacKeychain("Perch registry")),
       launch: async () => browser,
       sidebar: (session) => runs.get(session),
       policy,
@@ -101,7 +80,7 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
     home = join(base, "home");
     daemon = await start({ ...io.env, PERCH_HOME: home });
   }
-  const vault = await Vault.open(macKeychain(), PROFILE);
+  const vault = await Vault.open(secrets?.app() ?? macKeychain(), PROFILE);
   const services = openPageServices({
     userDataDir: settings.dataDir,
     profile: PROFILE,
@@ -113,6 +92,7 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
     env: io.env,
     policy,
     policyProblems,
+    ...(secrets ? { secrets: { settings: secrets.config(), mcp: secrets.secure(), memory: secrets.memory(), importer: secrets.importer() } } : {}),
   });
   const app = await startApp({
     dataDir: join(base, "app"),

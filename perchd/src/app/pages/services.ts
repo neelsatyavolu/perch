@@ -18,7 +18,8 @@ import { systemKeychain } from "../../config/keychain";
 import { SettingsStore } from "../../config/store";
 import type { ClientRegistry } from "../../daemon/clients";
 import { macConfirm } from "../../daemon/confirm";
-import { macKeychain as importKeychain } from "../../import/keychain";
+import { macKeychain as importKeychain, type Keychain as ImportKeychain } from "../../import/keychain";
+import type { KeyStore } from "../../memory/keychain";
 import { readChromiumBookmarks, readChromiumHistory } from "../../memory/sources";
 import { findImports } from "../../mcp-client/importers/sources";
 import { describeLaunch } from "../../mcp-client/launch";
@@ -28,7 +29,7 @@ import { isProviderId } from "../../models/ids";
 import { createModelRegistry, type ModelHandle, type ModelRegistry } from "../../models/registry";
 import type { Model } from "../../models/types";
 import { openPerchData, type PerchData } from "../../routines/service";
-import { MacKeychain } from "../../secure/keychain";
+import { MacKeychain, type SecretStore } from "../../secure/keychain";
 import { SkillStore } from "../../skills/store";
 import type { PagesCore, Windows } from "../app";
 import type { ChatStore } from "../chats";
@@ -52,6 +53,15 @@ export type PageServicesOptions = {
   /** Company policy (spec 12.2) and problems to report beside it, such as an unwritable AuditLogPath. */
   policy?: PolicyWatcher;
   policyProblems?: () => readonly PolicyError[];
+  /** The profile's sealed secrets (plan 3b, task 3); without them, the older Keychain stores. */
+  secrets?: ServiceSecrets;
+};
+
+export type ServiceSecrets = {
+  settings: ReturnType<typeof systemKeychain>;
+  mcp: SecretStore;
+  memory: KeyStore;
+  importer: ImportKeychain;
 };
 
 /** The profile's audit log, with every older log merged in on first use (spec 7.4). */
@@ -86,7 +96,7 @@ export function openPageServices(opts: PageServicesOptions): PageServices {
   const openUrl = async (url: string) => {
     await opts.conn.send("Target.createTarget", { url });
   };
-  const settingsKeychain = systemKeychain();
+  const settingsKeychain = opts.secrets?.settings ?? systemKeychain();
   let registry: Promise<ModelRegistry> | null = null;
   const models = () => (registry ??= SettingsStore.open({ dir: base, keychain: settingsKeychain }).then((store) => createModelRegistry({ store, keychain: settingsKeychain })));
 
@@ -94,6 +104,7 @@ export function openPageServices(opts: PageServicesOptions): PageServices {
   const data = openPerchData({
     dataDir: base,
     profile: opts.profile,
+    ...(opts.secrets ? { keys: opts.secrets.memory } : {}),
     models: {
       fast: async () => modelOf(await (await models()).modelFor("fast")),
       forRoutine: async (routine) => {
@@ -119,7 +130,7 @@ export function openPageServices(opts: PageServicesOptions): PageServices {
   // A failure shows on the pages that need memory; the rest of Perch keeps working.
   data.catch((error: Error) => process.stderr.write(`perchd: memory and routines did not open: ${error.message}\n`));
 
-  const secrets = new MacKeychain();
+  const secrets = opts.secrets?.mcp ?? new MacKeychain();
   const confirm = macConfirm();
   const mcpStore = new RegistryStore(join(base, "mcp-servers.enc"), secrets);
   const manager = new McpManager({ store: mcpStore, keychain: secrets, env: opts.env, openUrl, approveLaunch: (r) => confirm(describeLaunch(r)) });
@@ -147,7 +158,7 @@ export function openPageServices(opts: PageServicesOptions): PageServices {
         ...(opts.policy ? { policy: opts.policy } : {}),
         ...(opts.policyProblems ? { policyProblems: opts.policyProblems } : {}),
         data: () => data.catch((error: Error) => Promise.reject(new AppError(`Perch couldn't open memory and routines: ${error.message}`, 503))),
-        importer: { home, target: { userDataDir: opts.userDataDir }, keychain: importKeychain(), running: opts.conn },
+        importer: { home, target: { userDataDir: opts.userDataDir }, keychain: opts.secrets?.importer ?? importKeychain(), running: opts.conn },
       }),
     async stop() {
       await manager.close();

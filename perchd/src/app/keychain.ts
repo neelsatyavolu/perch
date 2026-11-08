@@ -68,3 +68,21 @@ export function memoryKeychain(): Keychain & { size(): number } {
     size: () => items.size,
   };
 }
+
+/** The same store, kept in the profile's sealed secrets file (plan 3b, task 3) instead of the Keychain. */
+export function sealedKeychain(secrets: import("../secure/sealed-secrets").SealedSecrets): Keychain {
+  const check = (service: string, account: string) => {
+    if (!SAFE_NAME.test(service) || !SAFE_NAME.test(account)) throw new Error("Keychain item names may use letters, digits, spaces, dots, dashes and underscores");
+  };
+  return {
+    async read(service, account) {
+      check(service, account);
+      return secrets.get(`${service}/${account}`);
+    },
+    async write(service, account, secret) {
+      check(service, account);
+      if (!SAFE_SECRET.test(secret)) throw new Error("Keychain secrets must be base64url text");
+      await secrets.set(`${service}/${account}`, secret);
+    },
+  };
+}

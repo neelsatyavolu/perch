@@ -83,3 +83,26 @@ export function memoryKeychain(items: Record<string, string> = {}, deny: readonl
     },
   };
 }
+
+/**
+ * Perch's own import items (`ownServices`, the bundle keys) kept in the profile's sealed secrets
+ * file (plan 3b, task 3). Every other service, such as another browser's "Safe Storage", is still
+ * read from the macOS Keychain through `foreign`, with macOS's own prompt.
+ */
+export function sealedImportKeychain(secrets: import("../secure/sealed-secrets").SealedSecrets, foreign: Keychain, ownServices: readonly string[]): Keychain {
+  const own = (service: string) => ownServices.includes(service);
+  const name = (service: string, account?: string) => `${plain(service, "service")}/${account === undefined ? "" : plain(account, "account")}`;
+  return {
+    async find(service, account) {
+      return own(service) ? secrets.get(name(service, account)) : foreign.find(service, account);
+    },
+    async set(service, account, value) {
+      if (own(service)) await secrets.set(name(service, account), value);
+      else await foreign.set(service, account, value);
+    },
+    async remove(service, account) {
+      if (own(service)) await secrets.delete(name(service, account));
+      else await foreign.remove(service, account);
+    },
+  };
+}

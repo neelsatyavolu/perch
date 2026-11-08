@@ -1,0 +1,26 @@
+# Perch: Builds Perch's theme, snapshot, layout, hide-chrome and command sources.
+diff --git a/chrome/browser/ui/browser_window/internal/BUILD.gn b/chrome/browser/ui/browser_window/internal/BUILD.gn
+index 5e53f6cd2d..8e473b90ee 100644
+--- a/chrome/browser/ui/browser_window/internal/BUILD.gn
++++ b/chrome/browser/ui/browser_window/internal/BUILD.gn
+@@ -84,6 +84,20 @@ source_set("internal") {
+       "//chrome/browser/perch/settings/appearance.h",
+       "//chrome/browser/perch/settings/privacy.cc",
+       "//chrome/browser/perch/settings/privacy.h",
++      "//chrome/browser/perch/snapshot/chrome_snapshot.cc",
++      "//chrome/browser/perch/snapshot/chrome_snapshot.h",
++      "//chrome/browser/perch/theme/perch_theme.cc",
++      "//chrome/browser/perch/theme/perch_theme.h",
++      "//chrome/browser/perch/theme/perch_tokens.inc",
++      "//chrome/browser/perch/hide_chrome/hide_chrome.cc",
++      "//chrome/browser/perch/hide_chrome/hide_chrome.h",
++      "//chrome/browser/perch/layout/perch_layout.cc",
++      "//chrome/browser/perch/layout/perch_layout.h",
++      "//chrome/browser/perch/perch_command_ids.h",
++      "//chrome/browser/perch/perch_commands.cc",
++      "//chrome/browser/perch/perch_commands.h",
++      "//chrome/browser/perch/perch_menu_mac.h",
++      "//chrome/browser/perch/perch_menu_mac.mm",
+       "browser_window_interface_iterator_non_android.cc",
+       "create_browser_window_non_android.cc",
+       "desktop_browser_window_capabilities.cc",

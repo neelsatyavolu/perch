@@ -19,6 +19,9 @@ import { allowedSidebarModels, SidebarRuns, sidebarModels, sidebarRunner } from 
 import { startPolicyWatcher } from "../policy/watch";
 import { Vault } from "../app/vault";
 import { startDaemon, type Daemon } from "../daemon/daemon";
+import { SIDEBAR_CLIENT } from "../daemon/server";
+import { BrowserLink } from "../app/browser-link";
+import { PerchDomain } from "../browser/perch-domain";
 import { MacKeychain } from "../daemon/keychain";
 import { perchPaths } from "../daemon/paths";
 import type { CliIO } from "./io";
@@ -81,6 +84,9 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
     const problem = mirror.error();
     return problem ? [{ name: "AuditLogPath", message: problem }] : [];
   };
+  // The perch dot, Ask and outside agents' approvals in the browser (src/app/browser-link.ts).
+  let agentTabs: (chatId: string) => string[] = () => [];
+  const link = new BrowserLink({ perch: new PerchDomain(conn), agentTabs: (chatId) => agentTabs(chatId), onError: io.stderr });
   const start = (env: Record<string, string | undefined>) =>
     startDaemon({
       paths: perchPaths(env),
@@ -90,6 +96,7 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
       sidebar: (session) => runs.get(session),
       policy,
       audit,
+      browser: link.approvals,
     });
   let home = perchPaths(io.env).home;
   let daemon: Daemon;
@@ -124,11 +131,15 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
     token: settings.token,
     browserToken: settings.browserToken,
     pages: services.pages,
+    onStatus: link.onStatus,
   });
   services.attach(app);
+  agentTabs = (chatId) => runs.sessionsFor(chatId).flatMap((s) => daemon.manager.get(SIDEBAR_CLIENT, s)?.tabIds() ?? []);
+  link.attach(app);
   io.stderr(`perchd ${process.pid}: connected to browser; app API on 127.0.0.1:${settings.port}; socket in ${home}\n`);
   await Promise.race([closed, conn.closed]);
   io.stderr("perchd: the browser went away; stopping\n");
+  link.stop();
   await app.stop();
   await services.stop();
   await daemon.stop();

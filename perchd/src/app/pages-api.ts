@@ -29,6 +29,8 @@ export const BROWSER_METHODS = [
   "openPage", "chooseFile", "openFullDiskAccess", "getAbout", "checkForUpdates", "installUpdate", "setAutoUpdate",
   "submitQuery", "openChat", "newChat",
   "listBuiltInExtensions", "setBuiltInExtension",
+  "getMemorySaver", "setMemorySaver", "addSleepRule", "listTabMemory",
+  "queryCommandBar", "runCommandBarItem", "closeCommandBar",
 ] as const satisfies readonly ApiMethod[];
 
 export type PerchdMethod = Exclude<(typeof API_METHODS)[number], (typeof BROWSER_METHODS)[number]>;

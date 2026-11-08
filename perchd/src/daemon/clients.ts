@@ -95,13 +95,19 @@ export class ClientRegistry {
     return token;
   }
 
-  /** The daemon side: checks a client's token and returns its record. */
-  async verify(name: string, token: string): Promise<Verified> {
+  /**
+   * The daemon side: checks a client's token and returns its record. `confirmNew`, inside Perch,
+   * asks the user before a client's first registration; declined, nothing is recorded.
+   */
+  async verify(name: string, token: string, confirmNew?: (name: string) => Promise<boolean>): Promise<Verified> {
     if (!CLIENT_NAME.test(name)) return { error: BAD_NAME };
     const record = this.list().find((c) => c.name === name);
     if (record?.revoked) return { error: `Client "${name}" was revoked. Run: perch clients allow ${name}` };
     const saved = await this.keychain.get(name);
     if (!saved || typeof token !== "string" || !sameToken(saved, token)) return { error: REJECTED };
+    if (!record && confirmNew && !(await confirmNew(name).catch(() => false))) {
+      return { error: `You didn't allow "${name}" to use Perch. It can ask again the next time it connects.` };
+    }
     const now = new Date().toISOString();
     const next: ClientRecord = record ? { ...record, lastUsed: now } : { name, mode: "guard", created: now, lastUsed: now };
     await this.upsert(next);

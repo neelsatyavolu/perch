@@ -31,6 +31,8 @@ export type SidebarRun = {
   approve: (request: ApprovalRequest) => Promise<boolean>;
   /** The CDP target id of the user's tab the task starts in ("current tab" scope), if any. */
   tab?: string;
+  /** The sidebar chat the run belongs to, for the browser's perch dot on the tabs it works in. */
+  chatId?: string;
 };
 
 function sameToken(a: string, b: string): boolean {
@@ -53,6 +55,14 @@ export type ServerOptions = {
   sidebar?: (session: string) => SidebarRun | undefined;
   /** Company policy (spec 12.2): which clients may connect, the mode cap and site rules. */
   policy?: PolicyView;
+  /** Inside Perch: approvals and first connections go to a card in the browser (src/app/outside-approvals.ts). */
+  browser?: () => BrowserApprovals | undefined;
+};
+
+/** How the browser asks the user for outside clients that cannot ask themselves. */
+export type BrowserApprovals = {
+  approve(session: AgentSession, request: ApprovalRequest, signal: AbortSignal): Promise<boolean>;
+  allowClient(name: string, signal: AbortSignal): Promise<boolean>;
 };
 
 /** Why a connection may not go on under the current policy, or null when it may. */
@@ -67,6 +77,8 @@ function refusal(client: string, policy: PolicyView | undefined): string | null 
 export class Connection {
   private nextAsk = 1;
   private readonly asks = new Map<number, (approved: boolean) => void>();
+  /** Aborted when the connection closes, which declines a card still waiting in the browser. */
+  private readonly gone = new AbortController();
 
   constructor(
     readonly hello: Hello,
@@ -96,7 +108,11 @@ export class Connection {
   }
 
   private approve(request: ApprovalRequest): Promise<boolean> {
-    if (!this.hello.interactive) return Promise.resolve(false);
+    if (!this.hello.interactive) {
+      // A client that cannot ask (Codex has no elicitation): inside Perch the browser asks instead.
+      const browser = this.opts.browser?.();
+      return browser ? browser.approve(this.session, request, this.gone.signal).catch(() => false) : Promise.resolve(false);
+    }
     const id = this.nextAsk++;
     const ask: ApproveAsk = { type: "approve", id, summary: request.summary, kind: request.kind, site: request.site };
     return new Promise((resolve) => {
@@ -117,11 +133,12 @@ export class Connection {
 
   /** A closed connection declines whatever it was asked. */
   declineAll(): void {
+    this.gone.abort();
     for (const id of [...this.asks.keys()]) this.answer(id, false);
   }
 }
 
-type State = { reader: LineReader; writer: SocketWriter; conn: Connection | null; helloing: boolean; closed: boolean; timer: ReturnType<typeof setTimeout> };
+type State = { reader: LineReader; writer: SocketWriter; conn: Connection | null; helloing: boolean; closed: boolean; left: AbortController; timer: ReturnType<typeof setTimeout> };
 
 export type Server = {
   stop(): void;
@@ -156,6 +173,19 @@ export async function startServer(opts: ServerOptions): Promise<Server> {
     state.writer.end();
   };
 
+  /**
+   * Inside Perch, a client's first connection waits for the user's card in the browser. The hello
+   * arrived, so its timer stops; the client leaving declines the card.
+   */
+  function newClientCheck(state: State): ((name: string) => Promise<boolean>) | undefined {
+    const browser = opts.browser?.();
+    if (!browser) return undefined;
+    return (name) => {
+      clearTimeout(state.timer);
+      return browser.allowClient(name, state.left.signal);
+    };
+  }
+
   async function onHello(state: State, value: unknown): Promise<void> {
     const hello = parseHello(value);
     if (typeof hello === "string") return fail(state, hello);
@@ -170,7 +200,7 @@ export async function startServer(opts: ServerOptions): Promise<Server> {
         ? run && sameToken(hello.token, run.token)
           ? { name: SIDEBAR_CLIENT, mode: run.mode, created: new Date().toISOString() }
           : { error: "Perch did not accept this client's token." }
-        : await opts.registry.verify(hello.client, hello.token);
+        : await opts.registry.verify(hello.client, hello.token, newClientCheck(state));
     if ("error" in verified) {
       await opts.audit.append({ time: new Date().toISOString(), tab: "", site: "", action: "connect", client: hello.client, approved: null, result: "blocked" });
       return fail(state, verified.error);
@@ -238,7 +268,7 @@ export async function startServer(opts: ServerOptions): Promise<Server> {
     socket: {
       open(socket) {
         const writer = new SocketWriter(socket);
-        const state: State = { reader: new LineReader(), writer, conn: null, helloing: false, closed: false, timer: setTimeout(() => fail(state, "No hello in time."), opts.helloTimeoutMs ?? 5000) };
+        const state: State = { reader: new LineReader(), writer, conn: null, helloing: false, closed: false, left: new AbortController(), timer: setTimeout(() => fail(state, "No hello in time."), opts.helloTimeoutMs ?? 5000) };
         socket.data = state;
         live = new Set(live).add(state);
       },
@@ -258,6 +288,7 @@ export async function startServer(opts: ServerOptions): Promise<Server> {
       close(socket) {
         const state = socket.data;
         state.closed = true;
+        state.left.abort();
         const rest = new Set(live);
         rest.delete(state);
         live = rest;

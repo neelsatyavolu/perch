@@ -56,8 +56,6 @@ constexpr BuiltIn kBuiltIns[] = {
     {"perch", kPerchExtensionId, prefs::kExtensionPerchEnabled},
     {"backrow", "ajhempjobmeelmhloiiecnbljbpoohcc",
      prefs::kExtensionBackrowEnabled},
-    {"lulltab", "cajablldnlcmhamlhpbjdapikiakdjdm",
-     prefs::kExtensionLulltabEnabled},
     {"caveatly", "mefnjppdmliabfgljepbdgdalmgggmid",
      prefs::kExtensionCaveatlyEnabled},
 };

@@ -18,7 +18,7 @@ inline constexpr char kPerchExtensionId[] = "ocjanjehckpdbcjamffmbeemoooamjpo";
 // Overrides where the built-in extensions are read from (development builds).
 inline constexpr char kExtensionsDirSwitch[] = "perch-extensions-dir";
 
-// Loads the extensions Perch ships built in (Perch's own, Backrow, Lulltab and
+// Loads the extensions Perch ships built in (Perch's own, Backrow and
 // Caveatly) as component extensions: the user can turn each one off in
 // Settings but cannot uninstall it. Manifests are read off the UI thread, and
 // each one follows its pref while the profile lives. Called from

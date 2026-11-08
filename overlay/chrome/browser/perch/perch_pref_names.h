@@ -12,8 +12,6 @@ namespace perch::prefs {
 inline constexpr char kExtensionPerchEnabled[] = "perch.extensions.perch.enabled";
 inline constexpr char kExtensionBackrowEnabled[] =
     "perch.extensions.backrow.enabled";
-inline constexpr char kExtensionLulltabEnabled[] =
-    "perch.extensions.lulltab.enabled";
 inline constexpr char kExtensionCaveatlyEnabled[] =
     "perch.extensions.caveatly.enabled";
 

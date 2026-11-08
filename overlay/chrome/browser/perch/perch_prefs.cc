@@ -52,6 +52,8 @@ void RegisterLocalStatePrefs(PrefRegistrySimple* registry) {
                  tuning::MemorySaverModeState::kEnabled)));
   SetDefault(registry, tuning::kMemorySaverModeTimeBeforeDiscardInMinutes,
              base::Value(15));
+  // A sleeping tab shows Perch's moon, not Chromium's dimmed favicon ring.
+  SetDefault(registry, tuning::kDiscardRingTreatmentEnabled, base::Value(false));
   SetDefault(registry, ::prefs::kDnsOverHttpsTemplates,
              base::Value(kDefaultDohTemplate));
 }
@@ -59,7 +61,6 @@ void RegisterLocalStatePrefs(PrefRegistrySimple* registry) {
 void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {
   registry->RegisterBooleanPref(prefs::kExtensionPerchEnabled, true);
   registry->RegisterBooleanPref(prefs::kExtensionBackrowEnabled, true);
-  registry->RegisterBooleanPref(prefs::kExtensionLulltabEnabled, true);
   registry->RegisterBooleanPref(prefs::kExtensionCaveatlyEnabled, true);
 
   registry->RegisterStringPref(prefs::kAppearanceTheme, "ink");

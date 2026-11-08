@@ -1,5 +1,5 @@
 {
-  "_comment": "Extensions Perch ships built in (spec 5.6, 5.7, 5.9). perch-build stage-extensions builds each one at the pinned commit into out/<config>/perch_extensions/<name>, and package copies them into the app. The keys are public keys that fix each extension's id; no private key exists.",
+  "_comment": "Extensions Perch ships built in (spec 5.7, 5.9; the memory saver of spec 5.6 is native). perch-build stage-extensions builds each one at the pinned commit into out/<config>/perch_extensions/<name>, and package copies them into the app. The keys are public keys that fix each extension's id; no private key exists.",
   "extensions": [
     {
       "name": "perch",
@@ -27,33 +27,6 @@
       "commit": "3a3ce297b8142101616149663df49934eb1b62ab",
       "dist": "extension/dist",
       "incognito": false
-    },
-    {
-      "name": "lulltab",
-      "id": "cajablldnlcmhamlhpbjdapikiakdjdm",
-      "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwcTojM/wrlErrnz/Jaan0g3NG40TB1ZiiCFKX11r7vIpkk0IouHVtbTzlIcYKDiyv8B4YG8UrOUT9RYZV4oR/EReB7fDe6RlvBw/8fKfW19vwfAeITBv97IPDJUR4Vj3vX/TQCYfQO39jRQIdMFbCwplmmQf5sWjemE/EnCAnPxESv27CD3he0fdrA/abs6u5z3Scbr/pdPb4qhiuEyKYvyQJepboQ1KJvlsnKIqUKuXnnh6VaZUg82NapQjkSpODKqaAK2uecev12IohwZ8fdujKrHpqELcK15TlvznBhpinKfr61FrAW7zg+r9wiAzMxbpy/WTaKkZ2RdgiW/nNQIDAQAB",
-      "repo": "https://github.com/neelsatyavolu/lulltab.git",
-      "commit": "524ee874dbe469a879b71ab9d5de57b89c701483",
-      "dist": ".",
-      "stubs": {
-        "lib/usage-ping.js": "lulltab-usage-ping.js"
-      },
-      "incognito": true,
-      "edits": [
-        {
-          "file": "options/options.html",
-          "find": "<label class=\"check\">\n            <input id=\"usage-stats\"",
-          "replace": "<label class=\"check\" hidden>\n            <input id=\"usage-stats\""
-        }
-      ],
-      "exclude": [
-        "site",
-        "store",
-        "tests",
-        "package.json",
-        "README.md",
-        "SECURITY.md"
-      ]
     },
     {
       "name": "caveatly",

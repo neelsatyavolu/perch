@@ -33,6 +33,8 @@
 #include "chrome/browser/perch/tab_tools/tab_tools.h"
 #include "chrome/browser/perch/toolbar/perch_profile_menu.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/translate/chrome_translate_client.h"
+#include "components/translate/core/browser/translate_manager.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
@@ -146,6 +148,18 @@ class Snapshotter {
       LOG(WARNING) << "Perch snapshot: spaces A:" << before << " / B:" << in_b
                    << " / back in A:" << urls() << " / names:"
                    << ListSpaces(browser_->GetProfile()).size();
+    } else if (state == "translate-open") {
+      browser_->GetTabStripModel()->GetActiveWebContents()->GetController()
+          .LoadURL(GURL("https://fr.wikipedia.org/wiki/Paris"),
+                   content::Referrer(), ui::PAGE_TRANSITION_TYPED,
+                   std::string());
+    } else if (state == "translate") {
+      // The page from "translate-open", translated French to English.
+      if (auto* client = ChromeTranslateClient::FromWebContents(
+              browser_->GetTabStripModel()->GetActiveWebContents())) {
+        client->GetTranslateManager()->TranslatePage("fr", "en",
+                                                     /*triggered_from_menu=*/true);
+      }
     } else if (state == "command-bar") {
       ExecutePerchCommand(browser_, IDC_PERCH_COMMAND_BAR);
       QueryCommandBar(browser_->GetProfile(), "histor",

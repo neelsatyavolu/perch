@@ -1,0 +1,74 @@
+# Perch: pages translate on the Mac with the Translator API (TranslateKit); Google's element.js and language list are never fetched. The script runs in the translate isolated world, where the Translator API is exposed (checked on fr.wikipedia.org).
+diff --git a/components/translate/core/browser/BUILD.gn b/components/translate/core/browser/BUILD.gn
+index 77e130e408..f0728a7712 100644
+--- a/components/translate/core/browser/BUILD.gn
++++ b/components/translate/core/browser/BUILD.gn
+@@ -41,6 +41,8 @@ static_library("browser") {
+     "translate_ranker.h",
+     "translate_ranker_impl.cc",
+     "translate_ranker_impl.h",
++    "perch_translate_script.cc",
++    "perch_translate_script.h",
+     "translate_script.cc",
+     "translate_script.h",
+     "translate_step.h",
+diff --git a/components/translate/core/browser/translate_language_list.cc b/components/translate/core/browser/translate_language_list.cc
+index a99374b961..a5beff100f 100644
+--- a/components/translate/core/browser/translate_language_list.cc
++++ b/components/translate/core/browser/translate_language_list.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "components/translate/core/browser/translate_language_list.h"
+ 
++#include "components/translate/core/browser/perch_translate_script.h"
++
+ #include <stddef.h>
+ 
+ #include <algorithm>
+@@ -274,6 +276,11 @@ GURL TranslateLanguageList::TranslateLanguageUrl() {
+ }
+ 
+ void TranslateLanguageList::RequestLanguageList() {
++  // Perch: translation runs on the Mac; the built-in list stands, and nothing
++  // asks Google's servers for theirs.
++  if (base::FeatureList::IsEnabled(kPerchOnDeviceTranslate)) {
++    return;
++  }
+   // If resource requests are not allowed, we'll get a callback when they are.
+   if (!resource_requests_allowed_) {
+     request_pending_ = true;
+diff --git a/components/translate/core/browser/translate_script.cc b/components/translate/core/browser/translate_script.cc
+index db76c7938f..584e7d76fe 100644
+--- a/components/translate/core/browser/translate_script.cc
++++ b/components/translate/core/browser/translate_script.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "components/translate/core/browser/translate_script.h"
+ 
++#include "components/translate/core/browser/perch_translate_script.h"
++
+ #include "base/command_line.h"
+ #include "base/feature_list.h"
+ #include "base/functional/bind.h"
+@@ -93,6 +95,21 @@ void TranslateScript::Request(RequestCallback callback,
+   DCHECK(data_.empty()) << "Do not fetch the script if it is already fetched";
+   callback_list_.AddUnsafe(std::move(callback));
+ 
++  // Perch: translate on the Mac with TranslateKit; never fetch Google's
++  // element.js.
++  if (base::FeatureList::IsEnabled(kPerchOnDeviceTranslate)) {
++    data_ = PerchTranslateScript();
++    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
++        FROM_HERE, base::BindOnce(
++                       [](base::WeakPtr<TranslateScript> self) {
++                         if (self) {
++                           self->callback_list_.Notify(true);
++                         }
++                       },
++                       weak_method_factory_.GetWeakPtr()));
++    return;
++  }
++
+   if (fetcher_) {
+     // If there is already a request in progress, do nothing. |callback| will be
+     // run on completion.

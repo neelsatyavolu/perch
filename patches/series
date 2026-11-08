@@ -37,5 +37,6 @@ perch/shell/sleeping-tab-icon.patch
 perch/shell/profile-menu.patch
 perch/shell/command-bar.patch
 perch/shell/spaces.patch
+perch/shell/translate-on-device.patch
 perch/build/thinlto-jobs.patch
 perch/build/perch-unittests.patch

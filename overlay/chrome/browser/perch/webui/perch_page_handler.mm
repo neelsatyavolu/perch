@@ -4,6 +4,7 @@
 #include "chrome/browser/perch/webui/perch_page_handler.h"
 
 #import <Foundation/Foundation.h>
+#import <LocalAuthentication/LocalAuthentication.h>
 
 #include <algorithm>
 #include <optional>
@@ -20,6 +21,8 @@
 #include "chrome/browser/perch/agent/perch_devtools.h"
 #include "chrome/browser/perch/command_bar/command_bar.h"
 #include "chrome/browser/perch/extensions/perch_component_extensions.h"
+#include "chrome/browser/perch/keys/key_broker.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/perch/memory_saver/memory_saver_settings.h"
 #include "chrome/browser/perch/perch_pref_names.h"
 #include "chrome/browser/perch/settings/appearance.h"
@@ -184,6 +187,76 @@ void PerchPageHandler::Reject(base::Value callback_id,
                         .Set("code", std::move(code))
                         .Set("message", std::move(message))));
   }
+}
+
+namespace {
+
+// The recovery key: the profile's root key in Crockford base32, in groups of
+// five, for writing down. It reopens Perch's sealed secrets on another Mac.
+std::string FormatRecoveryKey(const std::vector<uint8_t>& key) {
+  static constexpr char kAlphabet[] = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+  std::string out;
+  int bits = 0;
+  uint32_t buffer = 0;
+  for (uint8_t byte : key) {
+    buffer = (buffer << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      out.push_back(kAlphabet[(buffer >> (bits - 5)) & 31]);
+      bits -= 5;
+    }
+  }
+  if (bits > 0) {
+    out.push_back(kAlphabet[(buffer << (5 - bits)) & 31]);
+  }
+  std::string grouped;
+  for (size_t i = 0; i < out.size(); ++i) {
+    if (i && i % 5 == 0) {
+      grouped.push_back('-');
+    }
+    grouped.push_back(out[i]);
+  }
+  return grouped;
+}
+
+}  // namespace
+
+void PerchPageHandler::RevealRecoveryKey(base::Value id) {
+  if (!KeyBroker::Get().RootKeyFor(profile()->GetPath())) {
+    Reject(std::move(id), "unavailable",
+           "This build of Perch can't show the recovery key");
+    return;
+  }
+  // Touch ID, or the Mac's password, before the key is shown.
+  LAContext* context = [[LAContext alloc] init];
+  scoped_refptr<base::SequencedTaskRunner> runner =
+      base::SequencedTaskRunner::GetCurrentDefault();
+  base::WeakPtr<PerchPageHandler> self = weak_factory_.GetWeakPtr();
+  __block base::Value callback_id = std::move(id);
+  [context evaluatePolicy:LAPolicyDeviceOwnerAuthentication
+          localizedReason:@"show your Perch recovery key"
+                    reply:^(BOOL success, NSError* error) {
+                      runner->PostTask(
+                          FROM_HERE,
+                          base::BindOnce(
+                              [](base::WeakPtr<PerchPageHandler> self,
+                                 base::Value id, bool success) {
+                                if (!self) {
+                                  return;
+                                }
+                                std::optional<std::vector<uint8_t>> key =
+                                    KeyBroker::Get().RootKeyFor(
+                                        self->profile()->GetPath());
+                                if (!success || !key) {
+                                  self->Reject(std::move(id), "cancelled",
+                                               "The recovery key stays hidden");
+                                  return;
+                                }
+                                self->Resolve(std::move(id),
+                                              base::Value(FormatRecoveryKey(*key)));
+                              },
+                              self, std::move(callback_id), success == YES));
+                    }];
 }
 
 void PerchPageHandler::Dispatch(const std::string& method,
@@ -368,6 +441,8 @@ void PerchPageHandler::Dispatch(const std::string& method,
   } else if (method == "closeCommandBar") {
     Resolve(std::move(id), base::Value());
     CloseCommandBarNow(web_ui());
+  } else if (method == "revealRecoveryKey") {
+    RevealRecoveryKey(std::move(id));
   } else if (method == "listTabMemory") {
     Resolve(std::move(id), base::Value(ListTabMemory(profile())));
   } else {

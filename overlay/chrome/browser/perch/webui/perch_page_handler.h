@@ -41,6 +41,8 @@ class PerchPageHandler : public content::WebUIMessageHandler {
                 base::Value callback_id);
   void Resolve(base::Value callback_id, base::Value result);
   void Reject(base::Value callback_id, std::string code, std::string message);
+  // Shows the profile's recovery key after Touch ID (Settings › Sync).
+  void RevealRecoveryKey(base::Value callback_id);
   void OnAppearanceChanged();
   // Opens `url` in this page's tab.
   void Navigate(const GURL& url);

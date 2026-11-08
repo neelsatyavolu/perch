@@ -155,6 +155,9 @@ KeyBroker::~KeyBroker() = default;
 
 void KeyBroker::OnPerchdLaunched(LineSender sender) {
   sender_ = std::move(sender);
+  if (!observation_.IsObserving() && g_browser_process->profile_manager()) {
+    observation_.Observe(g_browser_process->profile_manager());
+  }
   for (const auto& [dir, entry] : keys_) {
     Send(dir, entry);
   }
@@ -163,6 +166,26 @@ void KeyBroker::OnPerchdLaunched(LineSender sender) {
       EnsureProfile(profile);
     }
   }
+}
+
+void KeyBroker::OnProfileAdded(Profile* profile) {
+  EnsureProfile(profile);
+}
+
+void KeyBroker::OnProfileMarkedForPermanentDeletion(Profile* profile) {
+  const base::FilePath dir = profile->GetPath();
+  keys_.erase(dir);
+  if (sender_) {
+    sender_.Run(base::WriteJson(base::DictValue()
+                                    .Set("op", "profile-removed")
+                                    .Set("id", dir.BaseName().value()))
+                    .value_or("{}") +
+                "\n");
+  }
+}
+
+void KeyBroker::OnProfileManagerDestroying() {
+  observation_.Reset();
 }
 
 void KeyBroker::EnsureProfile(Profile* profile) {

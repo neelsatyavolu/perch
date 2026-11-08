@@ -13,6 +13,9 @@
 #include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/no_destructor.h"
+#include "base/scoped_observation.h"
+#include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/profiles/profile_manager_observer.h"
 
 class Profile;
 
@@ -25,7 +28,7 @@ namespace perch {
 //   {op:"profile", id, dir, key, protected, recovery?}
 // Without the helper (development builds) nothing is sent, and perchd keeps
 // using the Keychain.
-class KeyBroker {
+class KeyBroker : public ProfileManagerObserver {
  public:
   // Writes one line to perchd's settings pipe.
   using LineSender = base::RepeatingCallback<void(std::string)>;
@@ -51,11 +54,17 @@ class KeyBroker {
   std::optional<std::vector<uint8_t>> RootKeyFor(
       const base::FilePath& profile_dir) const;
 
+  // ProfileManagerObserver: a new profile gets its key, and a deleted one is
+  // forgotten here and in perchd ({op:"profile-removed", id}).
+  void OnProfileAdded(Profile* profile) override;
+  void OnProfileMarkedForPermanentDeletion(Profile* profile) override;
+  void OnProfileManagerDestroying() override;
+
  private:
   friend class base::NoDestructor<KeyBroker>;
 
   KeyBroker();
-  ~KeyBroker();
+  ~KeyBroker() override;
 
   void Fetch(const base::FilePath& profile_dir);
   void OnFetched(base::FilePath profile_dir, std::optional<Entry> entry);
@@ -64,6 +73,8 @@ class KeyBroker {
   LineSender sender_;
   std::map<base::FilePath, Entry> keys_;
   std::vector<base::FilePath> pending_;
+  base::ScopedObservation<ProfileManager, ProfileManagerObserver>
+      observation_{this};
   base::WeakPtrFactory<KeyBroker> weak_factory_{this};
 };
 

@@ -1,0 +1,38 @@
+# Perch: cmd-return in the address bar asks Perch's agent (Perch.askRequested) when it is running.
+diff --git a/chrome/browser/ui/views/omnibox/omnibox_view_views.cc b/chrome/browser/ui/views/omnibox/omnibox_view_views.cc
+index 6d919ced44..50f31aac18 100644
+--- a/chrome/browser/ui/views/omnibox/omnibox_view_views.cc
++++ b/chrome/browser/ui/views/omnibox/omnibox_view_views.cc
+@@ -4,6 +4,9 @@
+ 
+ #include "chrome/browser/ui/views/omnibox/omnibox_view_views.h"
+ 
++#include "chrome/browser/perch/agent/perch_devtools.h"
++#include "content/public/browser/devtools_agent_host.h"
++
+ #include <algorithm>
+ #include <memory>
+ #include <set>
+@@ -2222,6 +2225,22 @@ bool OmniboxViewViews::HandleKeyEvent(views::Textfield* textfield,
+   const bool command = event.IsCommandDown();
+   switch (event.key_code()) {
+     case ui::VKEY_RETURN: {
++      // Perch: ⌘↵ asks Perch's agent, which opens the chat for this tab.
++      if (command && !shift && perch::IsPerchdConnected()) {
++        std::u16string text;
++        base::TrimWhitespace(GetText(), base::TRIM_ALL, &text);
++        content::WebContents* tab = location_bar_view_->GetWebContents();
++        if (!text.empty() && tab) {
++          perch::EmitPerchEvent(
++              "askRequested",
++              base::DictValue()
++                  .Set("text", base::UTF16ToUTF8(text))
++                  .Set("tabId", content::DevToolsAgentHost::GetOrCreateFor(tab)
++                                    ->GetId()));
++          RevertAll();
++          return true;
++        }
++      }
+       if (omnibox::kShowRhsAimHint.Get()) {
+ #if BUILDFLAG(IS_MAC)
+         const bool ai_mode_modifier = command;

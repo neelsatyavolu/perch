@@ -1,0 +1,34 @@
+# Perch: chrome://perch-chat is a trusted shell around chrome-untrusted://perch-chat, which hosts the chat page.
+diff --git a/chrome/browser/ui/browser_window/internal/BUILD.gn b/chrome/browser/ui/browser_window/internal/BUILD.gn
+index 355ee203a4..4baf6736ea 100644
+--- a/chrome/browser/ui/browser_window/internal/BUILD.gn
++++ b/chrome/browser/ui/browser_window/internal/BUILD.gn
+@@ -73,6 +73,8 @@ source_set("internal") {
+       "//chrome/browser/perch/webui/perch_side_chat_ui.cc",
+       "//chrome/browser/perch/webui/perch_side_chat_ui.h",
+       "//chrome/browser/perch/webui/perch_chat_ui.cc",
++      "//chrome/browser/perch/webui/perch_shell_handler.cc",
++      "//chrome/browser/perch/webui/perch_shell_handler.h",
+       "//chrome/browser/perch/webui/perch_chat_ui.h",
+       "//chrome/browser/perch/webui/perch_ui_source.cc",
+       "//chrome/browser/perch/webui/perch_ui_source.h",
+diff --git a/chrome/browser/ui/webui/chrome_untrusted_web_ui_configs.cc b/chrome/browser/ui/webui/chrome_untrusted_web_ui_configs.cc
+index ac2257b723..4f9eed3998 100644
+--- a/chrome/browser/ui/webui/chrome_untrusted_web_ui_configs.cc
++++ b/chrome/browser/ui/webui/chrome_untrusted_web_ui_configs.cc
+@@ -13,6 +13,7 @@
+ #if defined(TOOLKIT_VIEWS)
+ #include "chrome/browser/ui/webui/data_sharing/data_sharing_ui.h"
+ #include "chrome/browser/ui/webui/side_panel/read_anything/read_anything_untrusted_ui.h"
++#include "chrome/browser/perch/webui/perch_chat_ui.h"
+ #include "chrome/browser/perch/webui/perch_side_chat_ui.h"
+ #include "components/compose/buildflags.h"
+ #if BUILDFLAG(ENABLE_COMPOSE)
+@@ -77,6 +78,7 @@ void RegisterChromeUntrustedWebUIConfigs() {
+       std::make_unique<ReadAnythingUIUntrustedConfig>());
+   // Perch: the side chat.
+   map.AddUntrustedWebUIConfig(std::make_unique<perch::PerchSideChatUIConfig>());
++  map.AddUntrustedWebUIConfig(std::make_unique<perch::PerchChatFrameUIConfig>());
+   map.AddUntrustedWebUIConfig(std::make_unique<DataSharingUIConfig>());
+ 
+ #if BUILDFLAG(ENABLE_COMPOSE)

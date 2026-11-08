@@ -21,6 +21,8 @@ enum class PageKind {
   kSidePanel,
   // Settings, New Tab and the other ui-pages/ entries, from ui-pages/dist.
   kPages,
+  // A trusted shell from ui/dist that frames a chat page; no network.
+  kShell,
 };
 
 // Serves Perch's built pages (in the app bundle) on `source`, with

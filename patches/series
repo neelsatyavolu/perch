@@ -44,5 +44,6 @@ perch/agent/import-bundle-sources.patch
 perch/agent/perch-keys-host.patch
 perch/agent/keys-sources.patch
 perch/agent/credential-fill-sources.patch
+perch/agent/chat-shell.patch
 perch/build/thinlto-jobs.patch
 perch/build/perch-unittests.patch

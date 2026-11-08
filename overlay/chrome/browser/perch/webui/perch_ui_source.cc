@@ -148,6 +148,14 @@ void ServePerchPages(content::WebUIDataSource* source,
                                         "font-src 'self' data:;");
   source->OverrideContentSecurityPolicy(Directive::FrameSrc,
                                         "frame-src http://127.0.0.1:*;");
+  if (kind == PageKind::kShell) {
+    source->OverrideContentSecurityPolicy(Directive::ConnectSrc,
+                                          "connect-src 'none';");
+    source->OverrideContentSecurityPolicy(
+        Directive::FrameSrc,
+        "frame-src chrome-untrusted://perch-chat "
+        "chrome-untrusted://perch-side-chat.top-chrome;");
+  }
   source->DisableTrustedTypesCSP();
 }
 

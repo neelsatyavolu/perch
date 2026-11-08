@@ -234,6 +234,7 @@ void PerchdLauncher::Launch() {
   base::ListValue origins;
   origins.Append(kSideChatOrigin);
   origins.Append(kChatOrigin);
+  origins.Append("chrome-untrusted://perch-chat");
   for (const char* page : {"settings", "newtab", "memory", "routines", "import",
                            "welcome"}) {
     origins.Append(std::string("chrome://perch-") + page);

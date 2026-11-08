@@ -1,0 +1,53 @@
+# Perch: on-device dictation for chats: the speech recognition usage string and Speech.framework.
+diff --git a/chrome/app/app-Info.plist b/chrome/app/app-Info.plist
+index 6fada0a2b1..572c90155e 100644
+--- a/chrome/app/app-Info.plist
++++ b/chrome/app/app-Info.plist
+@@ -219,6 +219,8 @@
+ 	<false/>
+ 	<key>NSPrincipalClass</key>
+ 	<string>BrowserCrApplication</string>
++	<key>NSSpeechRecognitionUsageDescription</key>
++	<string>Perch turns what you say into text for chats. Speech is recognized on this Mac and never sent anywhere.</string>
+ 	<key>NSSupportsAutomaticGraphicsSwitching</key>
+ 	<true/>
+ 	<key>NSUserActivityTypes</key>
+diff --git a/chrome/browser/ui/browser_window/internal/BUILD.gn b/chrome/browser/ui/browser_window/internal/BUILD.gn
+index ef9f2de478..9f23a9cfc9 100644
+--- a/chrome/browser/ui/browser_window/internal/BUILD.gn
++++ b/chrome/browser/ui/browser_window/internal/BUILD.gn
+@@ -60,6 +60,10 @@ source_set("internal") {
+       "//ui/android",
+     ]
+   } else {
++    if (is_mac) {
++      # Perch: on-device dictation (perch_dictation.mm).
++      frameworks = [ "Speech.framework" ]
++    }
+     sources += [
+       "browser_window_features.cc",
+ 
+@@ -73,6 +77,8 @@ source_set("internal") {
+       "//chrome/browser/perch/webui/perch_side_chat_ui.cc",
+       "//chrome/browser/perch/webui/perch_side_chat_ui.h",
+       "//chrome/browser/perch/webui/perch_chat_ui.cc",
++      "//chrome/browser/perch/webui/perch_dictation.h",
++      "//chrome/browser/perch/webui/perch_dictation.mm",
+       "//chrome/browser/perch/webui/perch_shell_handler.cc",
+       "//chrome/browser/perch/webui/perch_shell_handler.h",
+       "//chrome/browser/perch/webui/perch_chat_ui.h",
+diff --git a/chrome/tools/build/mac/infoplist_strings_util.cc b/chrome/tools/build/mac/infoplist_strings_util.cc
+index f52b1cf14e..a362e1d1d3 100644
+--- a/chrome/tools/build/mac/infoplist_strings_util.cc
++++ b/chrome/tools/build/mac/infoplist_strings_util.cc
+@@ -193,6 +193,10 @@ int main(int argc, char* const argv[]) {
+          local_network_access_permission_description},
+         {"NSLocationUsageDescription", permission_reason},
+         {"NSMicrophoneUsageDescription", permission_reason},
++        // Perch: dictation in chats, recognized on this Mac only.
++        {"NSSpeechRecognitionUsageDescription",
++         "Perch turns what you say into text for chats. Speech is "
++         "recognized on this Mac and never sent anywhere."},
+         {"NSWebBrowserPublicKeyCredentialUsageDescription", permission_reason},
+ 
+         {"\"Chromium Shortcut\"", chromium_shortcut_description},

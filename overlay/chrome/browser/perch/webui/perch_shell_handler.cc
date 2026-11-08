@@ -9,6 +9,7 @@
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "chrome/browser/perch/agent/perchd_launcher.h"
+#include "chrome/browser/perch/webui/perch_dictation.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/side_panel/side_panel_ui.h"
@@ -141,11 +142,48 @@ void PerchShellHandler::HandleHost(const base::ListValue& args) {
     ChooseFiles(id);
     return;
   }
-  Reply(id, false,
-        base::Value(base::DictValue().Set(
-            "message", method == "startDictation" || method == "stopDictation"
-                           ? "Dictation isn't available in this build yet"
-                           : "Unknown call")));
+  if (method == "startDictation") {
+    if (!dictation_) {
+      dictation_ = std::make_unique<PerchDictation>();
+    }
+    AllowJavascript();
+    dictation_->Start(
+        base::BindRepeating(
+            [](base::WeakPtr<PerchShellHandler> self, std::string text,
+               bool final) {
+              if (self && self->IsJavascriptAllowed()) {
+                self->FireWebUIListener(
+                    "perch-dictation",
+                    base::Value(base::DictValue()
+                                    .Set("text", std::move(text))
+                                    .Set("final", final)));
+              }
+            },
+            weak_factory_.GetWeakPtr()),
+        base::BindOnce(
+            [](base::WeakPtr<PerchShellHandler> self, std::string id,
+               std::optional<std::string> error) {
+              if (!self) {
+                return;
+              }
+              if (error) {
+                self->Reply(id, false,
+                            base::Value(base::DictValue().Set("message", *error)));
+              } else {
+                self->Reply(id, true, base::Value());
+              }
+            },
+            weak_factory_.GetWeakPtr(), id));
+    return;
+  }
+  if (method == "stopDictation") {
+    if (dictation_) {
+      dictation_->Stop();
+    }
+    Reply(id, true, base::Value());
+    return;
+  }
+  Reply(id, false, base::Value(base::DictValue().Set("message", "Unknown call")));
 }
 
 void PerchShellHandler::ChooseFiles(const std::string& id) {

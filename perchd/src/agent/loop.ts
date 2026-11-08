@@ -6,7 +6,7 @@ import { actExtra, type ExtraTools } from "../mcp-client/extra-tools";
 import { memoryCall, type MemoryAccess } from "../memory/agent";
 import type { Effort, Message, Model, ToolCall, TurnRequest } from "../models/types";
 import { AGENT_OFF, agentAllowed, capMode, siteRuleFor, type PolicyView } from "../policy/policy";
-import type { AuditLog } from "./audit";
+import type { AuditWriter } from "./audit";
 import type { Mode, SiteRule } from "./permissions";
 import { finalTurn } from "./finish";
 import { Progress } from "./progress";
@@ -29,7 +29,7 @@ export type TaskOptions = {
   task: string;
   mode: Mode;
   approve: (request: ApprovalRequest) => Promise<boolean>;
-  audit: AuditLog;
+  audit: AuditWriter;
   maxSteps?: number;
   /** Wall-clock budget; when it runs out the model gives its best answer. */
   maxMs?: number;

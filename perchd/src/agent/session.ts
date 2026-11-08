@@ -5,7 +5,7 @@
 
 import { appTool } from "../apps/index";
 import type { ToolCall } from "../models/types";
-import type { AuditLog } from "./audit";
+import type { AuditWriter } from "./audit";
 import { classify, needsApproval, type Kind, type Mode, type SiteRule, type Target } from "./permissions";
 import { approvalDetail, checkCall, describeTarget, focusedTarget, liveTarget, pageContext, runTool, type ToolContext, type ToolResult } from "./tools";
 
@@ -14,7 +14,7 @@ export type ApprovalRequest = { call: ToolCall; target?: Target; kind: Kind; sit
 export type CallPolicy = {
   mode: Mode;
   approve: (request: ApprovalRequest) => Promise<boolean>;
-  audit: AuditLog;
+  audit: AuditWriter;
   client?: string;
   siteRule?: (host: string) => SiteRule | undefined;
 };

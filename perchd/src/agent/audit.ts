@@ -22,6 +22,12 @@ export type AuditEntry = {
   result: "ok" | "error" | "blocked" | "declined";
 };
 
+/** Whatever takes entries: the log itself, or a wrapper that drops page text (audit-seal.ts). */
+export type AuditWriter = { append(entry: AuditEntry): Promise<void> };
+
+/** Encrypts and decrypts one line (audit-seal.ts). `open` throws on a line it cannot read. */
+export type AuditSealer = { seal(text: string): Promise<string>; open(sealed: string): Promise<string> };
+
 /** Where else each entry goes: the company's copy. It never throws; it records its own errors. */
 export type AuditSink = { write(entry: AuditEntry): void };
 
@@ -29,13 +35,18 @@ export type AuditLogOptions = {
   /** Log files from older versions, merged into this one on first use. */
   legacy?: readonly string[];
   mirror?: AuditSink;
+  /** Seals each new line. Plain lines (older versions, other writers) are still read. */
+  sealer?: AuditSealer;
 };
 
 const MAX_READ = 500;
+const SEALED = "enc1:";
 
-function parse(line: string): AuditEntry | null {
+/** One line, plain or sealed; null for a line that is not an entry or does not open. */
+async function parse(line: string, sealer?: AuditSealer): Promise<AuditEntry | null> {
   try {
-    const e = JSON.parse(line) as AuditEntry;
+    const text = line.startsWith(SEALED) ? (sealer ? await sealer.open(line.slice(SEALED.length)) : "") : line;
+    const e = JSON.parse(text) as AuditEntry;
     return typeof e?.time === "string" && typeof e.action === "string" ? e : null;
   } catch {
     return null;
@@ -44,14 +55,19 @@ function parse(line: string): AuditEntry | null {
 
 const byTime = (a: AuditEntry, b: AuditEntry) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0);
 
-export class AuditLog {
+async function parseAll(lines: readonly string[], sealer?: AuditSealer): Promise<{ line: string; entry: AuditEntry }[]> {
+  const parsed = await Promise.all(lines.map(async (line) => ({ line, entry: await parse(line, sealer) })));
+  return parsed.filter((x): x is { line: string; entry: AuditEntry } => x.entry !== null);
+}
+
+export class AuditLog implements AuditWriter {
   private ready: Promise<void> | null = null;
 
   constructor(readonly path: string, private readonly opts: AuditLogOptions = {}) {}
 
   async append(entry: AuditEntry): Promise<void> {
     await this.open();
-    await appendFile(this.path, `${JSON.stringify(entry)}\n`, { mode: 0o600 });
+    await appendFile(this.path, `${await sealLine(JSON.stringify(entry), this.opts.sealer)}\n`, { mode: 0o600 });
     await chmod(this.path, 0o600);
     this.opts.mirror?.write(entry);
   }
@@ -60,7 +76,9 @@ export class AuditLog {
   async entries(): Promise<AuditEntry[]> {
     await this.open();
     const text = await readFile(this.path, "utf8").catch(() => "");
-    return text.split("\n").filter(Boolean).map(parse).filter((e): e is AuditEntry => e !== null);
+    const entries = (await parseAll(text.split("\n").filter(Boolean), this.opts.sealer)).map((x) => x.entry);
+    // A writer in another process (an outside agent's own log) can append out of order.
+    return entries.every((e, i) => i === 0 || entries[i - 1]!.time <= e.time) ? entries : [...entries].sort(byTime);
   }
 
   /** Newest first, `limit` at most, and only entries older than `before` when it is given. */
@@ -80,23 +98,31 @@ export class AuditLog {
   private open(): Promise<void> {
     this.ready ??= (async () => {
       await mkdir(dirname(this.path), { recursive: true, mode: 0o700 });
-      await mergeLegacy(this.path, this.opts.legacy ?? []);
+      await mergeLegacy(this.path, this.opts.legacy ?? [], this.opts.sealer);
     })();
     return this.ready;
   }
 }
 
-/** Merges older logs into `path`, each entry once and in time order, then removes them. */
-export async function mergeLegacy(path: string, legacy: readonly string[]): Promise<number> {
+async function sealLine(plain: string, sealer?: AuditSealer): Promise<string> {
+  return sealer ? `${SEALED}${await sealer.seal(plain)}` : plain;
+}
+
+/**
+ * Merges older logs into `path`, each entry once and in time order, then removes them. With a
+ * sealer, the plain lines they bring are sealed as they move in.
+ */
+export async function mergeLegacy(path: string, legacy: readonly string[], sealer?: AuditSealer): Promise<number> {
   const others = legacy.filter((f) => f !== path);
   const texts = await Promise.all(others.map((f) => readFile(f, "utf8").catch(() => null)));
   if (texts.every((t) => t === null)) return 0;
   const current = await readFile(path, "utf8").catch(() => "");
   const lines = [...new Set([current, ...texts].flatMap((t) => (t ?? "").split("\n").filter(Boolean)))];
-  const entries = lines.map((line) => ({ line, entry: parse(line) })).filter((x): x is { line: string; entry: AuditEntry } => x.entry !== null);
+  const entries = await parseAll(lines, sealer);
   entries.sort((a, b) => byTime(a.entry, b.entry));
+  const out = await Promise.all(entries.map((x) => (x.line.startsWith(SEALED) ? x.line : sealLine(x.line, sealer))));
   const tmp = `${path}.merge-${process.pid}`;
-  await writeFile(tmp, entries.map((x) => `${x.line}\n`).join(""), { mode: 0o600 });
+  await writeFile(tmp, out.map((line) => `${line}\n`).join(""), { mode: 0o600 });
   await rename(tmp, path);
   await Promise.all(others.map((f, i) => (texts[i] === null ? undefined : rm(f, { force: true }))));
   return entries.length;

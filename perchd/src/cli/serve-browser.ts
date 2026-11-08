@@ -80,7 +80,8 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
   // Company policy (spec 12.2) and the profile's one audit log, shared by the daemon, the sidebar and routines.
   const policy = startPolicyWatcher();
   const mirror = new PolicyAuditMirror(policy);
-  const audit = profileAuditLog(settings.dataDir, perchPaths(io.env), mirror);
+  const vault = await Vault.open(macKeychain(), PROFILE);
+  const audit = profileAuditLog(settings.dataDir, perchPaths(io.env), mirror, vault);
   const policyProblems = () => {
     const problem = mirror.error();
     return problem ? [{ name: "AuditLogPath", message: problem }] : [];
@@ -110,7 +111,6 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
     home = join(base, "home");
     daemon = await start({ ...io.env, PERCH_HOME: home });
   }
-  const vault = await Vault.open(macKeychain(), PROFILE);
   const services = openPageServices({
     userDataDir: settings.dataDir,
     profile: PROFILE,

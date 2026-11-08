@@ -7,7 +7,7 @@
  * Incognito chats get no memory at all.
  */
 
-import type { AuditLog } from "../agent/audit";
+import type { AuditWriter } from "../agent/audit";
 import { needsApproval, type Kind, type Mode } from "../agent/permissions";
 import { DECLINED, type ApprovalRequest } from "../agent/session";
 import type { Message, Model, ToolCall, ToolSpec } from "../models/types";
@@ -31,7 +31,7 @@ export type MemoryAccess = {
   chatEnded(transcript: readonly Message[]): void;
 };
 
-export type MemoryPolicy = { mode: Mode; approve: (request: ApprovalRequest) => Promise<boolean>; audit: AuditLog; client?: string };
+export type MemoryPolicy = { mode: Mode; approve: (request: ApprovalRequest) => Promise<boolean>; audit: AuditWriter; client?: string };
 
 const SEARCH_LIMIT = 5;
 const FACTS_SHOWN = 12;

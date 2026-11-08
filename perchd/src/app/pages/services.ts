@@ -8,6 +8,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { AuditLog, type AuditSink } from "../../agent/audit";
+import { vaultAuditSealer } from "../../agent/audit-seal";
 import type { PerchPaths } from "../../daemon/paths";
 import { allowsModel, MODEL_NOT_ALLOWED, type PolicyError } from "../../policy/policy";
 import type { PolicyWatcher } from "../../policy/watch";
@@ -54,12 +55,16 @@ export type PageServicesOptions = {
   policyProblems?: () => readonly PolicyError[];
 };
 
-/** The profile's audit log, with every older log merged in on first use (spec 7.4). */
-export function profileAuditLog(userDataDir: string, home: PerchPaths, mirror?: AuditSink): AuditLog {
+/**
+ * The profile's audit log, with every older log merged in on first use (spec 7.4). With the
+ * profile's vault, each record is sealed on its own (spec 11.1).
+ */
+export function profileAuditLog(userDataDir: string, home: PerchPaths, mirror?: AuditSink, vault?: Vault): AuditLog {
   const base = join(userDataDir, "Perch Agent");
   return new AuditLog(join(base, "audit.jsonl"), {
     legacy: [join(base, "sidebar-audit.jsonl"), home.auditFile, ...home.legacyAuditFiles],
     ...(mirror ? { mirror } : {}),
+    ...(vault ? { sealer: vaultAuditSealer(vault) } : {}),
   });
 }
 

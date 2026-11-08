@@ -29,7 +29,8 @@ policy `SyncEnabled` set to false.
 
 Perch uses the macOS trust store. Company root certificates installed in the System keychain by a
 profile work without any Perch setting. `CACertificates` and `CAPlatformIntegrationEnabled` are
-available when you need them.
+available when you need them. `CACertificates` takes a list of base64-encoded DER certificates, as in
+Chrome.
 
 ## Recommended alongside your policies
 
@@ -52,7 +53,7 @@ bun run scripts/policy-check.ts --app /path/to/out/Dev/Perch.app
 It rewrites the table below. A result of "fails" is a bug to fix before a release, or a policy to
 move to the ignored list with the reason.
 
-Two limits of this check:
+Three limits of this check:
 
 - Chromium treats some policies as sensitive (the homepage and startup pages, metrics reporting
   and a few others) and takes them only from a managed Mac, never from test policies. The check
@@ -60,6 +61,10 @@ Two limits of this check:
 - The "Ignored in Perch" status comes from a Chromium patch (plan 8, task 2). A dev build without
   that patch reports `BrowserSignin` and `CloudManagementEnrollmentToken` as applied, which the
   table shows as not matching what is expected.
+- For `CACertificates` the check sets a fixed test root (its private key was thrown away) and reads
+  the policy page, which shows whether Chromium took the certificate. It does not yet load a page
+  signed by that root. The table below is from a run before the `CACertificates` case was added;
+  the next run adds its row.
 
 <!-- policy-check:begin -->
 Checked 2026-11-07 on Chromium 158.0.8127.18.

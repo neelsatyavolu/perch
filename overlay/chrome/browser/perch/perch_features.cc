@@ -36,6 +36,7 @@ const base::Feature* const kDisabled[] = {
     &omnibox::kAimServerRequestOnStartupEnabled,
     &omnibox::kAimEligibilityComponentExtension,
     &extensions_features::kApiContextualTasksPrivate,
+    &extensions_features::kApiGlicPrivate,
     &optimization_guide::features::kOptimizationHints,
     &safe_browsing::kHashPrefixRealTimeLookups,
     &network_time::kNetworkTimeServiceQuerying,

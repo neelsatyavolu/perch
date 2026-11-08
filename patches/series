@@ -31,4 +31,5 @@ perch/shell/perch-commands.patch
 perch/shell/incognito-downloads.patch
 perch/shell/component-extension-rulesets.patch
 perch/shell/tab-tools.patch
+perch/shell/incognito-spelling.patch
 perch/build/thinlto-jobs.patch

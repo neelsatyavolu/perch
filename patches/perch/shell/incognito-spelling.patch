@@ -1,0 +1,16 @@
+# Perch: a private window can't add words to the on-disk spelling dictionary.
+diff --git a/chrome/browser/renderer_context_menu/spelling_menu_observer.cc b/chrome/browser/renderer_context_menu/spelling_menu_observer.cc
+index 0a5da1ad50..a8cf62feeb 100644
+--- a/chrome/browser/renderer_context_menu/spelling_menu_observer.cc
++++ b/chrome/browser/renderer_context_menu/spelling_menu_observer.cc
+@@ -258,7 +258,9 @@ bool SpellingMenuObserver::IsCommandIdEnabled(int command_id) {
+   Profile* profile = Profile::FromBrowserContext(proxy_->GetBrowserContext());
+   switch (command_id) {
+     case IDC_SPELLCHECK_ADD_TO_DICTIONARY:
+-      return !misspelled_word_.empty();
++      // Perch: the dictionary is the main profile's and lives on disk, so a
++      // private window can't add to it.
++      return !misspelled_word_.empty() && !profile->IsOffTheRecord();
+ 
+     case IDC_CONTENT_CONTEXT_NO_SPELLING_SUGGESTIONS:
+       return false;

@@ -1,0 +1,26 @@
+# Perch: Keeps the ad-rule checksums a built-in extension records, so its rules load on first launch.
+diff --git a/extensions/browser/extension_registrar.cc b/extensions/browser/extension_registrar.cc
+index 49fa880c1f..4b462b1dff 100644
+--- a/extensions/browser/extension_registrar.cc
++++ b/extensions/browser/extension_registrar.cc
+@@ -595,11 +595,15 @@ void ExtensionRegistrar::AddComponentExtension(const Extension* extension) {
+     if (old_version.IsValid()) {
+       UnregisterServiceWorkerWithRootScope(extension);
+     }
+-    // TODO(crbug.com/40508457): If needed, add support for Declarative Net
+-    // Request to component extensions and pass the ruleset install prefs here.
+-    AddNewOrUpdatedExtension(extension, kInstallFlagNone,
+-                             syncer::StringOrdinal(), std::string(),
+-                             /*ruleset_install_prefs=*/{});
++    // Perch: a built-in extension indexes its own ad-rule lists and records
++    // their checksums before it is added. Keep them, or its rules don't load.
++    const base::DictValue* ruleset_install_prefs =
++        extension_prefs_->ReadPrefAsDict(extension->id(),
++                                         ExtensionPrefs::kDNRStaticRulesetPref);
++    AddNewOrUpdatedExtension(
++        extension, kInstallFlagNone, syncer::StringOrdinal(), std::string(),
++        ruleset_install_prefs ? ruleset_install_prefs->Clone()
++                              : base::DictValue());
+     return;
+   }
+ 

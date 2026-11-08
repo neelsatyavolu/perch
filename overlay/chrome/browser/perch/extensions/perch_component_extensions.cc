@@ -7,10 +7,15 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "base/apple/bundle_locations.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/files/file_util.h"
+#include "base/json/json_reader.h"
+#include "base/json/json_writer.h"
+#include "base/path_service.h"
 #include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/weak_ptr.h"
@@ -20,9 +25,19 @@
 #include "chrome/browser/perch/perch_pref_names.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_observer.h"
+#include "chrome/common/chrome_paths.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_service.h"
+#include "base/strings/string_number_conversions.h"
+#include "base/strings/utf_string_conversions.h"
+#include "extensions/browser/api/declarative_net_request/install_index_helper.h"
+#include "extensions/browser/api/declarative_net_request/prefs_helper.h"
+#include "extensions/browser/ruleset_parse_result.h"
+#include "extensions/common/extension.h"
+#include "extensions/common/mojom/manifest.mojom-shared.h"
 #include "extensions/browser/extension_file_task_runner.h"
+#include "extensions/browser/extension_prefs.h"
+#include "extensions/common/api/declarative_net_request/constants.h"
 #include "extensions/common/file_util.h"
 
 namespace perch {
@@ -61,16 +76,141 @@ base::FilePath ExtensionsDir() {
       .Append("perch_extensions");
 }
 
-// Runs on the extension file task runner.
-std::optional<base::DictValue> ReadManifest(const base::FilePath& dir) {
+// Where a built-in extension runs from: a copy in the user data folder,
+// because Chromium writes the ad blocker's indexed rules into the extension's
+// own folder, and the app bundle must stay as it was signed.
+base::FilePath RunDir(std::string_view name) {
+  base::FilePath user_data;
+  base::PathService::Get(chrome::DIR_USER_DATA, &user_data);
+  return user_data.Append(FILE_PATH_LITERAL("Perch Extensions"))
+      .AppendASCII(name);
+}
+
+std::string VersionOf(const base::FilePath& dir) {
   std::string error;
   std::optional<base::DictValue> manifest =
       extensions::file_util::LoadManifest(dir, &error);
-  if (!manifest) {
-    LOG(ERROR) << "Perch: can't load the built-in extension in " << dir
-               << ": " << error;
+  const std::string* version = manifest ? manifest->FindString("version") : nullptr;
+  return version ? *version : std::string();
+}
+
+struct Prepared {
+  base::FilePath dir;
+  base::DictValue manifest;
+  // Ruleset id → checksum of the copy's indexed ad-rule lists.
+  std::vector<std::pair<int, int>> checksums;
+};
+
+// Indexes the extension's static ad-rule lists into its copy, as an install
+// would, and returns their checksums.
+std::vector<std::pair<int, int>> IndexRulesets(const base::FilePath& dir,
+                                               const base::DictValue& manifest) {
+  std::vector<std::pair<int, int>> checksums;
+  if (!manifest.FindByDottedPath("declarative_net_request")) {
+    return checksums;
   }
-  return manifest;
+  std::u16string error;
+  scoped_refptr<const extensions::Extension> extension =
+      extensions::Extension::Create(
+          dir, extensions::mojom::ManifestLocation::kComponent, manifest,
+          extensions::Extension::NO_FLAGS, &error);
+  if (!extension) {
+    LOG(ERROR) << "Perch: can't read the built-in extension in " << dir
+               << ": " << base::UTF16ToUTF8(error);
+    return checksums;
+  }
+  extensions::RulesetParseResult result = extensions::declarative_net_request::
+      InstallIndexHelper::IndexAndPersistRulesOnInstall(*extension);
+  if (result.error) {
+    LOG(ERROR) << "Perch: can't index the ad-rule lists in " << dir << ": "
+               << *result.error;
+    return checksums;
+  }
+  for (const auto [key, value] : result.ruleset_install_prefs) {
+    int id = 0;
+    const std::optional<int> checksum =
+        value.is_dict() ? value.GetDict().FindInt("checksum") : std::nullopt;
+    if (base::StringToInt(key, &id) && checksum) {
+      checksums.emplace_back(id, *checksum);
+    }
+  }
+  return checksums;
+}
+
+// Runs on the extension file task runner: refreshes the copy when the bundled
+// extension changed (a Perch update), then reads its manifest.
+std::optional<Prepared> Prepare(const base::FilePath& bundled,
+                                const base::FilePath& run_dir) {
+  const std::string version = VersionOf(bundled);
+  if (version.empty()) {
+    LOG(ERROR) << "Perch: no built-in extension in " << bundled;
+    return std::nullopt;
+  }
+  // Any change to the bundled manifest (a new version, or a development
+  // build) replaces the copy. Both folders carry the extension's name.
+  std::string bundled_manifest, run_manifest;
+  base::ReadFileToString(bundled.Append(FILE_PATH_LITERAL("manifest.json")),
+                         &bundled_manifest);
+  base::ReadFileToString(run_dir.Append(FILE_PATH_LITERAL("manifest.json")),
+                         &run_manifest);
+  const bool refresh = bundled_manifest != run_manifest;
+  if (refresh) {
+    base::DeletePathRecursively(run_dir);
+    if (!base::CreateDirectory(run_dir.DirName()) ||
+        !base::CopyDirectory(bundled, run_dir.DirName(), /*recursive=*/true)) {
+      LOG(ERROR) << "Perch: can't copy the built-in extension to " << run_dir;
+      return std::nullopt;
+    }
+  }
+  std::string error;
+  std::optional<base::DictValue> manifest =
+      extensions::file_util::LoadManifest(run_dir, &error);
+  if (!manifest) {
+    LOG(ERROR) << "Perch: can't load the built-in extension in " << run_dir
+               << ": " << error;
+    return std::nullopt;
+  }
+  // Every profile records the checksums, so they are kept beside the copy.
+  const base::FilePath checksum_file =
+      run_dir.AddExtension(FILE_PATH_LITERAL("checksums"));
+  std::vector<std::pair<int, int>> checksums;
+  if (refresh) {
+    checksums = IndexRulesets(run_dir, *manifest);
+    base::DictValue saved;
+    for (const auto& [ruleset, checksum] : checksums) {
+      saved.Set(base::NumberToString(ruleset), checksum);
+    }
+    base::WriteFile(checksum_file, base::WriteJson(saved).value_or("{}"));
+  } else {
+    std::string text;
+    base::ReadFileToString(checksum_file, &text);
+    std::optional<base::DictValue> saved =
+        base::JSONReader::ReadDict(text, base::JSON_PARSE_RFC);
+    if (!saved) {
+      saved.emplace();
+    }
+    for (const auto [key, value] : *saved) {
+      int ruleset = 0;
+      if (base::StringToInt(key, &ruleset) && value.is_int()) {
+        checksums.emplace_back(ruleset, value.GetInt());
+      }
+    }
+  }
+  return Prepared{run_dir, std::move(*manifest), std::move(checksums)};
+}
+
+// Chromium records each static ad-rule list's checksum when it installs an
+// extension, and a built-in one is never installed: record the checksums of
+// the lists just indexed, so they load.
+void RecordRulesetChecksums(Profile* profile,
+                            const std::string& id,
+                            const std::vector<std::pair<int, int>>& checksums) {
+  extensions::declarative_net_request::PrefsHelper helper(
+      *extensions::ExtensionPrefs::Get(profile));
+  for (const auto& [ruleset, checksum] : checksums) {
+    helper.SetStaticRulesetChecksum(
+        id, extensions::declarative_net_request::RulesetID(ruleset), checksum);
+  }
 }
 
 // Keeps each built-in extension in step with its pref for one profile. It
@@ -119,28 +259,28 @@ class Watcher : public base::SupportsUserData::Data, public ProfileObserver {
     if (loader->Exists(builtin.id)) {
       return;
     }
-    const base::FilePath dir = ExtensionsDir().Append(builtin.name);
     extensions::GetExtensionFileTaskRunner()->PostTaskAndReplyWithResult(
-        FROM_HERE, base::BindOnce(&ReadManifest, dir),
-        base::BindOnce(&Watcher::Add, weak_factory_.GetWeakPtr(), builtin,
-                       dir));
+        FROM_HERE,
+        base::BindOnce(&Prepare, ExtensionsDir().Append(builtin.name),
+                       RunDir(builtin.name)),
+        base::BindOnce(&Watcher::Add, weak_factory_.GetWeakPtr(), builtin));
   }
 
  private:
-  void Add(const BuiltIn& builtin,
-           const base::FilePath& dir,
-           std::optional<base::DictValue> manifest) {
+  void Add(const BuiltIn& builtin, std::optional<Prepared> prepared) {
     if (!profile_) {
       return;
     }
     extensions::ComponentLoader* loader =
         extensions::ComponentLoader::Get(profile_);
-    // The pref may have changed while the manifest was read.
-    if (!manifest || !loader || loader->Exists(builtin.id) ||
+    // The pref may have changed while the files were prepared.
+    if (!prepared || !loader || loader->Exists(builtin.id) ||
         !profile_->GetPrefs()->GetBoolean(builtin.pref)) {
       return;
     }
-    const std::string id = loader->Add(std::move(*manifest), dir);
+    RecordRulesetChecksums(profile_, builtin.id, prepared->checksums);
+    const std::string id =
+        loader->Add(std::move(prepared->manifest), prepared->dir);
     if (id != builtin.id) {
       LOG(ERROR) << "Perch: the built-in extension " << builtin.name
                  << " loaded as '" << id << "', expected " << builtin.id

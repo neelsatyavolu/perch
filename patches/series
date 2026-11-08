@@ -7,6 +7,7 @@ perch/branding/no-api-keys-infobar.patch
 perch/updater/start-updater.patch
 perch/agent/devtools-io-fds.patch
 perch/agent/sidebar.patch
+perch/build/thinlto-jobs.patch
 perch/agent/perch-domain.patch
 perch/agent/tab-ids.patch
 perch/agent/chat-page.patch
@@ -19,11 +20,10 @@ perch/shell/privacy-components.patch
 perch/shell/allowed-connections.patch
 perch/shell/search-default.patch
 perch/shell/tab-for-google.patch
-perch/shell/new-tab-page.patch
 perch/policy/no-test-policies-in-release.patch
 perch/policy/ignored-google-policies.patch
+perch/shell/new-tab-page.patch
 perch/policy/update-policy.patch
-perch/policy/built-in-policy.patch
 perch/shell/layout-constants.patch
 perch/shell/tab-strip.patch
 perch/shell/browser-window-sources.patch
@@ -33,6 +33,7 @@ perch/shell/incognito-downloads.patch
 perch/shell/component-extension-rulesets.patch
 perch/shell/tab-tools.patch
 perch/shell/incognito-spelling.patch
+perch/build/perch-unittests.patch
 perch/shell/memory-saver.patch
 perch/shell/sleeping-tab-icon.patch
 perch/shell/profile-menu.patch
@@ -51,5 +52,4 @@ perch/agent/artifact-scheme.patch
 perch/agent/side-shell.patch
 perch/agent/dictation.patch
 perch/agent/agent-status-ui.patch
-perch/build/thinlto-jobs.patch
-perch/build/perch-unittests.patch
+perch/policy/built-in-policy.patch

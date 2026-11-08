@@ -32,6 +32,7 @@ import type { Model } from "../../models/types";
 import { openPerchData, type PerchData } from "../../routines/service";
 import { MacKeychain } from "../../secure/keychain";
 import { SkillStore } from "../../skills/store";
+import { startBrowserSync } from "../../sync/browser-sync";
 import type { PagesCore, Windows } from "../app";
 import type { ChatStore } from "../chats";
 import { createPagesApi, type PagesApi } from "../pages-api";
@@ -134,6 +135,9 @@ export function openPageServices(opts: PageServicesOptions): PageServices {
   const manager = new McpManager({ store: mcpStore, keychain: secrets, env: opts.env, openUrl, approveLaunch: (r) => confirm(describeLaunch(r)) });
   void manager.start().catch((error: Error) => process.stderr.write(`perchd: MCP servers did not start: ${error.message}\n`));
   const home = opts.env.HOME || homedir();
+  const domain = new PerchDomain(opts.conn);
+  // Bookmarks, history and open tabs sync every 15 minutes while sync is on (plan 3b task 14).
+  const browserSync = startBrowserSync({ domain, dataDir: base, ...(opts.policy ? { policy: opts.policy } : {}) });
 
   return {
     sidebarAudit: opts.audit.path,
@@ -156,9 +160,11 @@ export function openPageServices(opts: PageServicesOptions): PageServices {
         ...(opts.policy ? { policy: opts.policy } : {}),
         ...(opts.policyProblems ? { policyProblems: opts.policyProblems } : {}),
         data: () => data.catch((error: Error) => Promise.reject(new AppError(`Perch couldn't open memory and routines: ${error.message}`, 503))),
-        importer: { home, target: { userDataDir: opts.userDataDir }, keychain: importKeychain(), running: opts.conn, browser: new PerchDomain(opts.conn) },
+        importer: { home, target: { userDataDir: opts.userDataDir }, keychain: importKeychain(), running: opts.conn, browser: domain },
+        sync: browserSync.sync,
       }),
     async stop() {
+      browserSync.stop();
       await manager.close();
       (await data.catch(() => null))?.stop();
       if (registry) (await registry.catch(() => null))?.dispose();

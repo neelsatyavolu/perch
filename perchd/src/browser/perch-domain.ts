@@ -32,6 +32,8 @@ export type PerchDomainApi = {
   getBookmarks(): Promise<{ roots: BookmarkNode[] } | null>;
   applyBookmarkChanges(p: { changes: BookmarkChange[] }): Promise<{ applied: number; idMap?: Record<number, string> } | null>;
   getHistory(p: { since: number; max?: number }): Promise<{ visits: HistoryVisit[] } | null>;
+  /** Visits other devices made (sync); the browser adds them as synced visits. */
+  addHistory(p: { visits: HistoryVisit[] }): Promise<{ added: number } | null>;
   getOpenTabs(): Promise<{ windows: OpenWindow[] } | null>;
   applyImportBundle(p: { path: string }): Promise<{ applied: ImportApplied; skipped: string[] } | null>;
   /** The address bar's ⌘↵ and the new tab page's Ask. Returns a function that stops listening. */
@@ -79,6 +81,10 @@ export class PerchDomain implements PerchDomainApi {
 
   getHistory(p: { since: number; max?: number }) {
     return this.call<{ visits: HistoryVisit[] }>("getHistory", p);
+  }
+
+  addHistory(p: { visits: HistoryVisit[] }) {
+    return this.call<{ added: number }>("addHistory", p);
   }
 
   getOpenTabs() {

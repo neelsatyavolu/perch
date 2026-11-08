@@ -23,6 +23,7 @@
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
 #include "chrome/browser/performance_manager/policies/memory_saver_mode_policy.h"
+#include "chrome/browser/perch/command_bar/command_bar.h"
 #include "chrome/browser/perch/memory_saver/sleep_controller.h"
 #include "chrome/browser/perch/perch_command_ids.h"
 #include "chrome/browser/perch/perch_commands.h"
@@ -78,10 +79,11 @@ class Snapshotter {
       return;
     }
     Apply(states_[index_]);
+    // "pause" holds the window for a probe over DevTools.
     base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&Snapshotter::Capture, base::Unretained(this)),
-        kSettle);
+        states_[index_] == "pause" ? base::Seconds(30) : kSettle);
   }
 
  private:
@@ -117,6 +119,14 @@ class Snapshotter {
                                     base::Time::Now() + base::Days(2))
                           .size()
                    << " of " << tabs->count() << " tabs older than a day";
+    } else if (state == "command-bar") {
+      ExecutePerchCommand(browser_, IDC_PERCH_COMMAND_BAR);
+      QueryCommandBar(browser_->GetProfile(), "histor",
+                      base::BindOnce([](base::ListValue results) {
+                        LOG(WARNING) << "Perch snapshot: command bar "
+                                        "query histor: "
+                                     << results.DebugString();
+                      }));
     } else if (state == "profile-menu") {
       // The profile menu's items, then New Tab run from it.
       PerchProfileMenuModel menu(browser_);
@@ -202,8 +212,12 @@ class Snapshotter {
 
   void Capture() {
     BrowserView* view = BrowserView::GetBrowserViewForBrowser(browser_);
-    ui::Layer* layer =
-        view && view->GetWidget() ? view->GetWidget()->GetLayer() : nullptr;
+    views::Widget* widget = view ? view->GetWidget() : nullptr;
+    // The command bar state draws the bar's own bubble.
+    if (states_[index_] == "command-bar") {
+      widget = GetCommandBarWidget(browser_);
+    }
+    ui::Layer* layer = widget ? widget->GetLayer() : nullptr;
     if (!layer) {
       LOG(ERROR) << "Perch snapshot: the window has no layer";
       ++index_;

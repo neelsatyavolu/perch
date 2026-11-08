@@ -1,6 +1,7 @@
 // Copyright 2026 The Perch Authors
 // Use of this source code is governed by the MIT license in Perch's LICENSE file.
 
+#include "chrome/browser/perch/command_bar/command_bar.h"
 #include "chrome/browser/perch/hide_chrome/hide_chrome.h"
 #include "chrome/browser/perch/memory_saver/sleep_controller.h"
 #include "chrome/browser/perch/perch_menu_mac.h"
@@ -338,6 +339,7 @@ void InitWindowFeatures(BrowserWindowInterface* browser,
 
 void TearDownWindowFeatures(BrowserWindowInterface* browser) {
   UnwatchHideChrome(browser);
+  ForgetCommandBar(browser);
   Controllers().erase(browser);
 }
 

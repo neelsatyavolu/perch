@@ -5,6 +5,7 @@
 
 #include "base/time/time.h"
 #include "chrome/browser/command_updater.h"
+#include "chrome/browser/perch/command_bar/command_bar.h"
 #include "chrome/browser/perch/hide_chrome/hide_chrome.h"
 #include "chrome/browser/perch/memory_saver/sleep_controller.h"
 #include "chrome/browser/perch/perch_command_ids.h"
@@ -12,6 +13,9 @@
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "components/tabs/public/tab_interface.h"
+#include "content/public/browser/page_navigator.h"
+#include "ui/base/window_open_disposition.h"
+#include "url/gurl.h"
 #include "content/public/browser/web_contents.h"
 
 namespace perch {
@@ -33,7 +37,8 @@ void EnablePerchCommands(CommandUpdater* updater) {
                  IDC_PERCH_CLOSE_TABS_OLDER_THAN_DAY,
                  IDC_PERCH_CLOSE_TABS_OLDER_THAN_WEEK,
                  IDC_PERCH_CLOSE_TABS_OLDER_THAN_MONTH, IDC_PERCH_SLEEP_TAB,
-                 IDC_PERCH_NEVER_SLEEP_SITE}) {
+                 IDC_PERCH_NEVER_SLEEP_SITE, IDC_PERCH_OPEN_SETTINGS,
+                 IDC_PERCH_COMMAND_BAR, IDC_PERCH_COPY_URL_MARKDOWN}) {
     updater->UpdateCommandEnabled(id, true);
   }
 }
@@ -65,6 +70,21 @@ bool ExecutePerchCommand(BrowserWindowInterface* browser, int id) {
     }
     case IDC_PERCH_TOGGLE_HIDE_CHROME:
       ToggleHideChrome(browser);
+      return true;
+    case IDC_PERCH_OPEN_SETTINGS:
+      // Perch's settings; Chromium's stay at chrome://settings.
+      browser->OpenURL(
+          content::OpenURLParams(GURL("chrome://perch-settings/"),
+                                 content::Referrer(),
+                                 WindowOpenDisposition::kNewForegroundTab,
+                                 ui::PAGE_TRANSITION_AUTO_BOOKMARK, false),
+          {});
+      return true;
+    case IDC_PERCH_COMMAND_BAR:
+      ToggleCommandBar(browser);
+      return true;
+    case IDC_PERCH_COPY_URL_MARKDOWN:
+      CopyUrlAsMarkdown(browser);
       return true;
     case IDC_PERCH_CLOSE_DUPLICATE_TABS: {
       TabStripModel& tabs = *browser->GetTabStripModel();

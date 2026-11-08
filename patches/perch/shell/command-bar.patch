@@ -1,0 +1,26 @@
+# Perch: builds the command bar and registers its WebUI name for the bubble's metrics.
+diff --git a/chrome/browser/ui/browser_window/internal/BUILD.gn b/chrome/browser/ui/browser_window/internal/BUILD.gn
+index e403b2b9cd..bc1f612511 100644
+--- a/chrome/browser/ui/browser_window/internal/BUILD.gn
++++ b/chrome/browser/ui/browser_window/internal/BUILD.gn
+@@ -98,6 +98,8 @@ source_set("internal") {
+       "//chrome/browser/perch/perch_commands.h",
+       "//chrome/browser/perch/perch_menu_mac.h",
+       "//chrome/browser/perch/perch_menu_mac.mm",
++      "//chrome/browser/perch/command_bar/command_bar.cc",
++      "//chrome/browser/perch/command_bar/command_bar.h",
+       "//chrome/browser/perch/tab_tools/tab_tools.cc",
+       "//chrome/browser/perch/toolbar/perch_profile_menu.cc",
+       "//chrome/browser/perch/toolbar/perch_profile_menu.h",
+diff --git a/tools/metrics/histograms/metadata/page/histograms.xml b/tools/metrics/histograms/metadata/page/histograms.xml
+index f648d89c5f..5163d1cba1 100644
+--- a/tools/metrics/histograms/metadata/page/histograms.xml
++++ b/tools/metrics/histograms/metadata/page/histograms.xml
+@@ -1097,6 +1097,7 @@ chromium-metrics-reviews@google.com.
+   <variant name=".OmniboxEverywhere"/>
+   <variant name=".OmniboxPopup"/>
+   <variant name=".PerformanceSidePanel"/>
++  <variant name=".PerchCommandBar"/>
+   <variant name=".PerchSideChat"/>
+   <variant name=".ReadAnythingUntrusted"/>
+   <variant name=".ReadingList"/>

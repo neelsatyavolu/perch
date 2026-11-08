@@ -69,10 +69,34 @@ void AddTabTools(NSMenu* main_menu) {
                atIndex:at + 3];
 }
 
+// Edit → Copy URL (⇧⌘C) and Copy URL as Markdown (⌥⇧⌘C), at the end.
+void AddCopyUrl(NSMenu* main_menu) {
+  NSMenu* edit_menu = [main_menu itemWithTag:IDC_EDIT_MENU].submenu;
+  if (!edit_menu || [edit_menu itemWithTag:IDC_PERCH_COPY_URL_MARKDOWN]) {
+    return;
+  }
+  NSMenuItem* copy = CommandItem(@"Copy URL", IDC_COPY_URL);
+  copy.keyEquivalent = @"c";
+  copy.keyEquivalentModifierMask =
+      NSEventModifierFlagCommand | NSEventModifierFlagShift;
+  NSMenuItem* markdown =
+      CommandItem(@"Copy URL as Markdown", IDC_PERCH_COPY_URL_MARKDOWN);
+  markdown.keyEquivalent = @"c";
+  markdown.keyEquivalentModifierMask = NSEventModifierFlagCommand |
+                                       NSEventModifierFlagShift |
+                                       NSEventModifierFlagOption;
+  [edit_menu addItem:[NSMenuItem separatorItem]];
+  if (![edit_menu itemWithTag:IDC_COPY_URL]) {
+    [edit_menu addItem:copy];
+  }
+  [edit_menu addItem:markdown];
+}
+
 }  // namespace
 
 void AddPerchMenuItems() {
   NSMenu* main_menu = NSApp.mainMenu;
+  AddCopyUrl(main_menu);
   // Tab → Add Tab to New Split View: ⌃⌘N (spec 5.3).
   SetKeyEquivalent(main_menu, IDC_NEW_SPLIT_TAB, @"n",
                    NSEventModifierFlagControl | NSEventModifierFlagCommand);
@@ -88,8 +112,13 @@ void AddPerchMenuItems() {
   item.keyEquivalentModifierMask =
       NSEventModifierFlagCommand | NSEventModifierFlagShift;
   item.tag = IDC_PERCH_TOGGLE_HIDE_CHROME;
+  // View → Command Bar (⌘K), above Hide Browser Chrome.
+  NSMenuItem* bar = CommandItem(@"Command Bar", IDC_PERCH_COMMAND_BAR);
+  bar.keyEquivalent = @"k";
+  bar.keyEquivalentModifierMask = NSEventModifierFlagCommand;
   [view_menu insertItem:[NSMenuItem separatorItem] atIndex:0];
   [view_menu insertItem:item atIndex:0];
+  [view_menu insertItem:bar atIndex:0];
 }
 
 }  // namespace perch

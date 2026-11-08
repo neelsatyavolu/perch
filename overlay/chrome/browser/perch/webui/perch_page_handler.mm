@@ -17,12 +17,15 @@
 #include "base/strings/string_util.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
+#include "chrome/browser/perch/command_bar/command_bar.h"
 #include "chrome/browser/perch/extensions/perch_component_extensions.h"
 #include "chrome/browser/perch/memory_saver/memory_saver_settings.h"
 #include "chrome/browser/perch/perch_pref_names.h"
 #include "chrome/browser/perch/settings/appearance.h"
 #include "chrome/browser/perch/settings/privacy.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+#include "chrome/browser/ui/webui/webui_embedding_context.h"
 #include "chrome/browser/search_engines/template_url_service_factory.h"
 #include "components/search_engines/search_engine_type.h"
 #include "components/search_engines/template_url.h"
@@ -320,6 +323,37 @@ void PerchPageHandler::Dispatch(const std::string& method,
       return;
     }
     Resolve(std::move(id), base::Value(std::move(*result)));
+  } else if (method == "queryCommandBar") {
+    const std::string* text = arg0 ? arg0->GetIfString() : nullptr;
+    if (!text) {
+      Reject(std::move(id), "invalid", "Send the text to look for");
+      return;
+    }
+    // The bubble opens hidden and shows once the page asks for its results.
+    ShowCommandBarNow(web_ui());
+    QueryCommandBar(
+        profile(), *text,
+        base::BindOnce(
+            [](base::WeakPtr<PerchPageHandler> self, base::Value id,
+               base::ListValue results) {
+              if (self) {
+                self->Resolve(std::move(id), base::Value(std::move(results)));
+              }
+            },
+            weak_factory_.GetWeakPtr(), id.Clone()));
+  } else if (method == "runCommandBarItem") {
+    BrowserWindowInterface* browser =
+        webui::GetBrowserWindowInterface(web_ui()->GetWebContents());
+    if (!arg0 || !arg0->is_dict() ||
+        !RunCommandBarItem(browser, arg0->GetDict())) {
+      Reject(std::move(id), "invalid", "Perch couldn't open that");
+      return;
+    }
+    Resolve(std::move(id), base::Value());
+    CloseCommandBarNow(web_ui());
+  } else if (method == "closeCommandBar") {
+    Resolve(std::move(id), base::Value());
+    CloseCommandBarNow(web_ui());
   } else if (method == "listTabMemory") {
     Resolve(std::move(id), base::Value(ListTabMemory(profile())));
   } else {

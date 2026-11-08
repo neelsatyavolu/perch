@@ -7,6 +7,7 @@
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/perch/perch_command_ids.h"
+#include "chrome/browser/perch/perch_commands.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_attributes_entry.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
@@ -17,21 +18,14 @@
 #include "chrome/browser/ui/profiles/profile_picker.h"
 #include "chrome/browser/ui/toolbar/app_menu_model.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
-#include "content/public/browser/page_navigator.h"
-#include "content/public/browser/web_contents.h"
 #include "ui/base/mojom/menu_source_type.mojom.h"
-#include "ui/base/window_open_disposition.h"
 #include "ui/views/controls/menu/menu_runner.h"
 #include "ui/views/view.h"
 #include "ui/views/widget/widget.h"
-#include "url/gurl.h"
 
 namespace perch {
 
 namespace {
-
-// Perch's settings page; Chromium's stays at chrome://settings.
-constexpr char kSettingsUrl[] = "chrome://perch-settings/";
 
 bool IsProfileRow(int command_id) {
   return command_id >= IDC_PERCH_PROFILE_FIRST &&
@@ -127,15 +121,10 @@ void PerchProfileMenuModel::ExecuteCommand(int command_id, int event_flags) {
       ProfilePicker::Show(ProfilePicker::Params::FromEntryPoint(
           ProfilePicker::EntryPoint::kProfileMenuManageProfiles));
       return;
-    case IDC_PERCH_OPEN_SETTINGS:
-      browser_->OpenURL(
-          content::OpenURLParams(GURL(kSettingsUrl), content::Referrer(),
-                                 WindowOpenDisposition::kNewForegroundTab,
-                                 ui::PAGE_TRANSITION_AUTO_BOOKMARK, false),
-          {});
-      return;
     default:
-      chrome::ExecuteCommand(browser_, command_id);
+      if (!ExecutePerchCommand(browser_, command_id)) {
+        chrome::ExecuteCommand(browser_, command_id);
+      }
   }
 }
 

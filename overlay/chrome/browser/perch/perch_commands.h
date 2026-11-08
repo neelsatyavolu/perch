@@ -7,6 +7,10 @@
 class BrowserWindowInterface;
 class CommandUpdater;
 
+namespace tabs {
+class TabInterface;
+}
+
 namespace perch {
 
 // Turns Perch's commands on in a window's command updater, so menus and
@@ -15,6 +19,10 @@ void EnablePerchCommands(CommandUpdater* updater);
 
 // Runs one of Perch's commands. Returns false for any other id.
 bool ExecutePerchCommand(BrowserWindowInterface* browser, int id);
+
+// Runs one of Perch's commands from a tab's context menu: the tab commands
+// act on `tab` instead of the active tab.
+bool ExecutePerchTabCommand(tabs::TabInterface* tab, int id);
 
 }  // namespace perch
 

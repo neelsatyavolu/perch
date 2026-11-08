@@ -24,6 +24,9 @@ inline constexpr char kAppearanceMatchSystem[] =
     "perch.appearance.match_system";
 inline constexpr char kAppearanceDarkTheme[] = "perch.appearance.dark_theme";
 inline constexpr char kAppearanceHideChrome[] = "perch.appearance.hide_chrome";
+
+// Never-sleep rules, [{"kind", "pattern"}] as in Lulltab (memory_saver/).
+inline constexpr char kMemorySaverRules[] = "perch.memory_saver.rules";
 inline constexpr char kAppearanceRevealOnHover[] =
     "perch.appearance.reveal_on_hover";
 inline constexpr char kAppearanceDensity[] = "perch.appearance.density";

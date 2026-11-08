@@ -12,6 +12,7 @@
 #include "chrome/common/pref_names.h"
 #include "components/content_settings/core/browser/cookie_settings.h"
 #include "components/content_settings/core/common/pref_names.h"
+#include "components/performance_manager/public/user_tuning/prefs.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/pref_registry.h"
 #include "components/prefs/pref_registry_simple.h"
@@ -44,6 +45,13 @@ void SetDefault(PrefRegistry* registry, const char* name, base::Value value) {
 void RegisterLocalStatePrefs(PrefRegistrySimple* registry) {
   RegisterAllowedConnectionPrefs(registry);
   SetDefault(registry, ::prefs::kDnsOverHttpsMode, base::Value("automatic"));
+  // Memory saver is on, and a background tab sleeps after 15 minutes.
+  namespace tuning = performance_manager::user_tuning::prefs;
+  SetDefault(registry, tuning::kMemorySaverModeState,
+             base::Value(static_cast<int>(
+                 tuning::MemorySaverModeState::kEnabled)));
+  SetDefault(registry, tuning::kMemorySaverModeTimeBeforeDiscardInMinutes,
+             base::Value(15));
   SetDefault(registry, ::prefs::kDnsOverHttpsTemplates,
              base::Value(kDefaultDohTemplate));
 }
@@ -59,6 +67,7 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {
   registry->RegisterBooleanPref(prefs::kAppearanceMatchSystem, false);
   registry->RegisterStringPref(prefs::kAppearanceDarkTheme, "ink");
   registry->RegisterBooleanPref(prefs::kAppearanceHideChrome, false);
+  registry->RegisterListPref(prefs::kMemorySaverRules);
   registry->RegisterBooleanPref(prefs::kAppearanceRevealOnHover, true);
   registry->RegisterStringPref(prefs::kAppearanceDensity, "comfortable");
 

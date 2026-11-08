@@ -1,0 +1,117 @@
+# Perch: memory saver takes Perch's timeout and never-sleep rules; Sleep Tab and Never Sleep This Site in the tab menu.
+diff --git a/chrome/browser/performance_manager/policies/discard_eligibility_policy.cc b/chrome/browser/performance_manager/policies/discard_eligibility_policy.cc
+index 7d1974430b..9455caca7e 100644
+--- a/chrome/browser/performance_manager/policies/discard_eligibility_policy.cc
++++ b/chrome/browser/performance_manager/policies/discard_eligibility_policy.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "chrome/browser/performance_manager/policies/discard_eligibility_policy.h"
+ 
++#include "chrome/browser/perch/memory_saver/sleep_controller.h"
++
+ #include "base/metrics/histogram_functions.h"
+ #include "base/strings/strcat.h"
+ #include "chrome/browser/glic/public/glic_keyed_service.h"
+@@ -455,6 +457,10 @@ bool DiscardEligibilityPolicy::IsPageOptedOutOfDiscarding(
+     const base::UnguessableToken& browser_context_id,
+     const GURL& url) const {
+   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
++  // Perch: the profile's never-sleep rules.
++  if (perch::IsSleepExempt(browser_context_id, url)) {
++    return true;
++  }
+   auto it = profiles_no_discard_patterns_.find(browser_context_id);
+   if (it == profiles_no_discard_patterns_.end()) {
+     // There can be a narrow window between profile creation and when prefs are
+diff --git a/chrome/browser/performance_manager/policies/memory_saver_mode_policy.cc b/chrome/browser/performance_manager/policies/memory_saver_mode_policy.cc
+index f121d12d95..35de40835e 100644
+--- a/chrome/browser/performance_manager/policies/memory_saver_mode_policy.cc
++++ b/chrome/browser/performance_manager/policies/memory_saver_mode_policy.cc
+@@ -217,8 +217,23 @@ void MemorySaverModePolicy::DiscardPageTimerCallback(
+   }
+ }
+ 
++void MemorySaverModePolicy::SetPerchTimeBeforeDiscard(base::TimeDelta time) {
++  if (perch_time_before_discard_ == time) {
++    return;
++  }
++  perch_time_before_discard_ = time;
++  if (memory_saver_mode_enabled_) {
++    active_discard_timers_.clear();
++    StartAllDiscardTimers();
++  }
++}
++
+ base::TimeDelta MemorySaverModePolicy::GetTimeBeforeDiscardForCurrentMode()
+     const {
++  // Perch: the timeout from Perch's settings.
++  if (perch_time_before_discard_) {
++    return *perch_time_before_discard_;
++  }
+   switch (mode_) {
+     case MemorySaverModeAggressiveness::kConservative:
+       return base::Hours(6);
+diff --git a/chrome/browser/performance_manager/policies/memory_saver_mode_policy.h b/chrome/browser/performance_manager/policies/memory_saver_mode_policy.h
+index 008225628d..602bf44aa8 100644
+--- a/chrome/browser/performance_manager/policies/memory_saver_mode_policy.h
++++ b/chrome/browser/performance_manager/policies/memory_saver_mode_policy.h
+@@ -46,6 +46,10 @@ class MemorySaverModePolicy : public GraphOwned,
+   base::TimeDelta GetTimeBeforeDiscardForTesting() const;
+   void SetMode(user_tuning::prefs::MemorySaverModeAggressiveness mode);
+ 
++  // Perch: how long a background tab waits before it sleeps, in place of the
++  // aggressiveness mode's time.
++  void SetPerchTimeBeforeDiscard(base::TimeDelta time);
++
+   // Returns true if Memory Saver mode is enabled, false otherwise. Useful to
+   // get the state of the mode from the Performance Manager sequence.
+   bool IsMemorySaverDiscardingEnabled() const;
+@@ -66,6 +70,7 @@ class MemorySaverModePolicy : public GraphOwned,
+ 
+   std::map<const TabPageDecorator::TabHandle*, base::OneShotTimer>
+       active_discard_timers_;
++  std::optional<base::TimeDelta> perch_time_before_discard_;
+   user_tuning::prefs::MemorySaverModeAggressiveness mode_ =
+       user_tuning::prefs::MemorySaverModeAggressiveness::kMedium;
+ 
+diff --git a/chrome/browser/ui/browser_window/internal/BUILD.gn b/chrome/browser/ui/browser_window/internal/BUILD.gn
+index 5b19196e1d..0f9dc3bf67 100644
+--- a/chrome/browser/ui/browser_window/internal/BUILD.gn
++++ b/chrome/browser/ui/browser_window/internal/BUILD.gn
+@@ -100,6 +100,10 @@ source_set("internal") {
+       "//chrome/browser/perch/perch_menu_mac.mm",
+       "//chrome/browser/perch/tab_tools/tab_tools.cc",
+       "//chrome/browser/perch/tab_tools/tab_tools.h",
++      "//chrome/browser/perch/memory_saver/sleep_controller.cc",
++      "//chrome/browser/perch/memory_saver/sleep_controller.h",
++      "//chrome/browser/perch/memory_saver/sleep_rules.cc",
++      "//chrome/browser/perch/memory_saver/sleep_rules.h",
+       "browser_window_interface_iterator_non_android.cc",
+       "create_browser_window_non_android.cc",
+       "desktop_browser_window_capabilities.cc",
+diff --git a/chrome/browser/ui/tabs/tab_menu_model.cc b/chrome/browser/ui/tabs/tab_menu_model.cc
+index e6cead8556..f2ee1058e0 100644
+--- a/chrome/browser/ui/tabs/tab_menu_model.cc
++++ b/chrome/browser/ui/tabs/tab_menu_model.cc
+@@ -715,6 +715,8 @@ void TabMenuModel::Build(int index) {
+                                       u"1 Month");
+   AddSubMenu(IDC_PERCH_CLOSE_TABS_OLDER_THAN_MENU, u"Close Tabs Older Than",
+              perch_close_older_submenu_.get());
++  AddItem(IDC_PERCH_SLEEP_TAB, u"Sleep Tab");
++  AddItem(IDC_PERCH_NEVER_SLEEP_SITE, u"Never Sleep This Site");
+ 
+   if (showing_vertical_tabs) {
+     AddItemWithStringId(TabStripModel::CommandCloseTabsToRight,
+diff --git a/chrome/browser/ui/views/tabs/tab/tab_context_menu_controller.cc b/chrome/browser/ui/views/tabs/tab/tab_context_menu_controller.cc
+index 1d4e951ce7..0656295435 100644
+--- a/chrome/browser/ui/views/tabs/tab/tab_context_menu_controller.cc
++++ b/chrome/browser/ui/views/tabs/tab/tab_context_menu_controller.cc
+@@ -122,7 +122,7 @@ bool TabContextMenuController::IsCommandIdAlerted(int command_id) const {
+ void TabContextMenuController::ExecuteCommand(int command_id, int event_flags) {
+   if (IsPerchCommand(command_id)) {
+     if (auto* tab = tab_handle_.Get()) {
+-      perch::ExecutePerchCommand(tab->GetBrowserWindowInterface(), command_id);
++      perch::ExecutePerchTabCommand(tab, command_id);
+     }
+     return;
+   }

@@ -1,0 +1,13 @@
+# Perch: builds Perch's own unit tests (perch_unittests) with gn_all.
+diff --git a/BUILD.gn b/BUILD.gn
+index 48a1485e5a..e62c40429a 100644
+--- a/BUILD.gn
++++ b/BUILD.gn
+@@ -98,6 +98,7 @@ group("gn_all") {
+     deps = [
+       "//base:base_perftests",
+       "//base:base_unittests",
++      "//chrome/browser/perch/test:perch_unittests",
+       "//build/modules",
+       "//codelabs",
+       "//components:components_unittests",

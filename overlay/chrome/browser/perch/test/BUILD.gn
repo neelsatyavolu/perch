@@ -1,0 +1,20 @@
+# Copyright 2026 The Perch Authors
+# Use of this source code is governed by the MIT license in Perch's LICENSE file.
+
+import("//testing/test.gni")
+
+# Perch's own unit tests: the parts that need only //base and //url, so they
+# build in minutes instead of Chromium's full unit_tests.
+test("perch_unittests") {
+  sources = [
+    "//chrome/browser/perch/memory_saver/sleep_rules.cc",
+    "//chrome/browser/perch/memory_saver/sleep_rules.h",
+    "sleep_rules_unittest.cc",
+  ]
+  deps = [
+    "//base",
+    "//base/test:run_all_unittests",
+    "//testing/gtest",
+    "//url",
+  ]
+}

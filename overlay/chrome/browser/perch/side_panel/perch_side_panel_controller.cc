@@ -2,6 +2,7 @@
 // Use of this source code is governed by the MIT license in Perch's LICENSE file.
 
 #include "chrome/browser/perch/hide_chrome/hide_chrome.h"
+#include "chrome/browser/perch/memory_saver/sleep_controller.h"
 #include "chrome/browser/perch/perch_menu_mac.h"
 #include "chrome/browser/perch/snapshot/chrome_snapshot.h"
 #include "chrome/browser/perch/theme/perch_theme.h"
@@ -329,6 +330,7 @@ void InitWindowFeatures(BrowserWindowInterface* browser,
   Controllers()[browser] =
       std::make_unique<PerchSidePanelController>(browser, registry);
   ApplyPerchTheme(browser->GetProfile());
+  WatchMemorySaver(browser->GetProfile());
   WatchHideChrome(browser);
   AddPerchMenuItems();
   MaybeStartChromeSnapshot(browser);

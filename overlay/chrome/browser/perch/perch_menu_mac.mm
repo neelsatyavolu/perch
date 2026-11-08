@@ -58,6 +58,15 @@ void AddTabTools(NSMenu* main_menu) {
                                    IDC_PERCH_CLOSE_DUPLICATE_TABS)
                atIndex:at];
   [tab_menu insertItem:older_item atIndex:at + 1];
+  // Sleep Tab (⌥⇧S) and Never Sleep This Site, after them.
+  NSMenuItem* sleep = CommandItem(@"Sleep Tab", IDC_PERCH_SLEEP_TAB);
+  sleep.keyEquivalent = @"s";
+  sleep.keyEquivalentModifierMask =
+      NSEventModifierFlagOption | NSEventModifierFlagShift;
+  [tab_menu insertItem:sleep atIndex:at + 2];
+  [tab_menu insertItem:CommandItem(@"Never Sleep This Site",
+                                   IDC_PERCH_NEVER_SLEEP_SITE)
+               atIndex:at + 3];
 }
 
 }  // namespace

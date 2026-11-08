@@ -6,10 +6,13 @@
 #include "base/time/time.h"
 #include "chrome/browser/command_updater.h"
 #include "chrome/browser/perch/hide_chrome/hide_chrome.h"
+#include "chrome/browser/perch/memory_saver/sleep_controller.h"
 #include "chrome/browser/perch/perch_command_ids.h"
 #include "chrome/browser/perch/tab_tools/tab_tools.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "components/tabs/public/tab_interface.h"
+#include "content/public/browser/web_contents.h"
 
 namespace perch {
 
@@ -29,13 +32,37 @@ void EnablePerchCommands(CommandUpdater* updater) {
   for (int id : {IDC_PERCH_TOGGLE_HIDE_CHROME, IDC_PERCH_CLOSE_DUPLICATE_TABS,
                  IDC_PERCH_CLOSE_TABS_OLDER_THAN_DAY,
                  IDC_PERCH_CLOSE_TABS_OLDER_THAN_WEEK,
-                 IDC_PERCH_CLOSE_TABS_OLDER_THAN_MONTH}) {
+                 IDC_PERCH_CLOSE_TABS_OLDER_THAN_MONTH, IDC_PERCH_SLEEP_TAB,
+                 IDC_PERCH_NEVER_SLEEP_SITE}) {
     updater->UpdateCommandEnabled(id, true);
+  }
+}
+
+bool ExecutePerchTabCommand(tabs::TabInterface* tab, int id) {
+  if (!tab) {
+    return false;
+  }
+  switch (id) {
+    case IDC_PERCH_SLEEP_TAB:
+      SleepTab(tab);
+      return true;
+    case IDC_PERCH_NEVER_SLEEP_SITE:
+      NeverSleepSite(tab->GetBrowserWindowInterface()->GetProfile(),
+                     tab->GetContents()->GetLastCommittedURL());
+      return true;
+    default:
+      return ExecutePerchCommand(tab->GetBrowserWindowInterface(), id);
   }
 }
 
 bool ExecutePerchCommand(BrowserWindowInterface* browser, int id) {
   switch (id) {
+    case IDC_PERCH_SLEEP_TAB:
+    case IDC_PERCH_NEVER_SLEEP_SITE: {
+      tabs::TabInterface* tab =
+          browser->GetTabStripModel()->GetActiveTab();
+      return tab && ExecutePerchTabCommand(tab, id);
+    }
     case IDC_PERCH_TOGGLE_HIDE_CHROME:
       ToggleHideChrome(browser);
       return true;

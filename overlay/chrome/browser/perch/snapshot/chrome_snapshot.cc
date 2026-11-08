@@ -20,6 +20,8 @@
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
+#include "chrome/browser/performance_manager/policies/memory_saver_mode_policy.h"
+#include "chrome/browser/perch/memory_saver/sleep_controller.h"
 #include "chrome/browser/perch/perch_command_ids.h"
 #include "chrome/browser/perch/perch_commands.h"
 #include "chrome/browser/perch/perch_pref_names.h"
@@ -112,6 +114,16 @@ class Snapshotter {
                                     base::Time::Now() + base::Days(2))
                           .size()
                    << " of " << tabs->count() << " tabs older than a day";
+    } else if (state == "sleep-open") {
+      Open("chrome://version");
+      Open("chrome://history");
+    } else if (state == "sleep") {
+      // Sleep Tab on a background tab opened by "sleep-open", the rules, and
+      // the timeout.
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+          FROM_HERE,
+          base::BindOnce(&Snapshotter::CheckSleep, base::Unretained(this)),
+          base::Milliseconds(500));
     } else if (state == "tabs") {
       TabStripModel* tabs = browser_->GetTabStripModel();
       for (const char* url : {"about:blank", "chrome://version",
@@ -148,6 +160,27 @@ class Snapshotter {
               tabs->GetWebContentsAt(i)->GetVisibleURL().spec();
     }
     LOG(WARNING) << "Perch snapshot: tabs " << when << ":" << list;
+  }
+
+  void CheckSleep() {
+    TabStripModel* tabs = browser_->GetTabStripModel();
+    const int last = tabs->count() - 1;
+    SleepTab(tabs->GetTabAtIndex(last));
+    Profile* profile = browser_->GetProfile();
+    SetSleepRules(profile, {*ParseSleepPattern("keep.example")});
+    const auto& token = profile->UniqueToken();
+    auto* policy =
+        performance_manager::policies::MemorySaverModePolicy::GetInstance();
+    LOG(WARNING) << "Perch snapshot: slept tab discarded="
+                 << tabs->GetWebContentsAt(last)->WasDiscarded()
+                 << " exempt(app.keep.example)="
+                 << IsSleepExempt(token, GURL("https://app.keep.example/"))
+                 << " exempt(other.example)="
+                 << IsSleepExempt(token, GURL("https://other.example/"))
+                 << " timeout_minutes=" << GetSleepTimeoutMinutes()
+                 << " policy_timeout="
+                 << (policy ? policy->GetTimeBeforeDiscardForTesting()
+                            : base::TimeDelta());
   }
 
   void Capture() {

@@ -21,6 +21,8 @@ Check a build without opening a window:
 out/Dev/Perch.app/Contents/MacOS/Perch --headless=new --user-data-dir="$(mktemp -d)" --dump-dom chrome://version
 ```
 
+`perch-build build --target <ninja target>` builds something other than the default `chrome`; `perch_unittests` and `perch_browser_tests` are short for `chrome/browser/perch:<name>`. `perch-build test` builds `perch_unittests` and runs it; `perch-build test browser` does the same for `perch_browser_tests`, headless. Both run two test jobs at a time and take `--filter 'Perch*'`.
+
 ## Packaging
 
 Anyone can make an unsigned DMG:

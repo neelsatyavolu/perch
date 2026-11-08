@@ -28,6 +28,7 @@ from .sparkle import fetch_sparkle, load_pin
 from .stage import BUNDLED_FILE, StageError, load_bundled, stage_extensions, stage_keyhelper
 from .netaudit import AllowedHosts, netaudit
 from .run import run
+from .testbin import suite_command, suite_target
 from .version import VersionInfo, bump, latest_stable_mac, read_version, write_version
 
 
@@ -94,9 +95,15 @@ def _cmd_export(args: argparse.Namespace) -> int:
 
 
 def _cmd_build(args: argparse.Namespace) -> int:
-    out = build_chromium(current_paths(), args.config, run=run, jobs=args.jobs)
+    out = build_chromium(current_paths(), args.config, run=run, jobs=args.jobs, targets=args.target or ())
     print(f"Built {out}")
     return 0
+
+
+def _cmd_test(args: argparse.Namespace) -> int:
+    out = build_chromium(current_paths(), args.config, run=run, jobs=args.jobs, targets=[suite_target(args.suite)])
+    result = run(suite_command(out, args.suite, args.filter), check=False)
+    return result.returncode
 
 
 def stage_bundled(paths: Paths, config: str) -> Path:
@@ -316,7 +323,17 @@ def build_parser() -> argparse.ArgumentParser:
     build = sub.add_parser("build", help="gn gen and autoninja")
     build.add_argument("--config", choices=["dev", "release"], default="dev")
     build.add_argument("--jobs", type=int, default=6, help="parallel compile jobs (default 6, low priority)")
+    build.add_argument("--target", action="append", metavar="TARGET",
+                       help="a ninja target instead of the default (chrome); perch_unittests and "
+                            "perch_browser_tests are short for chrome/browser/perch:<name>; repeatable")
     build.set_defaults(func=_cmd_build)
+    test = sub.add_parser("test", help="build Perch's unit or browser tests and run them")
+    test.add_argument("suite", nargs="?", choices=["unit", "browser"], default="unit",
+                      help="unit runs out/<config>/perch_unittests, browser runs perch_browser_tests headless")
+    test.add_argument("--filter", default="*", help="gtest filter, e.g. 'Perch*'")
+    test.add_argument("--config", choices=["dev", "release"], default="dev")
+    test.add_argument("--jobs", type=int, default=6, help="parallel compile jobs (default 6, low priority)")
+    test.set_defaults(func=_cmd_test)
     pkg = sub.add_parser("package", help="sign, package and notarize the release build")
     pkg.add_argument("--mode", choices=["release", "adhoc"], default="release")
     pkg.add_argument("--no-pkg", action="store_true", help="write the DMG only, no .pkg installer")

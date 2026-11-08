@@ -4,9 +4,18 @@ Perch is managed the way Chrome is. If your MDM already pushes Chrome policies, 
 
 ## Installing Perch
 
-Today Perch ships as a signed and notarized DMG, `Perch-<version>.dmg`, attached to each [GitHub release](https://github.com/neelsatyavolu/perch/releases). It holds `Perch.app`, which goes in `/Applications`. Jamf, Kandji, Intune and Mosyle can each install an app from a DMG; follow your tool's steps for a DMG app.
+Each [GitHub release](https://github.com/neelsatyavolu/perch/releases) attaches two signed and notarized downloads that hold the same `Perch.app`:
 
-A signed and notarized `.pkg` installer is planned and not yet built. When it ships, it will be attached to each release next to the DMG and this page will cover it.
+- `Perch-<version>.pkg`, an installer package for MDM tools. It installs `Perch.app` into `/Applications`, runs no install scripts, installs nothing else, and only installs on Apple silicon Macs. If Perch is already in `/Applications`, it upgrades that copy in place.
+- `Perch-<version>.dmg`, for people installing by hand.
+
+To deploy with an MDM tool:
+
+1. Upload `Perch-<version>.pkg` as a package: in Jamf Pro under Settings > Packages, in Kandji as a Custom App, in Intune as a macOS app (LOB) or unmanaged PKG, in Mosyle under Custom Apps. Use the pkg as it is; it is already signed and notarized.
+2. Deploy the configuration profile from [`enterprise/examples/`](../../enterprise/examples/) (see [Setting policies](#setting-policies)) to the same Macs.
+3. Decide who installs updates (see [Updates](#updates)). If your MDM pushes each new pkg, set `AutoUpdateEnabled` to false so Perch does not update itself as well.
+
+To check a pkg before you upload it: `pkgutil --check-signature Perch-<version>.pkg` names a Developer ID Installer certificate, and `spctl -a -t install -vv Perch-<version>.pkg` says it is accepted and notarized.
 
 Each release also attaches an SBOM (`Perch-<version>.spdx.json`) and `SHA256SUMS`. To check a download, put it in a folder with `SHA256SUMS` and run `shasum -a 256 -c SHA256SUMS`. Files you did not download show as `FAILED open or read`; the ones you did should show `OK`.
 

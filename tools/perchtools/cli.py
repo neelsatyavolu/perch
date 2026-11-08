@@ -15,9 +15,10 @@ from typing import Any
 from .checkout import checkout
 from .doctor import SystemProbe, run_checks
 from .gnargs import build as build_chromium
-from .package import creds_from_env, package
+from .package import creds_from_env, package, packaged_app
 from .patching import Generator, PatchFailed, apply_series, continue_series, export_series
 from .paths import REPO, Paths, load_paths
+from .pkg import PkgError, build_pkg, installer_identity, require_identity
 from .policies import CATALOGUE, CatalogueError, policy_ids_generator, stale_files, write_generated
 from .release import REPO_SLUG, appcast, preflight, publish, published_build_from_appcast, release_assets, release_notes
 from .rename import rename_product_strings
@@ -159,13 +160,21 @@ def _cmd_package(args: argparse.Namespace) -> int:
             print(error, file=sys.stderr)
             return 1
     paths = current_paths()
+    identity = installer_identity(os.environ, REPO)
     try:
+        if not args.no_pkg:
+            require_identity(identity, args.mode)
         stage_bundled(paths, "release")
-    except StageError as error:
+    except (PkgError, StageError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
-    dmg = package(paths, read_version(REPO / "version.json"), args.mode, creds, run)
+    info = read_version(REPO / "version.json")
+    dmg = package(paths, info, args.mode, creds, run)
     print(f"Wrote {dmg}")
+    if args.no_pkg:
+        return 0
+    pkg = build_pkg(packaged_app(paths.repo / "dist", args.mode), paths.repo / "dist", info, args.mode, identity, creds, run)
+    print(f"Wrote {pkg}{'' if identity else ' (unsigned; for testing only)'}")
     return 0
 
 
@@ -310,6 +319,7 @@ def build_parser() -> argparse.ArgumentParser:
     build.set_defaults(func=_cmd_build)
     pkg = sub.add_parser("package", help="sign, package and notarize the release build")
     pkg.add_argument("--mode", choices=["release", "adhoc"], default="release")
+    pkg.add_argument("--no-pkg", action="store_true", help="write the DMG only, no .pkg installer")
     pkg.set_defaults(func=_cmd_package)
     rel = sub.add_parser("release", help="check, write the appcast and publish to GitHub")
     rel.add_argument("--dry-run", action="store_true", help="write everything to dist/release and publish nothing")

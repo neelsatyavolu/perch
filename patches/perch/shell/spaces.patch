@@ -1,0 +1,55 @@
+# Perch: the Spaces button at the tab strip's leading edge.
+diff --git a/chrome/browser/ui/browser_window/internal/BUILD.gn b/chrome/browser/ui/browser_window/internal/BUILD.gn
+index bc1f612511..2a6205e510 100644
+--- a/chrome/browser/ui/browser_window/internal/BUILD.gn
++++ b/chrome/browser/ui/browser_window/internal/BUILD.gn
+@@ -100,6 +100,9 @@ source_set("internal") {
+       "//chrome/browser/perch/perch_menu_mac.mm",
+       "//chrome/browser/perch/command_bar/command_bar.cc",
+       "//chrome/browser/perch/command_bar/command_bar.h",
++      "//chrome/browser/perch/spaces/spaces.cc",
++      "//chrome/browser/perch/spaces/spaces.h",
++      "//chrome/browser/perch/spaces/spaces_button.mm",
+       "//chrome/browser/perch/tab_tools/tab_tools.cc",
+       "//chrome/browser/perch/toolbar/perch_profile_menu.cc",
+       "//chrome/browser/perch/toolbar/perch_profile_menu.h",
+diff --git a/chrome/browser/ui/views/frame/horizontal_tab_strip_region_view.cc b/chrome/browser/ui/views/frame/horizontal_tab_strip_region_view.cc
+index 1e8642e4cd..9e0a75905a 100644
+--- a/chrome/browser/ui/views/frame/horizontal_tab_strip_region_view.cc
++++ b/chrome/browser/ui/views/frame/horizontal_tab_strip_region_view.cc
+@@ -4,6 +4,10 @@
+ 
+ #include "chrome/browser/ui/views/frame/horizontal_tab_strip_region_view.h"
+ 
++#include <algorithm>
++
++#include "chrome/browser/perch/spaces/spaces.h"
++
+ #include "base/feature_list.h"
+ #include "base/functional/bind.h"
+ #include "base/task/single_thread_task_runner.h"
+@@ -198,6 +202,11 @@ HorizontalTabStripRegionViewOld::HorizontalTabStripRegionViewOld(
+     }
+   }
+ 
++  // Perch: the Spaces button at the strip's leading edge.
++  if (browser &&
++      browser->GetType() == BrowserWindowInterface::Type::TYPE_NORMAL) {
++    AddChildView(perch::CreateSpacesButton(browser));
++  }
+   tab_strip_ = AddChildView(CreateTabStrip(this, browser_view));
+ 
+   // Allow the |tab_strip_| to grow into the free space available in
+@@ -325,6 +334,12 @@ views::View::Views HorizontalTabStripRegionViewOld::GetChildrenInZOrder() {
+     children.emplace_back(reserved_grab_handle_space_.get());
+   }
+ 
++  // Perch: children this list doesn't name (the Spaces button) paint first.
++  for (views::View* child : this->children()) {
++    if (!std::ranges::contains(children, child)) {
++      children.insert(children.begin(), child);
++    }
++  }
+   return children;
+ }
+ 

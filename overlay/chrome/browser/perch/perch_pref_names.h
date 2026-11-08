@@ -25,6 +25,11 @@ inline constexpr char kAppearanceHideChrome[] = "perch.appearance.hide_chrome";
 
 // Never-sleep rules, [{"kind", "pattern"}] as in Lulltab (memory_saver/).
 inline constexpr char kMemorySaverRules[] = "perch.memory_saver.rules";
+
+// Spaces (spaces/): [{id, name, tabs: [{url, title, pinned, active}]}], and
+// the id of the one the window shows.
+inline constexpr char kSpaces[] = "perch.spaces";
+inline constexpr char kActiveSpace[] = "perch.active_space";
 inline constexpr char kAppearanceRevealOnHover[] =
     "perch.appearance.reveal_on_hover";
 inline constexpr char kAppearanceDensity[] = "perch.appearance.density";

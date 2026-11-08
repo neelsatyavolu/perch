@@ -8,6 +8,7 @@
 #include "chrome/browser/perch/command_bar/command_bar.h"
 #include "chrome/browser/perch/hide_chrome/hide_chrome.h"
 #include "chrome/browser/perch/memory_saver/sleep_controller.h"
+#include "chrome/browser/perch/spaces/spaces.h"
 #include "chrome/browser/perch/perch_command_ids.h"
 #include "chrome/browser/perch/tab_tools/tab_tools.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
@@ -38,7 +39,12 @@ void EnablePerchCommands(CommandUpdater* updater) {
                  IDC_PERCH_CLOSE_TABS_OLDER_THAN_WEEK,
                  IDC_PERCH_CLOSE_TABS_OLDER_THAN_MONTH, IDC_PERCH_SLEEP_TAB,
                  IDC_PERCH_NEVER_SLEEP_SITE, IDC_PERCH_OPEN_SETTINGS,
-                 IDC_PERCH_COMMAND_BAR, IDC_PERCH_COPY_URL_MARKDOWN}) {
+                 IDC_PERCH_COMMAND_BAR, IDC_PERCH_COPY_URL_MARKDOWN,
+                 IDC_PERCH_SPACE_NEXT, IDC_PERCH_SPACE_PREVIOUS,
+                 IDC_PERCH_NEW_SPACE}) {
+    updater->UpdateCommandEnabled(id, true);
+  }
+  for (int id = IDC_PERCH_SPACE_1; id <= IDC_PERCH_SPACE_9; ++id) {
     updater->UpdateCommandEnabled(id, true);
   }
 }
@@ -61,7 +67,20 @@ bool ExecutePerchTabCommand(tabs::TabInterface* tab, int id) {
 }
 
 bool ExecutePerchCommand(BrowserWindowInterface* browser, int id) {
+  if (id >= IDC_PERCH_SPACE_1 && id <= IDC_PERCH_SPACE_9) {
+    SwitchToSpace(browser, id - IDC_PERCH_SPACE_1);
+    return true;
+  }
   switch (id) {
+    case IDC_PERCH_SPACE_NEXT:
+      SwitchSpaceBy(browser, 1);
+      return true;
+    case IDC_PERCH_SPACE_PREVIOUS:
+      SwitchSpaceBy(browser, -1);
+      return true;
+    case IDC_PERCH_NEW_SPACE:
+      NewSpace(browser);
+      return true;
     case IDC_PERCH_SLEEP_TAB:
     case IDC_PERCH_NEVER_SLEEP_SITE: {
       tabs::TabInterface* tab =

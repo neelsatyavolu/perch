@@ -67,6 +67,24 @@ void AddTabTools(NSMenu* main_menu) {
   [tab_menu insertItem:CommandItem(@"Never Sleep This Site",
                                    IDC_PERCH_NEVER_SLEEP_SITE)
                atIndex:at + 3];
+  // Tab → Spaces ›: next, previous, new, and Space 1–9 on ⌃1…⌃9.
+  NSMenu* spaces = [[NSMenu alloc] initWithTitle:@"Spaces"];
+  [spaces addItem:CommandItem(@"Next Space", IDC_PERCH_SPACE_NEXT)];
+  [spaces addItem:CommandItem(@"Previous Space", IDC_PERCH_SPACE_PREVIOUS)];
+  [spaces addItem:CommandItem(@"New Space", IDC_PERCH_NEW_SPACE)];
+  [spaces addItem:[NSMenuItem separatorItem]];
+  for (int i = 0; i <= IDC_PERCH_SPACE_9 - IDC_PERCH_SPACE_1; ++i) {
+    NSMenuItem* item = CommandItem(
+        [NSString stringWithFormat:@"Space %d", i + 1], IDC_PERCH_SPACE_1 + i);
+    item.keyEquivalent = [NSString stringWithFormat:@"%d", i + 1];
+    item.keyEquivalentModifierMask = NSEventModifierFlagControl;
+    [spaces addItem:item];
+  }
+  NSMenuItem* spaces_item = [[NSMenuItem alloc] initWithTitle:@"Spaces"
+                                                       action:nil
+                                                keyEquivalent:@""];
+  spaces_item.submenu = spaces;
+  [tab_menu insertItem:spaces_item atIndex:at + 4];
 }
 
 // Edit → Copy URL (⇧⌘C) and Copy URL as Markdown (⌥⇧⌘C), at the end.

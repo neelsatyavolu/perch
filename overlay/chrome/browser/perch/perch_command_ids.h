@@ -24,6 +24,12 @@
 // The command bar (command_bar/).
 #define IDC_PERCH_COMMAND_BAR 46013
 #define IDC_PERCH_COPY_URL_MARKDOWN 46014
+// Spaces (spaces/): next, previous, new, and the first nine by position.
+#define IDC_PERCH_SPACE_NEXT 46015
+#define IDC_PERCH_SPACE_PREVIOUS 46016
+#define IDC_PERCH_NEW_SPACE 46017
+#define IDC_PERCH_SPACE_1 46020
+#define IDC_PERCH_SPACE_9 46028
 // One per profile row.
 #define IDC_PERCH_PROFILE_FIRST 46100
 #define IDC_PERCH_PROFILE_LAST 46149

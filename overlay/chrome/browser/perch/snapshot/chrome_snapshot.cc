@@ -14,6 +14,7 @@
 #include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -28,6 +29,7 @@
 #include "chrome/browser/perch/perch_command_ids.h"
 #include "chrome/browser/perch/perch_commands.h"
 #include "chrome/browser/perch/perch_pref_names.h"
+#include "chrome/browser/perch/spaces/spaces.h"
 #include "chrome/browser/perch/tab_tools/tab_tools.h"
 #include "chrome/browser/perch/toolbar/perch_profile_menu.h"
 #include "chrome/browser/profiles/profile.h"
@@ -119,6 +121,31 @@ class Snapshotter {
                                     base::Time::Now() + base::Days(2))
                           .size()
                    << " of " << tabs->count() << " tabs older than a day";
+    } else if (state == "spaces") {
+      // Space A has the open tabs; a new space B gets one tab; back to A.
+      auto urls = [&] {
+        TabStripModel* tabs = browser_->GetTabStripModel();
+        std::string list = "[" + base::NumberToString(tabs->count()) + "]";
+        for (int i = 0; i < tabs->count(); ++i) {
+          list += " " + tabs->GetWebContentsAt(i)->GetVisibleURL().spec() +
+                  (tabs->GetWebContentsAt(i)->GetController().NeedsReload()
+                       ? "(asleep)"
+                       : "");
+        }
+        return list;
+      };
+      const std::string before = urls();
+      NewSpace(browser_);
+      const std::string in_b = urls();
+      LOG(WARNING) << "Perch snapshot: spaces pref after new: "
+                   << browser_->GetProfile()
+                          ->GetPrefs()
+                          ->GetList(prefs::kSpaces)
+                          .DebugString();
+      SwitchToSpace(browser_, 0);
+      LOG(WARNING) << "Perch snapshot: spaces A:" << before << " / B:" << in_b
+                   << " / back in A:" << urls() << " / names:"
+                   << ListSpaces(browser_->GetProfile()).size();
     } else if (state == "command-bar") {
       ExecutePerchCommand(browser_, IDC_PERCH_COMMAND_BAR);
       QueryCommandBar(browser_->GetProfile(), "histor",

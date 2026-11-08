@@ -36,6 +36,9 @@ export type RunDeps = {
   onStatus?: (chatId: string, status: ChatStatus, card: ApprovalCard | null) => void;
 };
 
+/** What a message brings beyond its text: attached files (resolved to paths) and @ tabs. */
+export type SendExtras = { files?: { id: string; name: string; path: string }[]; mentions?: TabInfo[] };
+
 export class AppError extends Error {
   constructor(message: string, readonly status = 400) {
     super(message);
@@ -117,15 +120,25 @@ export class RunManager {
     };
   }
 
-  async send(chatId: string, text: string, context?: TabInfo): Promise<{ runId: string; message: ChatMessage }> {
+  async send(chatId: string, text: string, context?: TabInfo, extras: SendExtras = {}): Promise<{ runId: string; message: ChatMessage }> {
     const chat = this.deps.chats.get(chatId);
     if (!chat) throw new AppError(`no chat ${chatId}`, 404);
     if (!text.trim()) throw new AppError("The message is empty");
     if (text.length > MAX_MESSAGE) throw new AppError("The message is too long (50,000 characters at most)");
     if (this.runs.has(chatId)) throw new AppError("A task is still running in this chat. Wait for it or stop it first", 409);
-    const message: ChatMessage = { id: crypto.randomUUID(), role: "user", text, time: new Date().toISOString(), ...(context ? { context: withoutTarget(context) } : {}) };
+    const files = extras.files ?? [];
+    const mentions = (extras.mentions ?? []).map(withoutTarget);
+    const message: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: "user",
+      text,
+      time: new Date().toISOString(),
+      ...(context ? { context: withoutTarget(context) } : {}),
+      ...(files.length ? { attachments: files.map((f) => ({ id: f.id, name: f.name })) } : {}),
+      ...(mentions.length ? { mentions } : {}),
+    };
     const tab = chat.settings.scope === "current" && context?.targetId ? context : undefined;
-    const task = buildTask({ history: chat.messages, text, scope: chat.settings.scope, tab: context, tabs: this.deps.tabs(), inTab: Boolean(tab) });
+    const task = buildTask({ history: chat.messages, text, scope: chat.settings.scope, tab: context, tabs: this.deps.tabs(), inTab: Boolean(tab), mentions, files });
     const run: Run = { runId: crypto.randomUUID(), chatId, controller: new AbortController(), text: "", steps: [], pending: null, done: Promise.resolve() };
     this.runs.set(chatId, run);
     try {

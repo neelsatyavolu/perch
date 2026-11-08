@@ -31,6 +31,10 @@ export type ChatMessage = {
   time: string;
   /** The tab the user was looking at when they sent it. */
   context?: TabInfo;
+  /** Files the user attached, by name; their paths stay in perchd. */
+  attachments?: { id: string; name: string }[];
+  /** Tabs the user named with @. */
+  mentions?: TabInfo[];
   steps?: string[];
   artifacts?: string[];
   error?: string;

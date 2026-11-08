@@ -1,6 +1,7 @@
 /** The app API's routes. Each handler gets checked input and returns JSON (or text for export). */
 
 import type { ArtifactServer } from "./artifact-server";
+import type { FileRegistry } from "./attachments";
 import type { ArtifactStore } from "./artifacts";
 import type { Windows } from "./app";
 import type { ChatStore } from "./chats";
@@ -20,6 +21,8 @@ export type RouteContext = {
   readonly defaults: ChatSettings;
   /** Perch's own pages (pages-api.ts); null when this app does not serve them. */
   pages: PagesApi | null;
+  /** Files the user attached through the browser's open panel. */
+  files: FileRegistry;
 };
 
 type Handler = (ctx: RouteContext, params: string[], body: unknown, query: URLSearchParams) => Promise<unknown> | unknown;
@@ -165,9 +168,24 @@ export const ROUTES: Route[] = [
   }),
   route("POST", "/api/chats/:id/messages", (ctx, [id], body) => {
     const o = v.object(body);
-    v.onlyKeys(o, ["text", "context"]);
-    return ctx.runs.send(id!, v.text(o.text, "text", 50_001), o.context === undefined ? undefined : reported(ctx, v.tabInfo(o.context, "context")));
+    v.onlyKeys(o, ["text", "context", "files", "mentions"]);
+    const files = o.files === undefined ? [] : v.list(o.files, "files", 20).map((f, i) => ctx.files.resolve(v.id(f, `files[${i}]`)));
+    // A mention names a tab the browser reported; a page never invents one.
+    const mentions = o.mentions === undefined ? [] : v.list(o.mentions, "mentions", 10).map((t, i) => {
+      const tab = ctx.windows.tab(v.id(t, `mentions[${i}]`));
+      if (!tab) throw new AppError("That tab is closed. Pick it again with @");
+      return tab;
+    });
+    return ctx.runs.send(id!, v.text(o.text, "text", 50_001), o.context === undefined ? undefined : reported(ctx, v.tabInfo(o.context, "context")), { files, mentions });
   }),
+  // The browser registers the files the user picked in its open panel; the page gets ids only.
+  browserRoute("POST", "/api/files", (ctx, _, body) => {
+    const o = v.object(body);
+    v.onlyKeys(o, ["paths"]);
+    return { files: ctx.files.register(v.list(o.paths, "paths", 20).map((p, i) => v.text(p, `paths[${i}]`, 4096))) };
+  }),
+  // The @ menu: every tab the browser reported, without its CDP target.
+  route("GET", "/api/tabs", (ctx) => ctx.windows.tabs().map(({ targetId: _, ...tab }) => tab)),
   route("POST", "/api/chats/:id/cancel", (ctx, [id]) => ({ stopped: ctx.runs.cancel(chatOf(ctx, id!).id) })),
   route("POST", "/api/chats/:id/branch", (ctx, [id], body) => {
     const o = v.object(body);

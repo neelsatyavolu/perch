@@ -5,6 +5,7 @@
 
 import { join } from "node:path";
 import { startArtifactServer, type ArtifactServer } from "./artifact-server";
+import { FileRegistry } from "./attachments";
 import { ArtifactStore } from "./artifacts";
 import { ChatStore, DEFAULT_SETTINGS } from "./chats";
 import type { PagesApi } from "./pages-api";
@@ -154,6 +155,7 @@ export async function startApp(opts: AppOptions): Promise<App> {
       defaults = { ...defaults, ...patch };
     },
   }) ?? null;
+  const files = new FileRegistry();
   const token = opts.token ?? Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url");
   const server = startServer({
     token,
@@ -162,7 +164,7 @@ export async function startApp(opts: AppOptions): Promise<App> {
     listen: opts.listen ?? { port: 0 },
     uiDir: opts.uiDir,
     ctx: {
-      chats, artifacts, runs, windows, info, artifactServer, pages, models: opts.models.map((m) => m.id),
+      chats, artifacts, runs, windows, info, artifactServer, pages, files, models: opts.models.map((m) => m.id),
       get defaults() {
         return defaults;
       },

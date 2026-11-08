@@ -7,6 +7,7 @@ import type { Windows } from "./app";
 import type { ChatStore } from "./chats";
 import type { PagesApi } from "./pages-api";
 import type { AppInfo, ArtifactKind, Chat, ChatSettings, TabInfo } from "./protocol";
+import { checkSameKind, endPrivateChats, isPrivateTab } from "./incognito";
 import { AppError, type RunManager } from "./runs";
 import * as v from "./validate";
 
@@ -53,12 +54,13 @@ async function sideChat(ctx: RouteContext, tabId: string, body: unknown) {
   const o = v.object(body);
   v.onlyKeys(o, ["chatId", "windowId", "settings"]);
   const tab = { id: tabId, windowId: v.id(o.windowId, "windowId") };
+  const incognito = isPrivateTab(ctx.windows, tabId);
   if (o.chatId !== undefined) {
-    chatOf(ctx, v.id(o.chatId, "chatId"));
+    checkSameKind(chatOf(ctx, v.id(o.chatId, "chatId")), incognito);
     return announced(ctx, await ctx.chats.attach(String(o.chatId), tab));
   }
   const settings = o.settings === undefined ? {} : v.settingsPatch(o.settings, ctx.models);
-  return announced(ctx, await ctx.chats.create({ tab, settings: { ...ctx.defaults, ...settings } }));
+  return announced(ctx, await ctx.chats.create({ tab, settings: { ...ctx.defaults, ...settings }, incognito }));
 }
 
 /** A page's tab with the target id the browser reported for it; a page never picks the target. */
@@ -266,6 +268,7 @@ export const ROUTES: Route[] = [
     ctx.windows.replace(tabs);
     const released = await ctx.chats.keepTabs(new Set(tabs.map((t) => t.id)));
     for (const chatId of released) ctx.runs.announce(chatId);
+    await endPrivateChats(ctx);
     return { released };
   }),
   browserRoute("PATCH", "/api/tabs/:id", (ctx, [id], body) => {
@@ -276,7 +279,9 @@ export const ROUTES: Route[] = [
   }),
   browserRoute("DELETE", "/api/tabs/:id", async (ctx, [id]) => {
     ctx.windows.forget(id!);
-    return { chat: (await ctx.chats.releaseTab(id!)) ?? null };
+    const chat = (await ctx.chats.releaseTab(id!)) ?? null;
+    await endPrivateChats(ctx);
+    return { chat: chat && ctx.chats.get(chat.id) ? chat : null };
   }),
 ];
 

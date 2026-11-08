@@ -17,6 +17,8 @@ export type TabInfo = {
   url: string;
   /** The tab's CDP target id, sent by the browser only; pages never set it. */
   targetId?: string;
+  /** A private (incognito) window's tab, as the browser reports it (spec 5.8). */
+  incognito?: boolean;
 };
 /** The tab a side chat belongs to. */
 export type TabRef = { id: string; windowId: string };
@@ -53,6 +55,11 @@ export type Chat = {
   draft: string;
   scrollTop: number;
   branchOf?: { chatId: string; messageId: string };
+  /**
+   * A private chat (spec 5.8): it began in an incognito tab, runs without memory, is never
+   * written to disk, and is deleted when the last private window closes.
+   */
+  incognito?: true;
 };
 
 export type ChatSummary = {

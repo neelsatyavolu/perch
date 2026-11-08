@@ -130,7 +130,7 @@ export class Windows {
 
 export async function startApp(opts: AppOptions): Promise<App> {
   const chats = await ChatStore.load(join(opts.dataDir, "chats"), opts.vault);
-  const artifacts = await ArtifactStore.load(join(opts.dataDir, "artifacts"), opts.vault);
+  const artifacts = await ArtifactStore.load(join(opts.dataDir, "artifacts"), opts.vault, (chatId) => chats.get(chatId)?.incognito === true);
   let publish: (event: AppEvent) => void = () => {};
   const windows = new Windows(chats, (event) => publish(event));
   let ownOrigin: string | null = null;

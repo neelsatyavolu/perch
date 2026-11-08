@@ -21,6 +21,8 @@ export type RunnerInput = {
   tab?: TabInfo;
   /** The chat this run belongs to, so the browser can mark the tabs it works in (the perch dot). */
   chatId?: string;
+  /** A private chat (spec 5.8): no memory in or out, and no page text in the audit log. */
+  incognito?: boolean;
 };
 export type Runner = (input: RunnerInput) => AsyncIterable<StepEvent>;
 
@@ -221,7 +223,8 @@ export class RunManager {
     let final: string | undefined;
     let error: string | undefined;
     try {
-      const events = this.deps.runner({ task, settings, approve: this.approve(run), signal: run.controller.signal, chatId: run.chatId, ...(tab ? { tab } : {}) });
+      const incognito = this.deps.chats.get(run.chatId)?.incognito === true;
+      const events = this.deps.runner({ task, settings, approve: this.approve(run), signal: run.controller.signal, chatId: run.chatId, ...(tab ? { tab } : {}), ...(incognito ? { incognito } : {}) });
       for await (const event of events) {
         if (event.type === "text") {
           run.text += event.delta;

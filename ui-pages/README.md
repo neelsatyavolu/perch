@@ -1,6 +1,6 @@
 # ui-pages
 
-Perch's own pages, apart from the chat: the new tab page, Settings, Memory (with "Set up your memory" and its review), Routines, the Import wizard and the welcome screen. Preact + TypeScript, built with Vite into one HTML file per page so each page loads only its own code.
+Perch's own pages, apart from the chat: the new tab page, Settings, Memory (with "Set up your memory" and its review), Routines, the Import wizard, the welcome screen and the command bar (⌘K). Preact + TypeScript, built with Vite into one HTML file per page so each page loads only its own code.
 
 ## Develop
 

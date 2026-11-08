@@ -252,6 +252,13 @@ export type MemorySaverSettings = { readonly timeoutMinutes: number; readonly ru
 /** A loaded tab's memory; a sleeping tab reports bytes 0. */
 export type TabMemory = { readonly title: string; readonly url: string; readonly bytes: number; readonly asleep: boolean };
 
+/* ---------- Command bar (⌘K) ---------- */
+
+export type CommandBarKind = "tab" | "history" | "bookmark";
+export type CommandBarResult = { readonly kind: CommandBarKind; readonly title: string; readonly url: string; readonly tabId?: number };
+/** What the command bar runs: a tab (tabId), a history or bookmark URL, or a command id from the page's static list. */
+export type CommandBarItem = { readonly kind: CommandBarKind | "command"; readonly url?: string; readonly tabId?: number; readonly id?: string };
+
 /* ---------- Memory (spec 8) ---------- */
 
 export type MemoryFolder = "" | "users" | "people" | "companies" | "sites" | "projects" | "routines" | "concepts" | "episodic";
@@ -446,6 +453,13 @@ export interface PerchApi {
   addSleepRule(input: string): Promise<MemorySaverSettings>;
   listTabMemory(): Promise<readonly TabMemory[]>;
 
+  // Command bar (chrome://perch-command-bar); the browser answers these
+  /** Open tabs, history and bookmarks matching `text`, best first, at most 8 of each kind. Empty text: the open tabs. */
+  queryCommandBar(text: string): Promise<readonly CommandBarResult[]>;
+  /** Activates a tab (tabId), opens a URL in the current tab, or runs a command by its id from commands.ts. The browser then closes the bubble. */
+  runCommandBarItem(item: CommandBarItem): Promise<void>;
+  closeCommandBar(): Promise<void>;
+
   // Memory
   getMemorySettings(): Promise<MemorySettings>;
   setMemorySettings(patch: Partial<MemorySettings>): Promise<MemorySettings>;
@@ -522,6 +536,7 @@ export const API_METHODS = [
   "getPrivacy", "setPrivacy", "setBackgroundConnection", "removeBlockerException", "listSiteData", "forgetSite",
   "listBuiltInExtensions", "setBuiltInExtension",
   "getMemorySaver", "setMemorySaver", "addSleepRule", "listTabMemory",
+  "queryCommandBar", "runCommandBarItem", "closeCommandBar",
   "getMemorySettings", "setMemorySettings", "listMemoryPages", "readMemoryPage", "writeMemoryPage", "deleteMemoryPage", "wipeMemory",
   "listDreamLogs", "listSetupSources", "startProfileBuild", "getProfileBuild", "getProfileDraft", "saveProfileDraft", "discardProfileDraft",
   "listRoutines", "saveRoutine", "setRoutineEnabled", "deleteRoutine", "runRoutine", "findRoutineProposals", "acceptProposal", "dismissProposal",

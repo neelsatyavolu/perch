@@ -1,7 +1,7 @@
 /** Sample data for the fake backend. Every name, address and figure here is made up. */
 
 import type {
-  AboutInfo, AuditEntry, ChatSummary, DetectedBrowser, DraftFact, DreamLog, McpImportCandidate, McpServer, MemoryDoc, MemorySettings, Model,
+  AboutInfo, AuditEntry, ChatSummary, CommandBarResult, DetectedBrowser, DraftFact, DreamLog, McpImportCandidate, McpServer, MemoryDoc, MemorySettings, Model,
   MemorySaverSettings, Permissions, PrivacySettings, Provider, Routine, RoutineProposal, SetupSource, SiteData, Skill, Suggestion, TabMemory, TaskModel,
 } from "../api";
 
@@ -135,6 +135,30 @@ export const TAB_MEMORY: readonly TabMemory[] = [
   { title: "Quarterly plan - Example Docs", url: "https://docs.example.com/d/plan", bytes: 0, asleep: true },
   { title: "Weekend playlist", url: "https://music.example.com/playlist/7", bytes: 241_800_000, asleep: false },
   { title: "Morning headlines", url: "https://news.example.com/", bytes: 0, asleep: true },
+];
+
+export const OPEN_TABS: readonly CommandBarResult[] = [
+  { kind: "tab", tabId: 101, title: "Inbox (12) - Example Mail", url: "https://mail.example.com/inbox" },
+  { kind: "tab", tabId: 102, title: "perch/ui-pages at main", url: "https://github.com/example/perch" },
+  { kind: "tab", tabId: 103, title: "Quarterly plan - Example Docs", url: "https://docs.example.com/d/plan" },
+  { kind: "tab", tabId: 104, title: "Weekend playlist", url: "https://music.example.com/playlist/7" },
+  { kind: "tab", tabId: 105, title: "Morning headlines", url: "https://news.example.com/" },
+];
+
+export const HISTORY: readonly CommandBarResult[] = [
+  { kind: "history", title: "SFO to HND, 12 Dec - Example Flights", url: "https://flights.example.com/search?from=SFO&to=HND" },
+  { kind: "history", title: "Preact hooks reference", url: "https://preactjs.com/guide/v10/hooks/" },
+  { kind: "history", title: "Pull request 214: command bar - perch", url: "https://github.com/example/perch/pull/214" },
+  { kind: "history", title: "Ramen near Hayes Valley - Example Maps", url: "https://maps.example.com/search/ramen" },
+  { kind: "history", title: "Quarterly plan comments - Example Docs", url: "https://docs.example.com/d/plan/comments" },
+  { kind: "history", title: "Weather this week", url: "https://weather.example.com/sf" },
+];
+
+export const BOOKMARKS: readonly CommandBarResult[] = [
+  { kind: "bookmark", title: "Team calendar", url: "https://calendar.example.com/team" },
+  { kind: "bookmark", title: "Perch issues", url: "https://github.com/example/perch/issues" },
+  { kind: "bookmark", title: "Expense report form", url: "https://expenses.example.com/new" },
+  { kind: "bookmark", title: "MDN Web Docs", url: "https://developer.mozilla.org/" },
 ];
 
 export const MEMORY_SETTINGS: MemorySettings = { extraction: true, historyExtraction: false, dreaming: true, lastDream: "2026-11-05T03:00:00.000Z" };

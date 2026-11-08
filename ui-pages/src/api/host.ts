@@ -18,6 +18,7 @@ export const BROWSER_METHODS: ReadonlySet<string> = new Set([
   "getAbout", "checkForUpdates", "installUpdate", "setAutoUpdate",
   "listBuiltInExtensions", "setBuiltInExtension",
   "getMemorySaver", "setMemorySaver", "addSleepRule", "listTabMemory",
+  "queryCommandBar", "runCommandBarItem", "closeCommandBar",
 ]);
 
 type AppConfig = { readonly api: string; readonly token: string };

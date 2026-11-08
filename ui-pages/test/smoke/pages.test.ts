@@ -15,7 +15,7 @@ import { THEMES, THEME_NAMES } from "../../src/theme/tokens";
 
 const ROOT = join(import.meta.dir, "..", "..");
 const OUT = join(ROOT, "dist-fake");
-const PAGES = ["newtab", "settings", "settings#models", "settings#skills", "settings#privacy", "memory", "memory#setup", "routines", "import", "welcome"];
+const PAGES = ["newtab", "settings", "settings#models", "settings#skills", "settings#privacy", "memory", "memory#setup", "routines", "import", "welcome", "command-bar"];
 
 let server: ReturnType<typeof Bun.serve>;
 let browser: CdpConnection;

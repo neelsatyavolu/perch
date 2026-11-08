@@ -1,0 +1,34 @@
+/* Command bar: the whole page is the 640px bubble, at most 420px tall; the browser sizes the bubble to it. */
+
+html, body { min-height: 0; }
+body { width: 640px; overflow: hidden; }
+
+.cb { width: 640px; max-height: 420px; display: flex; flex-direction: column; background: var(--card); }
+
+.cb-field {
+  flex: none; height: 48px; display: flex; align-items: center; gap: 10px; padding: 0 16px;
+  border-bottom: 1px solid var(--hair); color: var(--mute);
+}
+/* The field is always focused and fills the bubble's top edge, so the caret marks focus instead of a ring. */
+.cb-field input {
+  flex: 1; min-width: 0; height: 100%; border: 0; background: none; color: var(--ink); font-size: 15px; outline: none;
+}
+.cb-field input:focus-visible { outline: none; }
+.cb-field input::placeholder { color: var(--mute); }
+
+.cb-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 6px 6px; overscroll-behavior: contain; }
+.cb-group + .cb-group { margin-top: 2px; }
+.cb-group-label { color: var(--mute); font-size: 12px; padding: 8px 10px 4px; }
+
+.cb-row { height: 34px; gap: 12px; cursor: default; }
+.cb-row:hover { background: none; }
+.cb-row[aria-selected="true"] { background: var(--raised); }
+.cb-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
+.cb-host { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; color: var(--mute); font-size: 12px; }
+.cb-keys { flex: none; display: inline-flex; gap: 3px; }
+.cb-key {
+  min-width: 18px; height: 18px; padding: 0 4px; display: inline-flex; align-items: center; justify-content: center;
+  font: 11px var(--mono); color: var(--mute); border: 1px solid var(--hair-strong); border-radius: 4px;
+}
+
+.cb-none { color: var(--mute); font-size: 13px; padding: 14px 16px; }

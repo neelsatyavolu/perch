@@ -5,7 +5,7 @@
  */
 
 import type {
-  AboutInfo, Appearance, BuiltInExtension, ChatSummary, DetectedBrowser, DraftFact, FileChoice, FileKind, JobId, JobProgress, McpImportCandidate, McpServer,
+  AboutInfo, Appearance, BuiltInExtension, ChatSummary, CommandBarResult, DetectedBrowser, DraftFact, FileChoice, FileKind, JobId, JobProgress, McpImportCandidate, McpServer,
   MemoryDoc, MemorySaverSettings, MemorySettings, NtpLayout, Onboarding, PerchApi, PermissionMode, Permissions, PolicyProblem, PrivacySettings, Provider, Routine, RoutineInput,
   RoutineProposal, SiteData, SleepRule, Skill, SystemAccess, TaskModel,
 } from "../api";
@@ -116,6 +116,15 @@ function parseSleepRule(input: string): SleepRule {
 }
 
 let counter = 0;
+/** Every word of the query must appear in the title or URL; titles that start with the query come first. */
+function matchCommandBar(items: readonly CommandBarResult[], text: string): readonly CommandBarResult[] {
+  const q = text.trim().toLowerCase();
+  const words = q.split(/\s+/);
+  const hits = items.filter((r) => words.every((w) => `${r.title} ${r.url}`.toLowerCase().includes(w)));
+  const score = (r: CommandBarResult) => (r.title.toLowerCase().startsWith(q) ? 0 : r.title.toLowerCase().includes(q) ? 1 : 2);
+  return [...hits].sort((a, b) => score(a) - score(b)).slice(0, 8);
+}
+
 const newId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${(counter++).toString(36)}`;
 const MODE_ORDER: readonly PermissionMode[] = ["ask", "guard", "skip"];
 const DEFAULT_FILE_NAMES: Readonly<Record<FileKind, string>> = { "memory-export": "export.zip", "passwords-csv": "Passwords.csv" };
@@ -475,6 +484,20 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     },
     async listTabMemory() {
       return seed.TAB_MEMORY;
+    },
+
+    async queryCommandBar(text) {
+      if (!text.trim()) return seed.OPEN_TABS.slice(0, 8);
+      return [seed.OPEN_TABS, seed.HISTORY, seed.BOOKMARKS].flatMap((list) => matchCommandBar(list, text));
+    },
+    async runCommandBarItem(item) {
+      if (item.kind === "tab" && !seed.OPEN_TABS.some((t) => t.tabId === item.tabId)) throw new Error("That tab is closed");
+      if ((item.kind === "history" || item.kind === "bookmark") && !item.url) throw new Error("Nothing to open");
+      if (item.kind === "command" && !item.id) throw new Error("Unknown command");
+      navigate("command-bar", item);
+    },
+    async closeCommandBar() {
+      navigate("close-command-bar", null);
     },
 
     async getMemorySettings() {

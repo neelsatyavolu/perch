@@ -2,7 +2,7 @@
 
 import type {
   AboutInfo, AuditEntry, ChatSummary, CommandBarResult, DetectedBrowser, DraftFact, DreamLog, McpImportCandidate, McpServer, MemoryDoc, MemorySettings, Model,
-  MemorySaverSettings, Permissions, PrivacySettings, Provider, Routine, RoutineProposal, SetupSource, SiteData, Skill, Suggestion, TabMemory, TaskModel,
+  MemorySaverSettings, Permissions, PrivacySettings, Provider, Routine, RoutineProposal, SetupSource, SiteData, Skill, Suggestion, SyncStatus, TabMemory, TaskModel,
 } from "../api";
 
 export const SEED_NOW = "2026-11-05T09:46:00.000Z";
@@ -251,3 +251,15 @@ export const BROWSERS: readonly DetectedBrowser[] = [
 ];
 
 export const ABOUT: AboutInfo = { version: "0.1.0", chromium: "157.0.8103.38", perchd: "0.1.0", channel: "stable", autoUpdate: true, lastChecked: "2026-11-05T07:00:00.000Z" };
+
+export const SYNC_ON: SyncStatus = {
+  on: true,
+  lastSync: "2026-11-08T09:12:00.000Z",
+  lastError: null,
+  devices: [
+    { id: "dev_mac", name: "MacBook Pro", kind: "browser", lastSeen: "2026-11-08T09:12:00.000Z", current: true },
+    { id: "dev_studio", name: "Mac Studio", kind: "browser", lastSeen: "2026-11-07T18:40:00.000Z", current: false },
+    { id: "dev_cli", name: "perch CLI on build box", kind: "cli", lastSeen: "2026-11-02T08:05:00.000Z", current: false },
+  ],
+};
+export const SYNC_OFF: SyncStatus = { on: false, lastSync: null, lastError: null, devices: [] };

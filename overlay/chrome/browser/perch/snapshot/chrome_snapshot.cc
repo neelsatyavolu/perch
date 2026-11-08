@@ -20,7 +20,10 @@
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
+#include "chrome/browser/perch/perch_command_ids.h"
+#include "chrome/browser/perch/perch_commands.h"
 #include "chrome/browser/perch/perch_pref_names.h"
+#include "chrome/browser/perch/tab_tools/tab_tools.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
@@ -90,6 +93,25 @@ class Snapshotter {
               browser_->GetTabStripModel()->GetActiveWebContents()) {
         page->Focus();
       }
+    } else if (state == "duplicate-tabs") {
+      // Two copies of one page (one with a #), and a pinned copy.
+      for (const char* url :
+           {"chrome://version", "chrome://version/#a", "chrome://history",
+            "chrome://version", "chrome://history"}) {
+        Open(url);
+      }
+      browser_->GetTabStripModel()->SetTabPinned(1, true);
+    } else if (state == "close-duplicates") {
+      ExecutePerchCommand(browser_, IDC_PERCH_CLOSE_DUPLICATE_TABS);
+      LogTabs("after closing duplicates");
+    } else if (state == "old-tabs") {
+      // Every background, unpinned tab is "older than a day" two days on.
+      TabStripModel* tabs = browser_->GetTabStripModel();
+      LOG(WARNING) << "Perch snapshot: "
+                   << FindOlderThan(*tabs, base::Days(1),
+                                    base::Time::Now() + base::Days(2))
+                          .size()
+                   << " of " << tabs->count() << " tabs older than a day";
     } else if (state == "tabs") {
       TabStripModel* tabs = browser_->GetTabStripModel();
       for (const char* url : {"about:blank", "chrome://version",
@@ -108,6 +130,24 @@ class Snapshotter {
                       {});
       }
     }
+  }
+
+  void Open(const char* url) {
+    BrowserView::GetBrowserViewForBrowser(browser_)->browser()->OpenURL(
+        content::OpenURLParams(GURL(url), content::Referrer(),
+                               WindowOpenDisposition::kNewBackgroundTab,
+                               ui::PAGE_TRANSITION_TYPED, false),
+        {});
+  }
+
+  void LogTabs(const char* when) {
+    TabStripModel* tabs = browser_->GetTabStripModel();
+    std::string list;
+    for (int i = 0; i < tabs->count(); ++i) {
+      list += (tabs->IsTabPinned(i) ? " [pinned]" : " ") +
+              tabs->GetWebContentsAt(i)->GetVisibleURL().spec();
+    }
+    LOG(WARNING) << "Perch snapshot: tabs " << when << ":" << list;
   }
 
   void Capture() {

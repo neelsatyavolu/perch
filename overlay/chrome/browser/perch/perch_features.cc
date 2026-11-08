@@ -12,6 +12,7 @@
 #include "components/optimization_guide/core/optimization_guide_features.h"
 #include "components/safe_browsing/core/common/features.h"
 #include "extensions/common/extension_features.h"
+#include "media/base/media_switches.h"
 #include "services/network/public/cpp/features.h"
 #include "third_party/blink/public/common/features.h"
 
@@ -19,11 +20,13 @@ namespace perch {
 
 namespace {
 
-// Features Perch turns on. Sites see only the user's main language, and a
-// playing video moves into picture in picture when its tab is hidden.
+// Features Perch turns on. Sites see only the user's main language, a
+// playing video moves into picture in picture when its tab is hidden, and
+// clicking a tab's speaker mutes it.
 const base::Feature* const kEnabled[] = {
     &network::features::kReduceAcceptLanguage,
     &blink::features::kBrowserInitiatedAutomaticPictureInPicture,
+    &media::kEnableTabMuting,
 };
 
 // Features Perch turns off (spec 5.1): Gemini in Chrome and Google's AI mode

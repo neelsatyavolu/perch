@@ -1,0 +1,123 @@
+# Perch: Close Duplicate Tabs and Close Tabs Older Than in the tab menu, run as Perch commands.
+diff --git a/chrome/browser/ui/browser_window/internal/BUILD.gn b/chrome/browser/ui/browser_window/internal/BUILD.gn
+index 8e473b90ee..5b19196e1d 100644
+--- a/chrome/browser/ui/browser_window/internal/BUILD.gn
++++ b/chrome/browser/ui/browser_window/internal/BUILD.gn
+@@ -98,6 +98,8 @@ source_set("internal") {
+       "//chrome/browser/perch/perch_commands.h",
+       "//chrome/browser/perch/perch_menu_mac.h",
+       "//chrome/browser/perch/perch_menu_mac.mm",
++      "//chrome/browser/perch/tab_tools/tab_tools.cc",
++      "//chrome/browser/perch/tab_tools/tab_tools.h",
+       "browser_window_interface_iterator_non_android.cc",
+       "create_browser_window_non_android.cc",
+       "desktop_browser_window_capabilities.cc",
+diff --git a/chrome/browser/ui/tabs/tab_menu_model.cc b/chrome/browser/ui/tabs/tab_menu_model.cc
+index c89651404a..e6cead8556 100644
+--- a/chrome/browser/ui/tabs/tab_menu_model.cc
++++ b/chrome/browser/ui/tabs/tab_menu_model.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "chrome/browser/ui/tabs/tab_menu_model.h"
+ 
++#include "chrome/browser/perch/perch_command_ids.h"
++
+ #include <memory>
+ #include <optional>
+ 
+@@ -702,6 +704,17 @@ void TabMenuModel::Build(int index) {
+   AddItemWithStringId(TabStripModel::CommandCloseTab, IDS_TAB_CXMENU_CLOSETAB);
+   AddItemWithStringId(TabStripModel::CommandCloseOtherTabs,
+                       IDS_TAB_CXMENU_CLOSEOTHERTABS);
++  // Perch: tab tools.
++  AddItem(IDC_PERCH_CLOSE_DUPLICATE_TABS, u"Close Duplicate Tabs");
++  perch_close_older_submenu_ = std::make_unique<ui::SimpleMenuModel>(delegate());
++  perch_close_older_submenu_->AddItem(IDC_PERCH_CLOSE_TABS_OLDER_THAN_DAY,
++                                      u"1 Day");
++  perch_close_older_submenu_->AddItem(IDC_PERCH_CLOSE_TABS_OLDER_THAN_WEEK,
++                                      u"1 Week");
++  perch_close_older_submenu_->AddItem(IDC_PERCH_CLOSE_TABS_OLDER_THAN_MONTH,
++                                      u"1 Month");
++  AddSubMenu(IDC_PERCH_CLOSE_TABS_OLDER_THAN_MENU, u"Close Tabs Older Than",
++             perch_close_older_submenu_.get());
+ 
+   if (showing_vertical_tabs) {
+     AddItemWithStringId(TabStripModel::CommandCloseTabsToRight,
+diff --git a/chrome/browser/ui/tabs/tab_menu_model.h b/chrome/browser/ui/tabs/tab_menu_model.h
+index f1cc0e7b16..cce4bc0e40 100644
+--- a/chrome/browser/ui/tabs/tab_menu_model.h
++++ b/chrome/browser/ui/tabs/tab_menu_model.h
+@@ -106,6 +106,8 @@ class TabMenuModel : public ui::SimpleMenuModel {
+   std::unique_ptr<ui::SimpleMenuModel> glic_tab_sub_menu_model_;
+   std::unique_ptr<ui::SimpleMenuModel> contextual_tasks_tab_sub_menu_model_;
+   std::unique_ptr<ui::SimpleMenuModel> send_tab_to_self_submenu_;
++  // Perch: Close Tabs Older Than › 1 Day, 1 Week, 1 Month.
++  std::unique_ptr<ui::SimpleMenuModel> perch_close_older_submenu_;
+ 
+   // `tab_strip_` needs to outlive this class.
+   raw_ptr<TabStripModel> tab_strip_;
+diff --git a/chrome/browser/ui/views/tabs/tab/tab_context_menu_controller.cc b/chrome/browser/ui/views/tabs/tab/tab_context_menu_controller.cc
+index d0e6a244aa..1d4e951ce7 100644
+--- a/chrome/browser/ui/views/tabs/tab/tab_context_menu_controller.cc
++++ b/chrome/browser/ui/views/tabs/tab/tab_context_menu_controller.cc
+@@ -4,6 +4,9 @@
+ 
+ #include "chrome/browser/ui/views/tabs/tab/tab_context_menu_controller.h"
+ 
++#include "chrome/browser/perch/perch_command_ids.h"
++#include "chrome/browser/perch/perch_commands.h"
++
+ #include "chrome/browser/ui/tabs/tab_menu_model.h"
+ #include "chrome/browser/ui/tabs/tab_strip_model.h"
+ #include "extensions/buildflags/buildflags.h"
+@@ -52,7 +55,19 @@ void TabContextMenuController::CloseMenu() {
+   }
+ }
+ 
++namespace {
++
++// Perch: the tab tools in the menu are Perch commands, not tab strip ones.
++bool IsPerchCommand(int command_id) {
++  return command_id >= IDC_PERCH_FIRST && command_id <= IDC_PERCH_LAST;
++}
++
++}  // namespace
++
+ bool TabContextMenuController::IsCommandIdChecked(int command_id) const {
++  if (IsPerchCommand(command_id)) {
++    return false;
++  }
+ #if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
+   if (extensions::ContextMenuMatcher::IsExtensionsCustomCommandId(command_id)) {
+     if (tab_menu_model_ && tab_menu_model_->extension_items()) {
+@@ -66,6 +81,9 @@ bool TabContextMenuController::IsCommandIdChecked(int command_id) const {
+ }
+ 
+ bool TabContextMenuController::IsCommandIdEnabled(int command_id) const {
++  if (IsPerchCommand(command_id)) {
++    return true;
++  }
+ #if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
+   if (extensions::ContextMenuMatcher::IsExtensionsCustomCommandId(command_id)) {
+     if (tab_menu_model_ && tab_menu_model_->extension_items()) {
+@@ -94,11 +112,20 @@ bool TabContextMenuController::IsCommandIdVisible(int command_id) const {
+ }
+ 
+ bool TabContextMenuController::IsCommandIdAlerted(int command_id) const {
++  if (IsPerchCommand(command_id)) {
++    return false;
++  }
+   return delegate_->IsContextMenuCommandAlerted(
+       static_cast<TabStripModel::ContextMenuCommand>(command_id));
+ }
+ 
+ void TabContextMenuController::ExecuteCommand(int command_id, int event_flags) {
++  if (IsPerchCommand(command_id)) {
++    if (auto* tab = tab_handle_.Get()) {
++      perch::ExecutePerchCommand(tab->GetBrowserWindowInterface(), command_id);
++    }
++    return;
++  }
+ #if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
+   if (extensions::ContextMenuMatcher::IsExtensionsCustomCommandId(command_id)) {
+     if (tab_menu_model_ && tab_menu_model_->extension_items()) {

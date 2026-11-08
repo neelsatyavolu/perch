@@ -1,10 +1,10 @@
 /**
  * The authenticator's store. Each account record (issuer, account, site, secret) is encrypted whole
  * with AES-256-GCM under one non-extractable key, with the record id as associated data so records
- * cannot be swapped. The key lives in IndexedDB as a CryptoKey that script cannot export; records
- * live in chrome.storage.local, which Chromium never syncs. Both sit in the profile folder, so this
- * alone does not protect codes from someone who can read that folder: release builds keep the
- * authenticator off (see stores.ts) until the key moves behind the Keychain wrap in spec 11.1.
+ * cannot be swapped. The key is a CryptoKey that script cannot export; records
+ * live in chrome.storage.local, which Chromium never syncs. In Perch the key comes from the browser
+ * over native messaging (native-key.ts) and is never stored by the extension; only unpacked
+ * development installs fall back to a key in IndexedDB (see stores.ts).
  */
 
 import { base32Decode } from "./base32";
@@ -83,14 +83,14 @@ export function codeFor(entry: Account, time = Date.now() / 1000): Promise<strin
   return totp(base32Decode(entry.secret), { time, period: entry.period, digits: entry.digits, algorithm: entry.algorithm });
 }
 
-async function encrypt(key: CryptoKey, entry: VaultEntry): Promise<StoredEntry> {
+export async function encrypt(key: CryptoKey, entry: VaultEntry): Promise<StoredEntry> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const plain = new TextEncoder().encode(JSON.stringify(entry));
   const data = await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: new TextEncoder().encode(entry.id) }, key, plain);
   return { id: entry.id, iv: toBase64(iv), data: toBase64(new Uint8Array(data)) };
 }
 
-async function decrypt(key: CryptoKey, stored: StoredEntry): Promise<VaultEntry> {
+export async function decrypt(key: CryptoKey, stored: StoredEntry): Promise<VaultEntry> {
   try {
     const plain = await crypto.subtle.decrypt(
       { name: "AES-GCM", iv: fromBase64(stored.iv) as BufferSource, additionalData: new TextEncoder().encode(stored.id) },

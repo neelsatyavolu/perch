@@ -33,7 +33,8 @@
     "contentSettings",
     "browsingData",
     "offscreen",
-    "clipboardWrite"
+    "clipboardWrite",
+    "nativeMessaging"
   ],
   "host_permissions": [
     "<all_urls>"

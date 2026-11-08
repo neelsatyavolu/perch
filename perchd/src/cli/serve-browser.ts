@@ -132,6 +132,7 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
     browserToken: settings.browserToken,
     pages: services.pages,
     onStatus: link.onStatus,
+    artifactScheme: browser.features.has("perch-artifact"),
   });
   services.attach(app);
   agentTabs = (chatId) => runs.sessionsFor(chatId).flatMap((s) => daemon.manager.get(SIDEBAR_CLIENT, s)?.tabIds() ?? []);

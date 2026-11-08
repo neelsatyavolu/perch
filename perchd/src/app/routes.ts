@@ -223,6 +223,8 @@ export const ROUTES: Route[] = [
     if (!ctx.pages) throw new AppError("not found", 404);
     return ctx.pages.call(method!, body);
   }),
+  // The browser's perch-artifact:// loader (plan 3b task 12): perch-artifact://<id>/<version>.
+  browserRoute("GET", "/api/artifact-frames/:id/(\\d{1,5})", (ctx, [id, version]) => ctx.artifactServer.serve(id!, Number(version))),
   browserRoute("POST", "/api/windows/:id/active", (ctx, [id], body) => {
     const o = v.object(body);
     v.onlyKeys(o, ["tab"]);

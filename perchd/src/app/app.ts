@@ -32,6 +32,8 @@ export type AppOptions = {
   pages?: (core: PagesCore) => PagesApi;
   /** Every chat status change (RunDeps.onStatus): the browser's perch dot. */
   onStatus?: RunDeps["onStatus"];
+  /** Artifacts on `perch-artifact://`, when the browser that runs perchd serves that scheme. */
+  artifactScheme?: boolean;
 };
 
 /** What the pages API gets from the app: its chats, runs, an event to the pages, and the new-chat defaults. */
@@ -132,7 +134,7 @@ export async function startApp(opts: AppOptions): Promise<App> {
   const windows = new Windows(chats, (event) => publish(event));
   let ownOrigin: string | null = null;
   // Perch's pages may frame artifacts; so may the development pages this server itself serves.
-  const artifactServer = startArtifactServer({ store: artifacts, frameAncestors: () => [...opts.allowedOrigins, ...(opts.uiDir && ownOrigin ? [ownOrigin] : [])] });
+  const artifactServer = startArtifactServer({ store: artifacts, frameAncestors: () => [...opts.allowedOrigins, ...(opts.uiDir && ownOrigin ? [ownOrigin] : [])], browserScheme: opts.artifactScheme === true });
   const runs = new RunManager({
     chats,
     artifacts,

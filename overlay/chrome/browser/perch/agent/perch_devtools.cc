@@ -18,6 +18,8 @@
 #include "base/no_destructor.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
+#include "chrome/browser/perch/agent/perch_domain_data.h"
+#include "chrome/browser/perch/agent/task_status.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/tabs/tab_group_model.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
@@ -57,6 +59,16 @@ Reply Ok(base::DictValue result = base::DictValue()) {
 Reply Fail(int code, std::string message) {
   return {std::nullopt, code, std::move(message)};
 }
+
+Reply FromData(DataResult result) {
+  return result.has_value() ? Ok(std::move(*result))
+                            : Fail(kServerError, result.error());
+}
+
+// perchd's channel, kept for replies that come later and for events. It is
+// the trusted pipe's browser session, which lives until perchd goes away
+// (OnPerchdDisconnected).
+content::DevToolsAgentHostClientChannel* g_channel = nullptr;
 
 // Holds that keep claimed tabs drawing, by target id. Each hold is bound to a
 // weak pointer, so a tab that closes while claimed is safe.
@@ -122,6 +134,14 @@ Reply GetInfo() {
   result.Set("product",
              "Perch/" + std::string(version_info::GetVersionNumber()));
   result.Set("perch", true);
+  base::ListValue features;
+  for (const char* feature :
+       {"setTaskStatus", "revealChat", "askRequested", "getBookmarks",
+        "applyBookmarkChanges", "getHistory", "addHistory", "getOpenTabs",
+        "getExtensionTabId"}) {
+    features.Append(feature);
+  }
+  result.Set("features", std::move(features));
   return Ok(std::move(result));
 }
 
@@ -204,7 +224,68 @@ Reply ReleaseTab(const base::DictValue& params) {
   return Ok();
 }
 
+Reply SetTaskStatusCommand(const base::DictValue& params) {
+  const std::string* chat = params.FindString("chatId");
+  const std::string* status = params.FindString("status");
+  const base::ListValue* ids = params.FindList("targetIds");
+  if (!chat || !status || !ids) {
+    return Fail(kInvalidParams, "chatId, status and targetIds are required");
+  }
+  TaskState state = TaskState::kIdle;
+  if (*status == "running") {
+    state = TaskState::kRunning;
+  } else if (*status == "waiting") {
+    state = TaskState::kWaiting;
+  } else if (*status != "idle") {
+    return Fail(kInvalidParams, "status is idle, running or waiting");
+  }
+  std::vector<std::string> targets;
+  for (const base::Value& id : *ids) {
+    if (id.is_string()) {
+      targets.push_back(id.GetString());
+    }
+  }
+  const std::string* title = params.FindString("title");
+  SetTaskStatus(*chat, state, targets, title ? *title : std::string());
+  return Ok();
+}
+
+Reply RevealChatCommand(const base::DictValue& params) {
+  const std::string* chat = params.FindString("chatId");
+  const std::string* mode = params.FindString("mode");
+  const std::string* tab = params.FindString("tabId");
+  if (!chat || !mode) {
+    return Fail(kInvalidParams, "chatId and mode are required");
+  }
+  const bool side = *mode == "side" && tab;
+  if (!RevealChat(*chat, tab ? *tab : std::string(), side)) {
+    return Fail(kServerError, "Perch couldn't show that chat");
+  }
+  return Ok();
+}
+
 Reply Dispatch(std::string_view method, const base::DictValue& params) {
+  if (method == "setTaskStatus") {
+    return SetTaskStatusCommand(params);
+  }
+  if (method == "revealChat") {
+    return RevealChatCommand(params);
+  }
+  if (method == "getBookmarks") {
+    return FromData(GetBookmarks(AgentProfile()));
+  }
+  if (method == "applyBookmarkChanges") {
+    return FromData(ApplyBookmarkChanges(AgentProfile(), params));
+  }
+  if (method == "addHistory") {
+    return FromData(AddHistory(AgentProfile(), params));
+  }
+  if (method == "getOpenTabs") {
+    return FromData(GetOpenTabs(AgentProfile()));
+  }
+  if (method == "getExtensionTabId") {
+    return FromData(GetExtensionTabId(params));
+  }
   if (method == "getInfo") {
     return GetInfo();
   }
@@ -281,9 +362,53 @@ bool MaybeHandleCommand(content::DevToolsAgentHostClientChannel* channel,
     }
     params = std::move(*value).TakeDict();
   }
-  Send(channel, dispatchable.CallId(),
-       Dispatch(method.substr(kPrefix.size()), params));
+  g_channel = channel;
+  const std::string_view name = method.substr(kPrefix.size());
+  const int call_id = dispatchable.CallId();
+  // Methods that answer later; the reply goes out only while the channel is
+  // still perchd's.
+  if (name == "getHistory") {
+    if (!AgentProfile()) {
+      Send(channel, call_id, Fail(kServerError, "No profile"));
+      return true;
+    }
+    GetHistory(AgentProfile(), params,
+               base::BindOnce(
+                   [](content::DevToolsAgentHostClientChannel* from, int id,
+                      DataResult result) {
+                     if (g_channel == from) {
+                       Send(from, id, FromData(std::move(result)));
+                     }
+                   },
+                   channel, call_id));
+    return true;
+  }
+  Send(channel, call_id, Dispatch(name, params));
   return true;
+}
+
+void EmitPerchEvent(std::string_view method, base::DictValue params) {
+  if (!g_channel) {
+    return;
+  }
+  base::DictValue message;
+  message.Set("method", "Perch." + std::string(method));
+  message.Set("params", std::move(params));
+  const std::string json = base::WriteJson(message).value_or("{}");
+  std::vector<uint8_t> cbor;
+  if (crdtp::json::ConvertJSONToCBOR(crdtp::SpanFrom(json), &cbor).ok()) {
+    g_channel->DispatchProtocolMessageToClient(std::move(cbor));
+  }
+}
+
+bool IsPerchdConnected() {
+  return g_channel != nullptr;
+}
+
+void OnPerchdDisconnected() {
+  g_channel = nullptr;
+  Claims().clear();
+  ClearAllTaskStatus();
 }
 
 }  // namespace perch

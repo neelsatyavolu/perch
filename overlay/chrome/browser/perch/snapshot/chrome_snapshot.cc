@@ -12,6 +12,7 @@
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/functional/bind.h"
+#include "base/json/json_reader.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
@@ -24,6 +25,8 @@
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
 #include "chrome/browser/performance_manager/policies/memory_saver_mode_policy.h"
+#include "chrome/browser/perch/agent/perch_domain_data.h"
+#include "chrome/browser/perch/agent/task_status.h"
 #include "chrome/browser/perch/command_bar/command_bar.h"
 #include "chrome/browser/perch/memory_saver/sleep_controller.h"
 #include "chrome/browser/perch/perch_command_ids.h"
@@ -41,6 +44,7 @@
 #include "components/prefs/pref_service.h"
 #include "components/viz/common/frame_sinks/copy_output_request.h"
 #include "components/viz/common/frame_sinks/copy_output_result.h"
+#include "content/public/browser/devtools_agent_host.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/web_contents.h"
 #include "third_party/skia/include/core/SkBitmap.h"
@@ -159,6 +163,31 @@ class Snapshotter {
               browser_->GetTabStripModel()->GetActiveWebContents())) {
         client->GetTranslateManager()->TranslatePage("fr", "en",
                                                      /*triggered_from_menu=*/true);
+      }
+    } else if (state == "agent") {
+      // The Perch domain's data calls and a running task's dot.
+      Profile* profile = AgentProfile();
+      DataResult tabs = GetOpenTabs(profile);
+      DataResult added = ApplyBookmarkChanges(
+          profile, *base::JSONReader::ReadDict(
+                       R"({"changes":[{"op":"add","parentId":"1",)"
+                       R"("title":"Perch","url":"https://perchbrowser.com/"}]})",
+                       base::JSON_PARSE_RFC));
+      DataResult marks = GetBookmarks(profile);
+      LOG(WARNING) << "Perch snapshot: agent tabs="
+                   << (tabs.has_value() ? tabs->DebugString().size() : 0)
+                   << " added=" << (added.has_value() ? added->DebugString() : added.error())
+                   << " bookmarks has Perch="
+                   << (marks.has_value() &&
+                       marks->DebugString().find("perchbrowser.com") !=
+                           std::string::npos);
+      TabStripModel* model = browser_->GetTabStripModel();
+      if (model->count() > 1) {
+        SetTaskStatus("chat-1", TaskState::kRunning,
+                      {content::DevToolsAgentHost::GetOrCreateFor(
+                           model->GetWebContentsAt(1))
+                           ->GetId()},
+                      std::string());
       }
     } else if (state == "command-bar") {
       ExecutePerchCommand(browser_, IDC_PERCH_COMMAND_BAR);

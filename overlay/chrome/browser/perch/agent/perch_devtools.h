@@ -4,7 +4,10 @@
 #ifndef CHROME_BROWSER_PERCH_AGENT_PERCH_DEVTOOLS_H_
 #define CHROME_BROWSER_PERCH_AGENT_PERCH_DEVTOOLS_H_
 
+#include <string_view>
+
 #include "base/containers/span.h"
+#include "base/values.h"
 
 namespace content {
 class DevToolsAgentHostClientChannel;
@@ -24,6 +27,13 @@ namespace perch {
 //   Perch.releaseTab  {targetId}: drops that hold.
 bool MaybeHandleCommand(content::DevToolsAgentHostClientChannel* channel,
                         base::span<const uint8_t> message);
+
+// Sends `Perch.<method>` to perchd, if it is connected.
+void EmitPerchEvent(std::string_view method, base::DictValue params);
+bool IsPerchdConnected();
+
+// perchd's pipe closed: forget its channel, drop tab holds and clear dots.
+void OnPerchdDisconnected();
 
 }  // namespace perch
 

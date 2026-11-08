@@ -17,6 +17,7 @@
 #include "base/strings/string_util.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
+#include "chrome/browser/perch/agent/perch_devtools.h"
 #include "chrome/browser/perch/command_bar/command_bar.h"
 #include "chrome/browser/perch/extensions/perch_component_extensions.h"
 #include "chrome/browser/perch/memory_saver/memory_saver_settings.h"
@@ -32,6 +33,7 @@
 #include "components/search_engines/template_url_service.h"
 #include "components/prefs/pref_service.h"
 #include "components/version_info/version_info.h"
+#include "content/public/browser/devtools_agent_host.h"
 #include "content/public/browser/page_navigator.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_ui.h"
@@ -270,6 +272,18 @@ void PerchPageHandler::Dispatch(const std::string& method,
       return;
     }
     std::optional<GURL> target;
+    // With perchd running, Ask starts the task there; it opens the chat.
+    if (*mode == "ask" && IsPerchdConnected()) {
+      EmitPerchEvent(
+          "askRequested",
+          base::DictValue()
+              .Set("text", *text)
+              .Set("tabId", content::DevToolsAgentHost::GetOrCreateFor(
+                                web_ui()->GetWebContents())
+                                ->GetId()));
+      Resolve(std::move(id), base::Value());
+      return;
+    }
     if (*mode == "ask") {
       target = GURL("chrome://perch-chat/?ask=" +
                     base::EscapeQueryParamValue(*text, /*use_plus=*/false));

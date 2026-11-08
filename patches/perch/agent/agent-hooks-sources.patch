@@ -1,0 +1,16 @@
+# Perch: builds the agent's task status and browser data sources.
+diff --git a/chrome/browser/ui/browser_window/internal/BUILD.gn b/chrome/browser/ui/browser_window/internal/BUILD.gn
+index 2a6205e510..4dda2b800f 100644
+--- a/chrome/browser/ui/browser_window/internal/BUILD.gn
++++ b/chrome/browser/ui/browser_window/internal/BUILD.gn
+@@ -98,6 +98,10 @@ source_set("internal") {
+       "//chrome/browser/perch/perch_commands.h",
+       "//chrome/browser/perch/perch_menu_mac.h",
+       "//chrome/browser/perch/perch_menu_mac.mm",
++      "//chrome/browser/perch/agent/perch_domain_data.cc",
++      "//chrome/browser/perch/agent/perch_domain_data.h",
++      "//chrome/browser/perch/agent/task_status.cc",
++      "//chrome/browser/perch/agent/task_status.h",
+       "//chrome/browser/perch/command_bar/command_bar.cc",
+       "//chrome/browser/perch/command_bar/command_bar.h",
+       "//chrome/browser/perch/spaces/spaces.cc",

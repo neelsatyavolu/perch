@@ -1,0 +1,101 @@
+# Perch: the perch dot on tabs a running agent task drives.
+diff --git a/chrome/browser/ui/tabs/tab_data.cc b/chrome/browser/ui/tabs/tab_data.cc
+index fd524a958c..a06b135af7 100644
+--- a/chrome/browser/ui/tabs/tab_data.cc
++++ b/chrome/browser/ui/tabs/tab_data.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "chrome/browser/ui/tabs/tab_data.h"
+ 
++#include "chrome/browser/perch/agent/task_status.h"
++
+ #include <string>
+ 
+ #include "base/check.h"
+@@ -52,6 +54,8 @@ TabData TabData::FromTabInterface(tabs::TabInterface* tab_interface) {
+       tab_ui_helper->GetDiscardedMemorySavings();
+   tab_data.network_state = tab_ui_helper->GetTabNetworkState();
+   tab_data.is_tab_discarded = tab_ui_helper->IsDiscarded();
++  tab_data.perch_task_running =
++      perch::IsTaskRunningIn(tab_interface->GetContents());
+   tab_data.last_committed_url = tab_ui_helper->GetLastCommittedURL();
+   tab_data.alert_state = tab_alert_controller->GetAlertToShow();
+   tab_data.pinned = tab_interface->IsPinned();
+@@ -97,6 +101,7 @@ bool TabData::operator==(const TabData& other) const {
+          discarded_memory_savings == other.discarded_memory_savings &&
+          network_state == other.network_state &&
+          is_tab_discarded == other.is_tab_discarded &&
++         perch_task_running == other.perch_task_running &&
+          last_committed_url == other.last_committed_url &&
+          alert_state == other.alert_state && pinned == other.pinned &&
+          blocked == other.blocked && thumbnail == other.thumbnail &&
+diff --git a/chrome/browser/ui/tabs/tab_data.h b/chrome/browser/ui/tabs/tab_data.h
+index 13cf9c48d2..662089a381 100644
+--- a/chrome/browser/ui/tabs/tab_data.h
++++ b/chrome/browser/ui/tabs/tab_data.h
+@@ -60,6 +60,8 @@ struct TabData {
+   std::optional<base::ByteSize> discarded_memory_savings;
+   TabNetworkState network_state = TabNetworkState::kNone;
+   bool is_tab_discarded = false;
++  // Perch: a running agent task drives this tab (the perch dot).
++  bool perch_task_running = false;
+   GURL last_committed_url;
+ 
+   // Alert properties:
+diff --git a/chrome/browser/ui/views/tabs/tab/tab_icon.cc b/chrome/browser/ui/views/tabs/tab/tab_icon.cc
+index edb9a083a8..f5bde5ef7a 100644
+--- a/chrome/browser/ui/views/tabs/tab/tab_icon.cc
++++ b/chrome/browser/ui/views/tabs/tab/tab_icon.cc
+@@ -13,7 +13,9 @@
+ #include "base/trace_event/trace_event.h"
+ #include "chrome/browser/browser_process.h"
+ #include "chrome/browser/favicon/favicon_utils.h"
++#include "cc/paint/paint_flags.h"
+ #include "chrome/browser/perch/memory_saver/sleeping_tab_icon.h"
++#include "ui/color/color_id.h"
+ #include "chrome/browser/ui/browser_element_identifiers.h"
+ #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+ #include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
+@@ -129,6 +131,10 @@ void TabIcon::SetData(const tabs::TabData& data) {
+   SetCrashed(data.is_crashed);
+   // Perch: every sleeping tab shows the moon, however it went to sleep.
+   SetDiscarded(data.should_show_discard_status || data.is_tab_discarded);
++  if (perch_task_running_ != data.perch_task_running) {
++    perch_task_running_ = data.perch_task_running;
++    SchedulePaint();
++  }
+   has_tab_data_ = true;
+ 
+   UpdateThrobber();
+@@ -258,6 +264,18 @@ void TabIcon::OnPaint(gfx::Canvas* canvas) {
+   if (GetShowingLoadingAnimation()) {
+     PaintLoadingAnimation(canvas, icon_bounds);
+   }
++
++  // Perch: the perch dot, 6 px in the accent at the favicon's top right,
++  // while an agent task runs in this tab.
++  if (perch_task_running_) {
++    cc::PaintFlags flags;
++    flags.setAntiAlias(true);
++    flags.setColor(
++        GetColorProvider()->GetColor(ui::kColorFocusableBorderFocused));
++    canvas->DrawCircle(
++        gfx::PointF(icon_bounds.right() - 1.0f, icon_bounds.y() + 1.0f), 3.0f,
++        flags);
++  }
+ }
+ 
+ void TabIcon::OnBoundsChanged(const gfx::Rect& previous_bounds) {
+diff --git a/chrome/browser/ui/views/tabs/tab/tab_icon.h b/chrome/browser/ui/views/tabs/tab/tab_icon.h
+index c4a7652ded..9252ec1de0 100644
+--- a/chrome/browser/ui/views/tabs/tab/tab_icon.h
++++ b/chrome/browser/ui/views/tabs/tab/tab_icon.h
+@@ -200,6 +200,8 @@ class TabIcon : public views::View, public views::AnimationDelegateViews {
+   // due to a change in the discard status or a change to the pref, because
+   // we don't want to animate the discard ring in the latter case.
+   bool is_discarded_ = false;
++  // Perch: draw the perch dot (a running agent task).
++  bool perch_task_running_ = false;
+   bool discard_ring_treatment_enabled_ = true;
+   bool was_discard_indicator_shown_ = false;
+ 

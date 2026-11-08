@@ -3,6 +3,8 @@
 
 #include "chrome/browser/perch/agent/perchd_launcher.h"
 
+#include "chrome/browser/perch/agent/perch_devtools.h"
+
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netinet/in.h>
@@ -272,6 +274,8 @@ void PerchdLauncher::OnPipeClosed() {
   if (browser_shutdown::HasShutdownStarted()) {
     return;
   }
+  // Dots, tab holds and the event channel belong to the perchd that left.
+  OnPerchdDisconnected();
   LOG(WARNING) << "Perch: the agent stopped; starting it again";
   content::DevToolsAgentHost::StopRemoteDebuggingPipeHandler();
   // The pipe handler's reader and writer threads wind down on their own after

@@ -1,0 +1,25 @@
+# Perch: Perch's sizes for the toolbar, tab strip and address bar.
+diff --git a/chrome/browser/ui/layout_constants.cc b/chrome/browser/ui/layout_constants.cc
+index b8206dc188..058b58b8f5 100644
+--- a/chrome/browser/ui/layout_constants.cc
++++ b/chrome/browser/ui/layout_constants.cc
+@@ -2,6 +2,7 @@
+ // Use of this source code is governed by a BSD-style license that can be
+ // found in the LICENSE file.
+ 
++#include "chrome/browser/perch/layout/perch_layout.h"
+ #include "chrome/browser/ui/layout_constants.h"
+ 
+ #include "base/notreached.h"
+@@ -19,6 +20,11 @@
+ 
+ int GetLayoutConstant(LayoutConstant constant) {
+   const bool touch_ui = ui::TouchUiController::Get()->touch_ui();
++  // Perch: DESIGN.md's sizes for the tab strip and toolbar.
++  if (std::optional<int> perch_value =
++          perch::PerchLayoutConstant(constant, touch_ui)) {
++    return *perch_value;
++  }
+   switch (constant) {
+     case LayoutConstant::kAppMenuProfileRowAvatarIconSize:
+       return 24;

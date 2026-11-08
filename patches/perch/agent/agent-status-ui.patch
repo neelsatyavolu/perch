@@ -1,0 +1,190 @@
+# Perch: the perch dot breathes, the profile button shows a still dot while a chat waits, and an agent's tab group can't be edited while its task runs.
+diff --git a/chrome/browser/ui/views/profiles/avatar_toolbar_button.cc b/chrome/browser/ui/views/profiles/avatar_toolbar_button.cc
+index 1051fde418..2b08c5d32c 100644
+--- a/chrome/browser/ui/views/profiles/avatar_toolbar_button.cc
++++ b/chrome/browser/ui/views/profiles/avatar_toolbar_button.cc
+@@ -4,7 +4,11 @@
+ 
+ #include "chrome/browser/ui/views/profiles/avatar_toolbar_button.h"
+ 
++#include "cc/paint/paint_flags.h"
++#include "chrome/browser/perch/agent/task_status.h"
+ #include "chrome/browser/perch/toolbar/perch_profile_menu.h"
++#include "ui/color/color_id.h"
++#include "ui/gfx/canvas.h"
+ 
+ #include "base/check.h"
+ #include "base/check_is_test.h"
+@@ -58,6 +62,8 @@ AvatarToolbarButton::AvatarToolbarButton(BrowserWindowInterface* browser)
+                                         base::Unretained(this),
+                                         /*is_source_accelerator=*/false)),
+       perch_browser_(browser),
++      perch_waiting_subscription_(perch::OnWaitingChanged(base::BindRepeating(
++          &AvatarToolbarButton::SchedulePaint, base::Unretained(this)))),
+       state_manager_(*this, browser),
+       slide_animation_(this) {
+   state_manager_.InitializeStates();
+@@ -449,6 +455,19 @@ void AvatarToolbarButton::OnThemeChanged() {
+   }
+ }
+ 
++void AvatarToolbarButton::PaintButtonContents(gfx::Canvas* canvas) {
++  ToolbarButton::PaintButtonContents(canvas);
++  if (!perch::IsAnyChatWaiting() || !GetColorProvider()) {
++    return;
++  }
++  cc::PaintFlags flags;
++  flags.setAntiAlias(true);
++  flags.setColor(GetColorProvider()->GetColor(ui::kColorFocusableBorderFocused));
++  const gfx::Rect bounds = GetContentsBounds();
++  canvas->DrawCircle(gfx::PointF(bounds.right() - 4.0f, bounds.y() + 4.0f),
++                     3.0f, flags);
++}
++
+ void AvatarToolbarButton::ButtonPressed(bool is_source_accelerator) {
+   // Perch: the profile button opens Perch's profile menu.
+   if (perch_browser_) {
+diff --git a/chrome/browser/ui/views/profiles/avatar_toolbar_button.h b/chrome/browser/ui/views/profiles/avatar_toolbar_button.h
+index 134169d431..e7b2777f98 100644
+--- a/chrome/browser/ui/views/profiles/avatar_toolbar_button.h
++++ b/chrome/browser/ui/views/profiles/avatar_toolbar_button.h
+@@ -76,6 +76,8 @@ class AvatarToolbarButton : public ToolbarButton,
+   void OnMouseExited(const ui::MouseEvent& event) override;
+   void OnBlur() override;
+   void OnThemeChanged() override;
++  // Perch: a still dot while a chat waits on the person.
++  void PaintButtonContents(gfx::Canvas* canvas) override;
+   void UpdateIcon() override;
+   void Layout(PassKey) override;
+   SkColor GetForegroundColor(ButtonState state) const override;
+@@ -124,6 +126,7 @@ class AvatarToolbarButton : public ToolbarButton,
+ 
+   // Perch: the window whose profile menu this button opens.
+   raw_ptr<BrowserWindowInterface> perch_browser_;
++  base::CallbackListSubscription perch_waiting_subscription_;
+   AvatarToolbarButtonStateManager state_manager_;
+ 
+   // Cached icons for the placeholder avatar in forced-colors mode, to avoid
+diff --git a/chrome/browser/ui/views/tabs/tab/tab_icon.cc b/chrome/browser/ui/views/tabs/tab/tab_icon.cc
+index f5bde5ef7a..4b5c094075 100644
+--- a/chrome/browser/ui/views/tabs/tab/tab_icon.cc
++++ b/chrome/browser/ui/views/tabs/tab/tab_icon.cc
+@@ -133,6 +133,13 @@ void TabIcon::SetData(const tabs::TabData& data) {
+   SetDiscarded(data.should_show_discard_status || data.is_tab_discarded);
+   if (perch_task_running_ != data.perch_task_running) {
+     perch_task_running_ = data.perch_task_running;
++    // 2.4 s from full to 35% and back (DESIGN.md), still with Reduce Motion.
++    if (perch_task_running_ && !gfx::Animation::PrefersReducedMotion()) {
++      perch_breath_.SetThrobDuration(base::Milliseconds(1200));
++      perch_breath_.StartThrobbing(-1);
++    } else {
++      perch_breath_.Reset(0);
++    }
+     SchedulePaint();
+   }
+   has_tab_data_ = true;
+@@ -270,8 +277,11 @@ void TabIcon::OnPaint(gfx::Canvas* canvas) {
+   if (perch_task_running_) {
+     cc::PaintFlags flags;
+     flags.setAntiAlias(true);
+-    flags.setColor(
+-        GetColorProvider()->GetColor(ui::kColorFocusableBorderFocused));
++    const SkColor accent =
++        GetColorProvider()->GetColor(ui::kColorFocusableBorderFocused);
++    const float opacity =
++        1.0f - 0.65f * static_cast<float>(perch_breath_.GetCurrentValue());
++    flags.setColor(SkColorSetA(accent, static_cast<U8CPU>(255 * opacity)));
+     canvas->DrawCircle(
+         gfx::PointF(icon_bounds.right() - 1.0f, icon_bounds.y() + 1.0f), 3.0f,
+         flags);
+diff --git a/chrome/browser/ui/views/tabs/tab/tab_icon.h b/chrome/browser/ui/views/tabs/tab/tab_icon.h
+index 9252ec1de0..e4ddf6100b 100644
+--- a/chrome/browser/ui/views/tabs/tab/tab_icon.h
++++ b/chrome/browser/ui/views/tabs/tab/tab_icon.h
+@@ -16,6 +16,7 @@
+ #include "ui/base/models/image_model.h"
+ #include "ui/gfx/animation/linear_animation.h"
+ #include "ui/gfx/animation/slide_animation.h"
++#include "ui/gfx/animation/throb_animation.h"
+ #include "ui/gfx/image/image_skia.h"
+ #include "ui/gfx/paint_throbber.h"
+ #include "ui/views/animation/animation_delegate_views.h"
+@@ -193,6 +194,8 @@ class TabIcon : public views::View, public views::AnimationDelegateViews {
+   // Animation used when a tab is discarded so the favicon will partially
+   // fade out
+   gfx::LinearAnimation tab_discard_animation_;
++  // Perch: the perch dot breathes while the task runs.
++  gfx::ThrobAnimation perch_breath_{this};
+ 
+   // The discard indicator will be shown only if the tab is discarded and the
+   // discard ring treatment pref is enabled. Keep track of both of the component
+diff --git a/chrome/browser/ui/views/tabs/tab_group_header.cc b/chrome/browser/ui/views/tabs/tab_group_header.cc
+index a81f253feb..5fa650af54 100644
+--- a/chrome/browser/ui/views/tabs/tab_group_header.cc
++++ b/chrome/browser/ui/views/tabs/tab_group_header.cc
+@@ -4,6 +4,10 @@
+ 
+ #include "chrome/browser/ui/views/tabs/tab_group_header.h"
+ 
++#include "chrome/browser/perch/agent/task_status.h"
++#include "chrome/browser/ui/tabs/tab_strip_model.h"
++#include "content/public/browser/web_contents.h"
++
+ #include <memory>
+ #include <string>
+ #include <string_view>
+@@ -336,6 +340,24 @@ bool TabGroupHeader::OnMouseDragged(const ui::MouseEvent& event) {
+   return true;
+ }
+ 
++// Perch: an agent's group can't be renamed or recoloured while its task runs.
++bool PerchAgentTaskRunsIn(TabSlotController* controller,
++                          const tab_groups::TabGroupId& group) {
++  BrowserWindowInterface* browser = controller->GetBrowserWindowInterface();
++  TabGroup* tab_group = controller->GetTabGroup(group);
++  if (!browser || !tab_group) {
++    return false;
++  }
++  TabStripModel* model = browser->GetTabStripModel();
++  const gfx::Range range = tab_group->ListTabs();
++  for (uint32_t i = range.start(); i < range.end(); ++i) {
++    if (perch::IsTaskRunningIn(model->GetWebContentsAt(i))) {
++      return true;
++    }
++  }
++  return false;
++}
++
+ void TabGroupHeader::OnMouseReleased(const ui::MouseEvent& event) {
+   if (!dragging()) {
+     bool open_editor_bubble =
+@@ -343,7 +365,8 @@ void TabGroupHeader::OnMouseReleased(const ui::MouseEvent& event) {
+     bool toggle_collapse = event.IsLeftMouseButton() &&
+                            tab_slot_controller_->GetFocusedGroup() != group();
+ 
+-    if (open_editor_bubble) {
++    if (open_editor_bubble &&
++        !PerchAgentTaskRunsIn(&*tab_slot_controller_, group().value())) {
+       editor_bubble_tracker_.Opened(TabGroupEditorBubbleView::Show(
+           tab_slot_controller_->GetBrowserWindowInterface(), group().value(),
+           /*anchor_view=*/this, /*anchor_rect=*/std::nullopt,
+@@ -389,6 +412,9 @@ void TabGroupHeader::OnGestureEvent(ui::GestureEvent* event) {
+       }
+       break;
+     case ui::EventType::kGestureLongTap: {
++      if (PerchAgentTaskRunsIn(&*tab_slot_controller_, group().value())) {
++        break;
++      }
+       editor_bubble_tracker_.Opened(TabGroupEditorBubbleView::Show(
+           tab_slot_controller_->GetBrowserWindowInterface(), group().value(),
+           /*anchor_view=*/this, /*anchor_rect=*/std::nullopt,
+@@ -474,7 +500,8 @@ void TabGroupHeader::ShowContextMenuForViewImpl(
+     ui::mojom::MenuSourceType source_type) {
+   // Right click toggles ShowContextMenuForViewImpl, which we dont want to occur
+   // if the left click should toggle the context menu.
+-  if (editor_bubble_tracker_.is_open()) {
++  if (editor_bubble_tracker_.is_open() ||
++      PerchAgentTaskRunsIn(&*tab_slot_controller_, group().value())) {
+     return;
+   }
+ 

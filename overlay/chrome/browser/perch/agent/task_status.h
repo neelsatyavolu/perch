@@ -7,6 +7,9 @@
 #include <string>
 #include <vector>
 
+#include "base/callback_list.h"
+#include "base/functional/callback_forward.h"
+
 namespace content {
 class WebContents;
 }
@@ -26,6 +29,11 @@ void SetTaskStatus(const std::string& chat_id,
 
 // Whether a running chat drives this tab: the tab shows the perch dot.
 bool IsTaskRunningIn(content::WebContents* contents);
+
+// Whether any chat waits on the person: the profile button shows a still dot.
+bool IsAnyChatWaiting();
+// Runs `callback` whenever that changes.
+base::CallbackListSubscription OnWaitingChanged(base::RepeatingClosure callback);
 
 // perchd went away: every dot clears.
 void ClearAllTaskStatus();

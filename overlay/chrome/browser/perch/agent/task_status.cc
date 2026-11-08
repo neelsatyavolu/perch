@@ -46,6 +46,20 @@ std::map<std::string, ChatStatus>& Chats() {
   return *chats;
 }
 
+base::RepeatingClosureList& WaitingListeners() {
+  static base::NoDestructor<base::RepeatingClosureList> listeners;
+  return *listeners;
+}
+
+bool AnyWaiting() {
+  for (const auto& [chat_id, chat] : Chats()) {
+    if (chat.state == TaskState::kWaiting) {
+      return true;
+    }
+  }
+  return false;
+}
+
 content::WebContents* ContentsFor(const std::string& target_id) {
   scoped_refptr<content::DevToolsAgentHost> host =
       content::DevToolsAgentHost::GetForId(target_id);
@@ -122,6 +136,7 @@ void SetTaskStatus(const std::string& chat_id,
                    TaskState state,
                    const std::vector<std::string>& target_ids,
                    const std::string& title) {
+  const bool waiting_before = AnyWaiting();
   ChatStatus& chat = Chats()[chat_id];
   std::vector<std::string> changed = chat.targets;
   changed.insert(changed.end(), target_ids.begin(), target_ids.end());
@@ -140,6 +155,18 @@ void SetTaskStatus(const std::string& chat_id,
     Chats().erase(chat_id);
   }
   Redraw(changed);
+  if (AnyWaiting() != waiting_before) {
+    WaitingListeners().Notify();
+  }
+}
+
+bool IsAnyChatWaiting() {
+  return AnyWaiting();
+}
+
+base::CallbackListSubscription OnWaitingChanged(
+    base::RepeatingClosure callback) {
+  return WaitingListeners().Add(std::move(callback));
 }
 
 bool IsTaskRunningIn(content::WebContents* contents) {
@@ -163,8 +190,12 @@ void ClearAllTaskStatus() {
   for (const auto& [chat_id, chat] : Chats()) {
     all.insert(all.end(), chat.targets.begin(), chat.targets.end());
   }
+  const bool was_waiting = AnyWaiting();
   Chats().clear();
   Redraw(all);
+  if (was_waiting) {
+    WaitingListeners().Notify();
+  }
 }
 
 bool RevealChat(const std::string& chat_id,

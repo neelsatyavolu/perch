@@ -191,6 +191,7 @@ class Snapshotter {
                            std::string::npos);
       TabStripModel* model = browser_->GetTabStripModel();
       if (model->count() > 1) {
+        SetTaskStatus("chat-2", TaskState::kWaiting, {}, std::string());
         SetTaskStatus("chat-1", TaskState::kRunning,
                       {content::DevToolsAgentHost::GetOrCreateFor(
                            model->GetWebContentsAt(1))

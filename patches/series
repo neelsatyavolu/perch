@@ -49,5 +49,6 @@ perch/agent/omnibox-ask.patch
 perch/agent/artifact-scheme.patch
 perch/agent/side-shell.patch
 perch/agent/dictation.patch
+perch/agent/agent-status-ui.patch
 perch/build/thinlto-jobs.patch
 perch/build/perch-unittests.patch

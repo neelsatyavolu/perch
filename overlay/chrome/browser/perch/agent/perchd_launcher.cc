@@ -18,6 +18,7 @@
 #include <utility>
 
 #include "base/apple/bundle_locations.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/base64url.h"
 #include "base/command_line.h"
 #include "base/files/file_util.h"
@@ -166,6 +167,22 @@ std::unique_ptr<PerchdLauncher::Launched> LaunchPerchd(
 
 }  // namespace
 
+namespace {
+
+bool IsAgentDisabledByPolicy() {
+  CFStringRef domain = CFSTR("co.xanom.perch");
+  CFStringRef key = CFSTR("AgentEnabled");
+  if (!CFPreferencesAppValueIsForced(key, domain)) {
+    return false;
+  }
+  base::apple::ScopedCFTypeRef<CFPropertyListRef> value(
+      CFPreferencesCopyAppValue(key, domain));
+  return value && CFGetTypeID(value.get()) == CFBooleanGetTypeID() &&
+         !CFBooleanGetValue(static_cast<CFBooleanRef>(value.get()));
+}
+
+}  // namespace
+
 // static
 PerchdLauncher& PerchdLauncher::Get() {
   static base::NoDestructor<PerchdLauncher> instance;
@@ -186,6 +203,15 @@ void PerchdLauncher::MaybeStart() {
   // In development perchd launches the browser itself over this pipe.
   if (command_line.HasSwitch(::switches::kRemoteDebuggingPipe) ||
       command_line.HasSwitch(kNoAgentSwitch)) {
+    return;
+  }
+  // Headless runs (tests, snapshots) opt in.
+  if (command_line.HasSwitch("headless") &&
+      !command_line.HasSwitch(kAgentInHeadlessSwitch)) {
+    return;
+  }
+  // An administrator turned the agent off (AgentEnabled).
+  if (IsAgentDisabledByPolicy()) {
     return;
   }
   perchd_path_ = command_line.GetSwitchValuePath(kPerchdPathSwitch);

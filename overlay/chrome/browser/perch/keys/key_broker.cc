@@ -7,7 +7,11 @@
 
 #include <utility>
 
+#include <Security/Security.h>
+
 #include "base/apple/bundle_locations.h"
+#include "base/apple/foundation_util.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/base64.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_file.h"
@@ -66,10 +70,51 @@ std::optional<std::string> ReadFrame(int fd) {
   return body;
 }
 
+// Whether the code at `path` is signed by Perch's team (and, when given, is
+// the program with `identifier`).
+bool SignedByTeam(const base::FilePath& path, const char* identifier) {
+  base::apple::ScopedCFTypeRef<CFURLRef> url =
+      base::apple::FilePathToCFURL(path);
+  base::apple::ScopedCFTypeRef<SecStaticCodeRef> code;
+  if (SecStaticCodeCreateWithPath(url.get(), kSecCSDefaultFlags,
+                                  code.InitializeInto()) != errSecSuccess) {
+    return false;
+  }
+  std::string text =
+      "anchor apple generic and certificate leaf[subject.OU] = \"VTQW687WBQ\"";
+  if (identifier) {
+    text += std::string(" and identifier \"") + identifier + "\"";
+  }
+  base::apple::ScopedCFTypeRef<CFStringRef> requirement_text(
+      CFStringCreateWithCString(nullptr, text.c_str(), kCFStringEncodingUTF8));
+  base::apple::ScopedCFTypeRef<SecRequirementRef> requirement;
+  if (SecRequirementCreateWithString(requirement_text.get(), kSecCSDefaultFlags,
+                                     requirement.InitializeInto()) !=
+      errSecSuccess) {
+    return false;
+  }
+  return SecStaticCodeCheckValidity(code.get(), kSecCSCheckAllArchitectures,
+                                    requirement.get()) == errSecSuccess;
+}
+
+// A Perch signed by the team talks only to a key helper signed by the team.
+// Development builds aren't signed, so they take the helper as it is.
+bool HelperTrusted(const base::FilePath& helper_executable) {
+  if (!SignedByTeam(base::apple::OuterBundlePath(), nullptr)) {
+    return true;
+  }
+  const base::FilePath app = helper_executable.DirName().DirName().DirName();
+  return SignedByTeam(app, "co.xanom.perch.keyhelper");
+}
+
 // One request to the helper: a frame in, a frame out, then it exits.
 std::optional<base::DictValue> AskHelper(const base::DictValue& request) {
   const base::FilePath helper = HelperPath();
   if (!base::PathExists(helper)) {
+    return std::nullopt;
+  }
+  if (!HelperTrusted(helper)) {
+    LOG(ERROR) << "Perch: the key helper isn't signed by Perch; not using it";
     return std::nullopt;
   }
   int to_helper[2];

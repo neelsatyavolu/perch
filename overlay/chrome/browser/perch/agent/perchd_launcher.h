@@ -18,6 +18,8 @@ namespace perch {
 // Switches.
 inline constexpr char kNoAgentSwitch[] = "perch-no-agent";
 inline constexpr char kPerchdPathSwitch[] = "perch-perchd-path";
+// Headless runs start no agent unless a test asks with this switch.
+inline constexpr char kAgentInHeadlessSwitch[] = "perch-agent-in-headless";
 inline constexpr char kUiDirSwitch[] = "perch-ui-dir";
 
 // Starts perchd, Perch's agent, as a child of the browser (spec 7.1). perchd

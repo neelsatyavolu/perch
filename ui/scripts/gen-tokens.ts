@@ -1,6 +1,7 @@
 /**
- * Generates the one token file, src/styles/tokens.css, and the theme list, src/theme/names.gen.ts,
- * from the theme and accent tables in DESIGN.md. Run `bun run tokens` after changing DESIGN.md.
+ * Generates the one token file, src/styles/tokens.css, the theme list, src/theme/names.gen.ts, and
+ * the browser's native table, overlay/chrome/browser/perch/theme/perch_tokens.inc, from the theme
+ * and accent tables in DESIGN.md. Run `bun run tokens` after changing DESIGN.md.
  */
 
 import { readFileSync, writeFileSync } from "node:fs";
@@ -142,10 +143,41 @@ export function renderNames(d: Design): string {
   ].join("\n");
 }
 
+/** "#RRGGBB" or "rgba(r, g, b, a)" as an SkColor literal, 0xAARRGGBB. */
+export function skColor(css: string): string {
+  const hex = css.match(/^#([0-9A-Fa-f]{6})$/);
+  if (hex) return `0xFF${hex[1]!.toUpperCase()}`;
+  const m = css.match(/^rgba\((\d+), (\d+), (\d+), ([\d.]+)\)$/);
+  if (!m) throw new Error(`cannot turn "${css}" into an SkColor`);
+  const byte = (n: number) => n.toString(16).toUpperCase().padStart(2, "0");
+  const alpha = Math.round(Number(m[4]) * 255);
+  return `0x${byte(alpha)}${byte(Number(m[1]))}${byte(Number(m[2]))}${byte(Number(m[3]))}`;
+}
+
+export function renderNative(d: Design): string {
+  const themes = d.themes.map((t) =>
+    `    {"${t.name}", ${t.dark}, ${skColor(t.canvas)}, ${skColor(t.card)}, ${skColor(t.raised)}, ${skColor(t.ink)}, ${skColor(t.body)}, ${skColor(t.mute)}, ${skColor(t.hair)}, ${skColor(t.hairStrong)}, ${skColor(t.btnBg)}, ${skColor(t.btnFg)}},`,
+  );
+  const accents = d.accents.map((a) => `    {"${a.name}", ${skColor(a.dark)}, ${skColor(a.light)}},`);
+  return [
+    "// Generated from DESIGN.md by ui/scripts/gen-tokens.ts. Do not edit; run `bun run tokens` in ui/.",
+    "// name, dark, canvas, card, raised, ink, body, mute, hair, hair_strong, button_bg, button_fg",
+    "inline constexpr PerchThemeTokens kPerchThemes[] = {",
+    ...themes,
+    "};",
+    "// name, on dark themes, on Paper",
+    "inline constexpr PerchAccentTokens kPerchAccents[] = {",
+    ...accents,
+    "};",
+    "",
+  ].join("\n");
+}
+
 if (import.meta.main) {
   const root = join(import.meta.dir, "..");
   const design = parseDesign(readFileSync(join(root, "..", "DESIGN.md"), "utf8"));
   writeFileSync(join(root, "src", "styles", "tokens.css"), renderCss(design));
   writeFileSync(join(root, "src", "theme", "names.gen.ts"), renderNames(design));
+  writeFileSync(join(root, "..", "overlay", "chrome", "browser", "perch", "theme", "perch_tokens.inc"), renderNative(design));
   process.stdout.write(`tokens: ${design.themes.length} themes, ${design.accents.length} accents\n`);
 }

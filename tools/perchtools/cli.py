@@ -17,7 +17,7 @@ from .checkout import checkout
 from .snapshot import snapshot_command, written
 from .components import ComponentsError, check_components, new_component_reasons, write_known
 from .doctor import SystemProbe, run_checks
-from .gnargs import build as build_chromium
+from .gnargs import build as build_chromium, google_api_key
 from .package import creds_from_env, package, packaged_app, stage_fonts
 from .patching import Generator, PatchFailed, apply_series, continue_series, export_series
 from .paths import REPO, Paths, load_paths
@@ -97,8 +97,25 @@ def _cmd_export(args: argparse.Namespace) -> int:
     return 0
 
 
+def _read_secret(ref: str) -> str | None:
+    """A 1Password value, or None when op is missing or can't read it. Never logged."""
+    try:
+        result = subprocess.run(["op", "read", ref], capture_output=True, text=True, check=False, timeout=120)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
 def _cmd_build(args: argparse.Namespace) -> int:
-    out = build_chromium(current_paths(), args.config, run=run, jobs=args.jobs, targets=args.target or ())
+    overrides: dict[str, str] = {}
+    if args.config == "release":
+        key = google_api_key(os.environ, _read_secret)
+        if key:
+            overrides["google_api_key"] = f'"{key}"'
+        else:
+            print("warning: no Safe Browsing API key; this build's Safe Browsing lists stay empty", file=sys.stderr)
+    out = build_chromium(current_paths(), args.config, run=run, jobs=args.jobs, targets=args.target or (),
+                         overrides=overrides)
     print(f"Built {out}")
     return 0
 

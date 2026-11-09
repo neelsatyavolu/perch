@@ -59,14 +59,32 @@ def ninja_target(target: str) -> str:
     return PERCH_TARGETS.get(target, target)
 
 
-def build(paths: Paths, config: Config, run=default_run, jobs: int = DEFAULT_JOBS, targets: Sequence[str] = ()) -> Path:
+# The Safe Browsing list key (plan 2, task 4): an API key restricted to the Safe Browsing API.
+GOOGLE_API_KEY_VAR = "PERCH_GOOGLE_API_KEY"
+GOOGLE_API_KEY_REF = "op://Private/Perch Safe Browsing API Key/credential"
+
+
+def google_api_key(env: Mapping[str, str], read_secret) -> str | None:
+    """The Safe Browsing key for a release build: PERCH_GOOGLE_API_KEY, else 1Password. None without
+    one, and the release then ships with empty local lists (the Settings row says so)."""
+    key = env.get(GOOGLE_API_KEY_VAR) or read_secret(GOOGLE_API_KEY_REF)
+    key = (key or "").strip()
+    if key and not all(c.isalnum() or c in "-_" for c in key):
+        raise ValueError("the Safe Browsing API key has unexpected characters")
+    return key or None
+
+
+def build(paths: Paths, config: Config, run=default_run, jobs: int = DEFAULT_JOBS, targets: Sequence[str] = (),
+          overrides: Mapping[str, str] = {}) -> Path:
     """gn gen, then autoninja the given targets, or the config's default targets when none are given."""
     out = paths.out(config)
     out.mkdir(parents=True, exist_ok=True)
     args_gn = out / "args.gn"
-    text = compose_args(paths.repo, config)
+    text = compose_args(paths.repo, config, overrides)
     if not args_gn.exists() or args_gn.read_text() != text:
+        # It can hold the API key, so only this user reads it.
         args_gn.write_text(text)
+        args_gn.chmod(0o600)
     env = depot_env(paths)
     run(["gn", "gen", out], cwd=paths.src, env=env)
     run(["nice", "-n", NICENESS, "autoninja", "-C", out, "-local_jobs", str(jobs),

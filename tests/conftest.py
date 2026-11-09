@@ -120,3 +120,6 @@ def _no_component_check(request, monkeypatch):
     from perchtools import cli
 
     monkeypatch.setattr(cli, "_component_reasons", lambda paths: [])
+    # No test reaches 1Password.
+    monkeypatch.setattr(cli, "_read_secret", lambda ref: None)
+    monkeypatch.delenv("PERCH_GOOGLE_API_KEY", raising=False)

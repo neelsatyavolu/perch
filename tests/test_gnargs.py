@@ -60,3 +60,32 @@ def test_release_builds_installer(paths, recorder):
 def test_build_jobs_cap(paths, recorder):
     build(paths, "dev", run=recorder, jobs=4)
     assert recorder.calls[1][recorder.calls[1].index("-local_jobs") + 1] == "4"
+
+
+def test_google_api_key_prefers_the_environment_then_1password():
+    import pytest
+
+    from perchtools.gnargs import GOOGLE_API_KEY_REF, google_api_key
+
+    asked = []
+    read = lambda ref: asked.append(ref) or "AIzaFromVault_1-2"
+    assert google_api_key({"PERCH_GOOGLE_API_KEY": "AIzaFromEnv"}, read) == "AIzaFromEnv"
+    assert asked == []
+    assert google_api_key({}, read) == "AIzaFromVault_1-2"
+    assert asked == [GOOGLE_API_KEY_REF]
+    assert google_api_key({}, lambda ref: None) is None
+    with pytest.raises(ValueError):
+        google_api_key({"PERCH_GOOGLE_API_KEY": 'bad" key'}, read)
+
+
+def test_release_build_writes_the_key_into_args_gn_only(monkeypatch, paths, recorder):
+    from perchtools import cli
+
+    monkeypatch.setattr(cli, "current_paths", lambda: paths)
+    monkeypatch.setattr(cli, "run", recorder)
+    monkeypatch.setenv("PERCH_GOOGLE_API_KEY", "AIzaTestKey")
+    assert cli.main(["build", "--config", "release"]) == 0
+    args_gn = paths.out("release") / "args.gn"
+    assert 'google_api_key = "AIzaTestKey"' in args_gn.read_text()
+    assert oct(args_gn.stat().st_mode & 0o777) == "0o600"
+    assert not any("AIzaTestKey" in " ".join(map(str, call)) for call in recorder.calls)

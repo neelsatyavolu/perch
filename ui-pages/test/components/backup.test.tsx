@@ -164,6 +164,16 @@ describe("Welcome › restore", () => {
     expect((await r.findByRole("alert")).textContent).toBe("That recovery key doesn't match this Perch data. Check it and try again.");
   });
 
+  test("without the recovery key, Start fresh sets the old data aside after a confirmation", async () => {
+    const r = renderWithApi(<Welcome />, { security: { needsRestore: true } });
+    expect(await r.findByText(LINE)).toBeTruthy();
+    fireEvent.click(r.getByRole("button", { name: "I don't have my recovery key" }));
+    expect((await r.findByRole("alert")).textContent).toContain("moves the old data aside, untouched");
+    fireEvent.click(r.getByRole("button", { name: "Start fresh" }));
+    expect(await r.findByRole("heading", { level: 1, name: "Welcome to Perch" })).toBeTruthy();
+    expect((await r.api.getSecurity()).needsRestore).toBe(false);
+  });
+
   test("a normal first run goes straight to setup", async () => {
     const r = renderWithApi(<Welcome />);
     expect(await r.findByRole("heading", { level: 1, name: "Welcome to Perch" })).toBeTruthy();

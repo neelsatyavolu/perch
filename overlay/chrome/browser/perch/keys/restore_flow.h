@@ -43,6 +43,12 @@ void RunExport(base::FilePath profile_dir,
                base::FilePath dest,
                base::OnceCallback<void(std::optional<std::string>)> done);
 
+// For someone who has lost the recovery key: sets the profile's Perch data
+// aside, untouched, as "Perch Agent (set aside <time>)", and makes a new key.
+// Replies nullopt when done, else "busy" or "failed".
+void RunStartFresh(base::FilePath profile_dir,
+                   base::OnceCallback<void(std::optional<std::string>)> done);
+
 }  // namespace perch
 
 #endif  // CHROME_BROWSER_PERCH_KEYS_RESTORE_FLOW_H_

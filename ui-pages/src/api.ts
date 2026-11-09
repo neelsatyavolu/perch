@@ -504,6 +504,8 @@ export interface PerchApi {
    * Rejects with code "wrong-key" (key doesn't match this profile/backup), "bad-backup" (not a Perch backup or damaged), "unavailable" (no key helper), or "failed".
    */
   restoreFromRecoveryKey(p: { recoveryKey: string; fromBackup: boolean; replaceData?: boolean }): Promise<{ readonly restored: boolean }>;
+  /** For someone without the recovery key: sets this profile's old Perch data aside, untouched, and starts with a new key. */
+  startFresh(): Promise<void>;
 
   // Memory
   getMemorySettings(): Promise<MemorySettings>;
@@ -583,7 +585,7 @@ export const API_METHODS = [
   "getMemorySaver", "setMemorySaver", "addSleepRule", "listTabMemory",
   "queryCommandBar", "runCommandBarItem", "closeCommandBar",
   "getSync", "startSyncPairing", "checkSyncPairing", "syncNow", "removeSyncDevice", "turnOffSync", "revealRecoveryKey",
-  "getSecurity", "exportBackup", "restoreFromRecoveryKey",
+  "getSecurity", "exportBackup", "restoreFromRecoveryKey", "startFresh",
   "getMemorySettings", "setMemorySettings", "listMemoryPages", "readMemoryPage", "writeMemoryPage", "deleteMemoryPage", "wipeMemory",
   "listDreamLogs", "listSetupSources", "startProfileBuild", "getProfileBuild", "getProfileDraft", "saveProfileDraft", "discardProfileDraft",
   "listRoutines", "saveRoutine", "setRoutineEnabled", "deleteRoutine", "runRoutine", "findRoutineProposals", "acceptProposal", "dismissProposal",

@@ -35,18 +35,19 @@ base::span<const uint8_t> MagicBytes() {
   return base::as_byte_span(kMagic);
 }
 
-// "Perch Agent (before restore 2026-11-08 18-40-12)", or with a number when
-// that exists too, so one restore never removes what an earlier one kept.
-base::FilePath KeptFolder(const base::FilePath& profile_dir) {
+// "Perch Agent (<why> 2026-11-08 18-40-12)", or with a number when that
+// exists too, so one restore never removes what an earlier one kept.
+base::FilePath KeptFolder(const base::FilePath& profile_dir,
+                          const std::string& why = "before restore") {
   base::Time::Exploded now;
   base::Time::Now().LocalExplode(&now);
   const std::string stamp =
       base::StringPrintf("%04d-%02d-%02d %02d-%02d-%02d", now.year, now.month,
                          now.day_of_month, now.hour, now.minute, now.second);
   base::FilePath kept =
-      profile_dir.Append("Perch Agent (before restore " + stamp + ")");
+      profile_dir.Append("Perch Agent (" + why + " " + stamp + ")");
   for (int i = 2; base::PathExists(kept); ++i) {
-    kept = profile_dir.Append("Perch Agent (before restore " + stamp + " " +
+    kept = profile_dir.Append("Perch Agent (" + why + " " + stamp + " " +
                               base::NumberToString(i) + ")");
   }
   return kept;
@@ -155,6 +156,14 @@ bool SwapInRestored(const base::FilePath& profile_dir,
   }
   base::DeletePathRecursively(staging);
   return ok;
+}
+
+bool SetAgentDataAside(const base::FilePath& profile_dir) {
+  const base::FilePath agent = AgentDir(profile_dir);
+  if (!base::DirectoryExists(agent)) {
+    return true;
+  }
+  return base::Move(agent, KeptFolder(profile_dir, "set aside"));
 }
 
 std::optional<bool> CheckRootKey(const base::FilePath& profile_dir,

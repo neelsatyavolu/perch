@@ -372,6 +372,16 @@ void KeyBroker::OnWindowOpened(BrowserWindowInterface* browser) {
   }
 }
 
+void KeyBroker::StartFresh(const base::FilePath& profile_dir) {
+  needs_restore_.erase(profile_dir);
+  restore_page_waiting_.erase(profile_dir);
+  keys_.erase(profile_dir);
+  if (std::find(pending_.begin(), pending_.end(), profile_dir) ==
+      pending_.end()) {
+    Fetch(profile_dir);
+  }
+}
+
 bool KeyBroker::IsProtected(const base::FilePath& profile_dir) const {
   auto it = keys_.find(profile_dir);
   return it != keys_.end() && it->second.is_protected;

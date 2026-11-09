@@ -531,6 +531,9 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
       if (options.exportBackup === "failed") throw coded("Perch couldn't write the backup.", "failed");
       return { saved: true, name: `Perch backup ${new Date().toISOString().slice(0, 10)}.perchbackup` };
     },
+    async startFresh() {
+      state.security = { ...state.security, needsRestore: false };
+    },
     async restoreFromRecoveryKey({ recoveryKey, fromBackup, replaceData }) {
       if (!state.security.available) throw coded("This build of Perch has no key helper.", "unavailable");
       // As the browser: any case, spaces and dashes are fine; a key that doesn't decode or match is "wrong-key".

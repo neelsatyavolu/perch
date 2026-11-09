@@ -206,4 +206,35 @@ void RunExport(base::FilePath profile_dir,
       std::move(done)));
 }
 
+void RunStartFresh(
+    base::FilePath profile_dir,
+    base::OnceCallback<void(std::optional<std::string>)> done) {
+  if (g_busy) {
+    std::move(done).Run("busy");
+    return;
+  }
+  g_busy = true;
+  PerchdLauncher::Get().Pause(base::BindOnce(
+      [](base::FilePath profile_dir,
+         base::OnceCallback<void(std::optional<std::string>)> done) {
+        FileRunner()->PostTaskAndReplyWithResult(
+            FROM_HERE, base::BindOnce(&SetAgentDataAside, profile_dir),
+            base::BindOnce(
+                [](base::FilePath profile_dir,
+                   base::OnceCallback<void(std::optional<std::string>)> done,
+                   bool ok) {
+                  g_busy = false;
+                  // With the old data aside, the broker makes a new key.
+                  if (ok) {
+                    KeyBroker::Get().StartFresh(profile_dir);
+                  }
+                  PerchdLauncher::Get().Resume();
+                  std::move(done).Run(
+                      ok ? std::nullopt : std::optional<std::string>("failed"));
+                },
+                profile_dir, std::move(done)));
+      },
+      std::move(profile_dir), std::move(done)));
+}
+
 }  // namespace perch

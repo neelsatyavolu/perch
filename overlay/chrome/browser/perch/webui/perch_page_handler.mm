@@ -618,7 +618,8 @@ void PerchPageHandler::Dispatch(const std::string& method,
     }
     Resolve(std::move(id), base::Value(About()));
   } else if ((method == "revealRecoveryKey" || method == "exportBackup" ||
-              method == "restoreFromRecoveryKey") &&
+              method == "restoreFromRecoveryKey" ||
+              method == "startFresh") &&
              !IsKeyPage()) {
     Reject(std::move(id), "unavailable", "Only Perch's settings can do that");
   } else if (method == "revealRecoveryKey") {
@@ -633,6 +634,22 @@ void PerchPageHandler::Dispatch(const std::string& method,
                     .Set("needsRestore", KeyBroker::Get().NeedsRestore(dir))));
   } else if (method == "exportBackup") {
     ExportBackup(std::move(id));
+  } else if (method == "startFresh") {
+    RunStartFresh(
+        profile()->GetPath(),
+        base::BindOnce(
+            [](base::WeakPtr<PerchPageHandler> self, base::Value id,
+               std::optional<std::string> error) {
+              if (!self) {
+                return;
+              }
+              if (error) {
+                self->Reject(std::move(id), *error, RestoreMessage(*error));
+                return;
+              }
+              self->Resolve(std::move(id), base::Value(base::DictValue()));
+            },
+            weak_factory_.GetWeakPtr(), std::move(id)));
   } else if (method == "restoreFromRecoveryKey") {
     RestoreFromRecoveryKey(std::move(id), arg0);
   } else if (method == "listTabMemory") {

@@ -1,7 +1,7 @@
 import { useRef, useState } from "preact/hooks";
 import type { OnboardingStep, Provider } from "../../api";
 import { ACCENTS, ACCENT_NAMES, THEMES, THEME_NAMES } from "../../theme/tokens";
-import { useAction, useApi, useAppearance, useLoad } from "../../ui/frame";
+import { errorText, useAction, useApi, useAppearance, useLoad } from "../../ui/frame";
 import { PerchMark } from "../../ui/PerchMark";
 import { ImportWizard } from "../import/ImportWizard";
 import { RestoreForm } from "../settings/Backup";
@@ -60,15 +60,42 @@ const COPY: Readonly<Record<OnboardingStep, { title: string; lead: string }>> = 
 
 /** perch://welcome#restore: this Mac has Perch data but not its key (spec 11.1). */
 function Restore({ onDone }: { readonly onDone: () => void }) {
+  const api = useApi();
   const [restored, setRestored] = useState(false);
+  const [confirmFresh, setConfirmFresh] = useState(false);
+  const [freshError, setFreshError] = useState<string | null>(null);
+
+  const startFresh = async () => {
+    setFreshError(null);
+    try {
+      await api.startFresh();
+      onDone();
+    } catch (e) {
+      setFreshError(errorText(e));
+    }
+  };
+
   return (
     <main class="wl">
       <h1 class="serif-title" tabIndex={-1}>Restore your Perch data</h1>
       <p class="wl-lead">This Mac has your Perch data but not its key. Enter your recovery key to unlock it.</p>
       <div class="wl-body"><RestoreForm onRestored={() => setRestored(true)} /></div>
-      {restored && (
+      {restored ? (
         <div class="wl-actions">
           <button type="button" class="btn primary" onClick={onDone}>Continue</button>
+        </div>
+      ) : confirmFresh ? (
+        <div class="wl-body restore-confirm" role="alert">
+          <p>Perch moves the old data aside, untouched, and starts with an empty memory and no chats. Your recovery key still opens the old data if you find it later.</p>
+          <div>
+            <button type="button" class="btn" onClick={() => setConfirmFresh(false)}>Cancel</button>
+            <button type="button" class="btn primary" onClick={startFresh}>Start fresh</button>
+          </div>
+          {freshError && <p class="field-error">{freshError}</p>}
+        </div>
+      ) : (
+        <div class="wl-actions">
+          <button type="button" class="btn ghost" onClick={() => setConfirmFresh(true)}>I don't have my recovery key</button>
         </div>
       )}
     </main>

@@ -50,6 +50,10 @@ base::expected<base::FilePath, BackupError> UnpackBackup(
 bool SwapInRestored(const base::FilePath& profile_dir,
                     const base::FilePath& staging);
 
+// Moves the profile's `Perch Agent` to "Perch Agent (set aside <time>)".
+// True when there was nothing to move.
+bool SetAgentDataAside(const base::FilePath& profile_dir);
+
 // Whether `root_key` is the key the profile's data was made with, from
 // `Perch Agent/root.check`: nullopt when there is no check file, false when it
 // doesn't match or can't be read.

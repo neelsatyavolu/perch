@@ -69,6 +69,9 @@ class KeyBroker : public ProfileManagerObserver {
   // Assistant doesn't carry Secure Enclave keys): restore from the recovery
   // key. Perch opens perch://welcome#restore when it finds this.
   bool NeedsRestore(const base::FilePath& profile_dir) const;
+  // The profile's old data was set aside (keys/restore_flow.h): forget that
+  // it needed a restore and fetch, which makes a new key.
+  void StartFresh(const base::FilePath& profile_dir);
   // A browser window opened: shows the restore page there if a profile was
   // waiting for a window to show it in.
   void OnWindowOpened(BrowserWindowInterface* browser);

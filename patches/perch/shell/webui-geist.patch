@@ -1,0 +1,64 @@
+# Perch: Geist as the WebUI font on Mac.
+diff --git a/ui/base/webui/web_ui_util.cc b/ui/base/webui/web_ui_util.cc
+index 46ca6525b0..14e957c2fb 100644
+--- a/ui/base/webui/web_ui_util.cc
++++ b/ui/base/webui/web_ui_util.cc
+@@ -44,7 +44,10 @@ namespace {
+ constexpr float kMaxScaleFactor = 1000.0f;
+ 
+ std::string GetFontFamilyMd() {
+-#if BUILDFLAG(IS_LINUX)
++#if BUILDFLAG(IS_MAC)
++  // Perch: Geist, loaded by //resources/css/geist.css.
++  return "Geist, " + GetFontFamily();
++#elif BUILDFLAG(IS_LINUX)
+   return "Roboto, " + GetFontFamily();
+ #else
+   return GetFontFamily();
+diff --git a/ui/webui/resources/BUILD.gn b/ui/webui/resources/BUILD.gn
+index ebebce61a3..8b32d55513 100644
+--- a/ui/webui/resources/BUILD.gn
++++ b/ui/webui/resources/BUILD.gn
+@@ -31,6 +31,13 @@ generate_grd("build_grd") {
+       "roboto/roboto-regular.woff2",
+     ]
+   }
++  if (is_mac) {
++    # Perch: Geist for WebUI on Mac.
++    input_files += [
++      "geist/geist-medium.woff2",
++      "geist/geist-regular.woff2",
++    ]
++  }
+ 
+   public_deps = [
+     "cr_components/commerce:build_grdp",
+diff --git a/ui/webui/resources/css/BUILD.gn b/ui/webui/resources/css/BUILD.gn
+index 91cc473cde..045d4917e4 100644
+--- a/ui/webui/resources/css/BUILD.gn
++++ b/ui/webui/resources/css/BUILD.gn
+@@ -35,6 +35,10 @@ preprocess_if_expr("preprocess") {
+   if (is_linux) {
+     in_files += [ "roboto.css" ]
+   }
++  if (is_mac) {
++    # Perch: Geist for WebUI on Mac.
++    in_files += [ "geist.css" ]
++  }
+ 
+   if (include_polymer || is_desktop_android) {
+     in_files += [ "md_colors.css" ]
+diff --git a/ui/webui/resources/css/text_defaults_md.css b/ui/webui/resources/css/text_defaults_md.css
+index 0228e24c83..84df710099 100644
+--- a/ui/webui/resources/css/text_defaults_md.css
++++ b/ui/webui/resources/css/text_defaults_md.css
+@@ -18,6 +18,9 @@
+ <if expr="is_linux">
+ @import url(//resources/css/roboto.css);
+ </if>
++<if expr="is_macosx">
++@import url(//resources/css/geist.css);
++</if>
+ <if expr="is_android">
+ @font-face {
+   font-family: 'Google Sans Text';

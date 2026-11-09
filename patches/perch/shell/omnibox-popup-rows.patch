@@ -1,0 +1,60 @@
+# Perch: 13px suggestion rows inset 8px with 8px radius; hairline on the selected row, no blue bar.
+diff --git a/chrome/browser/resources/omnibox_popup/app.css b/chrome/browser/resources/omnibox_popup/app.css
+index 48ae23bb48..f67085268d 100644
+--- a/chrome/browser/resources/omnibox_popup/app.css
++++ b/chrome/browser/resources/omnibox_popup/app.css
+@@ -25,7 +25,7 @@
+ }
+ 
+ :host([has-visible-matches_]) .dropdownContainer {
+-  padding-bottom: 10px;
++  padding-bottom: 8px;
+ }
+ 
+ /**
+diff --git a/chrome/browser/resources/omnibox_popup/omnibox_popup_shared_style.css b/chrome/browser/resources/omnibox_popup/omnibox_popup_shared_style.css
+index 0d455f6f6c..d4e18154c2 100644
+--- a/chrome/browser/resources/omnibox_popup/omnibox_popup_shared_style.css
++++ b/chrome/browser/resources/omnibox_popup/omnibox_popup_shared_style.css
+@@ -60,7 +60,8 @@
+   /* Closely resembles the views Omnibox input font size.
+    * TODO(crbug.com/450640041): Investigate webUI blink & views rendering
+    * difference. */
+-  --omnibox-font-size: 14.3px;
++  /* Perch: 13px, the browser's own text size (DESIGN.md). */
++  --omnibox-font-size: 13px;
+   --omnibox-context-menu-container-margin-top: 2px;
+ 
+   /* Popup drop shadow, matching views::BubbleBorder at
+@@ -100,11 +101,14 @@
+ }
+ 
+ cr-searchbox-dropdown {
++  /* Perch: 32px rows, medium weight, and an icon column that lines up with
++     the address bar's own icon. */
+   --cr-searchbox-dropdown-header-padding-inline-start: 16px;
+-  --cr-searchbox-icon-container-size: 28px;
+-  --cr-searchbox-match-font-weight: 700;
+-  --cr-searchbox-match-padding: 6px;
+-  --cr-searchbox-match-padding-inline-start: 16px;
++  --cr-searchbox-icon-container-size: 24px;
++  --cr-searchbox-icon-border-radius: 6px;
++  --cr-searchbox-match-font-weight: 500;
++  --cr-searchbox-match-padding: 4px;
++  --cr-searchbox-match-padding-inline-start: 8px;
+   --cr-searchbox-match-text-padding-inline-end: 8px;
+   --cr-searchbox-results-action-chip-height: 26px;
+   --cr-searchbox-results-search-icon-size: 16px;
+diff --git a/ui/webui/resources/cr_components/searchbox/searchbox_match.css b/ui/webui/resources/cr_components/searchbox/searchbox_match.css
+index cc20bacc7c..4119d259e6 100644
+--- a/ui/webui/resources/cr_components/searchbox/searchbox_match.css
++++ b/ui/webui/resources/cr_components/searchbox/searchbox_match.css
+@@ -89,6 +89,8 @@
+ :host(:is(:focus-visible, [selected]))  .container:not(.actions) {
+   background-color: var(--color-searchbox-results-background-selected,
+       var(--color-searchbox-results-background-hovered));
++  /* Perch: a hairline ring on the selected row. */
++  box-shadow: inset 0 0 0 1px var(--color-omnibox-results-button-border);
+ }
+ 
+ :host([enable-csb-motion-tweaks_][is-lens-searchbox_]) .container {

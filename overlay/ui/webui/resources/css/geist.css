@@ -1,0 +1,19 @@
+/* Copyright 2026 The Perch Authors
+ * Use of this source code is governed by the MIT license in Perch's LICENSE
+ * file. */
+
+/* Perch: Geist (SIL OFL) for Chromium's own pages on Mac, the way Linux
+   ships Roboto. The browser registers Geist for its own views only, so pages
+   load it here. */
+@font-face {
+  font-family: 'Geist';
+  font-style: normal;
+  font-weight: 400;
+  src: url(//resources/geist/geist-regular.woff2) format('woff2');
+}
+@font-face {
+  font-family: 'Geist';
+  font-style: normal;
+  font-weight: 500 700;
+  src: url(//resources/geist/geist-medium.woff2) format('woff2');
+}

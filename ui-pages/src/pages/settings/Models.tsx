@@ -5,12 +5,9 @@ import { useAction, useApi, useLoad } from "../../ui/frame";
 import { useManaged } from "../../ui/useManaged";
 import { Icon, Plus } from "../../ui/icons";
 import { Group, Row } from "../../ui/Row";
+import { ProviderMark } from "../../ui/ProviderMark";
 import { Switch } from "../../ui/Switch";
 import { ConnectDialog } from "./ConnectDialog";
-
-const TILE: Readonly<Record<Provider["id"], string>> = {
-  "claude-code": "C", chatgpt: "O", grok: "X", anthropic: "A", openai: "O", xai: "X", gemini: "G", openrouter: "R", local: "L",
-};
 
 function ProviderStatus({ p }: { readonly p: Provider }) {
   if (p.state === "connected") return <span class="status ok"><span class="dotc" />Connected{p.account ? ` · ${p.account}` : ""}</span>;
@@ -56,7 +53,7 @@ function Providers({ onModelsChanged }: { readonly onModelsChanged: () => void }
       <div class="card">
         {providers.error && <p class="empty">{providers.error}</p>}
         {visible.map((p) => (
-          <Row key={p.id} title={p.name} detail={p.detail} icon={<span class="tile" aria-hidden="true">{TILE[p.id]}</span>}>
+          <Row key={p.id} title={p.name} detail={p.detail} icon={<ProviderMark id={p.id} />}>
             <ProviderStatus p={p} />
             {action(p)}
           </Row>

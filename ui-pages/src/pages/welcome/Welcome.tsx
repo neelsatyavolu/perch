@@ -3,6 +3,7 @@ import type { OnboardingStep, Provider } from "../../api";
 import { ACCENTS, ACCENT_NAMES, THEMES, THEME_NAMES } from "../../theme/tokens";
 import { errorText, useAction, useApi, useAppearance, useLoad } from "../../ui/frame";
 import { PerchMark } from "../../ui/PerchMark";
+import { ProviderMark } from "../../ui/ProviderMark";
 import { ImportWizard } from "../import/ImportWizard";
 import { RestoreForm } from "../settings/Backup";
 import { Swatches } from "../../ui/Swatches";
@@ -35,7 +36,8 @@ function Models() {
   return (
     <div class="card">
       {list.map((p) => (
-        <div class="srow noicon" key={p.id} id={`prov-${p.id}`}>
+        <div class="srow" key={p.id} id={`prov-${p.id}`}>
+          <ProviderMark id={p.id} />
           <div><div class="n">{p.name}</div><div class="d">{p.detail}</div></div>
           <div class="ctl">
             {p.state === "connected" ? (

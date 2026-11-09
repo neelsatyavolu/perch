@@ -1,0 +1,72 @@
+# Perch: Paper and Ink palette and 8px buttons on error and interstitial pages.
+diff --git a/components/neterror/resources/neterror.css b/components/neterror/resources/neterror.css
+index dbdbeac156..e8d838692c 100644
+--- a/components/neterror/resources/neterror.css
++++ b/components/neterror/resources/neterror.css
+@@ -63,7 +63,7 @@ a {
+ }
+ 
+ #suggestions-list a {
+-  color: var(--google-blue-600);
++  color: var(--link-color);
+ }
+ 
+ #suggestions-list p {
+diff --git a/components/security_interstitials/core/common/resources/interstitial_common.css b/components/security_interstitials/core/common/resources/interstitial_common.css
+index 416f2d46df..cc25be308c 100644
+--- a/components/security_interstitials/core/common/resources/interstitial_common.css
++++ b/components/security_interstitials/core/common/resources/interstitial_common.css
+@@ -4,7 +4,8 @@
+ 
+ button {
+   border: 0;
+-  border-radius: 20px;
++  /* Perch: 8px buttons (DESIGN.md). */
++  border-radius: 8px;
+   box-sizing: border-box;
+   color: var(--primary-button-text-color);
+   cursor: pointer;
+diff --git a/components/security_interstitials/core/common/resources/interstitial_core.css b/components/security_interstitials/core/common/resources/interstitial_core.css
+index 29af336800..ed978eecf8 100644
+--- a/components/security_interstitials/core/common/resources/interstitial_core.css
++++ b/components/security_interstitials/core/common/resources/interstitial_core.css
+@@ -81,3 +81,39 @@ html {
+     --text-color: var(--google-gray-500);
+   }
+ }
++
++/* Perch: Paper and Ink (DESIGN.md). These pages can't read the browser's
++   theme, so they use the two default palettes. */
++body {
++  --background-color: #FFFFFF;
++  --error-code-color: #5F6366;
++  --heading-color: #0A0A0C;
++  --link-color: #2B68D6;
++  --primary-button-fill-color: #0A0A0C;
++  --primary-button-fill-color-active: #2B2C31;
++  --primary-button-text-color: #FFFFFF;
++  --secondary-button-border-color: rgba(0, 0, 0, 0.12);
++  --secondary-button-hover-border-color: rgba(0, 0, 0, 0.24);
++  --secondary-button-text-color: #0A0A0C;
++  --small-link-color: #2B68D6;
++  --text-color: #5F6366;
++}
++
++@media (prefers-color-scheme: dark) {
++  body {
++    --background-color: #0E0E10;
++    --error-code-color: #A1A4A5;
++    --heading-color: #FCFDFF;
++    --link-color: #4C8DFF;
++    --primary-button-fill-color: #FCFDFF;
++    --primary-button-fill-color-active: #DCDDDF;
++    --primary-button-text-color: #000000;
++    --quiet-background-color: #0E0E10;
++    --secondary-button-border-color: rgba(255, 255, 255, 0.14);
++    --secondary-button-fill-color: #0E0E10;
++    --secondary-button-hover-fill-color: #1A1A1E;
++    --secondary-button-text-color: #FCFDFF;
++    --small-link-color: #4C8DFF;
++    --text-color: #A1A4A5;
++  }
++}

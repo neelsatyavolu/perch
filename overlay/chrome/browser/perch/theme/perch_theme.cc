@@ -309,6 +309,8 @@ void AddPerchMixer(ui::ColorProvider* provider,
   m[ui::kColorRadioButtonForegroundChecked] = {t->ink};
   m[kColorNavMenuItemSelected] = {t->ink};
   m[kColorNavMenuItemBackgroundSelected] = {t->raised};
+  m[kColorNavMenuItem] = {body};
+  m[kColorNavMenuItemBackgroundHover] = {Over(t->hair, t->canvas)};
   m[kColorDownloadToolbarButtonActive] = {t->ink};
   m[kColorDownloadToolbarButtonRingBackground] = {strong_on_card};
   m[kColorDownloadBubblePrimaryIcon] = {body};

@@ -1,0 +1,54 @@
+# Perch: no You and Google or AI sections in Settings (opens on Autofill); no synced tabs or Google account footer in History.
+diff --git a/chrome/browser/resources/history/side_bar.html.ts b/chrome/browser/resources/history/side_bar.html.ts
+index f2384bffe5..fa70d5e3ed 100644
+--- a/chrome/browser/resources/history/side_bar.html.ts
++++ b/chrome/browser/resources/history/side_bar.html.ts
+@@ -20,7 +20,9 @@ export function getHtml(this: HistorySideBarElement) {
+     $i18n{historyMenuItem}
+     <cr-ripple></cr-ripple>
+   </a>
+-  <a id="syncedTabs" role="menuitem" href="/syncedTabs"
++  <!-- Perch: tabs from other devices come from Google sync, which Perch
++       doesn't use. -->
++  <a id="syncedTabs" role="menuitem" href="/syncedTabs" hidden
+       class="page-item cr-nav-menu-item" path="syncedTabs"
+       @click="${this.onItemClick_}">
+     <cr-icon icon="cr:devices"></cr-icon>
+@@ -42,7 +44,7 @@ export function getHtml(this: HistorySideBarElement) {
+ <div id="footer" ?hidden="${!this.showFooter_}">
+   <div class="separator"></div>
+   <managed-footnote></managed-footnote>
+-  <div id="google-account-footer" ?hidden="${!this.showGoogleAccountFooter_}"
++  <div id="google-account-footer" hidden
+       @click="${this.onGoogleAccountFooterClick_}">
+     <cr-icon icon="cr:info"></cr-icon>
+     <div ?hidden="${!this.showGMAOnly_}">$i18nRaw{sidebarFooterGMAOnly}</div>
+diff --git a/chrome/browser/resources/settings/page_visibility.ts b/chrome/browser/resources/settings/page_visibility.ts
+index feff9bdf64..e30fa5d1cb 100644
+--- a/chrome/browser/resources/settings/page_visibility.ts
++++ b/chrome/browser/resources/settings/page_visibility.ts
+@@ -44,7 +44,9 @@ export interface PrivacyPageVisibility {
+ 
+ function createPageVisibility(): PageVisibility|undefined {
+   if (!loadTimeData.getBoolean('isGuest')) {
+-    return undefined;
++    // Perch: no "You and Google" (Google sign-in and sync) or "AI in Chrome"
++    // (Gemini) sections; Perch's own settings cover its accounts and agent.
++    return {people: false, ai: false};
+   }
+ 
+   // <if expr="not is_chromeos">
+diff --git a/chrome/browser/resources/settings/route.ts b/chrome/browser/resources/settings/route.ts
+index 257eee5f0e..8586d096dd 100644
+--- a/chrome/browser/resources/settings/route.ts
++++ b/chrome/browser/resources/settings/route.ts
+@@ -341,7 +341,8 @@ export let routes: SettingsRoutes = Router.getInstance().getRoutes();
+ // Returns the "effective" route when at chrome://settings/.
+ export function getTopLevelRoute(): Route {
+   if (!loadTimeData.getBoolean('isGuest')) {
+-    return routes.PEOPLE;
++    // Perch hides "You and Google", so open on the first section shown.
++    return routes.PEOPLE || routes.AUTOFILL;
+   }
+ 
+   let guestTopLevelRoute = routes.SEARCH;

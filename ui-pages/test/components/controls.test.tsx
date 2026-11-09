@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { cleanup, fireEvent, render, within } from "@testing-library/preact";
 import { useState } from "preact/hooks";
+import type { ProviderId } from "../../src/api";
 import { Dialog } from "../../src/ui/Dialog";
+import { ProviderMark } from "../../src/ui/ProviderMark";
 import { Segmented } from "../../src/ui/Segmented";
 import { Switch } from "../../src/ui/Switch";
 import { TabList } from "../../src/ui/TabList";
@@ -113,5 +115,18 @@ describe("Dialog", () => {
     within(getByRole("dialog", { name: "Rename" })).getByRole("textbox").focus();
     fireEvent.click(getByRole("button", { name: "Close" }));
     expect(document.activeElement).toBe(opener);
+  });
+});
+
+describe("ProviderMark", () => {
+  test("draws a mark for every provider, never a letter", () => {
+    const ids: readonly ProviderId[] = ["claude-code", "chatgpt", "grok", "anthropic", "openai", "xai", "gemini", "openrouter", "local"];
+    for (const id of ids) {
+      const { container } = render(<ProviderMark id={id} />);
+      const tile = container.querySelector(".tile")!;
+      expect(tile.querySelector("svg")).not.toBeNull();
+      expect(tile.textContent).toBe("");
+      cleanup();
+    }
   });
 });

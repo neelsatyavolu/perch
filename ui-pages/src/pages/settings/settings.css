@@ -32,8 +32,8 @@
 .mode-opt .n { color: var(--ink); }
 .mode-opt .d { color: var(--mute); font-size: 12px; }
 .mode-opt .radio { width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--hair-strong); margin-top: 1px; display: grid; place-items: center; }
-.mode-opt[aria-checked="true"] .radio { border-color: var(--accent); }
-.mode-opt[aria-checked="true"] .radio::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.mode-opt[aria-checked="true"] .radio { border-color: var(--ink); }
+.mode-opt[aria-checked="true"] .radio::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ink); }
 .mode-opt:disabled { cursor: default; }
 .mode-opt:disabled .n, .mode-opt:disabled .d { color: var(--mute); }
 

@@ -82,3 +82,8 @@ perch/shell/menu-config-mac.patch
 perch/shell/starter-pack.patch
 perch/shell/typography-sizes.patch
 perch/shell/side-panel-flush.patch
+perch/shell/omnibox-popup-rows.patch
+perch/shell/webui-shapes.patch
+perch/shell/error-pages.patch
+perch/shell/settings-history-trim.patch
+perch/shell/webui-geist.patch

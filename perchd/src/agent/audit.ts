@@ -41,6 +41,10 @@ export type AuditLogOptions = {
 
 const MAX_READ = 500;
 const SEALED = "enc1:";
+/** Retention: the newest 20,000 entries are kept (the company mirror, if any, keeps everything). */
+export const MAX_ENTRIES = 20_000;
+/** The log is cut back to MAX_ENTRIES once it grows this far past it, not on every append. */
+const TRIM_SLACK = 2_000;
 
 /** One line, plain or sealed; null for a line that is not an entry or does not open. */
 async function parse(line: string, sealer?: AuditSealer): Promise<AuditEntry | null> {
@@ -62,6 +66,10 @@ async function parseAll(lines: readonly string[], sealer?: AuditSealer): Promise
 
 export class AuditLog implements AuditWriter {
   private ready: Promise<void> | null = null;
+  /** Lines already opened, so a read decrypts only what was added since the last one. */
+  private parsed: ReadonlyMap<string, AuditEntry | null> = new Map();
+  /** Lines in the file as last seen, plus this process's appends since. */
+  private lines = 0;
 
   constructor(readonly path: string, private readonly opts: AuditLogOptions = {}) {}
 
@@ -70,13 +78,19 @@ export class AuditLog implements AuditWriter {
     await appendFile(this.path, `${await sealLine(JSON.stringify(entry), this.opts.sealer)}\n`, { mode: 0o600 });
     await chmod(this.path, 0o600);
     this.opts.mirror?.write(entry);
+    if (++this.lines > MAX_ENTRIES + TRIM_SLACK) this.lines = await trimLog(this.path);
   }
 
   /** Every entry, oldest first. */
   async entries(): Promise<AuditEntry[]> {
     await this.open();
     const text = await readFile(this.path, "utf8").catch(() => "");
-    const entries = (await parseAll(text.split("\n").filter(Boolean), this.opts.sealer)).map((x) => x.entry);
+    const lines = text.split("\n").filter(Boolean);
+    const known = this.parsed;
+    const parsed = await Promise.all(lines.map(async (line) => [line, known.has(line) ? known.get(line)! : await parse(line, this.opts.sealer)] as const));
+    this.parsed = new Map(parsed);
+    this.lines = lines.length;
+    const entries = parsed.map(([, e]) => e).filter((e): e is AuditEntry => e !== null);
     // A writer in another process (an outside agent's own log) can append out of order.
     return entries.every((e, i) => i === 0 || entries[i - 1]!.time <= e.time) ? entries : [...entries].sort(byTime);
   }
@@ -99,6 +113,7 @@ export class AuditLog implements AuditWriter {
     this.ready ??= (async () => {
       await mkdir(dirname(this.path), { recursive: true, mode: 0o700 });
       await mergeLegacy(this.path, this.opts.legacy ?? [], this.opts.sealer);
+      this.lines = await trimLog(this.path);
     })();
     return this.ready;
   }
@@ -126,6 +141,17 @@ export async function mergeLegacy(path: string, legacy: readonly string[], seale
   await rename(tmp, path);
   await Promise.all(others.map((f, i) => (texts[i] === null ? undefined : rm(f, { force: true }))));
   return entries.length;
+}
+
+/** Keeps the newest MAX_ENTRIES lines when the file has more; returns how many lines it holds. */
+async function trimLog(path: string): Promise<number> {
+  const lines = (await readFile(path, "utf8").catch(() => "")).split("\n").filter(Boolean);
+  if (lines.length <= MAX_ENTRIES) return lines.length;
+  const kept = lines.slice(lines.length - MAX_ENTRIES);
+  const tmp = `${path}.trim-${process.pid}`;
+  await writeFile(tmp, kept.map((line) => `${line}\n`).join(""), { mode: 0o600 });
+  await rename(tmp, path);
+  return kept.length;
 }
 
 const CSV_COLUMNS = ["time", "client", "tab", "site", "url", "action", "detail", "approved", "result"] as const;

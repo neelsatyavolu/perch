@@ -6,26 +6,33 @@ const MAX_ATTEMPTS = 4;
 const RETRY_MS = 800;
 /** Reasoning models can think silently for minutes before the first event. */
 export const IDLE_MS = 300_000;
+/** How long to wait for a response to start (its headers). The body that follows has no limit but IDLE_MS. */
+export const HEADERS_MS = 120_000;
 
 export type Attempt = { url: string; init: RequestInit };
 
 /** Retries 429, 5xx and network failures; `adjust` may return a changed attempt for a 400. */
 export async function openStream(
   build: () => Attempt,
-  opts: { fetch: typeof fetch; signal: AbortSignal; describe: (status: number, text: string) => string; adjust?: (text: string) => boolean },
+  opts: { fetch: typeof fetch; signal: AbortSignal; describe: (status: number, text: string) => string; adjust?: (text: string) => boolean; headersMs?: number },
 ): Promise<ReadableStream<Uint8Array>> {
   let failure = new ModelError("The model request failed.");
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     if (opts.signal.aborted) throw new ModelError("Cancelled.");
     const { url, init } = build();
     let res: Response;
+    // Stops a request that never starts; cleared once headers arrive, so a long stream is not cut.
+    const waiting = new AbortController();
+    const timer = setTimeout(() => waiting.abort(), opts.headersMs ?? HEADERS_MS);
     try {
-      res = await opts.fetch(url, { ...init, signal: opts.signal });
+      res = await opts.fetch(url, { ...init, signal: AbortSignal.any([opts.signal, waiting.signal]) });
     } catch {
       if (opts.signal.aborted) throw new ModelError("Cancelled.");
-      failure = new ModelError("Could not reach the model. Check your connection.");
+      failure = new ModelError(waiting.signal.aborted ? "The model did not respond. Check your connection." : "Could not reach the model. Check your connection.");
       await Bun.sleep(RETRY_MS * (attempt + 1));
       continue;
+    } finally {
+      clearTimeout(timer);
     }
     if (res.ok && res.body) return res.body;
     const text = await res.text().catch(() => "");

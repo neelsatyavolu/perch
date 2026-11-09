@@ -316,3 +316,36 @@ test("a routine still running when its next time comes is skipped and the skip i
   release();
   await running;
 });
+
+test("a long scheduled run does not stop a routine that comes due meanwhile from starting on time", async () => {
+  const { store } = await openStore();
+  const second = "fedcba9876543210fedcba9876543210";
+  clock = new Date("2026-11-05T08:00:00Z");
+  await store.save(routine({ nextRunAt: "2026-11-05T08:00:00.000Z" }));
+  await store.save(routine({ id: second, name: "Second", missed: "skip", nextRunAt: "2026-11-05T08:00:00.500Z" }));
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  const triggers: string[] = [];
+  const s = new Scheduler({
+    store,
+    now: () => clock,
+    run: async (r, trigger) => {
+      triggers.push(`${r.name}:${trigger}`);
+      if (r.id === routine().id) await gate;
+      return { id: "e".repeat(32), routineId: r.id, trigger, scheduledFor: null, startedAt: "", finishedAt: "", status: "ok", answer: "", declined: [], chatId: null };
+    },
+  });
+  s.start();
+  await new Promise((r) => setTimeout(r, 50));
+  expect(s.busy()).toEqual([routine().id]);
+  clock = new Date("2026-11-05T08:01:00Z");
+  await new Promise((r) => setTimeout(r, 1200));
+  expect(s.busy()).toEqual([routine().id, second]);
+  // The first run goes on well past the second's grace period; the second still runs, not "missed".
+  clock = new Date("2026-11-05T08:30:00Z");
+  release();
+  await new Promise((r) => setTimeout(r, 50));
+  s.stop();
+  expect(triggers).toEqual(["Teacher mail:schedule", "Second:schedule"]);
+  expect(store.runs(second).filter((r) => r.status === "skipped")).toEqual([]);
+});

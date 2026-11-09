@@ -72,6 +72,10 @@ class KeyBroker : public ProfileManagerObserver {
   // The profile's old data was set aside (keys/restore_flow.h): forget that
   // it needed a restore and fetch, which makes a new key.
   void StartFresh(const base::FilePath& profile_dir);
+  // After a restore that stored a key but couldn't put its files in place
+  // and has no old key to go back to: perchd gets no key for the profile,
+  // and the restore page is offered again.
+  void MarkNeedsRestore(const base::FilePath& profile_dir);
   // A browser window opened: shows the restore page there if a profile was
   // waiting for a window to show it in.
   void OnWindowOpened(BrowserWindowInterface* browser);

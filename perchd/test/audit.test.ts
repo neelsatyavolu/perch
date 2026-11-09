@@ -1,7 +1,7 @@
 import { afterAll, expect, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { AuditLog, csvCell, toCsv, type AuditEntry } from "../src/agent/audit";
+import { AuditLog, csvCell, MAX_ENTRIES, toCsv, type AuditEntry, type AuditSealer } from "../src/agent/audit";
 import { AuditMirror, expandAuditPath, PolicyAuditMirror } from "../src/agent/audit-mirror";
 import { prepareCall, finishCall } from "../src/agent/session";
 import type { ToolContext } from "../src/agent/tools";
@@ -38,6 +38,32 @@ test("read pages by before, newest first", async () => {
   const next = await log.read({ limit: 2, before: first[1]!.time });
   expect(next.map((e) => e.time.slice(8, 10))).toEqual(["03", "02"]);
   expect(await log.read({ limit: 0 })).toEqual([]);
+});
+
+test("a read opens only the lines added since the last read", async () => {
+  let opened = 0;
+  const sealer: AuditSealer = { seal: async (t) => Buffer.from(t).toString("base64"), open: async (t) => (opened++, Buffer.from(t, "base64").toString()) };
+  const log = new AuditLog(join(dir(), "audit.jsonl"), { sealer });
+  for (let day = 1; day <= 3; day++) await log.append(entry(`2026-11-0${day}T10:00:00.000Z`));
+  expect(await log.read({ limit: 10 })).toHaveLength(3);
+  expect(opened).toBe(3);
+  await log.append(entry("2026-11-04T10:00:00.000Z"));
+  expect((await log.read({ limit: 10 })).map((e) => e.time.slice(8, 10))).toEqual(["04", "03", "02", "01"]);
+  expect(opened).toBe(4);
+});
+
+test("the log keeps only the newest MAX_ENTRIES entries", async () => {
+  const d = dir();
+  mkdirSync(d, { recursive: true });
+  const path = join(d, "audit.jsonl");
+  const time = (i: number) => new Date(Date.UTC(2026, 0, 1) + i * 1000).toISOString();
+  writeFileSync(path, Array.from({ length: MAX_ENTRIES + 500 }, (_, i) => `${JSON.stringify(entry(time(i)))}\n`).join(""));
+  const log = new AuditLog(path);
+  const all = await log.entries();
+  expect(all).toHaveLength(MAX_ENTRIES);
+  expect(all[0]!.time).toBe(time(500));
+  expect((await log.read({ limit: 1 }))[0]!.time).toBe(time(MAX_ENTRIES + 499));
+  expect(statSync(path).mode & 0o777).toBe(0o600);
 });
 
 test("CSV export guards formulas", async () => {

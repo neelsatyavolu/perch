@@ -59,8 +59,13 @@ export class Scheduler {
     return this.enqueue(routine, "manual", null, run);
   }
 
-  /** Checks every routine once and runs the due ones. */
+  /** Checks every routine once and runs the due ones; resolves when those runs finish. */
   async tick(): Promise<RunRecord[]> {
+    return Promise.all(await this.enqueueDue());
+  }
+
+  /** Checks every routine once and queues the due ones; resolves once they are queued, not run. */
+  private async enqueueDue(): Promise<Promise<RunRecord>[]> {
     if (this.ticking) return [];
     this.ticking = true;
     const started: Promise<RunRecord>[] = [];
@@ -88,7 +93,7 @@ export class Scheduler {
     } finally {
       this.ticking = false;
     }
-    return Promise.all(started);
+    return started;
   }
 
   private async recordSkip(routine: Routine, due: Date, now: Date, note: string): Promise<RunRecord> {
@@ -114,7 +119,9 @@ export class Scheduler {
   start(): void {
     if (this.timer) return;
     const loop = async () => {
-      await this.tick().catch(() => undefined);
+      // Not waiting for the runs: a long run must not stop routines that come due meanwhile from being checked.
+      const started = await this.enqueueDue().catch(() => []);
+      for (const run of started) run.catch(() => undefined);
       if (!this.timer) return;
       this.timer = setTimeout(loop, this.delay());
     };

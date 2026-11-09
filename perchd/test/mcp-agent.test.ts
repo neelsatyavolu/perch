@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, expect, test } from "bun:test";
+import { afterAll, beforeEach, expect, spyOn, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,6 +7,7 @@ import { runTask, type ApprovalRequest, type StepEvent } from "../src/agent/loop
 import type { Mode } from "../src/agent/permissions";
 import type { Browser } from "../src/browser/browser";
 import { mcpExtraTools, toolName, toToolResult } from "../src/mcp-client/agent-tools";
+import { McpClient } from "../src/mcp-client/client";
 import type { LaunchRequest } from "../src/mcp-client/launch";
 import { deleteServer, McpManager } from "../src/mcp-client/manager";
 import { addServer, EMPTY, RegistryStore, updateServer } from "../src/mcp-client/registry";
@@ -176,6 +177,20 @@ test("a server that went away is reconnected on the next call", async () => {
   await m.start();
   await m.disconnect("fixture");
   expect((await m.call("fixture", "echo", { text: "back" })).content[0]).toEqual({ type: "text", text: "back" });
+});
+
+test("a server whose tool list fails is stopped, not left running", async () => {
+  const list = spyOn(McpClient.prototype, "listTools").mockRejectedValue(new Error("tools/list timed out"));
+  const close = spyOn(McpClient.prototype, "close");
+  try {
+    const m = manager();
+    expect(await m.connect("fixture")).toMatchObject({ state: "failed", error: "tools/list timed out" });
+    expect(close).toHaveBeenCalledTimes(1);
+    expect((close.mock.contexts[0] as McpClient).isClosed).toBe(true);
+  } finally {
+    list.mockRestore();
+    close.mockRestore();
+  }
 });
 
 test("results: PNG images are described, not sent; long output is cut", () => {

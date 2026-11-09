@@ -1,0 +1,22 @@
+# Perch: the Perch sidebar's page is cached while the panel is closed, so it reopens without reloading.
+diff --git a/chrome/browser/ui/views/side_panel/side_panel_coordinator.cc b/chrome/browser/ui/views/side_panel/side_panel_coordinator.cc
+index 5ecbb979df..36c04ff91e 100644
+--- a/chrome/browser/ui/views/side_panel/side_panel_coordinator.cc
++++ b/chrome/browser/ui/views/side_panel/side_panel_coordinator.cc
+@@ -449,7 +449,15 @@ void SidePanelCoordinator::OnViewVisibilityChanged(views::View* observed_view,
+   // exists.
+   auto* content_wrapper = side_panel->GetContentParentView();
+   if (!content_wrapper->children().empty()) {
+-    content_wrapper->RemoveChildViewT(content_wrapper->children().front());
++    std::unique_ptr<views::View> removed =
++        content_wrapper->RemoveChildViewT(content_wrapper->children().front());
++    // Perch: keep the Perch sidebar's page alive while the panel is closed,
++    // so reopening it (on a tab switch or by hand) shows it at once instead
++    // of reloading it.
++    if (previous_entry &&
++        previous_entry->key().id() == SidePanelEntryId::kPerch) {
++      previous_entry->CacheView(std::move(removed));
++    }
+   }
+   side_panel->RemoveHeaderView();
+   SidePanelMetrics::RecordSidePanelClosed(opened_timestamp());

@@ -47,6 +47,8 @@ export function perchCommand(execPath = process.execPath, dir = import.meta.dir)
 }
 
 export async function serveInBrowser(io: CliIO): Promise<number> {
+  // A stray rejection (a background timer, say) must not end perchd and with it the sidebar and chats.
+  process.on("unhandledRejection", (error) => io.stderr(`perchd: unhandled rejection: ${String(error)}\n`));
   const channel = readKeyChannel(createReadStream("", { fd: 5 }), { onProblem: (m) => io.stderr(`${m}\n`) });
   const settings = await channel.settings;
   const closed = channel.closed;

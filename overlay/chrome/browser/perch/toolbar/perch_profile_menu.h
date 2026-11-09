@@ -74,8 +74,8 @@ class PerchProfileMenuModel : public ui::SimpleMenuModel,
 // A line icon for a toolbar menu item, in the menu's icon colour.
 ui::ImageModel Icon(const gfx::VectorIcon& icon);
 
-// Runs `model` as a native macOS menu just below `anchor`, keeping the runner
-// in `runner`. Every Perch toolbar menu opens this way.
+// Runs `model` as a frosted Perch menu just below `anchor`, keeping the
+// runner in `runner`. Every Perch toolbar menu opens this way.
 void RunToolbarMenu(ui::MenuModel* model,
                     std::unique_ptr<views::MenuRunner>& runner,
                     views::View* anchor);

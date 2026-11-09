@@ -125,6 +125,7 @@ class Restore {
     }
     // The files stayed as they were, so the key they need goes back too.
     if (!old_key_) {
+      KeyBroker::Get().MarkNeedsRestore(request_.profile_dir);
       Finish("failed");
       return;
     }

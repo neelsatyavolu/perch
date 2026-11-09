@@ -62,6 +62,13 @@
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
+#include "content/public/browser/render_widget_host_view.h"
+#include "chrome/browser/ui/browser_tabstrip.h"
+#include "chrome/browser/ui/views/side_panel/side_panel.h"
+#include "chrome/browser/ui/side_panel/side_panel_enums.h"
+#include "chrome/browser/ui/side_panel/side_panel_entry_key.h"
+#include "chrome/browser/ui/side_panel/side_panel_entry_id.h"
+#include "chrome/browser/ui/side_panel/side_panel_ui.h"
 #include "components/prefs/pref_service.h"
 #include "components/viz/common/frame_sinks/copy_output_request.h"
 #include "components/viz/common/frame_sinks/copy_output_result.h"
@@ -237,7 +244,7 @@ class Snapshotter {
       SwitchToSpace(browser_, 0);
       LOG(WARNING) << "Perch snapshot: spaces A:" << before << " / B:" << in_b
                    << " / back in A:" << urls() << " / names:"
-                   << ListSpaces(browser_->GetProfile()).size();
+                   << ListSpaces(browser_).size();
     } else if (state == "translate-open") {
       browser_->GetTabStripModel()->GetActiveWebContents()->GetController()
           .LoadURL(GURL("https://fr.wikipedia.org/wiki/Paris"),
@@ -484,6 +491,15 @@ class Snapshotter {
       const bool handled = controller->HandleKeyEvent(omnibox, key);
       LOG(WARNING) << "Perch snapshot: omnibox ask handled " << handled
                    << ", text left '" << omnibox->GetText() << "'";
+    } else if (state == "sidebar-newtab") {
+      // The sidebar stays open across a new tab, and comes back without a
+      // reload after a close on another tab (see perch_side_panel_controller).
+      SidePanelUI::From(browser_)->Show(SidePanelEntryId::kPerch);
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+          FROM_HERE,
+          base::BindOnce(&Snapshotter::CheckSidebarNewTab,
+                         base::Unretained(this)),
+          base::Milliseconds(1500));
     } else if (state == "split") {
       // A side-by-side split, then ⌃⌘[ to focus its left side.
       chrome::ExecuteCommand(browser_, IDC_NEW_SPLIT_TAB);
@@ -526,6 +542,58 @@ class Snapshotter {
               tabs->GetWebContentsAt(i)->GetVisibleURL().spec();
     }
     LOG(WARNING) << "Perch snapshot: tabs " << when << ":" << list;
+  }
+
+  views::View* SidebarContent() {
+    SidePanel* panel =
+        BrowserView::GetBrowserViewForBrowser(browser_)->side_panel();
+    views::View* parent = panel ? panel->GetContentParentView() : nullptr;
+    return parent && !parent->children().empty() ? parent->children().front()
+                                                 : nullptr;
+  }
+
+  bool SidebarShowing() {
+    SidePanelUI* ui = SidePanelUI::From(browser_);
+    return ui && ui->IsSidePanelEntryShowing(
+                     SidePanelEntryKey(SidePanelEntryId::kPerch));
+  }
+
+  void CheckSidebarNewTab() {
+    TabStripModel* tabs = browser_->GetTabStripModel();
+    views::View* first = SidebarContent();
+    const bool open_before = SidebarShowing();
+    chrome::ExecuteCommand(browser_, IDC_NEW_TAB);
+    const bool open_after_new_tab = SidebarShowing();
+    const bool same_after_new_tab = SidebarContent() == first;
+    // Close it on the new tab, go back (open there), then return (closed).
+    SidePanelUI::From(browser_)->Close(
+        SidePanelEntryHideReason::kSidePanelClosed,
+        /*suppress_animations=*/true);
+    const int new_tab = tabs->active_index();
+    tabs->ActivateTabAt(0);
+    const bool reopened = SidebarShowing();
+    const bool same_after_reopen = SidebarContent() == first;
+    tabs->ActivateTabAt(new_tab);
+    const bool closed_again = !SidebarShowing();
+    tabs->ActivateTabAt(0);
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+        FROM_HERE,
+        base::BindOnce(
+            [](Snapshotter* self, bool a, bool b, bool c, bool d, bool e,
+               bool f) {
+              content::WebContents* page =
+                  self->browser_->GetTabStripModel()->GetActiveWebContents();
+              LOG(WARNING) << "Perch snapshot: sidebar-newtab open " << a
+                           << " / after new tab open " << b << " same view "
+                           << c << " / back to first reopened " << d
+                           << " same view " << e << " / new tab closed "
+                           << f << " / page focused "
+                           << (page && page->GetRenderWidgetHostView() &&
+                               page->GetRenderWidgetHostView()->HasFocus());
+            },
+            base::Unretained(this), open_before, open_after_new_tab,
+            same_after_new_tab, reopened, same_after_reopen, closed_again),
+        base::Milliseconds(300));
   }
 
   void CheckSleep() {

@@ -382,6 +382,11 @@ void KeyBroker::StartFresh(const base::FilePath& profile_dir) {
   }
 }
 
+void KeyBroker::MarkNeedsRestore(const base::FilePath& profile_dir) {
+  keys_.erase(profile_dir);
+  needs_restore_.insert(profile_dir);
+}
+
 bool KeyBroker::IsProtected(const base::FilePath& profile_dir) const {
   auto it = keys_.find(profile_dir);
   return it != keys_.end() && it->second.is_protected;

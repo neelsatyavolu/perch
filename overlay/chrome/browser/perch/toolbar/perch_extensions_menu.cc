@@ -37,29 +37,34 @@ namespace perch {
 
 namespace {
 
-enum ExtensionCommand { kOpen = 1, kPin, kOptions };
+enum ExtensionCommand { kOpen = 0, kPin, kOptions, kCommandCount };
 
-// One extension's submenu: Open, Pin to Toolbar, Options.
+// One extension's submenu: Open, Pin to Toolbar, Options. Views menus need
+// ids unique across the whole menu, so each submenu has its own range from
+// `base`.
 class ExtensionSubmenu : public ui::SimpleMenuModel,
                          public ui::SimpleMenuModel::Delegate {
  public:
-  ExtensionSubmenu(BrowserWindowInterface* browser, std::string id)
-      : ui::SimpleMenuModel(this), browser_(browser), id_(std::move(id)) {
-    AddItem(kOpen, u"Open");
-    AddCheckItem(kPin, u"Pin to Toolbar");
+  ExtensionSubmenu(BrowserWindowInterface* browser, std::string id, int base)
+      : ui::SimpleMenuModel(this),
+        browser_(browser),
+        id_(std::move(id)),
+        base_(base) {
+    AddItem(base_ + kOpen, u"Open");
+    AddCheckItem(base_ + kPin, u"Pin to Toolbar");
     if (OptionsUrl().is_valid()) {
-      AddItem(kOptions, u"Options");
+      AddItem(base_ + kOptions, u"Options");
     }
   }
 
   bool IsCommandIdChecked(int command_id) const override {
     ToolbarActionsModel* model =
         ToolbarActionsModel::Get(browser_->GetProfile());
-    return command_id == kPin && model && model->IsActionPinned(id_);
+    return command_id == base_ + kPin && model && model->IsActionPinned(id_);
   }
 
   void ExecuteCommand(int command_id, int event_flags) override {
-    switch (command_id) {
+    switch (command_id - base_) {
       case kOpen:
         if (ExtensionsContainer* container =
                 ExtensionsContainer::From(*browser_)) {
@@ -98,6 +103,7 @@ class ExtensionSubmenu : public ui::SimpleMenuModel,
 
   raw_ptr<BrowserWindowInterface> browser_;
   const std::string id_;
+  const int base_;
 };
 
 class ExtensionsMenu : public ui::SimpleMenuModel,
@@ -138,8 +144,11 @@ class ExtensionsMenu : public ui::SimpleMenuModel,
     AddSeparator(ui::NORMAL_SEPARATOR);
     AddTitle(u"Installed extensions");
     int command = kFirstExtension;
+    int submenu_base = kFirstSubmenuCommand;
     for (Row& row : rows) {
-      submenus_.push_back(std::make_unique<ExtensionSubmenu>(browser, row.id));
+      submenus_.push_back(
+          std::make_unique<ExtensionSubmenu>(browser, row.id, submenu_base));
+      submenu_base += kCommandCount;
       AddSubMenuWithIcon(command++, row.name, submenus_.back().get(),
                          row.icon);
     }
@@ -151,6 +160,8 @@ class ExtensionsMenu : public ui::SimpleMenuModel,
 
  private:
   static constexpr int kFirstExtension = 1000;
+  // Clear of the submenu rows above (one per extension).
+  static constexpr int kFirstSubmenuCommand = 20000;
 
   raw_ptr<BrowserWindowInterface> browser_;
   std::vector<std::unique_ptr<ExtensionSubmenu>> submenus_;

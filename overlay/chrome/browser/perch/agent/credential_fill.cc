@@ -28,6 +28,7 @@
 #include "content/public/browser/devtools_agent_host.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/browser/global_routing_id.h"
 #include "crypto/hash.h"
 #include "url/gurl.h"
 #include "url/origin.h"
@@ -237,14 +238,27 @@ void FillLogin(const base::DictValue& params,
     std::move(reply).Run(base::unexpected("targetId and loginId are required"));
     return;
   }
+  // The lookup is async: fill only if the tab still shows the same page.
+  content::RenderFrameHost* frame = contents->GetPrimaryMainFrame();
+  const content::GlobalRenderFrameHostId frame_id = frame->GetGlobalId();
+  const url::Origin origin = frame->GetLastCommittedOrigin();
   LoginFetcher::Start(
       contents,
       base::BindOnce(
           [](base::WeakPtr<content::WebContents> contents, std::string id,
+             content::GlobalRenderFrameHostId frame_id, url::Origin origin,
              base::OnceCallback<void(DataResult)> reply,
              std::vector<password_manager::StoredCredential> logins) {
+            content::RenderFrameHost* now =
+                contents ? contents->GetPrimaryMainFrame() : nullptr;
+            if (!now || now->GetGlobalId() != frame_id ||
+                !now->GetLastCommittedOrigin().IsSameOriginWith(origin)) {
+              std::move(reply).Run(
+                  base::unexpected("The page changed before the fill"));
+              return;
+            }
             for (const auto& login : logins) {
-              if (contents && LoginId(login) == id) {
+              if (LoginId(login) == id) {
                 RunFill(contents.get(),
                         LoginScript(login.username_value,
                                     login.password_value.value()),
@@ -256,7 +270,8 @@ void FillLogin(const base::DictValue& params,
                                      .Set("result", "failed")
                                      .Set("fields", base::ListValue()));
           },
-          contents->GetWeakPtr(), *login_id, std::move(reply)));
+          contents->GetWeakPtr(), *login_id, frame_id, origin,
+          std::move(reply)));
 }
 
 DataResult ListCards(const base::DictValue& params) {

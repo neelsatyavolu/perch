@@ -256,6 +256,9 @@ void PerchSidePanelController::OnTabStripModelChanged(
                                           "tabId", TabIdFor(removed.tab)));
         }
         ForgetTab(removed.tab);
+        if (hiding_tab_ == removed.tab) {
+          hiding_tab_ = nullptr;
+        }
       } else {
         // Leaving for another window: the insert there reports the move.
         MovingTabs().insert(TabIdFor(removed.tab));
@@ -266,6 +269,11 @@ void PerchSidePanelController::OnTabStripModelChanged(
       if (inserted.tab) {
         sync.Update(profile, window_id_, inserted.tab);
         const bool moved = MovingTabs().erase(TabIdFor(inserted.tab)) > 0;
+        // A new tab opened while the sidebar is showing keeps it showing,
+        // so the panel doesn't vanish on Cmd+T. A moved tab keeps its own.
+        if (!moved && IsShowing()) {
+          SetPanelOpenFor(inserted.tab, true);
+        }
         if (IsPerchdConnected()) {
           EmitPerchEvent(moved ? "tabMoved" : "tabCreated",
                          TabInfo(inserted.tab));
@@ -293,8 +301,10 @@ void PerchSidePanelController::OnTabStripModelChanged(
   }
   base::AutoReset<bool> switching(&switching_, true);
   if (want) {
+    // Instant, like the close below and Chromium's own tab-switch handling.
     side_panel->Show(SidePanelEntryId::kPerch,
-                     SidePanelOpenTrigger::kTabChanged);
+                     SidePanelOpenTrigger::kTabChanged,
+                     /*suppress_animations=*/true);
   } else {
     // Without the animation the panel is hidden before `switching` ends, so
     // OnEntryHidden does not clear this tab's remembered state.
@@ -324,19 +334,56 @@ void PerchSidePanelController::OnEntryShown(SidePanelEntry* entry) {
   if (!tab) {
     return;
   }
-  if (!switching_) {
+  if (switching_) {
+    // Opening for a tab switch keeps the keyboard on the page; the panel
+    // takes focus later in the same show, so hand it back afterwards.
+    if (content::WebContents* contents = tab->GetContents()) {
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, base::BindOnce(
+                         [](base::WeakPtr<content::WebContents> page) {
+                           if (page) {
+                             page->Focus();
+                           }
+                         },
+                         contents->GetWeakPtr()));
+    }
+  } else {
     SetPanelOpenFor(tab, true);
   }
-  PerchTabSync::Get().ResyncAll(browser_->GetProfile());
+  // The page stays alive between shows, so perchd needs every tab only the
+  // first time, or after a failed sync; tab switches already send Activate.
+  PerchTabSync& sync = PerchTabSync::Get();
+  if (!synced_once_ || sync.needs_resync()) {
+    synced_once_ = true;
+    sync.ResyncAll(browser_->GetProfile());
+  }
+}
+
+void PerchSidePanelController::OnEntryWillHide(
+    SidePanelEntry* entry,
+    SidePanelEntryHideReason reason) {
+  // Recorded when the close starts, not when its animation ends, so a tab
+  // switch during the animation doesn't take the closed state with it.
+  if (switching_) {
+    return;
+  }
+  hiding_tab_ = browser_->GetTabStripModel()->GetActiveTab();
+  if (hiding_tab_) {
+    SetPanelOpenFor(hiding_tab_, false);
+  }
+}
+
+void PerchSidePanelController::OnEntryHideCancelled(SidePanelEntry* entry) {
+  if (hiding_tab_) {
+    SetPanelOpenFor(hiding_tab_, true);
+  }
+  hiding_tab_ = nullptr;
 }
 
 void PerchSidePanelController::OnEntryHidden(SidePanelEntry* entry) {
+  hiding_tab_ = nullptr;
   if (SidePanel* panel = Panel(); panel && panel->width() > 0) {
     width_ = panel->width();
-  }
-  tabs::TabInterface* tab = browser_->GetTabStripModel()->GetActiveTab();
-  if (tab && !switching_) {
-    SetPanelOpenFor(tab, false);
   }
 }
 

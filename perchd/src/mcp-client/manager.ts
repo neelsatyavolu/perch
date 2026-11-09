@@ -69,10 +69,11 @@ export class McpManager {
     const entry = findServer(await this.opts.store.load(), name);
     if (!entry) throw new Error(`no server named "${name}"`);
     await this.disconnect(name);
+    let client: McpClient | undefined;
     try {
       const approved = await this.checkLaunch(entry);
       if (!approved) return this.setStatus({ name, state: "declined", tools: 0, error: "You did not allow this server to run." });
-      const client = await this.open(approved);
+      client = await this.open(approved);
       const tools = await client.listTools({ timeoutMs: this.opts.connectTimeoutMs ?? 30_000 });
       client.onToolsChanged(() => void this.refresh(name));
       client.onClose((error) => {
@@ -86,6 +87,8 @@ export class McpManager {
       this.emit();
       return this.setStatus({ name, state: "connected", tools: tools.length });
     } catch (error) {
+      // The server may be running (listTools failed): stop it, or each later call would leave another behind.
+      await client?.close().catch(() => undefined);
       return this.setStatus({ name, state: "failed", tools: 0, error: error instanceof Error ? error.message : String(error) });
     }
   }

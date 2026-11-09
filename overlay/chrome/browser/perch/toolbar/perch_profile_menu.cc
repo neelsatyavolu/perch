@@ -2,6 +2,9 @@
 // Use of this source code is governed by the MIT license in Perch's LICENSE file.
 
 #include "chrome/browser/perch/toolbar/perch_profile_menu.h"
+#include "ui/gfx/geometry/insets.h"
+#include "components/prefs/pref_service.h"
+#include "components/bookmarks/common/bookmark_pref_names.h"
 
 #include <algorithm>
 
@@ -66,10 +69,15 @@ void RunToolbarMenu(ui::MenuModel* model,
   // tokens) just below the button, not a system NSMenu.
   runner = std::make_unique<views::MenuRunner>(
       model, views::MenuRunner::HAS_MNEMONICS);
-  const gfx::Rect button = anchor->GetAnchorBoundsInScreen();
-  runner->RunMenuAt(anchor->GetWidget(), nullptr,
-                    gfx::Rect(button.x(), button.bottom() + 4, 0, 0),
-                    views::MenuAnchorPosition::kTopLeft,
+  // Below the whole button, 4px down, lined up with the edge nearer the
+  // middle of the window so it never hangs past the window's side.
+  gfx::Rect button = anchor->GetAnchorBoundsInScreen();
+  button.Inset(gfx::Insets::TLBR(0, 0, -4, 0));
+  const gfx::Rect window = anchor->GetWidget()->GetWindowBoundsInScreen();
+  const bool right_half = button.CenterPoint().x() > window.CenterPoint().x();
+  runner->RunMenuAt(anchor->GetWidget(), nullptr, button,
+                    right_half ? views::MenuAnchorPosition::kTopRight
+                               : views::MenuAnchorPosition::kTopLeft,
                     ui::mojom::MenuSourceType::kMouse);
 }
 
@@ -144,7 +152,7 @@ void PerchProfileMenuModel::BuildApp() {
 
   bookmarks_ = std::make_unique<ui::SimpleMenuModel>(this);
   bookmarks_->AddItem(IDC_BOOKMARK_THIS_TAB, u"Bookmark This Tab");
-  bookmarks_->AddItem(IDC_SHOW_BOOKMARK_BAR, u"Always Show Bookmarks Bar");
+  bookmarks_->AddCheckItem(IDC_SHOW_BOOKMARK_BAR, u"Always Show Bookmarks Bar");
   bookmarks_->AddItem(IDC_SHOW_BOOKMARK_MANAGER, u"Bookmark Manager");
   AddSubMenuWithIcon(IDC_BOOKMARKS_MENU, u"Bookmarks", bookmarks_.get(),
                      Icon(kBookmarkManagerIcon));
@@ -156,7 +164,15 @@ void PerchProfileMenuModel::BuildApp() {
                      extensions_.get(),
                      Icon(vector_icons::kExtensionChromeRefreshOldIcon));
 
-  developers_ = std::make_unique<ToolsMenuModel>(this, browser_);
+  // Only the tools Perch keeps (no Customize Chrome, Labs or vertical tabs).
+  developers_ = std::make_unique<ui::SimpleMenuModel>(this);
+  developers_->AddItem(IDC_NAME_WINDOW, u"Name Window\u2026");
+  developers_->AddItem(IDC_PERFORMANCE, u"Performance");
+  if (chrome::CanOpenTaskManager()) {
+    developers_->AddItem(IDC_TASK_MANAGER_APP_MENU, u"Task Manager");
+  }
+  developers_->AddSeparator(ui::NORMAL_SEPARATOR);
+  developers_->AddItem(IDC_DEV_TOOLS, u"Developer Tools");
   AddSubMenuWithIcon(IDC_PERCH_DEVELOPERS_MENU, u"More Tools",
                      developers_.get(), Icon(vector_icons::kCodeIcon));
   AddSeparator(ui::NORMAL_SEPARATOR);
@@ -195,6 +211,10 @@ void PerchProfileMenuModel::AddRecentDownloads() {
 }
 
 bool PerchProfileMenuModel::IsCommandIdChecked(int command_id) const {
+  if (command_id == IDC_SHOW_BOOKMARK_BAR) {
+    return browser_->GetProfile()->GetPrefs()->GetBoolean(
+        bookmarks::prefs::kShowBookmarkBar);
+  }
   if (!IsProfileRow(command_id)) {
     return false;
   }

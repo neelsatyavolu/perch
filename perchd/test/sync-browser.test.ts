@@ -127,6 +127,16 @@ describe("sync in the browser", () => {
     expect((await mac.sync.status()).on).toBe(false);
   });
 
+  test("a Keychain read that fails ends the pass with an error, not a rejection", async () => {
+    const { api } = server();
+    const secrets = { ...memorySecretStore(), get: async () => { throw new Error("The keychain is locked."); } };
+    const sync = new BrowserSync({ domain: fakeBrowser().domain, secrets, api, state: memoryState() });
+    expect(await sync.syncNow()).toBeNull();
+    const stop = sync.start();
+    await new Promise((r) => setTimeout(r, 10));
+    stop();
+  });
+
   test("the timer runs a pass at start and then on its interval", async () => {
     const { api } = server();
     const mac = await pairedDevice("dev_mac", [{ version: 1, raw: newSyncKey() }], api);

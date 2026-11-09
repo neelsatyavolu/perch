@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { newToolContext, runTool } from "../src/agent/tools";
 import { anthropicModel } from "../src/models/anthropic";
-import { IDLE_MS } from "../src/models/http";
+import { IDLE_MS, openStream } from "../src/models/http";
 import { responsesModel } from "../src/models/responses";
 import { click, press, type } from "../src/page/actions";
 import { repl } from "../src/page/repl";
@@ -261,6 +261,32 @@ test("Anthropic runs one tool call per turn, and long silent turns are allowed",
   expect(JSON.parse(body).tool_choice).toEqual({ type: "auto", disable_parallel_tool_use: true });
   expect(IDLE_MS).toBeGreaterThanOrEqual(300_000);
 });
+
+test("a model request whose response never starts is retried and then fails; a started stream is not cut", async () => {
+  let calls = 0;
+  const hang = (async (_url: string, init: RequestInit) => {
+    calls++;
+    return new Promise<Response>((_, reject) => init.signal!.addEventListener("abort", () => reject(new Error("aborted"))));
+  }) as unknown as typeof fetch;
+  const opts = { signal: new AbortController().signal, describe: () => "", headersMs: 20 };
+  await expect(openStream(() => ({ url: "http://model.test", init: {} }), { ...opts, fetch: hang })).rejects.toThrow("The model did not respond.");
+  expect(calls).toBe(4);
+  let slowSignal: AbortSignal | undefined;
+  const slow = (async (_url: string, init: RequestInit) => {
+    slowSignal = init.signal!;
+    const body = new ReadableStream<Uint8Array>({
+      start: async (c) => {
+        await Bun.sleep(60);
+        c.enqueue(new TextEncoder().encode("late"));
+        c.close();
+      },
+    });
+    return new Response(body, { status: 200 });
+  }) as unknown as typeof fetch;
+  const stream = await openStream(() => ({ url: "http://model.test", init: {} }), { ...opts, fetch: slow });
+  expect(await new Response(stream).text()).toBe("late");
+  expect(slowSignal!.aborted).toBe(false);
+}, 15_000);
 
 test("only visible fields decide whether a page is a password change", async () => {
   const { pageContext } = await import("../src/agent/tools");

@@ -327,6 +327,8 @@ void PerchdLauncher::OnLaunched(std::unique_ptr<Launched> launched) {
   config_ = base::MakeRefCounted<ConfigPipe>(std::move(launched->config));
   launched_at_ = base::TimeTicks::Now();
   // Chromium's pipe handler reads the two descriptors from this switch.
+  // Replaced, not appended, so restarts don't pile up stale values.
+  base::CommandLine::ForCurrentProcess()->RemoveSwitch(kRemoteDebuggingIoPipes);
   base::CommandLine::ForCurrentProcess()->AppendSwitchASCII(
       kRemoteDebuggingIoPipes,
       base::StringPrintf("%d,%d", browser_read_.get(), browser_write_.get()));

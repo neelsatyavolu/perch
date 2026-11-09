@@ -88,3 +88,5 @@ perch/shell/error-pages.patch
 perch/shell/settings-history-trim.patch
 perch/shell/webui-geist.patch
 perch/shell/menu-glass.patch
+perch/shell/sidebar-keep-alive.patch
+perch/shell/menu-hairline.patch

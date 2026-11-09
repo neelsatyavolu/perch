@@ -65,7 +65,7 @@ class SpacesMenuModel : public ui::SimpleMenuModel,
  public:
   explicit SpacesMenuModel(BrowserWindowInterface* browser)
       : ui::SimpleMenuModel(this), browser_(browser) {
-    spaces_ = ListSpaces(browser->GetProfile());
+    spaces_ = ListSpaces(browser);
     for (size_t i = 0; i < spaces_.size(); ++i) {
       AddCheckItem(kFirstSpace + static_cast<int>(i), spaces_[i].name);
     }
@@ -91,10 +91,9 @@ class SpacesMenuModel : public ui::SimpleMenuModel,
         NewSpace(browser_);
         return;
       case kRenameSpace: {
-        Profile* profile = browser_->GetProfile();
-        const std::u16string name = AskForName(ActiveSpaceName(profile));
+        const std::u16string name = AskForName(ActiveSpaceName(browser_));
         if (!name.empty()) {
-          RenameActiveSpace(profile, name);
+          RenameActiveSpace(browser_, name);
         }
         return;
       }
@@ -143,7 +142,7 @@ class SpacesButton : public views::LabelButton {
     views::InkDrop::Get(this)->SetMode(
         views::InkDropHost::InkDropMode::ON_NO_ANIMATE);
     views::InkDrop::Get(this)->SetBaseColor(
-        kColorTabBackgroundInactiveHoverFrameActive);
+        kColorTabForegroundActiveFrameActive);
     views::InkDrop::Get(this)->SetHighlightOpacity(0.08f);
     views::InkDrop::Get(this)->SetVisibleOpacity(0.12f);
     SetTooltipText(u"Spaces");
@@ -160,7 +159,7 @@ class SpacesButton : public views::LabelButton {
 
  private:
   void UpdateName() {
-    SetText(ActiveSpaceName(browser_->GetProfile()));
+    SetText(ActiveSpaceName(browser_));
   }
 
   void ShowMenu() {

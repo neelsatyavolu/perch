@@ -21,6 +21,11 @@ struct PerchDictation::State {
   SFSpeechRecognitionTask* __strong task = nil;
   AVAudioEngine* __strong engine = nil;
   bool listening = false;
+  // Between Start and macOS answering the permission requests.
+  bool starting = false;
+  // Bumped by each Start, so a cancelled start's late answer is ignored.
+  int generation = 0;
+  StartedCallback pending_started;
   TextCallback on_text;
   base::WeakPtrFactory<State> weak_factory{this};
 
@@ -37,6 +42,12 @@ struct PerchDictation::State {
   void Begin(StartedCallback started,
              SFSpeechRecognizerAuthorizationStatus status,
              bool microphone) {
+    // Guard against a previous session left running.
+    [task cancel];
+    task = nil;
+    if (listening) {
+      StopListening();
+    }
     if (status != SFSpeechRecognizerAuthorizationStatusAuthorized) {
       std::move(started).Run(
           "Speech recognition is off for Perch in System Settings › Privacy");
@@ -116,15 +127,17 @@ PerchDictation::~PerchDictation() {
 }
 
 void PerchDictation::Start(TextCallback on_text, StartedCallback started) {
-  if (state_->listening) {
+  if (state_->listening || state_->starting) {
     std::move(started).Run("Dictation is already listening");
     return;
   }
   state_->on_text = std::move(on_text);
+  state_->starting = true;
+  state_->pending_started = std::move(started);
+  const int generation = ++state_->generation;
   scoped_refptr<base::SequencedTaskRunner> runner =
       base::SequencedTaskRunner::GetCurrentDefault();
   base::WeakPtr<State> self = state_->weak_factory.GetWeakPtr();
-  __block StartedCallback callback = std::move(started);
   // Speech recognition first, then the microphone; each asks once.
   [SFSpeechRecognizer requestAuthorization:^(
                           SFSpeechRecognizerAuthorizationStatus status) {
@@ -134,20 +147,30 @@ void PerchDictation::Start(TextCallback on_text, StartedCallback started) {
                   runner->PostTask(
                       FROM_HERE,
                       base::BindOnce(
-                          [](base::WeakPtr<State> self, StartedCallback started,
+                          [](base::WeakPtr<State> self, int generation,
                              SFSpeechRecognizerAuthorizationStatus status,
                              bool microphone) {
-                            if (self) {
-                              self->Begin(std::move(started), status,
-                                          microphone);
+                            // Stopped (or restarted) while macOS asked.
+                            if (!self || !self->starting ||
+                                self->generation != generation) {
+                              return;
                             }
+                            self->starting = false;
+                            self->Begin(std::move(self->pending_started),
+                                        status, microphone);
                           },
-                          self, std::move(callback), status, granted == YES));
+                          self, generation, status, granted == YES));
                 }];
   }];
 }
 
 void PerchDictation::Stop() {
+  if (state_->starting) {
+    state_->starting = false;
+    if (state_->pending_started) {
+      std::move(state_->pending_started).Run("Dictation was cancelled");
+    }
+  }
   if (state_->listening) {
     state_->StopListening();
   }

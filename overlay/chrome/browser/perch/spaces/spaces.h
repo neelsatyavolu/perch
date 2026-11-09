@@ -33,18 +33,20 @@ struct SpaceInfo {
   bool active = false;
 };
 
-// Spaces (spec 5.9): named sets of tabs, one shown per window at a time. A
+// Spaces (spec 5.9): named sets of tabs, one shown per window at a time, and
+// each shown in at most one window. A
 // space's tabs live in the profile's perch.spaces pref while it is hidden,
 // and come back unloaded (asleep) except the one that was active. Tab groups
 // are flattened. There is always at least one space.
-std::vector<SpaceInfo> ListSpaces(Profile* profile);
-std::u16string ActiveSpaceName(Profile* profile);
+std::vector<SpaceInfo> ListSpaces(BrowserWindowInterface* browser);
+std::u16string ActiveSpaceName(BrowserWindowInterface* browser);
 
 void SwitchToSpace(BrowserWindowInterface* browser, size_t index);
 void SwitchSpaceBy(BrowserWindowInterface* browser, int delta);
 // Adds "Space N" after the others and switches to it.
 void NewSpace(BrowserWindowInterface* browser);
-void RenameActiveSpace(Profile* profile, const std::u16string& name);
+void RenameActiveSpace(BrowserWindowInterface* browser,
+                       const std::u16string& name);
 // Moves the active space's tabs into the space before it (never closes
 // them) and removes it. Does nothing to the last space left.
 void DeleteActiveSpace(BrowserWindowInterface* browser);

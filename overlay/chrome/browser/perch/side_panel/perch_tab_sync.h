@@ -67,6 +67,8 @@ class PerchTabSync {
   void Remove(Profile* profile, const std::string& tab_id);
   // Sends every open tab and each window's active tab.
   void ResyncAll(Profile* profile);
+  // Whether a request failed since the last ResyncAll.
+  bool needs_resync() const { return needs_resync_; }
 
  private:
   friend class base::NoDestructor<PerchTabSync>;

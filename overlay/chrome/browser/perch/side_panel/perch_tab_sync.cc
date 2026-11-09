@@ -276,6 +276,11 @@ void PerchTabSync::Enqueue(Profile* profile,
   request->method = std::move(method);
   request->path = std::move(path);
   request->body = std::move(body);
+  // perchd is far behind: drop the backlog and send the whole state instead.
+  if (queue_.size() >= 200) {
+    queue_.clear();
+    needs_resync_ = true;
+  }
   queue_.push_back(std::move(request));
   SendNext();
 }
@@ -296,6 +301,9 @@ void PerchTabSync::SendNext() {
   std::unique_ptr<network::SimpleURLLoader> loader =
       network::SimpleURLLoader::Create(std::move(resource),
                                        kTrafficAnnotation);
+  // A hung request fails into the resync path in OnDone instead of holding
+  // up the queue.
+  loader->SetTimeoutDuration(base::Seconds(5));
   if (next->body) {
     loader->AttachStringForUpload(base::WriteJson(*next->body).value_or("{}"),
                                   "application/json");

@@ -1,0 +1,14 @@
+# Perch: draw the hairline edge around frosted menus.
+diff --git a/ui/views/controls/menu/menu_config_mac.mm b/ui/views/controls/menu/menu_config_mac.mm
+index 84941b0d58..db8e801278 100644
+--- a/ui/views/controls/menu/menu_config_mac.mm
++++ b/ui/views/controls/menu/menu_config_mac.mm
+@@ -22,6 +22,8 @@ void MenuConfig::InitPlatform() {
+   corner_radius = 12;
+   rounded_menu_vertical_border_size = 6;
+   menu_horizontal_border_size = 6;
++  // The hairline edge (kColorMenuBorder) around the frosted fill.
++  use_outer_border = true;
+ }
+ 
+ }  // namespace views

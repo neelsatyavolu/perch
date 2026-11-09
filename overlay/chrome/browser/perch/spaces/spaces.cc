@@ -4,18 +4,23 @@
 #include "chrome/browser/perch/spaces/spaces.h"
 
 #include <algorithm>
+#include <map>
 #include <utility>
 
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
+#include "base/no_destructor.h"
 #include "base/values.h"
 #include "chrome/browser/perch/perch_pref_names.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_tabrestore.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
+#include "components/sessions/core/session_id.h"
 #include "chrome/browser/ui/tabs/tab_enums.h"
+#include "ui/base/base_window.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "components/prefs/pref_service.h"
 #include "components/sessions/core/serialized_navigation_entry.h"
@@ -44,8 +49,36 @@ base::ListValue ReadSpaces(Profile* profile) {
   return spaces;
 }
 
-size_t ActiveIndex(Profile* profile, const base::ListValue& spaces) {
-  const std::string& active = profile->GetPrefs()->GetString(prefs::kActiveSpace);
+// Each window shows its own space. The pref keeps the last one chosen, which
+// is where a window without a choice of its own starts.
+std::map<SessionID, std::string>& WindowSpaces() {
+  static base::NoDestructor<std::map<SessionID, std::string>> spaces;
+  return *spaces;
+}
+
+std::string ActiveId(BrowserWindowInterface* browser) {
+  const auto it = WindowSpaces().find(browser->GetSessionID());
+  return it != WindowSpaces().end()
+             ? it->second
+             : browser->GetProfile()->GetPrefs()->GetString(
+                   prefs::kActiveSpace);
+}
+
+// Another open window of the same profile showing space `id`, if any.
+BrowserWindowInterface* WindowShowing(BrowserWindowInterface* browser,
+                                      const std::string& id) {
+  for (BrowserWindowInterface* other : GetAllBrowserWindowInterfaces()) {
+    if (other != browser && other->GetProfile() == browser->GetProfile() &&
+        ActiveId(other) == id) {
+      return other;
+    }
+  }
+  return nullptr;
+}
+
+size_t ActiveIndex(BrowserWindowInterface* browser,
+                   const base::ListValue& spaces) {
+  const std::string active = ActiveId(browser);
   for (size_t i = 0; i < spaces.size(); ++i) {
     const std::string* id = spaces[i].GetDict().FindString(kId);
     if (id && *id == active) {
@@ -55,11 +88,25 @@ size_t ActiveIndex(Profile* profile, const base::ListValue& spaces) {
   return 0;
 }
 
-void Write(Profile* profile, base::ListValue spaces, size_t active) {
+void Write(BrowserWindowInterface* browser,
+           base::ListValue spaces,
+           size_t active) {
   const std::string* id = spaces[active].GetDict().FindString(kId);
-  profile->GetPrefs()->SetString(prefs::kActiveSpace, id ? *id : "1");
-  profile->GetPrefs()->SetList(prefs::kSpaces, std::move(spaces));
+  const std::string active_id = id ? *id : "1";
+  WindowSpaces()[browser->GetSessionID()] = active_id;
+  PrefService* prefs = browser->GetProfile()->GetPrefs();
+  prefs->SetString(prefs::kActiveSpace, active_id);
+  prefs->SetList(prefs::kSpaces, std::move(spaces));
 }
+
+std::string IdAt(const base::ListValue& spaces, size_t index) {
+  const std::string* id = spaces[index].GetDict().FindString(kId);
+  return id ? *id : "";
+}
+
+void AddTabsAsleep(BrowserWindowInterface* browser,
+                   const std::vector<SpaceTab>& tabs,
+                   bool at_front);
 
 std::string NextId(const base::ListValue& spaces) {
   int highest = 0;
@@ -124,9 +171,9 @@ void ReplaceTabs(BrowserWindowInterface* browser, std::vector<SpaceTab> tabs) {
 
 }  // namespace
 
-std::vector<SpaceInfo> ListSpaces(Profile* profile) {
-  const base::ListValue spaces = ReadSpaces(profile);
-  const size_t active = ActiveIndex(profile, spaces);
+std::vector<SpaceInfo> ListSpaces(BrowserWindowInterface* browser) {
+  const base::ListValue spaces = ReadSpaces(browser->GetProfile());
+  const size_t active = ActiveIndex(browser, spaces);
   std::vector<SpaceInfo> list;
   for (size_t i = 0; i < spaces.size(); ++i) {
     const base::DictValue& space = spaces[i].GetDict();
@@ -138,8 +185,8 @@ std::vector<SpaceInfo> ListSpaces(Profile* profile) {
   return list;
 }
 
-std::u16string ActiveSpaceName(Profile* profile) {
-  for (const SpaceInfo& space : ListSpaces(profile)) {
+std::u16string ActiveSpaceName(BrowserWindowInterface* browser) {
+  for (const SpaceInfo& space : ListSpaces(browser)) {
     if (space.active) {
       return space.name;
     }
@@ -150,15 +197,21 @@ std::u16string ActiveSpaceName(Profile* profile) {
 void SwitchToSpace(BrowserWindowInterface* browser, size_t index) {
   Profile* profile = browser->GetProfile();
   base::ListValue spaces = ReadSpaces(profile);
-  const size_t active = ActiveIndex(profile, spaces);
+  const size_t active = ActiveIndex(browser, spaces);
   if (index >= spaces.size() || index == active) {
+    return;
+  }
+  // A space shows in one window at a time: bring that window forward.
+  if (BrowserWindowInterface* other =
+          WindowShowing(browser, IdAt(spaces, index))) {
+    other->GetWindow()->Activate();
     return;
   }
   spaces[active].GetDict().Set(kTabs, CaptureTabs(browser));
   std::vector<SpaceTab> target =
       TabsFrom(*spaces[index].GetDict().FindList(kTabs));
   spaces[index].GetDict().Set(kTabs, base::ListValue());
-  Write(profile, std::move(spaces), index);
+  Write(browser, std::move(spaces), index);
   ReplaceTabs(browser, std::move(target));
 }
 
@@ -167,7 +220,7 @@ void SwitchSpaceBy(BrowserWindowInterface* browser, int delta) {
   const base::ListValue spaces = ReadSpaces(profile);
   const int count = static_cast<int>(spaces.size());
   const int next =
-      ((static_cast<int>(ActiveIndex(profile, spaces)) + delta) % count +
+      ((static_cast<int>(ActiveIndex(browser, spaces)) + delta) % count +
        count) %
       count;
   SwitchToSpace(browser, next);
@@ -182,22 +235,23 @@ void NewSpace(BrowserWindowInterface* browser) {
                     .Set(kName, "Space " + base::NumberToString(
                                                spaces.size() + 1))
                     .Set(kTabs, base::ListValue()));
-  const size_t active = ActiveIndex(profile, spaces);
+  const size_t active = ActiveIndex(browser, spaces);
   const size_t index = spaces.size() - 1;
-  Write(profile, std::move(spaces), active);
+  Write(browser, std::move(spaces), active);
   SwitchToSpace(browser, index);
 }
 
-void RenameActiveSpace(Profile* profile, const std::u16string& name) {
+void RenameActiveSpace(BrowserWindowInterface* browser,
+                       const std::u16string& name) {
   std::u16string trimmed;
   base::TrimWhitespace(name, base::TRIM_ALL, &trimmed);
   if (trimmed.empty()) {
     return;
   }
-  base::ListValue spaces = ReadSpaces(profile);
-  const size_t active = ActiveIndex(profile, spaces);
+  base::ListValue spaces = ReadSpaces(browser->GetProfile());
+  const size_t active = ActiveIndex(browser, spaces);
   spaces[active].GetDict().Set(kName, trimmed.substr(0, 40));
-  Write(profile, std::move(spaces), active);
+  Write(browser, std::move(spaces), active);
 }
 
 void DeleteActiveSpace(BrowserWindowInterface* browser) {
@@ -206,28 +260,40 @@ void DeleteActiveSpace(BrowserWindowInterface* browser) {
   if (spaces.size() < 2) {
     return;
   }
-  const size_t active = ActiveIndex(profile, spaces);
+  const size_t active = ActiveIndex(browser, spaces);
   const size_t previous = active == 0 ? 1 : active - 1;
-  // The window shows the previous space's tabs followed by this one's.
-  std::vector<SpaceTab> merged =
-      TabsFrom(*spaces[previous].GetDict().FindList(kTabs));
-  for (SpaceTab tab : TabsFrom(CaptureTabs(browser))) {
-    if (!merged.empty()) {
-      tab.active = false;
-    }
-    merged.push_back(std::move(tab));
+  // Merging into a space another window shows would split it across two
+  // windows; that window has to show something else first.
+  if (WindowShowing(browser, IdAt(spaces, previous))) {
+    return;
   }
+  // The window shows the previous space's tabs followed by this one's. The
+  // tabs already open stay as they are; only the previous space's come in,
+  // asleep, in front of them.
+  std::vector<SpaceTab> previous_tabs =
+      TabsFrom(*spaces[previous].GetDict().FindList(kTabs));
   spaces[previous].GetDict().Set(kTabs, base::ListValue());
   spaces.erase(spaces.begin() + active);
-  Write(profile, std::move(spaces), previous < active ? previous : 0);
-  ReplaceTabs(browser, std::move(merged));
+  Write(browser, std::move(spaces), previous < active ? previous : 0);
+  AddTabsAsleep(browser, previous_tabs, /*at_front=*/true);
 }
 
 void OpenTabsAsleep(BrowserWindowInterface* browser,
                     const std::vector<SpaceTab>& tabs) {
+  AddTabsAsleep(browser, tabs, /*at_front=*/false);
+}
+
+namespace {
+
+// At the front, the tabs keep their order before the window's unpinned tabs
+// and none is selected, so the tab in use stays in use.
+void AddTabsAsleep(BrowserWindowInterface* browser,
+                   const std::vector<SpaceTab>& tabs,
+                   bool at_front) {
   TabStripModel* model = browser->GetTabStripModel();
   const bool any_active = std::ranges::any_of(
       tabs, [](const SpaceTab& tab) { return tab.active; });
+  int front = model->IndexOfFirstNonPinnedTab();
   for (size_t i = 0; i < tabs.size(); ++i) {
     const SpaceTab& tab = tabs[i];
     sessions::SerializedNavigationEntry entry;
@@ -239,9 +305,13 @@ void OpenTabsAsleep(BrowserWindowInterface* browser,
     entry.set_timestamp(base::Time::Now());
     const std::vector<sessions::SerializedNavigationEntry> navigations = {
         entry};
-    const bool select = tab.active || (!any_active && i == 0);
-    const int index =
-        tab.pinned ? model->IndexOfFirstNonPinnedTab() : model->count();
+    const bool select =
+        !at_front && (tab.active || (!any_active && i == 0));
+    int index = tab.pinned ? model->IndexOfFirstNonPinnedTab()
+                           : (at_front ? front++ : model->count());
+    if (tab.pinned && at_front) {
+      ++front;
+    }
     chrome::AddRestoredTab(browser, navigations, index,
                            /*selected_navigation=*/0,
                            /*extension_app_id=*/std::string(),
@@ -254,5 +324,7 @@ void OpenTabsAsleep(BrowserWindowInterface* browser,
                            /*is_active_browser=*/std::nullopt);
   }
 }
+
+}  // namespace
 
 }  // namespace perch

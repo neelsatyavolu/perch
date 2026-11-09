@@ -155,9 +155,9 @@ export class BrowserSync {
 
   private async pass(): Promise<SyncRun | null> {
     if (this.opts.allowed && !this.opts.allowed()) return null;
-    const account = await this.account();
-    if (!account) return null;
     try {
+      const account = await this.account();
+      if (!account) return null;
       const api = this.opts.api.withToken(account.session.sessionToken);
       let keys = await this.keysFor(account, api);
       if (!keys) {
@@ -206,7 +206,7 @@ export class BrowserSync {
 
   /** A pass now and every 15 minutes while sync is on. Returns a function that stops it. */
   start(): () => void {
-    const tick = () => void this.syncNow();
+    const tick = () => void this.syncNow().catch(() => undefined);
     tick();
     const timer = setInterval(tick, this.opts.intervalMs ?? SYNC_INTERVAL_MS);
     timer.unref?.();

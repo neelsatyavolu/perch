@@ -22,11 +22,17 @@ class View;
 
 class SidePanel;
 
+namespace tabs {
+class TabInterface;
+}
+
 namespace perch {
 
 // The Perch sidebar in one window (spec 5.3): one window-scoped side panel
-// entry whose page shows the active tab's side chat. Switching to a tab
-// without an open side chat closes the panel; switching back reopens it.
+// entry whose page shows the active tab's side chat. A new tab opened while
+// the panel shows keeps it showing. Switching to a tab whose panel was closed
+// closes it, and switching back reopens it at once: the page is kept alive
+// while closed (side_panel_coordinator.cc), so it never reloads.
 class PerchSidePanelController : public TabStripModelObserver,
                                  public SidePanelEntryObserver {
  public:
@@ -46,6 +52,9 @@ class PerchSidePanelController : public TabStripModelObserver,
 
   // SidePanelEntryObserver:
   void OnEntryShown(SidePanelEntry* entry) override;
+  void OnEntryWillHide(SidePanelEntry* entry,
+                       SidePanelEntryHideReason reason) override;
+  void OnEntryHideCancelled(SidePanelEntry* entry) override;
   void OnEntryHidden(SidePanelEntry* entry) override;
 
  private:
@@ -61,6 +70,10 @@ class PerchSidePanelController : public TabStripModelObserver,
   // Set while the panel opens or closes because of a tab switch, so that
   // does not change the tab's remembered state.
   bool switching_ = false;
+  // The tab whose panel the user is closing, while the close animates.
+  raw_ptr<tabs::TabInterface> hiding_tab_ = nullptr;
+  // Whether perchd has had every tab since this window's sidebar first showed.
+  bool synced_once_ = false;
   // The width this window's sidebar last had, or 0 before it first closes.
   int width_ = 0;
   base::WeakPtrFactory<PerchSidePanelController> weak_factory_{this};

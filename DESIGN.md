@@ -21,9 +21,10 @@ Perch follows `~/DESIGN.md` (Blackletter) and the unslop rules (unslop by Damir 
 | No shadows at all | Menus, popovers and the approval card may use one soft neutral shadow | Floating layers over arbitrary web pages need separation that a hairline alone can't give on a white site |
 | Serif hero on every page | Geist Serif only on the new tab page title, empty states and the welcome screen, at 40px or larger | The chrome is a tool, not an editorial |
 | Dark and light | Five themes and five accents (below) | People live in a browser; it should feel like theirs |
+| No glass | Toolbar and tab menus are frosted: the macOS menu material under a 60% `elevated` tint, 12px corners, a hairline edge and 8px rows inset 6px | The owner asked for menus that sit in the window like Aside's; the tint keeps them on-palette over any page |
 | One accent use list | Accent marks: the perch dot, focus rings, text selection, the search engine chip, links in chat, the active artifact | Same restraint, named for browser surfaces |
 
-Everything else carries over: Geist / Geist Mono / Geist Serif, weights 400 and 500, the 4px grid, radii (controls and tabs 8, cards and panels 12, inner elements 8), three text roles plus `stone`, hairlines for depth, the single easing curve, no gradients, glows, glass or emoji.
+Everything else carries over: Geist / Geist Mono / Geist Serif, weights 400 and 500, the 4px grid, radii (controls and tabs 8, cards and panels 12, inner elements 8), three text roles plus `stone`, hairlines for depth, the single easing curve, no gradients, glows, glass (menus aside) or emoji.
 
 ## Themes
 

@@ -28,7 +28,7 @@ export function syncPages(deps: PagesDeps): Methods<SyncMethod> {
       const sync = allowed();
       const paired = await plainly(() => sync.checkPairing(v.text(id, "pairingId", 200)));
       if (!paired) return null;
-      void sync.syncNow();
+      void sync.syncNow().catch(() => undefined);
       return sync.status();
     },
     syncNow: async () => {

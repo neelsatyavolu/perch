@@ -281,7 +281,10 @@ void ApplyPin(base::WeakPtr<Profile> profile,
     return;
   }
   if (toolbar->HasAction(id)) {
-    toolbar->SetActionVisibility(id, pinned);
+    // Setting the state it already has is an error to the model.
+    if (toolbar->IsActionPinned(id) != pinned) {
+      toolbar->SetActionVisibility(id, pinned);
+    }
     return;
   }
   if (tries_left > 0) {

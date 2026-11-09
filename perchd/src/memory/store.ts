@@ -7,13 +7,16 @@
 import type { KeyStore } from "./keychain";
 import { factKey, newPage, parsePage, renderPage, type Fact, type FactSource, type Page } from "./page";
 import { RecordFolder } from "./records";
-import { cleanText, FILEABLE, isCategory, looksSecret, pagePath, type Category } from "./sanitize";
+import { categoryOf, cleanText, FILEABLE, isCategory, looksSecret, pagePath, type Category } from "./sanitize";
 import { cosine, fuse, MemoryIndex, pageText, type Embedder, type SearchHit, type SearchOptions } from "./search";
 import { DEFAULT_TAXONOMY, MAX_TAXONOMY, TAXONOMY_PATH } from "./taxonomy";
 
 export type NewFact = { category: Category; title: string; text: string; expires?: string };
 export type AddResult = { added: number; duplicates: number; rejected: { text: string; reason: string }[]; paths: string[] };
-export type PageSummary = { id: string; path: string; title: string; category: Category; facts: number; updated: string };
+/** A whole page to add: its path, title and fact texts. */
+export type NewPage = { readonly path: string; readonly title: string; readonly current: readonly string[]; readonly history?: readonly string[] };
+export type AddPagesResult = { readonly added: readonly string[]; readonly skipped: readonly { readonly path: string; readonly reason: string }[] };
+export type PageSummary ={ id: string; path: string; title: string; category: Category; facts: number; updated: string };
 export type RetentionDays = 30 | 90 | null;
 /** `dreaming`: the nightly tidy (spec 8) runs; it never runs while extraction is off or memory is paused. */
 export type MemorySettings = { extraction: boolean; paused: boolean; dreaming: boolean; episodicRetentionDays: RetentionDays };
@@ -247,6 +250,44 @@ export class MemoryStore {
       await this.log(changes);
       return result;
     });
+  }
+
+  /**
+   * Adds whole new pages in one pass (an import): one record per page, one change-log write for
+   * all of them. A page whose path is taken is left as it is; bad paths, secrets, empty and
+   * oversized pages are refused. Nothing existing is ever replaced.
+   */
+  addPages(items: readonly NewPage[], source: FactSource, detail: string): Promise<AddPagesResult> {
+    return this.exclusive(async () => {
+      const taken = new Set([...this.pages.values()].map((p) => p.path));
+      const added: Page[] = [];
+      const skipped: { path: string; reason: string }[] = [];
+      for (const item of items) {
+        const page = taken.has(item.path) ? "a page is already there" : this.pageFrom(item, source, taken.size);
+        if (typeof page === "string") skipped.push({ path: String(item.path), reason: page });
+        else {
+          taken.add(page.path);
+          added.push(page);
+        }
+      }
+      for (const page of added) await this.write(page);
+      await this.log(added.map((p) => ({ time: p.created, action: "add", path: p.path, detail, source })));
+      return { added: added.map((p) => p.path), skipped };
+    });
+  }
+
+  /** The page an import item makes, or why it cannot be one. */
+  private pageFrom(item: NewPage, source: FactSource, count: number): Page | string {
+    if (count >= MAX_PAGES) return "memory is full";
+    if (typeof item.path !== "string" || !categoryOf(item.path)) return "not a memory page path";
+    const now = this.stamp();
+    const facts = (texts: readonly string[]): Fact[] => texts.map((t) => cleanText(String(t))).filter(Boolean).map((text) => ({ text, added: now, source }));
+    const current = facts(item.current);
+    const history = facts(item.history ?? []);
+    if (current.length + history.length === 0) return "empty";
+    if (current.length > MAX_FACTS_PER_PAGE || history.length > MAX_FACTS_PER_PAGE) return "too many facts";
+    if ([...current, ...history].some((f) => looksSecret(f.text))) return "looks like a secret";
+    return { ...newPage(item.path, String(item.title ?? ""), now), current, history };
   }
 
   private problemWith(item: NewFact, text: string): string | null {

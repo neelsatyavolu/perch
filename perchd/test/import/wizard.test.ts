@@ -117,7 +117,7 @@ test("counts never ask the Keychain", async () => {
     searchEngines: { count: 2 },
     passwords: { count: 1 },
     addresses: { count: 1 },
-    cookies: { count: 2 },
+    cookies: { count: 3 },
     extensions: { count: 1 },
   });
   const firefox = firefoxProfile(env.home);
@@ -145,7 +145,7 @@ test("importing from Chrome: bookmarks and history written, the rest sealed in o
     { type: "searchEngines", status: "bundled", count: 2, message: BUNDLED_MESSAGE },
     { type: "passwords", status: "bundled", count: 1, message: BUNDLED_MESSAGE },
     { type: "addresses", status: "bundled", count: 1, message: BUNDLED_MESSAGE },
-    { type: "cookies", status: "bundled", count: 1, skipped: 1, message: BUNDLED_MESSAGE },
+    { type: "cookies", status: "bundled", count: 2, message: BUNDLED_MESSAGE },
     { type: "extensions", status: "bundled", count: 1, message: BUNDLED_MESSAGE },
   ]);
   expect(keychain.asked).toEqual(["Chrome Safe Storage"]);

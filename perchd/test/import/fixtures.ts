@@ -123,7 +123,7 @@ export function chromeProfile(home: string, dir = "Google/Chrome", profileDir = 
   const future = chromeUs(Date.now() + 86_400_000);
   addCookie.run(chromeUs(T0), ".example.com", "sid", sealed(".example.com", "test-session-value"), "/", future, 1, 1, chromeUs(T0), 1, chromeUs(T0));
   addCookie.run(chromeUs(T0), "old.example.com", "gone", sealed("old.example.com", "x"), "/", chromeUs(T0 - 86_400_000), 0, 0, chromeUs(T0), 1, chromeUs(T0));
-  // A partitioned (CHIPS) cookie: only readable under its top-level site, so it is not imported.
+  // A partitioned (CHIPS) cookie: only readable under its top-level site, and imported with that partition.
   cookies
     .prepare("INSERT INTO cookies VALUES (?, ?, ?, ?, '', ?, ?, ?, 1, 0, ?, 1, 1, 1, 0, 2, 443, ?, 0, 1)")
     .run(chromeUs(T0), ".tracker.test", "https://embedder.test", "pid", sealed(".tracker.test", "partitioned"), "/", future, chromeUs(T0), chromeUs(T0));
@@ -197,4 +197,33 @@ export function snss(commands: [number, Buffer][], version = 3): Buffer {
       return Buffer.concat([h, payload]);
     }),
   ]);
+}
+
+export type AsideFixture = {
+  readonly memory?: Readonly<Record<string, string>>;
+  /** Skill files by path under skills/user, like "mail/SKILL.md". */
+  readonly skills?: Readonly<Record<string, string>>;
+  readonly chats?: readonly { readonly id: string; readonly title: string; readonly created: number; readonly turns: readonly (readonly [user: string, assistant: string | null])[] }[];
+};
+
+/** Aside's agent folder (~/.aside/u/0) with made-up memory, skills and chats. Returns the account folder. */
+export function asideAgent(home: string, data: AsideFixture): string {
+  const account = join(home, ".aside", "u", "0");
+  for (const [path, text] of Object.entries(data.memory ?? {})) write(join(account, "memory", path), text);
+  for (const [path, text] of Object.entries(data.skills ?? {})) write(join(account, "skills", "user", path), text);
+  const db = sqlite(
+    join(account, "state.db"),
+    `CREATE TABLE sessions (id TEXT PRIMARY KEY, title TEXT NOT NULL DEFAULT 'New Session', incognito INTEGER NOT NULL DEFAULT 0, ephemeral INTEGER NOT NULL DEFAULT 0, archived_at INTEGER, created_at INTEGER NOT NULL);
+     CREATE TABLE session_turns (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, user_message TEXT NOT NULL, final_assistant_message TEXT, started_at INTEGER NOT NULL);`,
+  );
+  const session = db.prepare("INSERT INTO sessions (id, title, created_at) VALUES (?, ?, ?)");
+  const turn = db.prepare("INSERT INTO session_turns (session_id, user_message, final_assistant_message, started_at) VALUES (?, ?, ?, ?)");
+  db.transaction(() => {
+    for (const chat of data.chats ?? []) {
+      session.run(chat.id, chat.title, chat.created);
+      chat.turns.forEach(([user, assistant], i) => turn.run(chat.id, user, assistant, chat.created + (i + 1) * 1000));
+    }
+  })();
+  db.close();
+  return account;
 }

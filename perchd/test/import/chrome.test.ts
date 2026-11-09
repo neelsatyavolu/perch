@@ -73,13 +73,14 @@ test("search engines: user-added ones and the default; addresses from the token 
   ]);
 });
 
-test("cookies: v24 hash prefix removed, expired ones dropped, partitioned ones left out", async () => {
-  expect(await countChromeCookies(fx.profile)).toBe(2);
+test("cookies: v24 hash prefix removed, expired ones dropped, partitioned ones keep their partition", async () => {
+  expect(await countChromeCookies(fx.profile)).toBe(3);
   const { cookies, undecryptable, partitioned } = await readChromeCookies(fx.profile, FAKE_KEY);
   expect(undecryptable).toBe(0);
-  expect(partitioned).toBe(1);
-  expect(cookies).toHaveLength(1);
-  expect(cookies[0]).toMatchObject({ name: "sid", value: "test-session-value", domain: ".example.com", path: "/", secure: true, httpOnly: true, sameSite: "Lax" });
+  expect(partitioned).toBe(0);
+  expect(cookies).toHaveLength(2);
+  expect(cookies.find((c) => c.name === "pid")).toMatchObject({ domain: ".tracker.test", value: "partitioned", partition: { site: "https://embedder.test", crossSite: true } });
+  expect(cookies.find((c) => c.name === "sid")).toMatchObject({ name: "sid", value: "test-session-value", domain: ".example.com", path: "/", secure: true, httpOnly: true, sameSite: "Lax" });
   expect(cookies[0]!.expires).toBeGreaterThan(Date.now() / 1000);
 });
 

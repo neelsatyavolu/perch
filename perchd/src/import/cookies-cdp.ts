@@ -7,7 +7,7 @@
 import type { CdpConnection } from "../cdp/connection";
 import type { Cookie } from "./types";
 
-const BATCH = 200;
+const BATCH = 100;
 
 function toCdp(c: Cookie): Record<string, unknown> {
   // Chromium refuses SameSite=None without Secure; such a cookie falls back to the default.
@@ -21,14 +21,23 @@ function toCdp(c: Cookie): Record<string, unknown> {
     httpOnly: c.httpOnly,
     ...(sameSite ? { sameSite } : {}),
     ...(c.expires !== undefined ? { expires: c.expires } : {}),
+    ...(c.partition ? { partitionKey: { topLevelSite: c.partition.site, hasCrossSiteAncestor: c.partition.crossSite } } : {}),
   };
 }
 
-/** Chromium sometimes never answers a large setCookies call; a call that stays silent this long counts as failed. */
-const BATCH_TIMEOUT_MS = 15_000;
-const ONE_TIMEOUT_MS = 4_000;
-/** After this many silent single calls in a row, the rest of the batch is given up on. */
-const MAX_SILENT = 3;
+/**
+ * Chromium sometimes gives no answer to a setCookies call, and the same cookies go in fine a moment
+ * later. So a call that stays silent this long is set aside and tried once more after the other
+ * batches; an import never waits on one call for long.
+ */
+const TIMEOUT_MS = 3_000;
+
+/**
+ * Chromium keeps about 3,300 cookies and throws out the least recently used beyond that, so sending
+ * more only makes it evict as it goes. Readers list the most recently used first; the import keeps
+ * this many and counts the rest as left out.
+ */
+export const MAX_COOKIES = 3_000;
 
 class Silent extends Error {}
 
@@ -40,37 +49,50 @@ function within<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([promise, silent]).finally(() => clearTimeout(timer));
 }
 
-export async function applyCookies(
-  conn: CdpConnection,
-  cookies: readonly Cookie[],
-  timeouts: { readonly batch: number; readonly one: number } = { batch: BATCH_TIMEOUT_MS, one: ONE_TIMEOUT_MS },
-): Promise<{ applied: number; failed: number }> {
+type Wire = Record<string, unknown>;
+
+/** Sets one batch. A refused batch is retried cookie by cookie; a silent one is handed back. */
+async function setBatch(conn: CdpConnection, batch: readonly Wire[], timeoutMs: number): Promise<{ applied: number; failed: number; silent: readonly Wire[] }> {
+  try {
+    await within(conn.send("Storage.setCookies", { cookies: batch }), timeoutMs);
+    return { applied: batch.length, failed: 0, silent: [] };
+  } catch (error) {
+    if (error instanceof Silent) return { applied: 0, failed: 0, silent: batch };
+  }
+  // One bad cookie fails the whole call; go one by one to keep the good ones.
   let applied = 0;
   let failed = 0;
-  for (let i = 0; i < cookies.length; i += BATCH) {
-    const batch = cookies.slice(i, i + BATCH).map(toCdp);
+  for (const [index, cookie] of batch.entries()) {
     try {
-      await within(conn.send("Storage.setCookies", { cookies: batch }), timeouts.batch);
-      applied += batch.length;
-    } catch {
-      // One bad cookie fails the whole call, and some calls are never answered; retry one by one to keep the good ones.
-      let silent = 0;
-      for (const [index, cookie] of batch.entries()) {
-        if (silent >= MAX_SILENT) {
-          failed += batch.length - index;
-          break;
-        }
-        try {
-          const r = await within(conn.send<{ success?: boolean }>("Storage.setCookies", { cookies: [cookie] }), timeouts.one);
-          silent = 0;
-          if (r && r.success === false) failed++;
-          else applied++;
-        } catch (error) {
-          silent = error instanceof Silent ? silent + 1 : 0;
-          failed++;
-        }
-      }
+      const r = await within(conn.send<{ success?: boolean }>("Storage.setCookies", { cookies: [cookie] }), timeoutMs);
+      if (r && r.success === false) failed++;
+      else applied++;
+    } catch (error) {
+      if (error instanceof Silent) return { applied, failed, silent: batch.slice(index) };
+      failed++;
     }
+  }
+  return { applied, failed, silent: [] };
+}
+
+export async function applyCookies(conn: CdpConnection, cookies: readonly Cookie[], timeoutMs = TIMEOUT_MS, now = Date.now()): Promise<{ applied: number; failed: number }> {
+  // A cookie that has already run out would be dropped by the browser anyway.
+  const current = cookies.filter((c) => c.expires === undefined || c.expires * 1000 > now);
+  const live = current.slice(0, MAX_COOKIES).map(toCdp);
+  let applied = 0;
+  let failed = current.length - live.length;
+  let later: Wire[] = [];
+  for (let i = 0; i < live.length; i += BATCH) {
+    const r = await setBatch(conn, live.slice(i, i + BATCH), timeoutMs);
+    applied += r.applied;
+    failed += r.failed;
+    later = [...later, ...r.silent];
+  }
+  // One more try for what got no answer; what is silent twice is left out.
+  for (let i = 0; i < later.length; i += BATCH) {
+    const r = await setBatch(conn, later.slice(i, i + BATCH), timeoutMs);
+    applied += r.applied;
+    failed += r.failed + r.silent.length;
   }
   return { applied, failed };
 }

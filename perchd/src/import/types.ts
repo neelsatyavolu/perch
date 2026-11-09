@@ -63,6 +63,8 @@ export type Cookie = {
   readonly secure: boolean;
   readonly httpOnly: boolean;
   readonly sameSite?: "Strict" | "Lax" | "None";
+  /** A partitioned (CHIPS) cookie: the top-level site it belongs to, and whether it was set in a cross-site frame. */
+  readonly partition?: { readonly site: string; readonly crossSite: boolean };
 };
 
 export type Extension = { readonly id: string; readonly name: string; readonly version: string; readonly storeUrl?: string };

@@ -33,7 +33,8 @@ import { MemoryKeychain } from "../src/secure/keychain";
 import { SkillCatalog } from "../src/skills/catalog";
 import { SkillStore } from "../src/skills/store";
 import { fakeServer, json, type FakeServer } from "./fixtures/fake-providers";
-import { chromeProfile, FAKE_SAFE_STORAGE, HISTORY_SCHEMA, sqlite } from "./import/fixtures";
+import { pendingBundles } from "../src/import/bundle";
+import { asideAgent, chromeProfile, FAKE_SAFE_STORAGE, HISTORY_SCHEMA, sqlite } from "./import/fixtures";
 
 const TOKEN = "page-token-0123456789abcdef0123456789abcdef";
 const BROWSER_TOKEN = "browser-token-0123456789abcdef0123456789ab";
@@ -527,4 +528,35 @@ test("import: browsers found, progress as job events, then the suggestion goes a
   expect(await api.getJob("job-unknown")).toBeNull();
   expect((await fails(api.getJob(42 as never))).status).toBe(400);
   expect((await api.listSuggestions()).map((s) => s.id)).toEqual([]);
+});
+
+test("import: Aside's memory, skills and chats go into Perch's own stores, once", async () => {
+  const home = join(dir, "home");
+  chromeProfile(home, "Aside");
+  asideAgent(home, {
+    memory: { "people/grace.md": "# Grace Hopper\n\n## Current\n- Wrote the first compiler.\n", "TAXONOMY.md": "# Rules\n- Aside's own.\n" },
+    skills: { "receipts/SKILL.md": "---\nname: receipts\ndescription: File receipts.\n---\nFile them.\n" },
+    chats: [{ id: "aside-session-1", title: "Trip to Kyoto", created: Date.UTC(2026, 9, 1), turns: [["Plan three days", "Here is a plan."]] }],
+  });
+  const aside = (await api.detectBrowsers()).find((b) => b.id === "aside")!;
+  expect(aside.options.filter((o) => o.kind.startsWith("aside-"))).toEqual([{ kind: "aside-memory", available: true }, { kind: "aside-skills", available: true }, { kind: "aside-chats", available: true }]);
+
+  const kinds = ["aside-memory", "aside-skills", "aside-chats"] as const;
+  const first = await untilDone(await api.startImport({ browser: "aside", profile: "Default", kinds: [...kinds] }));
+  expect(first.at(-1)).toMatchObject({ state: "done", summary: ["1 memory pages, 1 skipped", "1 skills", "1 chats"] });
+  expect(pendingBundles(join(dir, "user-data"))).toEqual([]);
+
+  const page = await api.readMemoryPage("people/grace.md");
+  expect(page).toMatchObject({ title: "Grace Hopper", body: "# Grace Hopper\n\n## Current\n- Wrote the first compiler.\n" });
+  expect((await data.memory.changes()).find((c) => c.path === "people/grace.md")).toMatchObject({ action: "add", source: "import", detail: "Imported from Aside" });
+  expect((await api.listSkills()).find((s) => s.id === "receipts")).toMatchObject({ origin: "aside", enabled: true });
+  const chat = app.chats.list().find((c) => c.title === "Trip to Kyoto")!;
+  expect(chat).toMatchObject({ tab: null, createdAt: "2026-10-01T00:00:00.000Z" });
+  expect(chat.messages.map((m) => [m.role, m.text])).toEqual([["user", "Plan three days"], ["assistant", "Here is a plan."]]);
+  expect((await api.searchChats("Kyoto")).map((c) => c.title)).toEqual(["Trip to Kyoto"]);
+
+  const again = await untilDone(await api.startImport({ browser: "aside", profile: "Default", kinds: [...kinds] }));
+  expect(again.at(-1)).toMatchObject({ state: "done", summary: ["0 memory pages, 2 skipped", "0 skills, 1 skipped", "0 chats, 1 skipped"] });
+  expect(app.chats.list().filter((c) => c.title === "Trip to Kyoto")).toHaveLength(1);
+  expect((await api.listMemoryPages()).filter((p) => p.path === "people/grace.md")).toHaveLength(1);
 });

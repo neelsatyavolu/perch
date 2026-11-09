@@ -1,7 +1,8 @@
 /**
  * The Import page over the import wizard (src/import/wizard.ts): the browsers found on this Mac,
  * what each can bring in, and an import that reports progress as a job. Aside's memory, skills
- * and chats come from its agent folder, shown under Aside. Chosen files (a passwords CSV) need the
+ * and chats come from its agent folder, shown under Aside, and go into Perch's own memory, skill
+ * and chat stores (import-agent.ts). Chosen files (a passwords CSV) need the
  * browser's file picker, which perchd can't read from yet.
  */
 
@@ -16,6 +17,7 @@ import * as v from "../validate";
 import { importAllowed } from "../../policy/policy";
 import { managed, notYet, policyOf, type Methods } from "./common";
 import type { PagesDeps } from "./deps";
+import { agentWriter } from "./import-agent";
 
 const BROWSERS: readonly BrowserId[] = ["aside", "chrome", "arc", "dia", "brave", "edge", "vivaldi", "opera", "helium", "safari", "firefox", "zen"];
 const ASIDE_AGENT = "aside-agent";
@@ -118,7 +120,7 @@ export function importPages(deps: PagesDeps): Methods<"detectBrowsers" | "getSys
         let base = 0;
         for (const part of parts) {
           const report = await importSource({
-            home, source: part.source, types: part.types, target, keychain: deps.importer.keychain, running: deps.importer.running, browser: deps.importer.browser,
+            home, source: part.source, types: part.types, target, keychain: deps.importer.keychain, running: deps.importer.running, browser: deps.importer.browser, agent: agentWriter(deps),
             onProgress: (p) => job.step(`Importing ${nounOf(p.type)}`, base + p.index),
           });
           results.push(...report.results);

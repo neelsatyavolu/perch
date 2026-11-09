@@ -46,6 +46,18 @@ export async function readSkillFolder(dir: string): Promise<SkillBundle> {
   return { name: head.name, description: head.description, files };
 }
 
+/** A bundle from text files already in memory (an import), under the same limits as a folder. */
+export function bundleFromText(folderName: string, texts: readonly { readonly path: string; readonly text: string }[]): SkillBundle {
+  const main = texts.find((t) => t.path === "SKILL.md");
+  if (!main) throw new Error("the folder has no SKILL.md");
+  const head = parseSkillFile(main.text, folderName);
+  if (texts.length > MAX_FILES) throw new Error(`the skill has more than ${MAX_FILES} files`);
+  if (texts.some((t) => t.path.startsWith("/") || t.path.split("/").includes(".."))) throw new Error("a skill file points outside its folder");
+  const files = Object.fromEntries([...texts].sort((a, b) => (a.path < b.path ? -1 : 1)).map((t) => [t.path, Buffer.from(t.text, "utf8").toString("base64")]));
+  if (Object.values(files).reduce((n, data) => n + Buffer.byteLength(data, "base64"), 0) > MAX_BYTES) throw new Error("the skill is larger than 5 MB");
+  return { name: head.name, description: head.description, files };
+}
+
 /** Text of one file in a bundle, or null when it is missing or binary. */
 export function bundleText(bundle: SkillBundle, path: string): string | null {
   const data = bundle.files[path];

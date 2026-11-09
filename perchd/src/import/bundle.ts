@@ -93,6 +93,24 @@ export async function discardBundle(userDataDir: string, keychain: Keychain, id:
 
 const sameSource = (a: Bundle["source"], b: Bundle["source"]) => a.browser === b.browser && a.profile === b.profile;
 
+/**
+ * Takes data types out of the source's pending bundles once they are in Perch: what is left is
+ * sealed again, and a bundle with nothing left is discarded with its key.
+ */
+export async function dropFromBundles(userDataDir: string, keychain: Keychain, source: Bundle["source"], types: readonly (keyof ImportData)[]): Promise<void> {
+  for (const id of pendingBundles(userDataDir)) {
+    try {
+      const bundle = await openBundle(userDataDir, keychain, id);
+      if (!sameSource(bundle.source, source) || !types.some((t) => t in bundle.data)) continue;
+      const left = Object.fromEntries(Object.entries(bundle.data).filter(([type]) => !(types as readonly string[]).includes(type))) as ImportData;
+      if (Object.keys(left).length) await sealBundle(userDataDir, keychain, bundle.source, left, bundle.created);
+      await discardBundle(userDataDir, keychain, id);
+    } catch {
+      // A damaged bundle, or one whose key is gone, is left alone; it cannot be opened to trim.
+    }
+  }
+}
+
 /** Seal `data` together with what an older pending bundle from the same source holds, then discard that bundle and its key. */
 export async function sealReplacingBundle(userDataDir: string, keychain: Keychain, source: Bundle["source"], data: ImportData, now = Date.now()): Promise<{ id: string; path: string }> {
   const older: Bundle[] = [];

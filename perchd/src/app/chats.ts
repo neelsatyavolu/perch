@@ -15,6 +15,8 @@ import type { Vault } from "./vault";
 
 export const DEFAULT_SETTINGS: ChatSettings = Object.freeze({ mode: "guard", model: "", effort: "medium", scope: "current" });
 const EXT = ".chat";
+/** How many chats `addAll` seals and writes at once. */
+const ADD_BATCH = 32;
 
 /** `incognito`: a private chat, kept in memory only (spec 5.8). */
 export type NewChat = { title?: string; tab?: TabRef | null; settings?: Partial<ChatSettings>; incognito?: boolean };
@@ -69,6 +71,18 @@ export class ChatStore {
     };
     await this.save(chat);
     return init.tab ? this.attach(chat.id, init.tab) : chat;
+  }
+
+  /**
+   * Adds whole chats (an import) under their own ids and times, a batch at a time. A chat whose id
+   * is already here is left alone, and none is tied to a tab. Returns the chats added.
+   */
+  async addAll(chats: readonly Chat[]): Promise<Chat[]> {
+    const fresh = [...new Map(chats.filter((c) => !this.chats.has(c.id)).map((c) => [c.id, { ...c, tab: null }])).values()];
+    for (let at = 0; at < fresh.length; at += ADD_BATCH) {
+      await Promise.all(fresh.slice(at, at + ADD_BATCH).map((c) => this.queue.run(c.id, () => this.save(c))));
+    }
+    return fresh;
   }
 
   /** Applies a change to the newest version of a chat. The change must return a new object. */

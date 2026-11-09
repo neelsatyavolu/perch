@@ -2,9 +2,10 @@
  * Chromium cookies (`Network/Cookies`, or `Cookies` in older profiles). From database
  * version 24 the decrypted value starts with SHA-256(host_key), which is checked and removed.
  *
- * Partitioned (CHIPS) cookies, rows with a `top_frame_site_key`, are left out: the source browser
- * only sends them under one top-level site, and importing them unpartitioned would let the
- * third party read them on every site that embeds it. The Firefox reader does the same.
+ * Partitioned (CHIPS) cookies, rows with a `top_frame_site_key`, keep their partition, so the third
+ * party still reads them only under that top-level site; importing them unpartitioned would let it
+ * read them everywhere. A key that isn't a plain site can't be set from outside and is left out.
+ * Rows come most recently used first, which is what the browser's cookie limit keeps (cookies-cdp.ts).
  */
 
 import { createHash } from "node:crypto";
@@ -28,11 +29,13 @@ type Row = {
   samesite: number;
   is_persistent: number;
   partition: string;
+  cross_site: number;
 };
 
-/** Older databases have no partition column; every cookie in them is unpartitioned. */
-const partitionColumn = (db: Database) =>
-  (db.query("SELECT name FROM pragma_table_info('cookies') WHERE name = 'top_frame_site_key'").get() ? "top_frame_site_key" : "''");
+const hasColumn = (db: Database, name: string) => Boolean(db.query("SELECT name FROM pragma_table_info('cookies') WHERE name = ?").get(name));
+/** Older databases have no partition columns; every cookie in them is unpartitioned. */
+const partitionColumn = (db: Database) => (hasColumn(db, "top_frame_site_key") ? "top_frame_site_key" : "''");
+const crossSiteColumn = (db: Database) => (hasColumn(db, "has_cross_site_ancestor") ? "has_cross_site_ancestor" : "0");
 
 export function chromeCookiesPath(profile: string): string | undefined {
   return [join(profile, "Network", "Cookies"), join(profile, "Cookies")].find((p) => existsSync(p));
@@ -41,7 +44,7 @@ export function chromeCookiesPath(profile: string): string | undefined {
 export function countChromeCookies(profile: string): Promise<number> {
   const path = chromeCookiesPath(profile);
   if (!path) return Promise.resolve(0);
-  return withSqliteCopy(path, (db) => (db.query(`SELECT COUNT(*) AS n FROM cookies WHERE ${partitionColumn(db)} = ''`).get() as { n: number }).n);
+  return withSqliteCopy(path, (db) => (db.query("SELECT COUNT(*) AS n FROM cookies").get() as { n: number }).n);
 }
 
 const SAME_SITE: Record<number, Cookie["sameSite"]> = { 0: "None", 1: "Lax", 2: "Strict" };
@@ -53,11 +56,12 @@ export async function readChromeCookies(profile: string, key: SafeStorageKey, no
   if (!path) return { cookies: [], undecryptable: 0, partitioned: 0 };
   return withSqliteCopy(path, (db) => {
     const version = hasTable(db, "meta") ? Number((db.query("SELECT value FROM meta WHERE key = 'version'").get() as { value: string } | null)?.value ?? 0) : 0;
-    const rows = db.query(`SELECT host_key, name, value, encrypted_value, path, expires_utc, is_secure, is_httponly, samesite, is_persistent, ${partitionColumn(db)} AS partition FROM cookies`).all() as Row[];
+    const rows = db.query(`SELECT host_key, name, value, encrypted_value, path, expires_utc, is_secure, is_httponly, samesite, is_persistent, ${partitionColumn(db)} AS partition, ${crossSiteColumn(db)} AS cross_site FROM cookies ORDER BY last_access_utc DESC`).all() as Row[];
     let undecryptable = 0;
     let partitioned = 0;
     const cookies = rows.flatMap((r): Cookie[] => {
-      if (r.partition) {
+      // A partition key that isn't a plain site (an opaque or nonce key) can't be set from outside.
+      if (r.partition && !/^https?:\/\//.test(r.partition)) {
         partitioned++;
         return [];
       }
@@ -78,6 +82,7 @@ export async function readChromeCookies(profile: string, key: SafeStorageKey, no
           secure: r.is_secure === 1,
           httpOnly: r.is_httponly === 1,
           ...(SAME_SITE[r.samesite] ? { sameSite: SAME_SITE[r.samesite] } : {}),
+          ...(r.partition ? { partition: { site: r.partition, crossSite: r.cross_site === 1 } } : {}),
         },
       ];
     });

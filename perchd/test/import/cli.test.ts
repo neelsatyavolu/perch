@@ -32,7 +32,7 @@ test("list, count and import from the terminal print counts and never a secret",
   out.length = 0;
   expect(await main(["import", "chrome", "--types", "bookmarks,passwords,cookies"], deps)).toBe(0);
   const text = out.join("");
-  expect(text).toBe("bookmarks: 3 added\npasswords: 1 saved for a later version of Perch to add\ncookies: 1 saved for a later version of Perch to add, 1 skipped\n");
+  expect(text).toBe("bookmarks: 3 added\npasswords: 1 saved for a later version of Perch to add\ncookies: 2 saved for a later version of Perch to add\n");
   expect(text).not.toContain("correct horse");
   expect(await main(["nonsense"], deps)).toBe(64);
 });

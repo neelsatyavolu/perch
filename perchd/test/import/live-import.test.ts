@@ -33,9 +33,10 @@ test("with Perch running, cookies go straight in over the DevTools pipe; the res
   });
   expect(report.results).toEqual([
     { type: "bookmarks", status: "bundled", count: 3, message: BUNDLED_MESSAGE },
-    { type: "cookies", status: "written", count: 1, skipped: 1 },
+    { type: "cookies", status: "written", count: 2 },
   ]);
   const { cookies } = await browser.conn.send<{ cookies: { name: string; value: string; domain: string }[] }>("Storage.getCookies", {});
   expect(cookies.find((c) => c.name === "sid")).toMatchObject({ value: "test-session-value", domain: ".example.com" });
-  expect(cookies.find((c) => c.name === "pid")).toBeUndefined();
+  // The partitioned cookie arrives still tied to its top-level site.
+  expect(cookies.find((c) => c.name === "pid")).toMatchObject({ value: "partitioned", partitionKey: { topLevelSite: "https://embedder.test" } });
 }, 60_000);

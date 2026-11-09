@@ -1,7 +1,8 @@
 /**
  * Put read data into Perch. Bookmarks and history go straight into the profile's Chromium files
  * when Perch is closed (and History already exists). Cookies go straight into a running Perch
- * over the DevTools pipe perchd holds. Everything else, and those types when they cannot be
+ * over the DevTools pipe perchd holds. Aside's memory, skills and chats go into Perch's own stores
+ * through the `agent` writer the app passes in. Everything else, and those types when they cannot be
  * written now, goes into one sealed bundle. Inside Perch the browser applies that bundle at once
  * (`Perch.applyImportBundle`, plan 3b task 14): perchd unseals it into a 0600 temp file the browser
  * reads, and deletes the file after the call. What the browser does not apply stays sealed, and
@@ -13,10 +14,10 @@ import { chmodSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs
 import { join } from "node:path";
 import type { ImportApplied, PerchDomainApi } from "../browser/perch-domain";
 import type { CdpConnection } from "../cdp/connection";
-import { bundleDir, discardBundle, openBundle, sealBundle, sealReplacingBundle } from "./bundle";
+import { bundleDir, discardBundle, dropFromBundles, openBundle, sealBundle, sealReplacingBundle } from "./bundle";
 import { applyCookies } from "./cookies-cdp";
 import type { Keychain } from "./keychain";
-import { countBookmarks, ImportError, type DataType, type ImportData } from "./types";
+import { countBookmarks, ImportError, type Chat, type DataType, type ImportData, type TextFile } from "./types";
 import { mergeBookmarksFile } from "./write/bookmarks-file";
 import { addHistory } from "./write/history-db";
 import { profileInUse } from "./write/profile-lock";
@@ -69,6 +70,27 @@ function writeDirect(type: DataType, data: ImportData, target: Target, label: st
   return undefined;
 }
 
+/** What an agent writer did with one type: items now in Perch, items left out, and a note for the result. */
+export type AgentCounts = { readonly added: number; readonly skipped: number; readonly note?: string };
+
+/**
+ * Writes Aside's agent data into Perch's own stores. The app supplies it (app/pages/import-agent.ts);
+ * without it, or without the method for a type, that type is bundled as before.
+ */
+export type AgentWriter = {
+  readonly memory?: (files: readonly TextFile[]) => Promise<AgentCounts>;
+  readonly skills?: (files: readonly TextFile[]) => Promise<AgentCounts>;
+  readonly chats?: (chats: readonly Chat[]) => Promise<AgentCounts>;
+};
+
+async function writeAgent(type: DataType, data: ImportData, agent: AgentWriter | undefined): Promise<TypeResult | undefined> {
+  const counts =
+    type === "memory" && data.memory ? agent?.memory?.(data.memory) : type === "skills" && data.skills ? agent?.skills?.(data.skills) : type === "chats" && data.chats ? agent?.chats?.(data.chats) : undefined;
+  if (!counts) return undefined;
+  const { added, skipped, note } = await counts;
+  return { type, status: "written", count: added, ...(skipped ? { skipped } : {}), ...(note ? { message: note } : {}) };
+}
+
 export type ApplyInput = {
   readonly target: Target;
   readonly keychain: Keychain;
@@ -81,6 +103,8 @@ export type ApplyInput = {
   readonly running?: CdpConnection;
   /** Perch's browser, which applies the sealed bundle itself when it has `Perch.applyImportBundle`. */
   readonly browser?: Pick<PerchDomainApi, "applyImportBundle">;
+  /** Perch's memory, skills and chats; tried before bundling those types. */
+  readonly agent?: AgentWriter;
 };
 
 /** The types the browser writes from a bundle; the rest wait in it. */
@@ -129,6 +153,7 @@ export async function applyImport(input: ApplyInput): Promise<{ results: TypeRes
   const label = `Imported from ${input.source.browser}`;
   const results: TypeResult[] = [];
   const toBundle: { type: DataType; data: ImportData; skipped?: number }[] = [];
+  const inStores: DataType[] = [];
   for (const [index, part] of input.parts.entries()) {
     const count = itemCount(part.type, part.data);
     if (count === 0) {
@@ -138,12 +163,16 @@ export async function applyImport(input: ApplyInput): Promise<{ results: TypeRes
     input.onProgress?.({ type: part.type, state: "writing", index, total: input.parts.length });
     try {
       const direct = writeDirect(part.type, part.data, input.target, label, closed) ?? (await writeLive(part.type, part.data, input.running, closed));
-      if (direct) results.push(part.skipped ? { ...direct, skipped: (direct.skipped ?? 0) + part.skipped } : direct);
+      const written = direct ?? (await writeAgent(part.type, part.data, input.agent));
+      if (written && !direct) inStores.push(part.type);
+      if (written) results.push(part.skipped ? { ...written, skipped: (written.skipped ?? 0) + part.skipped } : written);
       else toBundle.push(part);
     } catch (error) {
       results.push(failure(part.type, error));
     }
   }
+  // A copy an earlier import sealed is not kept once the data is in Perch's own stores.
+  if (inStores.length) await dropFromBundles(input.target.userDataDir, input.keychain, input.source, inStores);
   const order = (r: TypeResult) => input.parts.findIndex((p) => p.type === r.type);
   const sorted = (list: TypeResult[]) => [...list].sort((a, b) => order(a) - order(b));
   if (toBundle.length === 0) return { results: sorted(results) };

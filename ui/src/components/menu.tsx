@@ -1,4 +1,7 @@
-/** A pill that opens a list of choices above it. Arrow keys move, Enter picks, Escape closes. */
+/**
+ * A pill that opens a list of choices above it. Arrow keys move, Enter picks, Escape closes, Tab
+ * closes and moves on. Picking or Escape puts focus back on the pill.
+ */
 
 import { Fragment, type ComponentChildren, type VNode } from "preact";
 import { useEffect, useId, useRef, useState } from "preact/hooks";
@@ -16,14 +19,17 @@ type MenuProps<T extends string> = {
   onPick: (choice: Choice<T>) => void;
   mono?: boolean;
   align?: "start" | "end";
+  /** What an open list with no choices says. */
+  empty?: string;
 };
 
-export function Menu<T extends string>({ label, children, choices, selected, onPick, mono, align = "start" }: MenuProps<T>) {
+export function Menu<T extends string>({ label, children, choices, selected, onPick, mono, align = "start", empty = "Nothing here yet" }: MenuProps<T>) {
   const id = useId();
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const root = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLUListElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -42,10 +48,14 @@ export function Menu<T extends string>({ label, children, choices, selected, onP
     if (!choice) return;
     onPick(choice);
     setOpen(false);
+    button.current?.focus();
   };
   const onKey = (e: KeyboardEvent) => {
-    if (e.key === "Escape") setOpen(false);
-    else if (e.key === "ArrowDown") setActive((i) => Math.min(choices.length - 1, i + 1));
+    if (e.key === "Tab") return setOpen(false);
+    if (e.key === "Escape") {
+      setOpen(false);
+      button.current?.focus();
+    } else if (e.key === "ArrowDown") setActive((i) => Math.min(choices.length - 1, i + 1));
     else if (e.key === "ArrowUp") setActive((i) => Math.max(0, i - 1));
     else if (e.key === "Enter" || e.key === " ") pick(active);
     else return;
@@ -54,12 +64,17 @@ export function Menu<T extends string>({ label, children, choices, selected, onP
 
   return (
     <div class="menu-wrap" ref={root}>
-      <button type="button" class={mono ? "pill mono" : "pill"} aria-haspopup="listbox" aria-expanded={open} aria-label={label} title={label} onClick={() => setOpen(!open)}>
+      <button ref={button} type="button" class={mono ? "pill mono" : "pill"} aria-haspopup="listbox" aria-expanded={open} aria-label={label} title={label} onClick={() => setOpen(!open)}>
         <span class="pill-t">{children}</span>
         <Icon name="down" size={12} />
       </button>
       {open && (
         <ul class={`menu ${align}`} role="listbox" aria-label={label} tabIndex={-1} ref={list} onKeyDown={onKey} aria-activedescendant={`${id}-${active}`}>
+          {choices.length === 0 && (
+            <li class="menu-empty" role="option" aria-disabled="true" aria-selected="false">
+              {empty}
+            </li>
+          )}
           {choices.map((c, i) => (
             <Fragment key={c.value}>
               {c.group && c.group !== choices[i - 1]?.group && (

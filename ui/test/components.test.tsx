@@ -7,6 +7,7 @@ import { clampWidth, parseCsv, PANE } from "../src/components/artifact-pane";
 import { ChatList } from "../src/components/chat-list";
 import { Composer, PLACEHOLDER } from "../src/components/composer";
 import { PerchDot } from "../src/components/icon";
+import { memo } from "../src/components/memo";
 import { LiveRun, Message, Steps } from "../src/components/message";
 import { providerPath } from "../src/components/provider-mark";
 import { resolveTheme } from "../src/theme/theme";
@@ -101,7 +102,7 @@ function composer(over: Partial<Parameters<typeof Composer>[0]> = {}) {
     <Composer
       draft=""
       onDraft={(t) => calls.draft.push(t)}
-      onSend={(t) => calls.send.push(t)}
+      onSend={(t) => void calls.send.push(t)}
       onStop={() => calls.stop++}
       running={false}
       tab={{ id: "t1", windowId: "w1", title: "Inbox (3)", url: "https://mail.example/inbox" }}
@@ -227,4 +228,30 @@ test("the model picker draws each provider's own mark, and none for providers wi
   expect(providerPath("Grok")).toBe(providerPath("xAI API key"));
   expect(providerPath("Perch")).toBeNull();
   expect(providerPath("Ollama")).toBeNull();
+});
+
+test("a memoized component renders again only when a prop changes", () => {
+  let renders = 0;
+  const Counted = memo(({ text }: { text: string; other?: number }) => {
+    renders++;
+    return <p>{text}</p>;
+  });
+  const el = mount(<Counted text="a" other={1} />);
+  act(() => render(<Counted text="a" other={1} />, root));
+  expect(renders).toBe(1);
+  act(() => render(<Counted text="b" other={1} />, root));
+  expect(renders).toBe(2);
+  expect(el.textContent).toBe("b");
+});
+
+test("copying a reply that the clipboard refuses does not claim it was copied", async () => {
+  const clipboard = navigator.clipboard;
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: () => Promise.reject(new Error("denied")) } });
+  try {
+    const el = mount(<Message message={reply} artifact={() => null} />);
+    await act(async () => (el.querySelector('[aria-label="Copy reply"]') as HTMLElement).click());
+    expect(el.querySelector('[aria-label="Copied"]')).toBeNull();
+  } finally {
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: clipboard });
+  }
 });

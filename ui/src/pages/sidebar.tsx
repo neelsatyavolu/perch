@@ -5,9 +5,9 @@
  * typed in a tab that has no side chat yet is kept here, per tab, until the tab gets one.
  */
 
-import { useEffect, useRef, useState } from "preact/hooks";
-import type { Client } from "../api/client";
-import type { AppInfo, ChatSettings, ChatSummary, TabInfo } from "../api/types";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
+import type { ChatPayload, Client } from "../api/client";
+import type { AppInfo, ArtifactMeta, ChatSettings, ChatSummary, TabInfo } from "../api/types";
 import { Composer } from "../components/composer";
 import { Icon, PerchDot } from "../components/icon";
 import { Menu } from "../components/menu";
@@ -30,6 +30,8 @@ export function Sidebar({ client, windowId, fallbackTab = null, host }: Props) {
   const [tab, setTab] = useState<TabInfo | null>(null);
   const [recent, setRecent] = useState<ChatSummary[]>([]);
   const [pending, setPending] = useState<Partial<ChatSettings>>({});
+  /** False until the first tab's chat is known, so the empty state never flashes before it. */
+  const [loaded, setLoaded] = useState(false);
   const tabRef = useRef<string | null>(null);
   /** Unsent drafts of tabs that have no side chat yet. */
   const unbound = useRef(new Map<string, string>());
@@ -53,15 +55,40 @@ export function Sidebar({ client, windowId, fallbackTab = null, host }: Props) {
     else unbound.current.delete(tabId);
   };
 
-  const showTab = async (next: TabInfo | null) => {
-    keepUnboundDraft();
-    tabRef.current = next?.id ?? null;
-    await saveScroll();
+  /** Shows `next` with its chat in one update: the tab chip, header and thread change together. */
+  const present = (next: TabInfo | null, payload: ChatPayload | null) => {
     setTab(next);
-    const payload = next ? await client.tabChat(next.id).catch(() => null) : null;
-    if (tabRef.current !== (next?.id ?? null)) return;
     scroll.current = { chatId: payload?.chat?.id ?? null, top: payload?.chat?.scrollTop ?? 0, saved: payload?.chat?.scrollTop ?? 0 };
-    await chat.show(payload, next ? unbound.current.get(next.id) ?? "" : "");
+    chat.show(payload, next ? unbound.current.get(next.id) ?? "" : "");
+    setLoaded(true);
+  };
+
+  /**
+   * Switches to a tab. `chatId` is the tab's side chat when the browser already said (null: none,
+   * so nothing to fetch); undefined asks perchd. The outgoing scroll and draft save in the background.
+   */
+  const showTab = async (next: TabInfo | null, chatId?: string | null) => {
+    keepUnboundDraft();
+    const id = next?.id ?? null;
+    tabRef.current = id;
+    void saveScroll();
+    const payload = next && chatId !== null ? await client.tabChat(next.id).catch(() => null) : null;
+    if (tabRef.current !== id) return;
+    present(next, payload);
+  };
+
+  /** After the event stream comes back: events sent while it was down are lost, so reload what is shown. */
+  const resync = async () => {
+    void client.chats().then(setRecent).catch(() => undefined);
+    const s = await client.windowState(windowId).catch(() => null);
+    if (!s) return;
+    if ((s.tab?.id ?? null) !== tabRef.current) return void showTab(s.tab, s.chatId);
+    const payload = s.tab ? await client.tabChat(s.tab.id).catch(() => null) : null;
+    if (tabRef.current !== (s.tab?.id ?? null)) return;
+    if ((payload?.chat?.id ?? null) !== chat.unsent().chatId) return present(s.tab, payload);
+    // The same chat: refresh it and keep what is being typed.
+    setTab(s.tab);
+    if (payload?.chat) chat.setView({ chat: payload.chat, run: payload.run, artifacts: payload.artifacts });
   };
 
   useEffect(() => {
@@ -69,16 +96,30 @@ export function Sidebar({ client, windowId, fallbackTab = null, host }: Props) {
     void client.chats().then(setRecent).catch(() => undefined);
     void client
       .windowState(windowId)
-      .then((s) => showTab(s.tab ?? fallbackTab))
+      .then((s) => showTab(s.tab ?? fallbackTab, s.tab ? s.chatId : undefined))
       .catch(() => showTab(fallbackTab));
-    const close = client.connect((event) => {
-      setRecent((l) => applyToList(l, event));
-      chat.onEvent(event);
-      if (event.type !== "window.active" || event.state.windowId !== windowId) return;
-      // The same tab again means its title or address changed: keep the chat, refresh the context.
-      if (event.state.tab?.id !== tabRef.current) void showTab(event.state.tab);
-      else if (event.state.tab) setTab(event.state.tab);
-    });
+    let dropped = false;
+    const close = client.connect(
+      (event) => {
+        setRecent((l) => applyToList(l, event));
+        chat.onEvent(event);
+        if (event.type === "chat.removed" && scroll.current.chatId === event.chatId) {
+          clearTimeout(scroll.current.timer);
+          scroll.current = { chatId: null, top: 0, saved: 0 };
+        }
+        if (event.type !== "window.active" || event.state.windowId !== windowId) return;
+        // The same tab again means its title or address changed: keep the chat, refresh the context.
+        if (event.state.tab?.id !== tabRef.current) void showTab(event.state.tab, event.state.chatId);
+        else if (event.state.tab) setTab(event.state.tab);
+      },
+      (connected) => {
+        if (!connected) dropped = true;
+        else if (dropped) {
+          dropped = false;
+          void resync();
+        }
+      },
+    );
     return () => {
       close();
       void saveScroll();
@@ -91,9 +132,11 @@ export function Sidebar({ client, windowId, fallbackTab = null, host }: Props) {
     unbound.current.delete(tab.id);
     setPending({});
     scroll.current = { chatId: side.id, top: side.scrollTop, saved: side.scrollTop };
-    await chat.show(chatId ? await client.chat(side.id) : { chat: side, run: null, artifacts: [] });
+    chat.show(chatId ? await client.chat(side.id) : { chat: side, run: null, artifacts: [] });
     return side.id;
   };
+
+  const openArtifact = useCallback((meta: ArtifactMeta) => (host?.openTab ? host.openTab(meta.url) : void window.open(meta.url, "_blank", "noopener,noreferrer")), [host]);
 
   const status = view.run ? (view.run.approval ? "waiting" : "running") : "idle";
   const settings: ChatSettings = view.chat?.settings ?? { ...(info?.defaults ?? { mode: "guard", model: "", effort: "medium", scope: "current" }), ...pending };
@@ -103,13 +146,13 @@ export function Sidebar({ client, windowId, fallbackTab = null, host }: Props) {
     <aside class="side" aria-label="Perch" data-ready={info ? "true" : undefined}>
       {/* The panel's only header: the browser draws none above it, so close lives here too. */}
       <header class="side-h">
-        <h1 class="title">{view.chat?.title ?? "New chat"}</h1>
+        <h1 class="title">{loaded ? view.chat?.title ?? "New chat" : ""}</h1>
         <PerchDot status={status} />
         {status !== "idle" && <span class="state">{status === "running" ? "Working" : "Waiting for you"}</span>}
-        <Menu label="Recent chats" align="end" choices={others.map((c) => ({ value: c.id, label: c.title, hint: c.tab ? "In another tab" : undefined }))} selected={[]} onPick={(c) => void attach(c.value)}>
+        <Menu label="Recent chats" align="end" choices={others.map((c) => ({ value: c.id, label: c.title, hint: c.tab ? "In another tab" : undefined }))} selected={[]} empty="No other chats yet" onPick={(c) => void chat.run(() => attach(c.value))}>
           <Icon name="history" />
         </Menu>
-        <button type="button" class="ib" aria-label="New chat" title="New chat" disabled={!view.chat} onClick={() => void attach()}>
+        <button type="button" class="ib" aria-label="New chat" title="New chat" disabled={!view.chat} onClick={() => void chat.run(() => attach())}>
           <Icon name="pen" />
         </button>
         <button type="button" class="ib" aria-label="Close side chat" title="Close side chat" onClick={() => host?.close?.()}>
@@ -119,9 +162,9 @@ export function Sidebar({ client, windowId, fallbackTab = null, host }: Props) {
       <Thread
         view={view}
         error={chat.error}
-        empty={SIDEBAR_EMPTY}
+        empty={loaded ? SIDEBAR_EMPTY : ""}
         onDecide={chat.decide}
-        onOpenArtifact={(meta) => (host?.openTab ? host.openTab(meta.url) : window.open(meta.url, "_blank", "noopener,noreferrer"))}
+        onOpenArtifact={openArtifact}
         onScroll={(top) => {
           const s = scroll.current;
           s.top = top;
@@ -129,10 +172,12 @@ export function Sidebar({ client, windowId, fallbackTab = null, host }: Props) {
           s.timer = setTimeout(() => void saveScroll(), SCROLL_SAVE_MS);
         }}
       />
+      {/* One composer per tab: its files, @ picks and dictation never carry over to another tab. */}
       <Composer
+        key={tab?.id ?? "none"}
         draft={chat.draft}
         onDraft={chat.setDraft}
-        onSend={(text, extras) => void chat.send(text, tab ?? undefined, () => attach(), extras)}
+        onSend={(text, extras) => chat.send(text, tab ?? undefined, () => attach(), extras)}
         host={host}
         listTabs={() => client.tabs()}
         frame={chat.frame}

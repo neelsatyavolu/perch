@@ -3,9 +3,9 @@
  * artifact pane 360px and resizable. The list collapses below 1100px.
  */
 
-import { useEffect, useState } from "preact/hooks";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import type { Client } from "../api/client";
-import type { AppInfo, ArtifactMeta, ChatSettings, ChatSummary } from "../api/types";
+import type { AppInfo, ArtifactMeta, ChatMessage, ChatSettings, ChatSummary } from "../api/types";
 import { ArtifactPane, PANE } from "../components/artifact-pane";
 import { ChatList } from "../components/chat-list";
 import { Composer } from "../components/composer";
@@ -42,12 +42,17 @@ export function FullChat({ client, initialChat = null, initialAsk = null, onNavi
   const [confirmDelete, setConfirmDelete] = useState(false);
   const { view } = chat;
   const selected = view.chat?.id ?? null;
+  /** Counts opens, so a slow load never replaces a chat opened after it. */
+  const opening = useRef(0);
 
   const open = async (id: string | null) => {
+    const n = ++opening.current;
     setArtifact(null);
     setConfirmDelete(false);
     setEditing(false);
-    await chat.show(id ? await client.chat(id).catch(() => null) : null);
+    const payload = id ? await client.chat(id).catch(() => null) : null;
+    if (n !== opening.current) return;
+    chat.show(payload);
     onNavigate?.(id);
   };
 
@@ -55,11 +60,27 @@ export function FullChat({ client, initialChat = null, initialAsk = null, onNavi
     void client.info().then(setInfo).catch((e: Error) => chat.setError(e.message));
     void client.chats().then(setList).catch(() => undefined);
     if (initialChat) void open(initialChat);
-    return client.connect((event) => {
-      setList((l) => applyToList(l, event));
-      chat.onEvent(event);
-      if (event.type === "chat.removed") chat.setView((v) => (v.chat?.id === event.chatId ? { chat: null, run: null, artifacts: [] } : v));
-    });
+    let dropped = false;
+    return client.connect(
+      (event) => {
+        setList((l) => applyToList(l, event));
+        chat.onEvent(event);
+      },
+      (connected) => {
+        if (!connected) dropped = true;
+        else if (dropped) {
+          dropped = false;
+          // Events sent while the stream was down are lost: reload the list and the open chat.
+          void client.chats().then(setList).catch(() => undefined);
+          const id = chat.unsent().chatId;
+          if (id)
+            void client
+              .chat(id)
+              .then((p) => p.chat && chat.unsent().chatId === p.chat.id && chat.setView({ chat: p.chat, run: p.run, artifacts: p.artifacts }))
+              .catch(() => undefined);
+        }
+      },
+    );
   }, [client]);
 
   // The chat list collapses when the window gets narrower than 1100px; the toggle still opens it.
@@ -97,7 +118,8 @@ export function FullChat({ client, initialChat = null, initialAsk = null, onNavi
   const create = async () => {
     const created = await client.createChat({ settings });
     setPending({});
-    await chat.show({ chat: created, run: null, artifacts: [] });
+    ++opening.current;
+    chat.show({ chat: created, run: null, artifacts: [] });
     onNavigate?.(created.id);
     return created.id;
   };
@@ -108,12 +130,23 @@ export function FullChat({ client, initialChat = null, initialAsk = null, onNavi
       chat.setView((v) => (v.chat ? { ...v, chat: { ...v.chat, title: updated.title } } : v));
     }
   };
+  const commitTitle = (title: string) => void chat.run(() => rename(title));
   const exportChat = async () => view.chat && saveFile(`${view.chat.title.replace(/[^\w .-]/g, "_")}.md`, await client.exportChat(view.chat.id));
   const remove = async () => {
     if (!view.chat) return;
     await client.deleteChat(view.chat.id);
     await open(null);
   };
+  const chatId = view.chat?.id;
+  const branch = useCallback(
+    (m: ChatMessage) =>
+      void chat.run(async () => {
+        if (!chatId) return;
+        const created = await client.branch(chatId, m.id);
+        await open(created.id);
+      }),
+    [client, chatId],
+  );
 
   return (
     <div class="full" data-ready={info ? "true" : undefined}>
@@ -121,7 +154,7 @@ export function FullChat({ client, initialChat = null, initialAsk = null, onNavi
       <main class="center">
         <header class="fc-h">
           {editing && view.chat ? (
-            <input class="title-edit" aria-label="Chat title" value={view.chat.title} autoFocus onBlur={(e) => void rename(e.currentTarget.value)} onKeyDown={(e) => (e.key === "Enter" ? void rename(e.currentTarget.value) : e.key === "Escape" && setEditing(false))} />
+            <input class="title-edit" aria-label="Chat title" value={view.chat.title} autoFocus onBlur={(e) => commitTitle(e.currentTarget.value)} onKeyDown={(e) => (e.key === "Enter" ? commitTitle(e.currentTarget.value) : e.key === "Escape" && setEditing(false))} />
           ) : (
             <button type="button" class="title" disabled={!view.chat} title={view.chat ? "Rename" : undefined} onClick={() => setEditing(true)}>
               {view.chat?.title ?? "New chat"}
@@ -131,11 +164,11 @@ export function FullChat({ client, initialChat = null, initialAsk = null, onNavi
           {status !== "idle" && <span class="state">{status === "running" ? "Working" : "Waiting for your approval"}</span>}
           <span class="grow" />
           {view.chat && (
-            <Menu label="More" choices={[{ value: "export", label: "Export as Markdown" }, { value: "delete", label: "Delete chat" }]} selected={[]} align="end" onPick={(c) => (c.value === "export" ? void exportChat() : setConfirmDelete(true))}>
+            <Menu label="More" choices={[{ value: "export", label: "Export as Markdown" }, { value: "delete", label: "Delete chat" }]} selected={[]} align="end" onPick={(c) => (c.value === "export" ? void chat.run(exportChat) : setConfirmDelete(true))}>
               <Icon name="more" />
             </Menu>
           )}
-          <button type="button" class="btn small" disabled={!view.chat} onClick={() => void exportChat()} title="Save this chat as a Markdown file">
+          <button type="button" class="btn small" disabled={!view.chat} onClick={() => void chat.run(exportChat)} title="Save this chat as a Markdown file">
             Share
           </button>
           <button type="button" class="ib" aria-label="Chat list" aria-pressed={listOpen} onClick={() => setListOpen(writePref("chat.list", !listOpen))}>
@@ -148,7 +181,7 @@ export function FullChat({ client, initialChat = null, initialAsk = null, onNavi
         {confirmDelete && (
           <div class="confirm" role="alert">
             <span>Delete this chat and its artifacts? This cannot be undone.</span>
-            <button type="button" class="btn small danger-text" onClick={() => void remove()}>
+            <button type="button" class="btn small danger-text" onClick={() => void chat.run(remove)}>
               Delete chat
             </button>
             <button type="button" class="btn small" onClick={() => setConfirmDelete(false)}>
@@ -163,16 +196,12 @@ export function FullChat({ client, initialChat = null, initialAsk = null, onNavi
           selectedArtifact={artifact?.id ?? null}
           onDecide={chat.decide}
           onOpenArtifact={setArtifact}
-          onBranch={async (m) => {
-            if (!view.chat) return;
-            const branch = await client.branch(view.chat.id, m.id);
-            await open(branch.id);
-          }}
+          onBranch={branch}
         />
         <Composer
           draft={chat.draft}
           onDraft={chat.setDraft}
-          onSend={(text, extras) => void chat.send(text, undefined, create, extras)}
+          onSend={(text, extras) => chat.send(text, undefined, create, extras)}
           host={host}
           listTabs={() => client.tabs()}
           frame={chat.frame}

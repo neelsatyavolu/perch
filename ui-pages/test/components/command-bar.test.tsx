@@ -144,6 +144,29 @@ describe("Command bar", () => {
     expect(r.getByRole("option", { name: /Quarterly plan/ })).toBeTruthy();
   });
 
+  test("Enter before the typed text's results arrive runs the first of those results, not a stale one", async () => {
+    const nav: { what: string; detail: unknown }[] = [];
+    const calls: { text: string; answer: (r: readonly CommandBarResult[]) => void }[] = [];
+    const api: PerchApi = {
+      ...createFakeApi({ stepMs: 0, onNavigate: (what, detail) => nav.push({ what, detail }) }),
+      queryCommandBar: (text) => new Promise((resolve) => calls.push({ text, answer: resolve })),
+    };
+    const r = renderWithApi(<CommandBar />, { api });
+    const box = await r.findByRole("combobox", { name: PLACEHOLDER });
+    calls[0]!.answer([{ kind: "tab", tabId: 101, title: "Inbox (12) - Example Mail", url: "https://mail.example.com/inbox" }]);
+    await r.findByRole("option", { name: /Inbox/ });
+    fireEvent.input(box, { target: { value: "github" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+    // Asked at once, without waiting out the debounce.
+    expect(calls.map((c) => c.text)).toEqual(["", "github"]);
+    await new Promise((res) => setTimeout(res, 20));
+    expect(nav).toEqual([]);
+    calls[1]!.answer([{ kind: "history", title: "GitHub", url: "https://github.com/" }]);
+    await waitFor(() => expect(nav).toEqual([{ what: "command-bar", detail: { kind: "history", url: "https://github.com/" } }]));
+    await new Promise((res) => setTimeout(res, 120));
+    expect(calls.length).toBe(2);
+  });
+
   test("typing quickly sends one debounced query", async () => {
     const { api, calls } = controlledApi();
     const r = renderWithApi(<CommandBar />, { api });

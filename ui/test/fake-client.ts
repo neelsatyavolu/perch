@@ -3,7 +3,7 @@
 import type { ChatPayload, Client } from "../src/api/client";
 import type { AppEvent, AppInfo, Chat, ChatSettings, TabInfo, WindowState } from "../src/api/types";
 
-export type FakeClient = Client & { calls: { name: string; args: unknown[] }[]; emit(event: AppEvent): void; chatsById: Map<string, Chat>; windows: Map<string, WindowState> };
+export type FakeClient = Client & { calls: { name: string; args: unknown[] }[]; emit(event: AppEvent): void; status(connected: boolean): void; chatsById: Map<string, Chat>; windows: Map<string, WindowState> };
 
 const info: AppInfo = {
   models: [{ id: "fake", label: "Scripted", provider: "Perch", efforts: ["medium"] }],
@@ -15,6 +15,7 @@ export function fakeClient(): FakeClient {
   const chatsById = new Map<string, Chat>();
   const windows = new Map<string, WindowState>();
   const listeners: ((e: AppEvent) => void)[] = [];
+  const statusListeners: ((connected: boolean) => void)[] = [];
   const calls: { name: string; args: unknown[] }[] = [];
   let n = 0;
   const record = <T>(name: string, args: unknown[], value: T): Promise<T> => {
@@ -33,6 +34,7 @@ export function fakeClient(): FakeClient {
     chatsById,
     windows,
     emit: (event: AppEvent) => listeners.forEach((l) => l(event)),
+    status: (connected: boolean) => statusListeners.forEach((l) => l(connected)),
     info: () => record("info", [], info),
     chats: () => record("chats", [], [...chatsById.values()].map((c) => ({ id: c.id, title: c.title, updatedAt: c.updatedAt, tab: c.tab, status: "idle" as const, preview: "" }))),
     createChat: (init: { settings?: Partial<ChatSettings> } = {}) => record("createChat", [init], newChat({ settings: { ...info.defaults, ...init.settings } })),
@@ -61,9 +63,13 @@ export function fakeClient(): FakeClient {
       chatsById.set(chat.id, chat);
       return record("openSideChat", [tabId, windowId, chatId], chat);
     },
-    connect: (onEvent: (e: AppEvent) => void) => {
+    connect: (onEvent: (e: AppEvent) => void, onStatus?: (connected: boolean) => void) => {
       listeners.push(onEvent);
-      return () => listeners.splice(listeners.indexOf(onEvent), 1);
+      if (onStatus) statusListeners.push(onStatus);
+      return () => {
+        listeners.splice(listeners.indexOf(onEvent), 1);
+        if (onStatus) statusListeners.splice(statusListeners.indexOf(onStatus), 1);
+      };
     },
   };
   return client as unknown as FakeClient;

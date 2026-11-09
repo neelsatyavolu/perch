@@ -196,7 +196,8 @@ test("a navigation in the active tab updates the tab the sidebar sends as contex
   await settle();
   expect(el.querySelector(".chip-t")!.textContent).toBe("Re: Lunch");
   expect(el.querySelector("textarea")!.value).toBe("Keep this draft");
-  expect(client.calls.filter((c) => c.name === "tabChat")).toHaveLength(1);
+  // The browser said the tab has no side chat, so there was nothing to fetch, then or after.
+  expect(client.calls.filter((c) => c.name === "tabChat")).toHaveLength(0);
   await act(async () => (el.querySelector('[aria-label="Send message"]') as HTMLElement).click());
   await settle();
   expect(client.calls.find((c) => c.name === "send")!.args[2]).toEqual(moved);
@@ -230,4 +231,142 @@ test("pages and drawings render in a frame that may run scripts but not open pop
   client.artifact = (async () => ({ meta: page, content: "<p>hi</p>" })) as typeof client.artifact;
   const el = await mount(<ArtifactPane client={client} meta={page} width={360} onWidth={() => {}} onClose={() => {}} />);
   expect(el.querySelector("iframe")!.getAttribute("sandbox")).toBe("allow-scripts");
+});
+
+test("until the tab's chat is known the sidebar shows no empty state and no title", async () => {
+  const client = fakeClient();
+  client.windowState = () => new Promise(() => {});
+  const el = await mount(<Sidebar client={client} windowId="w1" />);
+  expect(el.querySelector(".empty")).toBeNull();
+  expect(el.querySelector(".side-h .title")!.textContent).toBe("");
+});
+
+test("a new tab with no side chat switches chip, header and thread in one step, with no fetch", async () => {
+  const client = fakeClient();
+  const side = await client.openSideChat("tA", "w1");
+  client.chatsById.set(side.id, { ...side, title: "Inbox help" });
+  client.windows.set("w1", { windowId: "w1", tab: tabA, chatId: side.id });
+  const el = await mount(<Sidebar client={client} windowId="w1" />);
+  const fetched = client.calls.filter((c) => c.name === "tabChat").length;
+  // No settle: whatever shows right after the event is what the user sees first.
+  await act(async () => client.emit({ type: "window.active", state: { windowId: "w1", tab: tabB, chatId: null } }));
+  expect(el.querySelector(".chip-t")!.textContent).toBe("Docs");
+  expect(el.querySelector(".side-h .title")!.textContent).toBe("New chat");
+  expect(el.querySelector(".empty")).not.toBeNull();
+  expect(client.calls.filter((c) => c.name === "tabChat")).toHaveLength(fetched);
+});
+
+test("a tab with a side chat keeps the old chip until its chat arrives, then changes everything together", async () => {
+  const client = fakeClient();
+  const side = await client.openSideChat("tB", "w1");
+  client.chatsById.set(side.id, { ...side, title: "Docs help" });
+  client.windows.set("w1", { windowId: "w1", tab: tabA, chatId: null });
+  let release = () => {};
+  const tabChat = client.tabChat;
+  const el = await mount(<Sidebar client={client} windowId="w1" />);
+  client.tabChat = (id) => new Promise((done) => (release = () => done(tabChat(id))));
+  await act(async () => client.emit({ type: "window.active", state: { windowId: "w1", tab: tabB, chatId: side.id } }));
+  expect(el.querySelector(".chip-t")!.textContent).toBe("Mailroom");
+  expect(el.querySelector(".side-h .title")!.textContent).toBe("New chat");
+  release();
+  await settle();
+  expect(el.querySelector(".chip-t")!.textContent).toBe("Docs");
+  expect(el.querySelector(".side-h .title")!.textContent).toBe("Docs help");
+});
+
+test("a side chat deleted elsewhere leaves the sidebar, keeping what was typed", async () => {
+  const client = fakeClient();
+  const side = await client.openSideChat("tA", "w1");
+  client.chatsById.set(side.id, { ...side, title: "Inbox help" });
+  client.windows.set("w1", { windowId: "w1", tab: tabA, chatId: side.id });
+  const el = await mount(<Sidebar client={client} windowId="w1" />);
+  await typeInto(el.querySelector("textarea")!, "not sent yet");
+  await act(async () => client.emit({ type: "chat.removed", chatId: side.id }));
+  await settle();
+  expect(el.querySelector(".side-h .title")!.textContent).toBe("New chat");
+  expect(el.querySelector("textarea")!.value).toBe("not sent yet");
+  expect(client.calls.some((c) => c.name === "patchChat" && c.args[0] === side.id)).toBe(false);
+});
+
+test("after the event stream reconnects the sidebar reloads its chat, so a finished run stops showing Working", async () => {
+  const client = fakeClient();
+  const side = await client.openSideChat("tA", "w1");
+  client.windows.set("w1", { windowId: "w1", tab: tabA, chatId: side.id });
+  const el = await mount(<Sidebar client={client} windowId="w1" />);
+  const message = { id: "u1", role: "user" as const, text: "Reply to Maya", time: new Date().toISOString() };
+  await act(async () => client.emit({ type: "run.started", chatId: side.id, runId: "r1", message }));
+  expect(el.querySelector(".side-h .state")!.textContent).toBe("Working");
+  await act(async () => client.status(false));
+  client.chatsById.set(side.id, { ...client.chatsById.get(side.id)!, messages: [message, { id: "a1", role: "assistant", text: "Sent.", time: new Date().toISOString() }] });
+  await act(async () => client.status(true));
+  await settle();
+  expect(el.querySelector(".side-h .state")).toBeNull();
+  expect(el.querySelector(".reply .md")!.textContent).toBe("Sent.");
+});
+
+test("a send that fails puts the text back and says why", async () => {
+  const client = fakeClient();
+  client.windows.set("w1", { windowId: "w1", tab: tabA, chatId: null });
+  client.send = () => Promise.reject(new Error("Perch did not answer (503). Try again in a moment"));
+  const el = await mount(<Sidebar client={client} windowId="w1" />);
+  await typeInto(el.querySelector("textarea")!, "Summarise this inbox");
+  await act(async () => (el.querySelector('[aria-label="Send message"]') as HTMLElement).click());
+  await settle();
+  expect(el.querySelector("textarea")!.value).toBe("Summarise this inbox");
+  expect(el.querySelector(".note.error")!.textContent).toContain("503");
+});
+
+test("files attached in one tab do not carry over to the next tab's chat", async () => {
+  const client = fakeClient();
+  client.windows.set("w1", { windowId: "w1", tab: tabA, chatId: null });
+  const el = await mount(<Sidebar client={client} windowId="w1" host={{ chooseFiles: async () => [{ id: "f1", name: "itinerary.pdf", size: 2048 }] }} />);
+  await act(async () => (el.querySelector('[aria-label="Attach files"]') as HTMLElement).click());
+  await settle();
+  expect(el.querySelector(".chip.file")).not.toBeNull();
+  await act(async () => client.emit({ type: "window.active", state: { windowId: "w1", tab: tabB, chatId: null } }));
+  await settle();
+  expect(el.querySelector(".chip.file")).toBeNull();
+});
+
+test("the recent chats menu says when there are none, and Escape puts focus back on its button", async () => {
+  const client = fakeClient();
+  client.windows.set("w1", { windowId: "w1", tab: tabA, chatId: null });
+  const el = await mount(<Sidebar client={client} windowId="w1" />);
+  const button = el.querySelector('[aria-label="Recent chats"]') as HTMLElement;
+  await act(async () => button.click());
+  const list = el.querySelector(".menu") as HTMLElement;
+  expect(list.textContent).toBe("No other chats yet");
+  await act(async () => void list.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+  expect(el.querySelector(".menu")).toBeNull();
+  expect(document.activeElement).toBe(button);
+});
+
+test("in the full-page chat a slow load never replaces a chat opened after it", async () => {
+  const client = fakeClient();
+  const slow = await client.createChat();
+  const fast = await client.createChat();
+  client.chatsById.set(slow.id, { ...slow, title: "Slow one" });
+  client.chatsById.set(fast.id, { ...fast, title: "Fast one" });
+  const load = client.chat;
+  client.chat = (id) => (id === slow.id ? Bun.sleep(20).then(() => load(id)) : load(id));
+  const navigated: (string | null)[] = [];
+  const el = await mount(<FullChat client={client} onNavigate={(id) => navigated.push(id)} />);
+  const row = (title: string) => [...el.querySelectorAll(".chats .row")].find((r) => r.textContent!.includes(title)) as HTMLElement;
+  await act(async () => row("Slow one").click());
+  await act(async () => row("Fast one").click());
+  await act(async () => void (await Bun.sleep(40)));
+  expect(el.querySelector(".fc-h .title")!.textContent).toBe("Fast one");
+  expect(navigated).toEqual([fast.id]);
+});
+
+test("a failed delete in the full-page chat says so instead of failing silently", async () => {
+  const client = fakeClient();
+  const chat = await client.createChat();
+  client.deleteChat = () => Promise.reject(new Error("Perch did not answer (500). Try again in a moment"));
+  const el = await mount(<FullChat client={client} initialChat={chat.id} />);
+  await act(async () => (el.querySelector('[aria-label="More"]') as HTMLElement).click());
+  await act(async () => ([...el.querySelectorAll('[role="option"]')].find((o) => o.textContent!.includes("Delete chat")) as HTMLElement).click());
+  await act(async () => (el.querySelector(".confirm .danger-text") as HTMLElement).click());
+  await settle();
+  expect(el.querySelector(".note.error")!.textContent).toContain("500");
 });

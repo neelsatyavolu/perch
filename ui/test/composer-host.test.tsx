@@ -18,7 +18,7 @@ const tabs: TabInfo[] = [
 ];
 
 /** A composer that keeps its own draft, like the pages do. */
-function mount(host: PageHost | undefined, frame: string | null = null, running = false) {
+function mount(host: PageHost | undefined, frame: string | null = null, running = false, delivered = true) {
   const sent: { text: string; extras: SendExtras }[] = [];
   function Harness() {
     const [draft, setDraft] = useState("");
@@ -26,7 +26,10 @@ function mount(host: PageHost | undefined, frame: string | null = null, running 
       <Composer
         draft={draft}
         onDraft={setDraft}
-        onSend={(text, extras) => sent.push({ text, extras })}
+        onSend={async (text, extras) => {
+          sent.push({ text, extras });
+          return delivered;
+        }}
         onStop={() => {}}
         running={running}
         tab={null}
@@ -64,7 +67,29 @@ test("attach shows the picked files and sends their ids; a file can be removed",
   await type(el, "check this");
   key(el, "Enter");
   expect(sent).toEqual([{ text: "check this", extras: { files: [{ id: "f1", name: "itinerary.pdf", size: 2048 }], mentions: [] } }]);
+  await act(async () => await Bun.sleep(0));
   expect(el.querySelector(".chip.file")).toBeNull();
+});
+
+test("a send that fails keeps the attached files for another try", async () => {
+  const host: PageHost = { chooseFiles: async () => [{ id: "f1", name: "itinerary.pdf", size: 2048 }] };
+  const { el, sent } = mount(host, null, false, false);
+  await act(async () => (el.querySelector('[aria-label="Attach files"]') as HTMLButtonElement).click());
+  await act(async () => await Bun.sleep(0));
+  await type(el, "check this");
+  key(el, "Enter");
+  await act(async () => await Bun.sleep(0));
+  expect(sent).toHaveLength(1);
+  expect([...el.querySelectorAll(".chip.file .chip-t")].map((c) => c.textContent)).toEqual(["itinerary.pdf"]);
+});
+
+test("dictation stops when the composer goes away", async () => {
+  let stopped = 0;
+  const host: PageHost = { startDictation: async () => {}, stopDictation: async () => void stopped++ };
+  const { el } = mount(host);
+  await act(async () => (el.querySelector('[aria-label="Dictate"]') as HTMLButtonElement).click());
+  act(() => render(null, root));
+  expect(stopped).toBe(1);
 });
 
 test("dictation streams words into the draft after what was typed, and the button stops it", async () => {

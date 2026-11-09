@@ -1,6 +1,7 @@
 /** One chat message: the user's bubble, or a reply with its steps, text, artifacts and actions. */
 
 import type { VNode } from "preact";
+import { memo } from "./memo";
 import { useState } from "preact/hooks";
 import type { ArtifactMeta, ChatMessage } from "../api/types";
 import { Icon } from "./icon";
@@ -53,7 +54,8 @@ type MessageProps = {
   onBranch?: (message: ChatMessage) => void;
 };
 
-export function Message({ message, artifact, onBranch }: MessageProps) {
+/** Memoized: a streamed token re-renders the thread, not every past reply's Markdown. */
+export const Message = memo(function Message({ message, artifact, onBranch }: MessageProps) {
   const [copied, setCopied] = useState(false);
   if (message.role === "user") {
     return (
@@ -66,7 +68,11 @@ export function Message({ message, artifact, onBranch }: MessageProps) {
     );
   }
   const copy = async () => {
-    await navigator.clipboard?.writeText(message.text.replace(/\[\[artifact:[^\]]+\]\]\n?/g, ""));
+    try {
+      await navigator.clipboard?.writeText(message.text.replace(/\[\[artifact:[^\]]+\]\]\n?/g, ""));
+    } catch {
+      return; // Not copied, so the button does not say it was.
+    }
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
@@ -93,7 +99,7 @@ export function Message({ message, artifact, onBranch }: MessageProps) {
       </div>
     </div>
   );
-}
+});
 
 /** The run in progress: streamed text and the live step line with the perch dot. */
 export function LiveRun({ text, steps, waiting }: { text: string; steps: string[]; waiting: boolean }) {

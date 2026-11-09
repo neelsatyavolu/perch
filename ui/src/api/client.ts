@@ -77,11 +77,14 @@ export function createClient(api: string, token: string, deps: Deps = {}) {
         socket.onopen = () => onStatus?.(true);
         socket.onmessage = (m) => {
           if (typeof m.data !== "string" || m.data === "pong") return;
+          let event: AppEvent;
           try {
-            onEvent(JSON.parse(m.data) as AppEvent);
+            event = JSON.parse(m.data) as AppEvent;
           } catch {
             // A malformed frame is dropped; the next full load corrects the view.
+            return;
           }
+          onEvent(event);
         };
         socket.onclose = () => {
           onStatus?.(false);

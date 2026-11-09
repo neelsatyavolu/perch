@@ -26,10 +26,13 @@ export function useChat(client: Client) {
     await client.patchChat(c.chatId, { draft: text }).catch(() => undefined);
   }, [client]);
 
-  /** Shows a chat, or none with `draftIfNone` in the composer. The previous chat's draft is saved first. */
+  /**
+   * Shows a chat, or none with `draftIfNone` in the composer, at once. The previous chat's draft is
+   * saved in the background: saveDraft reads it before its first await, so a later show never races it.
+   */
   const show = useCallback(
-    async (payload: ChatPayload | null, draftIfNone = "") => {
-      await saveDraft();
+    (payload: ChatPayload | null, draftIfNone = "") => {
+      void saveDraft();
       const next = payload?.chat ? { chat: payload.chat, run: payload.run, artifacts: payload.artifacts } : emptyView;
       const draft = next.chat ? next.chat.draft : draftIfNone;
       current.current = { chatId: next.chat?.id ?? null, draft, saved: draft };
@@ -49,6 +52,15 @@ export function useChat(client: Client) {
   const onEvent = useCallback((event: AppEvent) => {
     if (event.type === "run.frame") {
       if (event.chatId === current.current.chatId) setFrame(event.data);
+      return;
+    }
+    // The open chat was deleted elsewhere: show none, keep the unsent text, and save nothing to it.
+    if (event.type === "chat.removed" && event.chatId === current.current.chatId) {
+      const { draft, timer } = current.current;
+      clearTimeout(timer);
+      current.current = { chatId: null, draft, saved: draft };
+      setFrame(null);
+      setView(emptyView);
       return;
     }
     setView((v) => applyToView(v, event));
@@ -74,17 +86,29 @@ export function useChat(client: Client) {
     }
   };
 
-  /** Sends to the open chat, or to the chat `ensure` creates when none is open. */
-  const send = (text: string, context: TabInfo | undefined, ensure: () => Promise<string>, extras?: SendExtras) =>
-    guard(async () => {
+  /**
+   * Sends to the open chat, or to the chat `ensure` creates when none is open. Resolves true once
+   * sent. On failure the text comes back, if that chat is still shown and nothing new was typed.
+   */
+  const send = async (text: string, context: TabInfo | undefined, ensure: () => Promise<string>, extras?: SendExtras): Promise<boolean> => {
+    let sent = false;
+    await guard(async () => {
       const chatId = view.chat?.id ?? (await ensure());
       const c = current.current;
       c.draft = "";
       c.saved = "";
       clearTimeout(c.timer);
       setDraftState("");
-      await client.send(chatId, text, context, { files: extras?.files.map((f) => f.id), mentions: extras?.mentions.map((t) => t.id) });
+      try {
+        await client.send(chatId, text, context, { files: extras?.files.map((f) => f.id), mentions: extras?.mentions.map((t) => t.id) });
+      } catch (e) {
+        if (current.current.chatId === chatId && current.current.draft === "") setDraft(text);
+        throw e;
+      }
+      sent = true;
     });
+    return sent;
+  };
 
   const stop = () => guard(async () => view.chat && client.cancel(view.chat.id));
   const decide = (approvalId: string, approved: boolean) => guard(() => client.decide(approvalId, approved));
@@ -97,5 +121,5 @@ export function useChat(client: Client) {
 
   useEffect(() => () => void saveDraft(), [saveDraft]);
 
-  return { view, setView, show, unsent, onEvent, draft, setDraft, saveDraft, send, stop, decide, setSettings, error, setError, frame };
+  return { view, setView, show, unsent, onEvent, draft, setDraft, saveDraft, send, stop, decide, setSettings, error, setError, frame, run: guard };
 }

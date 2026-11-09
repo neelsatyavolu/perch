@@ -5,6 +5,7 @@
  */
 
 import type { ComponentChildren, VNode } from "preact";
+import { memo } from "./memo";
 
 export type MarkdownProps = { text: string; renderArtifact?: (id: string) => VNode | null };
 
@@ -12,9 +13,10 @@ const SAFE_URL = /^(https?:|mailto:)/i;
 const FENCE = /^(\s*)(`{3,}|~{3,})(.*)$/;
 const MARKER = /^\[\[artifact:([\w-]{1,64})\]\]$/;
 
-export function Markdown({ text, renderArtifact }: MarkdownProps) {
+/** Memoized: parsing runs again only when the text or the artifact renderer changes. */
+export const Markdown = memo(function Markdown({ text, renderArtifact }: MarkdownProps) {
   return <div class="md">{blocks(text.replace(/\r\n?/g, "\n").split("\n"), renderArtifact)}</div>;
-}
+});
 
 function blocks(lines: string[], renderArtifact: MarkdownProps["renderArtifact"]): VNode[] {
   const out: VNode[] = [];

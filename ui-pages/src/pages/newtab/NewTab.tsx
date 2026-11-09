@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { ChatSummary, NtpLayout, NtpSection, Routine, Suggestion } from "../../api";
 import { useAction, useApi } from "../../ui/frame";
 import { Icon, PanelLeft, PanelLeftClose } from "../../ui/icons";
@@ -17,7 +17,10 @@ export function NewTab() {
   const api = useApi();
   const act = useAction();
   const [layout, setLayout] = useState<NtpLayout | null>(null);
-  const [data, setData] = useState<Data>({ chats: [], routines: [], suggestions: [] });
+  // Null until the lists first load: the page never says "No chats yet" to someone who has chats.
+  const [data, setData] = useState<Data | null>(null);
+  /** The refresh started by the tab coming back, so focus and visibilitychange run it once. */
+  const showing = useRef<Promise<unknown> | null>(null);
 
   const refresh = () =>
     Promise.all([api.listChats(12), api.listRoutines(), api.listSuggestions()]).then(
@@ -29,7 +32,10 @@ export function NewTab() {
     api.getNtpLayout().then(setLayout, () => setLayout({ railOpen: true, hidden: [], recentTab: "chats" }));
     refresh();
     // The page is reused when the tab comes back; suggestions may have finished in the meantime.
-    const onShow = () => document.visibilityState !== "hidden" && refresh();
+    const onShow = () => {
+      if (document.visibilityState === "hidden" || showing.current) return;
+      showing.current = refresh().finally(() => (showing.current = null));
+    };
     window.addEventListener("focus", onShow);
     document.addEventListener("visibilitychange", onShow);
     return () => {
@@ -49,7 +55,7 @@ export function NewTab() {
 
   return (
     <div class="ntp-wrap">
-      {layout.railOpen && <ChatRail chats={data.chats} />}
+      {layout.railOpen && <ChatRail chats={data?.chats ?? null} />}
       <main class="ntp-main">
         <button
           type="button"
@@ -65,10 +71,10 @@ export function NewTab() {
           <h1 class="sr-only">New tab</h1>
           <PerchMark />
           <AddressBox onSubmit={(q) => act(() => api.submitQuery(q))} />
-          {!layout.hidden.includes("recent") && (
+          {data && !layout.hidden.includes("recent") && (
             <Recent chats={data.chats} routines={data.routines} tab={layout.recentTab} onTab={(recentTab) => update({ recentTab })} onHide={() => hide("recent")} />
           )}
-          {!layout.hidden.includes("suggested") && <Suggested items={data.suggestions} onHide={() => hide("suggested")} onDismissed={() => refresh()} />}
+          {data && !layout.hidden.includes("suggested") && <Suggested items={data.suggestions} onHide={() => hide("suggested")} onDismissed={() => refresh()} />}
           {layout.hidden.length > 0 && (
             <p class="hidden-note">
               {layout.hidden.map((s) => (

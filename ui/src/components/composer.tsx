@@ -32,7 +32,8 @@ const EFFORT_LABEL: Record<Effort, string> = { low: "low", medium: "medium", hig
 type ComposerProps = {
   draft: string;
   onDraft: (text: string) => void;
-  onSend: (text: string, extras: SendExtras) => void;
+  /** Resolving false means it was not sent, so the files and @ picks stay for another try. */
+  onSend: (text: string, extras: SendExtras) => Promise<boolean> | void;
   onStop: () => void;
   running: boolean;
   tab: TabInfo | null;
@@ -80,6 +81,10 @@ export function Composer(p: ComposerProps) {
   const [dictating, setDictating] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const dictationBase = useRef("");
+  const dictatingNow = useRef(false);
+  dictatingNow.current = dictating;
+  // Dictation writes into this composer's draft, so it stops when the composer goes away.
+  useEffect(() => () => void (dictatingNow.current && p.host?.stopDictation?.().catch(() => undefined)), []);
 
   const query = p.listTabs ? mentionQuery(p.draft) : null;
   const choices = query !== null && tabs ? matchTabs(tabs, query) : [];
@@ -99,9 +104,13 @@ export function Composer(p: ComposerProps) {
     const text = p.draft.trim();
     if (!text || p.running) return;
     if (dictating) void stopDictation();
-    p.onSend(text, { files, mentions: keptMentions(text, picked) });
-    setFiles([]);
-    setPicked([]);
+    const sentFiles = files;
+    const sentPicks = picked;
+    void Promise.resolve(p.onSend(text, { files: sentFiles, mentions: keptMentions(text, sentPicks) })).then((ok) => {
+      if (ok === false) return;
+      setFiles((list) => list.filter((f) => !sentFiles.includes(f)));
+      setPicked((list) => list.filter((t) => !sentPicks.includes(t)));
+    });
   };
   const onKey = (e: KeyboardEvent) => {
     if (choices.length) {

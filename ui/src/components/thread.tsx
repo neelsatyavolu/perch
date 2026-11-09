@@ -1,7 +1,7 @@
 /** The conversation: messages, the run in progress, and the approval card as the only status while it is up. */
 
 import type { VNode } from "preact";
-import { useLayoutEffect, useRef } from "preact/hooks";
+import { useCallback, useLayoutEffect, useRef } from "preact/hooks";
 import type { ArtifactMeta, ChatMessage } from "../api/types";
 import type { ChatView } from "../state/chat";
 import { ApprovalCard } from "./approval";
@@ -17,6 +17,7 @@ type ThreadProps = {
   /** Called with the scroll position, for side chats that come back where they were. */
   onScroll?: (top: number) => void;
   error?: string | null;
+  /** Shown when the chat has no messages; "" shows nothing, as while the chat is still loading. */
   empty: VNode | string;
 };
 
@@ -38,10 +39,14 @@ export function Thread({ view, onDecide, onOpenArtifact, onBranch, selectedArtif
     if (el && pinned.current) el.scrollTop = el.scrollHeight;
   });
 
-  const artifact = (id: string) => {
-    const meta = view.artifacts.find((a) => a.id === id);
-    return meta ? <ArtifactCard meta={meta} onOpen={onOpenArtifact} selected={selectedArtifact === id} /> : <div class="artifact-card missing">This artifact was removed</div>;
-  };
+  // Stable while the artifacts are, so past messages skip re-rendering on every streamed token.
+  const artifact = useCallback(
+    (id: string) => {
+      const meta = view.artifacts.find((a) => a.id === id);
+      return meta ? <ArtifactCard meta={meta} onOpen={onOpenArtifact} selected={selectedArtifact === id} /> : <div class="artifact-card missing">This artifact was removed</div>;
+    },
+    [view.artifacts, selectedArtifact, onOpenArtifact],
+  );
   const messages = view.chat?.messages ?? [];
   const run = view.run;
   return (
@@ -55,7 +60,7 @@ export function Thread({ view, onDecide, onOpenArtifact, onBranch, selectedArtif
         onScroll?.(Math.round(el.scrollTop));
       }}
     >
-      {messages.length === 0 && !run ? (
+      {messages.length === 0 && !run && empty ? (
         <div class="empty">
           <PerchMark size={48} />
           {typeof empty === "string" ? <p>{empty}</p> : empty}

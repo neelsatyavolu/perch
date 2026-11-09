@@ -3,8 +3,11 @@ import type { ChatSummary } from "../../api";
 import { useAction, useApi } from "../../ui/frame";
 import { Icon, Search, SquarePen } from "../../ui/icons";
 
-/** The 200px chat rail on the new tab page: New chat, Search chats, then recent chats (as in Aside). */
-export function ChatRail({ chats }: { readonly chats: readonly ChatSummary[] }) {
+/**
+ * The 200px chat rail on the new tab page: New chat, Search chats, then recent chats (as in Aside).
+ * `chats` is null while they load, when the list shows nothing rather than "No chats yet".
+ */
+export function ChatRail({ chats }: { readonly chats: readonly ChatSummary[] | null }) {
   const api = useApi();
   const act = useAction();
   const [searching, setSearching] = useState(false);
@@ -28,7 +31,7 @@ export function ChatRail({ chats }: { readonly chats: readonly ChatSummary[] }) 
     };
   }, [query]);
 
-  const list = results ?? chats;
+  const list = results ?? chats ?? [];
   return (
     <nav class="rail" id="chat-rail" aria-label="Chats">
       <button type="button" class="row act" onClick={() => act(() => api.newChat())}>
@@ -64,7 +67,7 @@ export function ChatRail({ chats }: { readonly chats: readonly ChatSummary[] }) 
             </button>
           </li>
         ))}
-        {list.length === 0 && <li class="rail-empty">{results ? "No chats match" : "No chats yet"}</li>}
+        {list.length === 0 && (results ?? chats) && <li class="rail-empty">{results ? "No chats match" : "No chats yet"}</li>}
       </ul>
     </nav>
   );

@@ -1,11 +1,39 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { cleanup, fireEvent, waitFor } from "@testing-library/preact";
+import type { PerchApi } from "../../src/api";
+import { createFakeApi } from "../../src/api/fake";
 import { NewTab } from "../../src/pages/newtab/NewTab";
 import { renderWithApi } from "./render";
 
 afterEach(cleanup);
 
 describe("New tab page", () => {
+  test("while the chats load it shows no 'No chats yet', only the address box", async () => {
+    const fake = createFakeApi({ stepMs: 0 });
+    let release = () => {};
+    const api: PerchApi = { ...fake, listChats: (n) => new Promise((done) => (release = () => done(fake.listChats(n)))) };
+    const { findByRole, queryByText, findByText } = renderWithApi(<NewTab />, { api });
+    await findByRole("searchbox", { name: "Search or ask" });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(queryByText(/No chats yet/)).toBeNull();
+    expect(document.querySelector(".ntp-sec")).toBeNull();
+    release();
+    expect(await findByText("Waiting for your approval")).toBeTruthy();
+  });
+
+  test("coming back to the tab refreshes once, though focus and visibilitychange both fire", async () => {
+    const fake = createFakeApi({ stepMs: 0 });
+    let loads = 0;
+    const api: PerchApi = { ...fake, listChats: (n) => (loads++, fake.listChats(n)) };
+    const { findByText } = renderWithApi(<NewTab />, { api });
+    await findByText("Waiting for your approval");
+    expect(loads).toBe(1);
+    window.dispatchEvent(new Event("focus"));
+    document.dispatchEvent(new Event("visibilitychange"));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(loads).toBe(2);
+  });
+
   test("shows the mark, the address box with Search | Ask, and the hints", async () => {
     const { findByRole, getByText, getByRole } = renderWithApi(<NewTab />);
     expect(await findByRole("searchbox", { name: "Search or ask" })).toBeTruthy();

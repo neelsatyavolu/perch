@@ -23,6 +23,10 @@ export function CommandBar() {
   const input = useRef<HTMLInputElement>(null);
   const latest = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout>>();
+  /** Text typed whose results have not arrived yet; null when the results match the field. */
+  const pending = useRef<string | null>(null);
+  /** Enter was pressed while results were pending: run the first entry when they arrive. */
+  const runOnArrive = useRef(false);
   const [text, setText] = useState("");
   const [results, setResults] = useState<readonly CommandBarResult[]>([]);
   const [sel, setSel] = useState(0);
@@ -32,11 +36,18 @@ export function CommandBar() {
     api.queryCommandBar(value).then(
       (r) => {
         if (n !== latest.current) return;
+        pending.current = null;
         setResults(r);
         setSel(0);
+        if (runOnArrive.current) {
+          runOnArrive.current = false;
+          run(buildEntries(r, matchCommands(value))[0]);
+        }
       },
       (e) => {
         if (n !== latest.current) return;
+        pending.current = null;
+        runOnArrive.current = false;
         setResults([]);
         announce(errorText(e), "error");
       },
@@ -66,8 +77,12 @@ export function CommandBar() {
     setText(value);
     setSel(0);
     latest.current++; // Any answer still in flight is now stale.
+    pending.current = value;
     clearTimeout(timer.current);
-    timer.current = setTimeout(() => query(value), QUERY_DEBOUNCE_MS);
+    timer.current = setTimeout(() => {
+      timer.current = undefined;
+      query(value);
+    }, QUERY_DEBOUNCE_MS);
   };
 
   const run = (entry: Entry | undefined) => {
@@ -81,6 +96,16 @@ export function CommandBar() {
       if (count) setSel((s) => (s + (e.key === "ArrowDown" ? 1 : count - 1)) % count);
     } else if (e.key === "Enter") {
       e.preventDefault();
+      // The shown results are for older text: wait for this text's, asking now if not yet asked.
+      if (pending.current !== null) {
+        runOnArrive.current = true;
+        if (timer.current !== undefined) {
+          clearTimeout(timer.current);
+          timer.current = undefined;
+          query(pending.current);
+        }
+        return;
+      }
       run(entries[sel]);
     } else if (e.key === "Escape") {
       e.preventDefault();

@@ -59,7 +59,8 @@ void OpenTabsAsleep(BrowserWindowInterface* browser,
 void AppendTabsAsleep(BrowserWindowInterface* browser,
                       const std::vector<SpaceTab>& tabs);
 
-// The button at the tab strip's leading edge: the space's name and a menu.
+// The arrow at the tab strip's trailing end: a menu of spaces. The active
+// space's name is in its tooltip and ticked in the menu.
 std::unique_ptr<views::View> CreateSpacesButton(BrowserWindowInterface* browser);
 
 }  // namespace perch

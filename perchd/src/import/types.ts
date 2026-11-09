@@ -34,7 +34,8 @@ export type Bookmarks = { readonly bar: readonly BookmarkNode[]; readonly other:
 export type HistoryEntry = { readonly url: string; readonly title: string; readonly visitCount: number; readonly typedCount: number; readonly lastVisit: number };
 
 export type TabGroup = { readonly id: string; readonly title: string; readonly color: string; readonly collapsed: boolean };
-export type SessionTab = { readonly url: string; readonly title: string; readonly pinned: boolean; readonly groupId?: string };
+/** `pinnedHome`: for browsers whose pinned tabs are shared entries (Aside), the address the pin always returns to. */
+export type SessionTab = { readonly url: string; readonly title: string; readonly pinned: boolean; readonly groupId?: string; readonly pinnedHome?: string };
 export type SessionWindow = { readonly tabs: readonly SessionTab[]; readonly selected: number; readonly groups: readonly TabGroup[] };
 
 export type SearchEngine = { readonly name: string; readonly keyword: string; readonly url: string; readonly suggestUrl?: string; readonly isDefault: boolean };
@@ -67,7 +68,8 @@ export type Cookie = {
   readonly partition?: { readonly site: string; readonly crossSite: boolean };
 };
 
-export type Extension = { readonly id: string; readonly name: string; readonly version: string; readonly storeUrl?: string };
+/** `pinned`: whether it sat in the source browser's toolbar; left out when the source doesn't say. */
+export type Extension = { readonly id: string; readonly name: string; readonly version: string; readonly storeUrl?: string; readonly pinned?: boolean };
 
 /** A markdown file from Aside's memory or skills, path relative to its root. */
 export type TextFile = { readonly path: string; readonly text: string };

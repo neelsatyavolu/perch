@@ -21,6 +21,7 @@
 #include "ui/base/mojom/menu_source_type.mojom.h"
 #include "ui/gfx/font_list.h"
 #include "ui/menus/simple_menu_model.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/controls/button/label_button.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/controls/menu/menu_runner.h"
@@ -121,21 +122,16 @@ class SpacesButton : public views::LabelButton {
             base::BindRepeating(&SpacesButton::ShowMenu,
                                 base::Unretained(this))),
         browser_(browser) {
-    label()->SetFontList(gfx::FontList().DeriveWithSizeDelta(
-        12 - gfx::FontList().GetFontSize()));
-    // The tab strip draws on a see-through layer.
-    label()->SetSubpixelRenderingEnabled(false);
-    SetEnabledTextColors(kColorTabForegroundInactiveFrameActive);
-    // The chevron follows the name and sits on its centre line.
+    // Just an arrow, so the tabs keep the strip's width; the space's name is
+    // in the tooltip and at the top of the menu.
     SetImageModel(views::Button::STATE_NORMAL,
                   ui::ImageModel::FromVectorIcon(
                       vector_icons::kKeyboardArrowDownIcon,
-                      kColorTabForegroundInactiveFrameActive, 14));
-    SetHorizontalAlignment(gfx::ALIGN_RIGHT);
-    SetImageLabelSpacing(2);
-    SetBorder(views::CreateEmptyBorder(gfx::Insets::TLBR(0, 8, 0, 4)));
-    SetMinSize(gfx::Size(0, 26));
-    SetMaxSize(gfx::Size(160, 26));
+                      kColorTabForegroundInactiveFrameActive, 16));
+    SetHorizontalAlignment(gfx::ALIGN_CENTER);
+    SetBorder(views::CreateEmptyBorder(gfx::Insets(0)));
+    SetMinSize(gfx::Size(28, 28));
+    SetMaxSize(gfx::Size(28, 28));
     // An 8 px rounded fill on hover and press, like the strip's other
     // controls.
     views::InstallRoundRectHighlightPathGenerator(this, gfx::Insets(), 8);
@@ -145,10 +141,9 @@ class SpacesButton : public views::LabelButton {
         kColorTabForegroundActiveFrameActive);
     views::InkDrop::Get(this)->SetHighlightOpacity(0.08f);
     views::InkDrop::Get(this)->SetVisibleOpacity(0.12f);
-    SetTooltipText(u"Spaces");
     SetProperty(views::kCrossAxisAlignmentKey,
                 views::LayoutAlignment::kCenter);
-    SetProperty(views::kMarginsKey, gfx::Insets::TLBR(0, 4, 0, 4));
+    SetProperty(views::kMarginsKey, gfx::Insets::TLBR(0, 4, 0, 8));
     registrar_.Init(browser->GetProfile()->GetPrefs());
     for (const char* pref : {prefs::kSpaces, prefs::kActiveSpace}) {
       registrar_.Add(pref, base::BindRepeating(&SpacesButton::UpdateName,
@@ -159,7 +154,9 @@ class SpacesButton : public views::LabelButton {
 
  private:
   void UpdateName() {
-    SetText(ActiveSpaceName(browser_));
+    const std::u16string name = u"Spaces: " + ActiveSpaceName(browser_);
+    SetTooltipText(name);
+    GetViewAccessibility().SetName(name);
   }
 
   void ShowMenu() {

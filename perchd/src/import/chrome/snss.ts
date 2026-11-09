@@ -27,6 +27,7 @@ export const CMD = {
   pruned: 24,
   setTabGroup: 25,
   setTabGroupMetadata2: 27,
+  addTabExtraData: 33,
 } as const;
 
 export const GROUP_COLORS = ["grey", "blue", "red", "yellow", "green", "pink", "purple", "cyan", "orange"] as const;
@@ -62,7 +63,7 @@ class Pickle {
 }
 
 type Nav = { url: string; title: string };
-type Tab = { window?: number; index: number; navs: Map<number, Nav>; current: number; pinned: boolean; group?: string };
+type Tab = { window?: number; index: number; navs: Map<number, Nav>; current: number; pinned: boolean; group?: string; pinnedHome?: string };
 type Win = { selected: number; type: number };
 
 const tokenId = (high: bigint, low: bigint) => `${high.toString(16).padStart(16, "0")}${low.toString(16).padStart(16, "0")}`;
@@ -74,12 +75,18 @@ export function parseSnss(buf: Buffer): SessionWindow[] | undefined {
   const tabs = new Map<number, Tab>();
   const windows = new Map<number, Win>();
   const groups = new Map<string, TabGroup>();
+  // A closed tab or window stays closed: Chromium keeps writing commands for an id after closing
+  // it (a navigation that finishes late, a pin change), and those must not bring it back.
+  const closed = { tabs: new Set<number>(), windows: new Set<number>() };
+  const gone: Tab = { index: 0, navs: new Map(), current: -1, pinned: false };
   const tab = (id: number): Tab => {
+    if (closed.tabs.has(id)) return { ...gone, navs: new Map() };
     const t = tabs.get(id) ?? { index: 0, navs: new Map(), current: -1, pinned: false };
     tabs.set(id, t);
     return t;
   };
   const win = (id: number): Win => {
+    if (closed.windows.has(id)) return { selected: 0, type: 0 };
     const w = windows.get(id) ?? { selected: 0, type: 0 };
     windows.set(id, w);
     return w;
@@ -92,7 +99,7 @@ export function parseSnss(buf: Buffer): SessionWindow[] | undefined {
     const p = buf.subarray(pos + 3, pos + 2 + size);
     pos += 2 + size;
     try {
-      apply(id, p, { tab, win, tabs, windows, groups });
+      apply(id, p, { tab, win, tabs, windows, groups, closed });
     } catch {
       // A damaged command is skipped, as Chromium does.
     }
@@ -100,7 +107,7 @@ export function parseSnss(buf: Buffer): SessionWindow[] | undefined {
   return build(tabs, windows, groups);
 }
 
-type State = { tab: (id: number) => Tab; win: (id: number) => Win; tabs: Map<number, Tab>; windows: Map<number, Win>; groups: Map<string, TabGroup> };
+type State = { tab: (id: number) => Tab; win: (id: number) => Win; tabs: Map<number, Tab>; windows: Map<number, Win>; groups: Map<string, TabGroup>; closed: { tabs: Set<number>; windows: Set<number> } };
 
 function apply(id: number, p: Buffer, s: State): void {
   const i32 = (at: number) => p.readInt32LE(at);
@@ -134,10 +141,21 @@ function apply(id: number, p: Buffer, s: State): void {
       return;
     case CMD.tabClosed:
       s.tabs.delete(i32(0));
+      s.closed.tabs.add(i32(0));
       return;
-    case CMD.windowClosed:
-      s.windows.delete(i32(0));
+    case CMD.windowClosed: {
+      const wid = i32(0);
+      s.windows.delete(wid);
+      s.closed.windows.add(wid);
+      // Its tabs close with it.
+      for (const [tid, t] of s.tabs) {
+        if (t.window === wid) {
+          s.tabs.delete(tid);
+          s.closed.tabs.add(tid);
+        }
+      }
       return;
+    }
     case CMD.prunedFromBack:
       prune(s.tab(i32(0)), i32(4), Infinity);
       return;
@@ -147,6 +165,16 @@ function apply(id: number, p: Buffer, s: State): void {
     case CMD.pruned:
       prune(s.tab(i32(0)), i32(4), i32(8));
       return;
+    case CMD.addTabExtraData: {
+      // Aside records each pinned tab's home address as extra data on the tab.
+      const pickle = new Pickle(p);
+      const tabId = pickle.int();
+      if (pickle.string() === "pinned_tab_entry_url") {
+        const home = pickle.string();
+        if (/^https?:\/\//.test(home)) s.tab(tabId).pinnedHome = home;
+      }
+      return;
+    }
     case CMD.setTabGroup: {
       const t = s.tab(i32(0));
       t.group = p[24] ? tokenId(p.readBigUInt64LE(8), p.readBigUInt64LE(16)) : undefined;
@@ -189,13 +217,37 @@ function build(tabs: Map<number, Tab>, windows: Map<number, Win>, groups: Map<st
       const out: SessionTab[] = own.flatMap((t) => {
         const nav = t.navs.get(t.current) ?? t.navs.get(Math.max(...t.navs.keys()));
         if (!nav || !nav.url) return [];
-        return [{ url: nav.url, title: nav.title, pinned: t.pinned, ...(t.group && groups.has(t.group) ? { groupId: t.group } : {}) }];
+        return [{ url: nav.url, title: nav.title, pinned: t.pinned, ...(t.group && groups.has(t.group) ? { groupId: t.group } : {}), ...(t.pinned && t.pinnedHome ? { pinnedHome: t.pinnedHome } : {}) }];
       });
       if (out.length === 0) return [];
       const used = new Set(out.map((t) => t.groupId).filter(Boolean));
       const selectedTab = own.findIndex((t) => t.index === w.selected);
       return [{ tabs: out, selected: Math.max(0, Math.min(selectedTab === -1 ? w.selected : selectedTab, out.length - 1)), groups: [...groups.values()].filter((g) => used.has(g.id)) }];
     });
+}
+
+/**
+ * Where pinned tabs are shared entries copied into every window (Aside), bring each over once: at
+ * its home address, in the first window, and only when every window that has such pins still has
+ * it. A pin left in one window after it was removed elsewhere is stale and is dropped.
+ */
+export function sharedPinsOnce(windows: readonly SessionWindow[]): SessionWindow[] {
+  const homes = windows.map((w) => new Set(w.tabs.flatMap((t) => (t.pinnedHome ? [t.pinnedHome] : []))));
+  const withPins = homes.filter((h) => h.size > 0);
+  if (withPins.length === 0) return [...windows];
+  const current = new Set([...withPins[0]!].filter((home) => withPins.every((h) => h.has(home))));
+  const first = homes.findIndex((h) => h.size > 0);
+  return windows.flatMap((w, index): SessionWindow[] => {
+    const seen = new Set<string>();
+    const tabs = w.tabs.flatMap((t): SessionTab[] => {
+      if (!t.pinnedHome) return [t];
+      if (index !== first || !current.has(t.pinnedHome) || seen.has(t.pinnedHome)) return [];
+      seen.add(t.pinnedHome);
+      return [{ url: t.pinnedHome, title: t.title, pinned: true, pinnedHome: t.pinnedHome }];
+    });
+    if (tabs.length === 0) return [];
+    return [{ ...w, tabs, selected: Math.min(w.selected, tabs.length - 1) }];
+  });
 }
 
 /** The newest session file in a profile: Sessions/Session_<n>, or the older "Current Session". */
@@ -218,7 +270,7 @@ export function readChromeSession(profile: string): SessionWindow[] {
       continue;
     }
     const parsed = parseSnss(buf);
-    if (parsed) return parsed;
+    if (parsed) return sharedPinsOnce(parsed);
   }
   return [];
 }

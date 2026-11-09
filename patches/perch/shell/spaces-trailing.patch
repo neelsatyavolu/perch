@@ -1,0 +1,42 @@
+# Perch: the Spaces arrow sits at the tab strip's trailing end.
+diff --git a/chrome/browser/ui/views/frame/horizontal_tab_strip_region_view.cc b/chrome/browser/ui/views/frame/horizontal_tab_strip_region_view.cc
+index 9e0a75905a..6e4b0856de 100644
+--- a/chrome/browser/ui/views/frame/horizontal_tab_strip_region_view.cc
++++ b/chrome/browser/ui/views/frame/horizontal_tab_strip_region_view.cc
+@@ -202,11 +202,6 @@ HorizontalTabStripRegionViewOld::HorizontalTabStripRegionViewOld(
+     }
+   }
+ 
+-  // Perch: the Spaces button at the strip's leading edge.
+-  if (browser &&
+-      browser->GetType() == BrowserWindowInterface::Type::TYPE_NORMAL) {
+-    AddChildView(perch::CreateSpacesButton(browser));
+-  }
+   tab_strip_ = AddChildView(CreateTabStrip(this, browser_view));
+ 
+   // Allow the |tab_strip_| to grow into the free space available in
+@@ -257,6 +252,11 @@ HorizontalTabStripRegionViewOld::HorizontalTabStripRegionViewOld(
+     tab_strip_action_container_ =
+         AddChildView(std::move(tab_strip_action_container));
+   }
++  // Perch: the Spaces arrow at the strip's trailing end, out of the tabs' way.
++  if (browser &&
++      browser->GetType() == BrowserWindowInterface::Type::TYPE_NORMAL) {
++    AddChildView(perch::CreateSpacesButton(browser));
++  }
+   UpdateTabStripMargin();
+ }
+ 
+@@ -334,10 +334,10 @@ views::View::Views HorizontalTabStripRegionViewOld::GetChildrenInZOrder() {
+     children.emplace_back(reserved_grab_handle_space_.get());
+   }
+ 
+-  // Perch: children this list doesn't name (the Spaces button) paint first.
++  // Perch: children this list doesn't name (the Spaces arrow) come last.
+   for (views::View* child : this->children()) {
+     if (!std::ranges::contains(children, child)) {
+-      children.insert(children.begin(), child);
++      children.emplace_back(child);
+     }
+   }
+   return children;

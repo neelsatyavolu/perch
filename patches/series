@@ -94,3 +94,5 @@ perch/shell/signing-assess-after-notarize.patch
 perch/shell/onboarding-build.patch
 perch/shell/no-chromium-intro.patch
 perch/shell/extensions-panel.patch
+perch/shell/spaces-trailing.patch
+perch/shell/native-hosts-from-chrome.patch

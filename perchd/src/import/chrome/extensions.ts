@@ -47,8 +47,15 @@ function displayName(dir: string, manifest: any): string {
   return hit?.message ?? raw;
 }
 
+/** The ids pinned to the toolbar, from Preferences; undefined when the profile doesn't record it. */
+function pinnedIds(profile: string): ReadonlySet<string> | undefined {
+  const pinned = json(join(profile, "Preferences"))?.extensions?.pinned_extensions;
+  return Array.isArray(pinned) ? new Set(pinned.filter((id): id is string => typeof id === "string")) : undefined;
+}
+
 export function readChromeExtensions(profile: string): Extension[] {
   const root = join(profile, "Extensions");
+  const pins = pinnedIds(profile);
   return list(root)
     .filter((id) => ID.test(id))
     .flatMap((id): Extension[] => {
@@ -58,7 +65,7 @@ export function readChromeExtensions(profile: string): Extension[] {
       const manifest = json(join(dir, "manifest.json"));
       if (!manifest) return [];
       const fromStore = typeof manifest.update_url === "string" && manifest.update_url.includes(WEB_STORE_UPDATE);
-      return [{ id, name: displayName(dir, manifest) || id, version: String(manifest.version ?? version), ...(fromStore ? { storeUrl: `https://chromewebstore.google.com/detail/${id}` } : {}) }];
+      return [{ id, name: displayName(dir, manifest) || id, version: String(manifest.version ?? version), ...(fromStore ? { storeUrl: `https://chromewebstore.google.com/detail/${id}` } : {}), ...(pins ? { pinned: pins.has(id) } : {}) }];
     })
     .sort((a, b) => a.name.localeCompare(b.name));
 }

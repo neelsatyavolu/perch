@@ -13,10 +13,12 @@
 #include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/files/file_util.h"
 #include "base/json/json_reader.h"
 #include "base/path_service.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
 #include "chrome/browser/autofill/personal_data_manager_factory.h"
@@ -25,6 +27,7 @@
 #include "chrome/browser/perch/spaces/spaces.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+#include "chrome/browser/ui/toolbar/toolbar_actions_model.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
 #include "chrome/browser/ui/browser_window/public/create_browser_window.h"
 #include "chrome/common/chrome_paths.h"
@@ -266,6 +269,30 @@ int ApplyTabs(Profile* profile, const base::ListValue& windows) {
   return count;
 }
 
+// Pins or unpins a newly installed extension. The toolbar learns of it a
+// moment after the install reports success, so this waits for that.
+void ApplyPin(base::WeakPtr<Profile> profile,
+              const std::string& id,
+              bool pinned,
+              int tries_left) {
+  ToolbarActionsModel* toolbar =
+      profile ? ToolbarActionsModel::Get(profile.get()) : nullptr;
+  if (!toolbar) {
+    return;
+  }
+  if (toolbar->HasAction(id)) {
+    toolbar->SetActionVisibility(id, pinned);
+    return;
+  }
+  if (tries_left > 0) {
+    base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
+        FROM_HERE,
+        base::BindOnce(&ApplyPin, std::move(profile), id, pinned,
+                       tries_left - 1),
+        base::Milliseconds(500));
+  }
+}
+
 // Installs from the Chrome Web Store without asking again: the person ticked
 // Extensions in the import, and had each of these installed already.
 class ImportedExtensionInstaller : public extensions::WebstoreInstallWithPrompt {
@@ -296,15 +323,25 @@ int ApplyExtensions(Profile* profile, const base::ListValue& list) {
         registry->GetInstalledExtension(*id)) {
       continue;
     }
+    // Pinned to the toolbar or not, as it was in the browser it came from.
+    const std::optional<bool> pinned = entry->FindBool("pinned");
     base::MakeRefCounted<ImportedExtensionInstaller>(
         *id, profile, gfx::NativeWindow(),
-        base::BindOnce([](const std::string& id, bool success,
-                          const std::string& error,
-                          extensions::webstore_install::Result) {
-          LOG_IF(WARNING, !success)
-              << "Perch import: extension " << id << " not installed: "
-              << error;
-        }, *id))
+        base::BindOnce(
+            [](base::WeakPtr<Profile> profile, const std::string& id,
+               std::optional<bool> pinned, bool success,
+               const std::string& error,
+               extensions::webstore_install::Result) {
+              if (!success) {
+                LOG(WARNING) << "Perch import: extension " << id
+                             << " not installed: " << error;
+                return;
+              }
+              if (pinned) {
+                ApplyPin(std::move(profile), id, *pinned, /*tries_left=*/8);
+              }
+            },
+            profile->GetWeakPtr(), *id, pinned))
         ->BeginInstall();
     ++started;
   }

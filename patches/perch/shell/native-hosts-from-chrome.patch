@@ -1,0 +1,35 @@
+# Perch: fall back to Chrome's native messaging host folders, where apps such as 1Password install theirs.
+diff --git a/chrome/browser/extensions/api/messaging/launch_context_posix.cc b/chrome/browser/extensions/api/messaging/launch_context_posix.cc
+index 686da41336..2fc397e763 100644
+--- a/chrome/browser/extensions/api/messaging/launch_context_posix.cc
++++ b/chrome/browser/extensions/api/messaging/launch_context_posix.cc
+@@ -49,6 +49,29 @@ base::FilePath LaunchContext::FindManifest(const std::string& host_name,
+     result = FindManifestInDir(chrome::DIR_NATIVE_MESSAGING, host_name);
+   }
+ 
++#if BUILDFLAG(IS_MAC)
++  // Perch: apps such as 1Password install their host only where Chrome looks.
++  // An extension from the Chrome Web Store has the same id in Perch, so the
++  // host Chrome would start is the right one here too.
++  if (result.empty() && allow_user_level_hosts) {
++    const base::FilePath path = base::GetHomeDir()
++                                    .Append("Library/Application Support/Google/"
++                                            "Chrome/NativeMessagingHosts")
++                                    .Append(host_name + ".json");
++    if (base::PathExists(path)) {
++      result = path;
++    }
++  }
++  if (result.empty()) {
++    const base::FilePath path =
++        base::FilePath("/Library/Google/Chrome/NativeMessagingHosts")
++            .Append(host_name + ".json");
++    if (base::PathExists(path)) {
++      result = path;
++    }
++  }
++#endif
++
+   if (result.empty()) {
+     error_message = "Can't find native messaging host " + host_name;
+   }

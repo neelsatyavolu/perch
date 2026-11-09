@@ -8,16 +8,20 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import urllib.request
 from pathlib import Path
 from typing import Any
 
 from .checkout import checkout
+from .snapshot import snapshot_command, written
+from .components import ComponentsError, check_components, new_component_reasons, write_known
 from .doctor import SystemProbe, run_checks
 from .gnargs import build as build_chromium
-from .package import creds_from_env, package
+from .package import creds_from_env, package, packaged_app
 from .patching import Generator, PatchFailed, apply_series, continue_series, export_series
 from .paths import REPO, Paths, load_paths
+from .pkg import PkgError, build_pkg, installer_identity, require_identity
 from .policies import CATALOGUE, CatalogueError, policy_ids_generator, stale_files, write_generated
 from .release import REPO_SLUG, appcast, preflight, publish, published_build_from_appcast, release_assets, release_notes
 from .rename import rename_product_strings
@@ -27,6 +31,7 @@ from .sparkle import fetch_sparkle, load_pin
 from .stage import BUNDLED_FILE, StageError, load_bundled, stage_extensions, stage_keyhelper
 from .netaudit import AllowedHosts, netaudit
 from .run import run
+from .testbin import suite_command, suite_target
 from .version import VersionInfo, bump, latest_stable_mac, read_version, write_version
 
 
@@ -93,9 +98,37 @@ def _cmd_export(args: argparse.Namespace) -> int:
 
 
 def _cmd_build(args: argparse.Namespace) -> int:
-    out = build_chromium(current_paths(), args.config, run=run, jobs=args.jobs)
+    out = build_chromium(current_paths(), args.config, run=run, jobs=args.jobs, targets=args.target or ())
     print(f"Built {out}")
     return 0
+
+
+def _cmd_test(args: argparse.Namespace) -> int:
+    out = build_chromium(current_paths(), args.config, run=run, jobs=args.jobs, targets=[suite_target(args.suite)])
+    result = run(suite_command(out, args.suite, args.filter), check=False)
+    return result.returncode
+
+
+def _cmd_snapshot(args: argparse.Namespace) -> int:
+    paths = current_paths()
+    out = paths.out(args.config)
+    app = out / "Perch.app"
+    if not app.is_dir():
+        print(f"error: {app} is missing; run perch-build build first", file=sys.stderr)
+        return 1
+    out_dir = Path(args.out) if args.out else paths.repo / "dist" / "snapshots"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    staged = out / "perch_extensions"
+    with tempfile.TemporaryDirectory(prefix="perch-snapshot-") as profile:
+        cmd = snapshot_command(app, paths.repo, out_dir, Path(profile), args.state,
+                               staged if staged.is_dir() else None)
+        result = run(cmd, check=False)
+    found, missing = written(out_dir, args.state)
+    for path in found:
+        print(path)
+    for state in missing:
+        print(f"error: no picture for state {state}", file=sys.stderr)
+    return 1 if missing or result.returncode else 0
 
 
 def stage_bundled(paths: Paths, config: str) -> Path:
@@ -159,13 +192,21 @@ def _cmd_package(args: argparse.Namespace) -> int:
             print(error, file=sys.stderr)
             return 1
     paths = current_paths()
+    identity = installer_identity(os.environ, REPO)
     try:
+        if not args.no_pkg:
+            require_identity(identity, args.mode)
         stage_bundled(paths, "release")
-    except StageError as error:
+    except (PkgError, StageError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
-    dmg = package(paths, read_version(REPO / "version.json"), args.mode, creds, run)
+    info = read_version(REPO / "version.json")
+    dmg = package(paths, info, args.mode, creds, run)
     print(f"Wrote {dmg}")
+    if args.no_pkg:
+        return 0
+    pkg = build_pkg(packaged_app(paths.repo / "dist", args.mode), paths.repo / "dist", info, args.mode, identity, creds, run)
+    print(f"Wrote {pkg}{'' if identity else ' (unsigned; for testing only)'}")
     return 0
 
 
@@ -192,7 +233,7 @@ def _release_preflight(paths: Paths, info: VersionInfo, sbom) -> list[str]:
         REPO, paths.src, info, _tag_exists, _published_build,
         stale_policies=lambda: stale_files(REPO),
         vulnerabilities=lambda: vulnerability_check(sbom(), run),
-    )
+    ) + _component_reasons(paths)
 
 
 def _cmd_release(args: argparse.Namespace) -> int:
@@ -275,7 +316,34 @@ def _cmd_rebase(args: argparse.Namespace) -> int:
         print(failure, file=sys.stderr)
         return 2
     print(f"Perch {info.perch} (build {info.build}) now applies cleanly on Chromium {info.chromium}.")
-    return 0
+    reasons = _component_reasons(current_paths())
+    for reason in reasons:
+        print(f"error: {reason}", file=sys.stderr)
+    return 1 if reasons else 0
+
+
+def _component_reasons(paths: Paths) -> list[str]:
+    try:
+        return new_component_reasons(check_components(REPO, paths.src))
+    except ComponentsError as error:
+        return [str(error)]
+
+
+def _cmd_components(args: argparse.Namespace) -> int:
+    paths = current_paths()
+    try:
+        if args.action == "update":
+            print(f"Wrote {write_known(REPO, paths.src)}")
+            return 0
+        diff = check_components(REPO, paths.src)
+    except ComponentsError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+    for name in diff.gone:
+        print(f"note: {name} is listed but registration.cc no longer calls it", file=sys.stderr)
+    for reason in new_component_reasons(diff):
+        print(f"error: {reason}", file=sys.stderr)
+    return 1 if diff.new else 0
 
 
 def _cmd_version(args: argparse.Namespace) -> int:
@@ -307,9 +375,26 @@ def build_parser() -> argparse.ArgumentParser:
     build = sub.add_parser("build", help="gn gen and autoninja")
     build.add_argument("--config", choices=["dev", "release"], default="dev")
     build.add_argument("--jobs", type=int, default=6, help="parallel compile jobs (default 6, low priority)")
+    build.add_argument("--target", action="append", metavar="TARGET",
+                       help="a ninja target instead of the default (chrome); perch_unittests and "
+                            "perch_browser_tests are short for chrome/browser/perch:<name>; repeatable")
     build.set_defaults(func=_cmd_build)
+    test = sub.add_parser("test", help="build Perch's unit or browser tests and run them")
+    test.add_argument("suite", nargs="?", choices=["unit", "browser"], default="unit",
+                      help="unit runs out/<config>/perch_unittests, browser runs perch_browser_tests headless")
+    test.add_argument("--filter", default="*", help="gtest filter, e.g. 'Perch*'")
+    test.add_argument("--config", choices=["dev", "release"], default="dev")
+    test.add_argument("--jobs", type=int, default=6, help="parallel compile jobs (default 6, low priority)")
+    test.set_defaults(func=_cmd_test)
+    snap = sub.add_parser("snapshot", help="render the browser window off-screen to PNGs, one per state")
+    snap.add_argument("--state", action="append", default=[], metavar="STATE",
+                      help="default, tabs, theme-<name>, accent-<name>, hidden-chrome, split, ...; repeatable")
+    snap.add_argument("--out", help="folder for the PNGs (default dist/snapshots)")
+    snap.add_argument("--config", choices=["dev", "release"], default="dev")
+    snap.set_defaults(func=_cmd_snapshot)
     pkg = sub.add_parser("package", help="sign, package and notarize the release build")
     pkg.add_argument("--mode", choices=["release", "adhoc"], default="release")
+    pkg.add_argument("--no-pkg", action="store_true", help="write the DMG only, no .pkg installer")
     pkg.set_defaults(func=_cmd_package)
     rel = sub.add_parser("release", help="check, write the appcast and publish to GitHub")
     rel.add_argument("--dry-run", action="store_true", help="write everything to dist/release and publish nothing")
@@ -336,6 +421,9 @@ def build_parser() -> argparse.ArgumentParser:
     pol = sub.add_parser("policies", help="generate or check the files made from enterprise/policies.json")
     pol.add_argument("action", choices=["generate", "check"])
     pol.set_defaults(func=_cmd_policies)
+    comp = sub.add_parser("components", help="check or update the list of component registrations Perch has classified")
+    comp.add_argument("action", choices=["check", "update"])
+    comp.set_defaults(func=_cmd_components)
     return parser
 
 

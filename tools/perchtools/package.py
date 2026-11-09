@@ -122,6 +122,11 @@ def embed_keys_profile(helper: Path, repo: Path) -> bool:
     return True
 
 
+def packaged_app(dist: Path, mode: Mode) -> Path:
+    """Where package() leaves the finished Perch.app: signed/ in release mode, stage/ ad hoc."""
+    return dist / ("signed" if mode == "release" else "stage") / APP
+
+
 def _make_dmg(app: Path, dist: Path, info: VersionInfo, run) -> Path:
     folder = dist / "dmg"
     folder.mkdir(parents=True, exist_ok=True)

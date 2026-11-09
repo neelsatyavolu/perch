@@ -110,3 +110,13 @@ def patch_dirs(chromium_like, tmp_path):
     (overlay / "b" / "new.txt").write_text("from overlay\n")
     (overlay / ".keep").write_text("")
     return {"patches": patches, "overlay": overlay, "state": tmp_path / "chromium" / "perch-apply-state.json"}
+
+
+@pytest.fixture(autouse=True)
+def _no_component_check(request, monkeypatch):
+    """CLI tests use a fake checkout without registration.cc; test_components covers the check."""
+    if request.module.__name__.endswith("test_components"):
+        return
+    from perchtools import cli
+
+    monkeypatch.setattr(cli, "_component_reasons", lambda paths: [])

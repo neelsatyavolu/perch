@@ -158,8 +158,23 @@
       "check": {
         "kind": "policy"
       },
+      "expect": "works"
+    },
+    {
+      "id": "ca-certificates",
+      "policies": [
+        {
+          "name": "CACertificates",
+          "value": [
+            "MIIBxDCCAWqgAwIBAgIUF0OSaGULiToc0Cv4tYu6OIfKeoowCgYIKoZIzj0EAwIwPzE9MDsGA1UEAww0UGVyY2ggcG9saWN5IGNoZWNrIHRlc3Qgcm9vdCAocHJpdmF0ZSBrZXkgZGlzY2FyZGVkKTAgFw0yNjExMDgyMTUyMThaGA8yMTI2MTAxNTIxNTIxOFowPzE9MDsGA1UEAww0UGVyY2ggcG9saWN5IGNoZWNrIHRlc3Qgcm9vdCAocHJpdmF0ZSBrZXkgZGlzY2FyZGVkKTBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABOgM/6bLhkj9CQ6/0OoBlJW5t0dK74Rnt9I+1vfyBtqG+N2S0OyAS2gwJqwYxbcoxRmVQICE6U4grcFPufgKYVSjQjBAMB0GA1UdDgQWBBTSN4affUpxL+CoyLftSQC8f+ceEDAPBgNVHRMBAf8EBTADAQH/MA4GA1UdDwEB/wQEAwIBBjAKBggqhkjOPQQDAgNIADBFAiA1FDEsRBoHH8GBkyYQUrbWJr76qK2En1ZnXWClxph4MwIhAOUqJAebbQo+mM8SMliMtT5BYgcCBL7qynkaqdoQh2I1"
+          ]
+        }
+      ],
+      "check": {
+        "kind": "policy"
+      },
       "expect": "works",
-      "note": "CACertificates (a page signed by a generated root loading without a warning) is not part of this check yet."
+      "note": "A fixed test root whose private key was thrown away when it was made, so it can sign nothing. The policy page shows whether Chromium took the certificate."
     },
     {
       "id": "google-sign-in",

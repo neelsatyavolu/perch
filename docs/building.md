@@ -21,6 +21,8 @@ Check a build without opening a window:
 out/Dev/Perch.app/Contents/MacOS/Perch --headless=new --user-data-dir="$(mktemp -d)" --dump-dom chrome://version
 ```
 
+`perch-build build --target <ninja target>` builds something other than the default `chrome`; `perch_unittests` and `perch_browser_tests` are short for `chrome/browser/perch:<name>`. `perch-build test` builds `perch_unittests` and runs it; `perch-build test browser` does the same for `perch_browser_tests`, headless. Both run two test jobs at a time and take `--filter 'Perch*'`.
+
 ## Packaging
 
 Anyone can make an unsigned DMG:
@@ -30,7 +32,7 @@ uv run perch-build build --config release
 uv run perch-build package --mode adhoc
 ```
 
-An ad-hoc build has no Sparkle updates and macOS warns before opening it.
+An ad-hoc build has no Sparkle updates and macOS warns before opening it. It also writes an unsigned installer, `dist/Perch-<version>-unsigned.pkg`, for trying the MDM install on a test Mac; `perch-build release` never uploads it. Add `--no-pkg` to skip the installer.
 
 Signed and notarized packages need the maintainer's Developer ID. Copy `scripts/maintainer.local.example` to `scripts/maintainer.local`, fill it in, and run:
 
@@ -41,6 +43,8 @@ scripts/with-apple-creds.sh uv run perch-build release
 ```
 
 `with-apple-creds.sh` loads the certificate into a temporary keychain and removes it, and the notarization key, when the command ends.
+
+`package --mode release` also builds `dist/Perch-<version>.pkg` for MDM tools: `pkgbuild` and `productbuild` (arm64 only, installs into `/Applications`, no install scripts), then `productsign` with a Developer ID Installer identity, notarization and stapling. The identity comes from `APPLE_INSTALLER_IDENTITY`, or from `"installer_identity"` in `perch-build.local.json`; without one, a release package stops before doing any work. The installer certificate must be in the keychain the command uses, like the application certificate. Chromium's own pkg pipeline is not used, because its postinstall script installs GoogleUpdater.
 
 A release also needs [osv-scanner](https://github.com/google/osv-scanner) version 2 (`brew install osv-scanner`). `perch-build release` writes an SPDX SBOM with Chromium's `tools/licenses/licenses.py` plus the npm packages and Sparkle that ship in `Perch.app`, checks it with `osv-scanner scan source -L`, and refuses to publish a finding that [known-vulnerabilities.md](known-vulnerabilities.md) does not list. It uploads the DMG, the `.pkg` when one exists, the appcast, the SBOM and `SHA256SUMS`. `uv run perch-build sbom` writes and checks the SBOM on its own.
 

@@ -3,6 +3,8 @@
 
 #include "chrome/browser/perch/toolbar/perch_profile_menu.h"
 
+#include <algorithm>
+
 #include "base/no_destructor.h"
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/browser_process.h"
@@ -16,7 +18,10 @@
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/profiles/profile_picker.h"
+#include "chrome/browser/ui/tabs/recent_tabs_sub_menu_model.h"
 #include "chrome/browser/ui/toolbar/app_menu_model.h"
+#include "components/download/public/common/download_item.h"
+#include "content/public/browser/download_manager.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "ui/base/mojom/menu_source_type.mojom.h"
 #include "ui/views/controls/menu/menu_runner.h"
@@ -69,16 +74,60 @@ void PerchProfileMenuModel::Build() {
   AddItem(IDC_PERCH_NEW_PROFILE, u"New Profile");
   AddItem(IDC_PERCH_MANAGE_PROFILES, u"Manage Profiles");
   AddSeparator(ui::NORMAL_SEPARATOR);
-  AddItem(IDC_SHOW_BOOKMARK_MANAGER, u"Bookmarks");
-  AddItem(IDC_SHOW_DOWNLOADS, u"Downloads");
-  AddItem(IDC_MANAGE_EXTENSIONS, u"Extensions");
-  AddItem(IDC_SHOW_HISTORY, u"History");
+  bookmarks_ = std::make_unique<ui::SimpleMenuModel>(this);
+  bookmarks_->AddItem(IDC_BOOKMARK_THIS_TAB, u"Bookmark This Tab");
+  bookmarks_->AddItem(IDC_SHOW_BOOKMARK_BAR, u"Show Bookmarks Bar");
+  bookmarks_->AddItem(IDC_SHOW_BOOKMARK_MANAGER, u"Bookmark Manager");
+  AddSubMenu(IDC_BOOKMARKS_MENU, u"Bookmarks", bookmarks_.get());
+
+  downloads_menu_ = std::make_unique<ui::SimpleMenuModel>(this);
+  AddRecentDownloads();
+  downloads_menu_->AddItem(IDC_SHOW_DOWNLOADS, u"Show All Downloads");
+  AddSubMenu(IDC_PERCH_DOWNLOADS_MENU, u"Downloads", downloads_menu_.get());
+
+  extensions_ = std::make_unique<ui::SimpleMenuModel>(this);
+  extensions_->AddItem(IDC_MANAGE_EXTENSIONS, u"Manage Extensions");
+  extensions_->AddItem(IDC_FIND_EXTENSIONS, u"Chrome Web Store");
+  AddSubMenu(IDC_PERCH_EXTENSIONS_MENU, u"Extensions", extensions_.get());
+
+  BrowserView* view = BrowserView::GetBrowserViewForBrowser(browser_);
+  history_ = std::make_unique<RecentTabsSubMenuModel>(view, browser_);
+  AddSubMenu(IDC_RECENT_TABS_MENU, u"History",
+             static_cast<ui::SimpleMenuModel*>(history_.get()));
   developers_ = std::make_unique<ToolsMenuModel>(this, browser_);
   AddSubMenu(IDC_PERCH_DEVELOPERS_MENU, u"Developers", developers_.get());
   AddSeparator(ui::NORMAL_SEPARATOR);
   AddItem(IDC_PERCH_OPEN_SETTINGS, u"Settings");
   AddItem(IDC_NEW_TAB, u"New Tab");
   AddItem(IDC_NEW_INCOGNITO_WINDOW, u"Incognito Window");
+}
+
+void PerchProfileMenuModel::AddRecentDownloads() {
+  content::DownloadManager* manager =
+      browser_->GetProfile()->GetDownloadManager();
+  if (!manager) {
+    return;
+  }
+  std::vector<raw_ptr<download::DownloadItem, VectorExperimental>> items;
+  manager->GetAllDownloads(&items);
+  std::erase_if(items, [](const auto& item) {
+    return item->GetState() != download::DownloadItem::COMPLETE ||
+           item->GetFileExternallyRemoved();
+  });
+  std::ranges::sort(items, [](const auto& a, const auto& b) {
+    return a->GetEndTime() > b->GetEndTime();
+  });
+  for (const auto& item : items) {
+    const int id = IDC_PERCH_DOWNLOAD_FIRST + static_cast<int>(downloads_.size());
+    if (id > IDC_PERCH_DOWNLOAD_LAST) {
+      break;
+    }
+    downloads_.push_back(item->GetGuid());
+    downloads_menu_->AddItem(id, item->GetFileNameToReportUser().LossyDisplayName());
+  }
+  if (!downloads_.empty()) {
+    downloads_menu_->AddSeparator(ui::NORMAL_SEPARATOR);
+  }
 }
 
 bool PerchProfileMenuModel::IsCommandIdChecked(int command_id) const {
@@ -109,6 +158,20 @@ void PerchProfileMenuModel::ExecuteCommand(int command_id, int event_flags) {
     const size_t row = command_id - IDC_PERCH_PROFILE_FIRST;
     if (row < profiles_.size()) {
       profiles::SwitchToProfile(profiles_[row], /*always_create=*/false);
+    }
+    return;
+  }
+  if (command_id >= IDC_PERCH_DOWNLOAD_FIRST &&
+      command_id <= IDC_PERCH_DOWNLOAD_LAST) {
+    const size_t row = command_id - IDC_PERCH_DOWNLOAD_FIRST;
+    content::DownloadManager* manager =
+        browser_->GetProfile()->GetDownloadManager();
+    download::DownloadItem* item =
+        manager && row < downloads_.size()
+            ? manager->GetDownloadByGuid(downloads_[row])
+            : nullptr;
+    if (item) {
+      item->OpenDownload();
     }
     return;
   }

@@ -168,6 +168,18 @@ bool MatchesAny(const GURL& url, const std::vector<SleepRule>& rules) {
       rules, [&](const SleepRule& rule) { return Matches(url, rule); });
 }
 
+std::string DiscardExceptionPattern(const SleepRule& rule) {
+  switch (rule.kind) {
+    case SleepRule::Kind::kHost:
+      return "." + rule.pattern;
+    case SleepRule::Kind::kDomain:
+    case SleepRule::Kind::kWildcard:
+    case SleepRule::Kind::kPrefix:
+    case SleepRule::Kind::kUrl:
+      return rule.pattern;
+  }
+}
+
 std::string_view KindName(SleepRule::Kind kind) {
   for (const auto& [k, name] : kKindNames) {
     if (k == kind) {

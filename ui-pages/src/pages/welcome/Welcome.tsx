@@ -4,6 +4,7 @@ import { ACCENTS, ACCENT_NAMES, THEMES, THEME_NAMES } from "../../theme/tokens";
 import { useAction, useApi, useAppearance, useLoad } from "../../ui/frame";
 import { PerchMark } from "../../ui/PerchMark";
 import { ImportWizard } from "../import/ImportWizard";
+import { RestoreForm } from "../settings/Backup";
 import { Swatches } from "../../ui/Swatches";
 import "./welcome.css";
 
@@ -57,8 +58,46 @@ const COPY: Readonly<Record<OnboardingStep, { title: string; lead: string }>> = 
   memory: { title: "Set up your memory", lead: "Perch can learn about you from sources you pick, so you explain less. You review every fact before it's saved, and it stays on this Mac, encrypted." },
 };
 
+/** perch://welcome#restore: this Mac has Perch data but not its key (spec 11.1). */
+function Restore({ onDone }: { readonly onDone: () => void }) {
+  const [restored, setRestored] = useState(false);
+  return (
+    <main class="wl">
+      <h1 class="serif-title" tabIndex={-1}>Restore your Perch data</h1>
+      <p class="wl-lead">This Mac has your Perch data but not its key. Enter your recovery key to unlock it.</p>
+      <div class="wl-body"><RestoreForm onRestored={() => setRestored(true)} /></div>
+      {restored && (
+        <div class="wl-actions">
+          <button type="button" class="btn primary" onClick={onDone}>Continue</button>
+        </div>
+      )}
+    </main>
+  );
+}
+
+/** The restore view shows for #restore, or when the browser says this Mac's data has no key. */
+function useRestoreView() {
+  const [asked] = useState(() => window.location.hash === "#restore");
+  const [done, setDone] = useState(false);
+  const security = useLoad((a) => a.getSecurity());
+  const loading = !asked && !security.data && !security.error;
+  const show = !done && (asked || Boolean(security.data?.needsRestore));
+  const finish = () => {
+    setDone(true);
+    if (window.location.hash === "#restore") history.replaceState(null, "", window.location.pathname + window.location.search);
+  };
+  return { loading, show, finish };
+}
+
 /** The first-run welcome screen. Every step can be skipped. */
 export function Welcome() {
+  const restore = useRestoreView();
+  if (restore.loading) return null;
+  if (restore.show) return <Restore onDone={restore.finish} />;
+  return <Setup />;
+}
+
+function Setup() {
   const api = useApi();
   const act = useAction();
   const [step, setStep] = useState<OnboardingStep | null>(null);

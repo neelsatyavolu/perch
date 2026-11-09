@@ -8,6 +8,7 @@ import { Dialog } from "../../ui/Dialog";
 import { Icon, X } from "../../ui/icons";
 import { Group, Row } from "../../ui/Row";
 import { Switch } from "../../ui/Switch";
+import { BackupGroup } from "./Backup";
 
 const DOH: Readonly<Record<DohProvider, string>> = { cloudflare: "Cloudflare", quad9: "Quad9", mullvad: "Mullvad", custom: "Custom" };
 
@@ -140,6 +141,8 @@ export function Privacy() {
       </Group>
 
       <SiteDataCard />
+
+      <BackupGroup />
     </div>
   );
 }

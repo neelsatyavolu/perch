@@ -9,11 +9,23 @@ test("perch_unittests") {
   sources = [
     "//chrome/browser/perch/memory_saver/sleep_rules.cc",
     "//chrome/browser/perch/memory_saver/sleep_rules.h",
+    "//chrome/browser/perch/keys/backup.cc",
+    "//chrome/browser/perch/keys/backup.h",
+    "//chrome/browser/perch/keys/recovery_key.cc",
+    "//chrome/browser/perch/keys/recovery_key.h",
+    "//chrome/browser/perch/perch_update_policy.h",
+    "//chrome/browser/perch/perch_update_policy.mm",
+    "backup_unittest.cc",
+    "perch_update_policy_unittest.cc",
+    "recovery_key_unittest.cc",
     "sleep_rules_unittest.cc",
   ]
+  frameworks = [ "Foundation.framework" ]
   deps = [
     "//base",
     "//base/test:run_all_unittests",
+    "//crypto",
+    "//third_party/zlib/google:zip",
     "//testing/gtest",
     "//url",
   ]

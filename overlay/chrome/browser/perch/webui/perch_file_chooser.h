@@ -32,6 +32,16 @@ void ChooseOneFile(content::WebContents* contents,
                    const std::vector<std::string>& extensions,
                    base::OnceCallback<void(std::optional<base::Value>)> reply);
 
+// The save or open panel for a path the browser itself reads or writes (a
+// backup), never one a page sees. Replies nullopt when cancelled.
+void ChooseSavePath(content::WebContents* contents,
+                    const base::FilePath& suggested_name,
+                    const std::string& extension,
+                    base::OnceCallback<void(std::optional<base::FilePath>)> reply);
+void ChooseOpenPath(content::WebContents* contents,
+                    const std::string& extension,
+                    base::OnceCallback<void(std::optional<base::FilePath>)> reply);
+
 }  // namespace perch
 
 #endif  // CHROME_BROWSER_PERCH_WEBUI_PERCH_FILE_CHOOSER_H_

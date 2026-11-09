@@ -55,3 +55,13 @@ perch/agent/agent-status-ui.patch
 perch/policy/built-in-policy.patch
 perch/agent/artifact-lock.patch
 perch/shell/settings-methods.patch
+perch/shell/audit-sources.patch
+perch/shell/split-view.patch
+perch/shell/tab-close-hover.patch
+perch/shell/keyword-chip.patch
+perch/shell/perch-scheme-typed.patch
+perch/agent/agent-tabs-never-sleep.patch
+perch/shell/watch-party.patch
+perch/shell/translate-packs-off.patch
+perch/shell/typography.patch
+perch/shell/restore-sources.patch

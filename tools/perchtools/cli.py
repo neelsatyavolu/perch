@@ -18,7 +18,7 @@ from .snapshot import snapshot_command, written
 from .components import ComponentsError, check_components, new_component_reasons, write_known
 from .doctor import SystemProbe, run_checks
 from .gnargs import build as build_chromium
-from .package import creds_from_env, package, packaged_app
+from .package import creds_from_env, package, packaged_app, stage_fonts
 from .patching import Generator, PatchFailed, apply_series, continue_series, export_series
 from .paths import REPO, Paths, load_paths
 from .pkg import PkgError, build_pkg, installer_identity, require_identity
@@ -140,6 +140,7 @@ def stage_bundled(paths: Paths, config: str) -> Path:
     stage_extensions(load_bundled(paths.repo / BUNDLED_FILE), repo=paths.repo, out=out,
                      cache=paths.repo / "dist" / "cache" / "extensions", local=local, run=run)
     stage_keyhelper(repo=paths.repo, out=paths.out(config), run=run)
+    stage_fonts(paths.repo, paths.out(config) / "perch_fonts")
     return out
 
 

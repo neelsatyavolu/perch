@@ -532,3 +532,11 @@ TypeScript only. No Chromium build.
 | 5.9 authenticator (key) | 4 |
 | 10 import applied to the profile | 14 |
 | 11.3 browser data adapters (encrypted blob sync) | 14 |
+
+---
+
+## Decisions after the audit (2026-11-08)
+
+- **`Perch.setAppEndpoint`:** not added. The browser picks perchd's port and tokens itself and hands them to perchd on the config pipe at launch (`PerchdLauncher`), so perchd has nothing to report back.
+- **Tab events:** `getTabs`, `tabCreated`, `tabClosed`, `tabMoved`, `tabUpdated`, `tabClaimed` and `tabReleased` carry `TabInfo` with the side panel's stable tab GUID (`TabIdFor`). `claimTab` takes `owner` and `render` (default true).
+- **Task 3, recovery:** the recovery key is the profile's root key in Crockford base32 (52 characters), shown behind Touch ID. Restore stores the typed key through the helper's new `import` op. `Perch Agent/root.check` (an HMAC of a fixed label under the root key) checks a typed key before anything changes, and when it exists the browser never quietly makes a new key: it opens `perch://welcome#restore`. "Export everything" writes the profile's `Perch Agent` folder as a zip sealed with AES-256-GCM under HKDF(root, "perch/backup/v1"), so the recovery key alone opens it. The `recovery-wrap` and `recovery-unwrap` ops stay for a future sync-held copy.

@@ -263,3 +263,6 @@ export const SYNC_ON: SyncStatus = {
   ],
 };
 export const SYNC_OFF: SyncStatus = { on: false, lastSync: null, lastError: null, devices: [] };
+
+/** A recovery key as the browser shows it: 32 bytes in Crockford base32, 52 characters in groups of five. */
+export const RECOVERY_KEY = "7KQ2D-M9XHT-4WB3N-PZ6RC-V8JFA-1GHK5-N0QRS-T3VWX-YZ8AB-CDEF4-G7";

@@ -89,6 +89,23 @@ def stage_agent(app: Path, repo: Path, run) -> Path:
     return perchd
 
 
+FONTS_DIR = Path("branding") / "fonts"
+
+
+def stage_fonts(repo: Path, dest: Path) -> Path:
+    """Copy the Geist fonts (SIL OFL, with their licence) to dest. The browser registers every .ttf
+    there at startup and uses Geist for its own text (perch_fonts_mac.mm)."""
+    src = repo / FONTS_DIR
+    fonts = sorted(src.glob("*.ttf"))
+    if not fonts or not (src / "OFL.txt").is_file():
+        raise ValueError(f"{src} needs the Geist .ttf files and OFL.txt")
+    shutil.rmtree(dest, ignore_errors=True)
+    dest.mkdir(parents=True)
+    for font in [*fonts, src / "OFL.txt"]:
+        shutil.copy2(font, dest / font.name)
+    return dest
+
+
 def stage_extensions_into(app: Path, staged: Path) -> None:
     """Copy the built-in extensions (perch-build stage-extensions) into Resources/perch_extensions."""
     if not (staged.is_dir() and any(staged.iterdir())):
@@ -156,6 +173,7 @@ def package(
     app = stage / APP
     perchd = stage_agent(app, paths.repo, run)
     stage_extensions_into(app, paths.out("release") / "perch_extensions")
+    stage_fonts(paths.repo, _framework_version(app) / "Resources" / "perch_fonts")
     helper = stage_keyhelper_into(app, paths.out("release") / KEYS_APP)
     embed_keys_profile(helper, paths.repo)
     if mode == "adhoc":

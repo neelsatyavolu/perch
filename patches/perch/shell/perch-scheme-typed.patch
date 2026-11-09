@@ -1,0 +1,16 @@
+# Perch: a typed perch:// address opens Perch's page instead of searching.
+diff --git a/chrome/browser/autocomplete/chrome_autocomplete_scheme_classifier.cc b/chrome/browser/autocomplete/chrome_autocomplete_scheme_classifier.cc
+index e0402ff520..fd84ae317a 100644
+--- a/chrome/browser/autocomplete/chrome_autocomplete_scheme_classifier.cc
++++ b/chrome/browser/autocomplete/chrome_autocomplete_scheme_classifier.cc
+@@ -72,7 +72,9 @@ ChromeAutocompleteSchemeClassifier::GetInputTypeForScheme(
+       (ProfileIOData::IsHandledProtocol(scheme) ||
+        base::EqualsCaseInsensitiveASCII(scheme, content::kViewSourceScheme) ||
+        base::EqualsCaseInsensitiveASCII(scheme, url::kJavaScriptScheme) ||
+-       base::EqualsCaseInsensitiveASCII(scheme, url::kDataScheme))) {
++       base::EqualsCaseInsensitiveASCII(scheme, url::kDataScheme) ||
++       // Perch: a typed perch:// address opens Perch's page, not a search.
++       base::EqualsCaseInsensitiveASCII(scheme, "perch"))) {
+     return metrics::OmniboxInputType::URL;
+   }
+ 

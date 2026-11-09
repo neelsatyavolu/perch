@@ -9,6 +9,7 @@
 #include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
+#include "chrome/browser/perch/hide_chrome/hide_chrome_mac.h"
 #include "chrome/browser/perch/perch_pref_names.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
@@ -47,6 +48,7 @@ struct WindowState {
   bool revealed = false;
   std::unique_ptr<FocusWatcher> focus;
   raw_ptr<views::FocusManager> focus_manager = nullptr;
+  std::unique_ptr<HideChromeMonitor> monitor;
 };
 
 std::map<const BrowserWindowInterface*, std::unique_ptr<WindowState>>&
@@ -58,6 +60,7 @@ Windows() {
 }
 
 void Relayout(BrowserWindowInterface* browser) {
+  SetTrafficLightsHidden(browser, IsChromeHidden(browser));
   if (BrowserView* view = BrowserView::GetBrowserViewForBrowser(browser)) {
     view->ToolbarSizeChanged(/*is_animating=*/false);
     view->InvalidateLayout();
@@ -105,6 +108,7 @@ void WatchHideChrome(BrowserWindowInterface* browser) {
       state->focus_manager->AddFocusChangeListener(state->focus.get());
     }
   }
+  state->monitor = CreateHideChromeMonitor(browser);
   Windows()[browser] = std::move(state);
   if (IsChromeHidden(browser)) {
     Relayout(browser);

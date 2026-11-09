@@ -1,0 +1,79 @@
+# Perch: a hairline split divider with an 8 px grab area, and ⌃⌘[ / ⌃⌘] to focus a side.
+diff --git a/chrome/browser/global_keyboard_shortcuts_mac.mm b/chrome/browser/global_keyboard_shortcuts_mac.mm
+index 4e41528d09..bd511ac498 100644
+--- a/chrome/browser/global_keyboard_shortcuts_mac.mm
++++ b/chrome/browser/global_keyboard_shortcuts_mac.mm
+@@ -13,6 +13,7 @@
+ #include "base/no_destructor.h"
+ #include "build/buildflag.h"
+ #include "chrome/app/chrome_command_ids.h"
++#include "chrome/browser/perch/perch_command_ids.h"
+ #import "chrome/browser/app_controller_mac.h"
+ #include "chrome/browser/ui/cocoa/accelerators_cocoa.h"
+ #include "chrome/browser/ui/tabs/features.h"
+@@ -154,6 +155,12 @@ const std::vector<KeyboardShortcutData>& GetShortcutsNotPresentInMainMenu() {
+     });
+     // clang-format on
+ 
++    // Perch: ⌃⌘[ and ⌃⌘] focus the left or right side of a split.
++    keys.push_back({true, false, true, false, kVK_ANSI_LeftBracket,
++                    IDC_PERCH_SPLIT_FOCUS_LEFT});
++    keys.push_back({true, false, true, false, kVK_ANSI_RightBracket,
++                    IDC_PERCH_SPLIT_FOCUS_RIGHT});
++
+     // Tab Group Shortcuts
+     keys.push_back(
+         {true, false, true, false, kVK_ANSI_C, IDC_ADD_NEW_TAB_TO_GROUP});
+diff --git a/chrome/browser/ui/views/frame/multi_contents_resize_area.cc b/chrome/browser/ui/views/frame/multi_contents_resize_area.cc
+index 37a68df743..7c77fa80d6 100644
+--- a/chrome/browser/ui/views/frame/multi_contents_resize_area.cc
++++ b/chrome/browser/ui/views/frame/multi_contents_resize_area.cc
+@@ -17,6 +17,8 @@
+ #include "ui/compositor/layer_type.h"
+ #include "ui/gfx/geometry/size.h"
+ #include "ui/views/accessibility/view_accessibility.h"
++#include "ui/color/color_provider.h"
++#include "ui/gfx/canvas.h"
+ #include "ui/views/background.h"
+ #include "ui/views/controls/focus_ring.h"
+ #include "ui/views/controls/highlight_path_generator.h"
+@@ -165,6 +167,17 @@ void MultiContentsResizeArea::SetVisible(bool visible) {
+   resize_handle_->UpdateVisibility();
+ }
+ 
++// Perch: the split divider is a hairline in the strong separator colour.
++void MultiContentsResizeArea::OnPaint(gfx::Canvas* canvas) {
++  ResizeArea::OnPaint(canvas);
++  const gfx::Rect bounds = GetLocalBounds();
++  const gfx::Rect line =
++      axis() == Axis::kHorizontal
++          ? gfx::Rect(bounds.CenterPoint().x(), 0, 1, bounds.height())
++          : gfx::Rect(0, bounds.CenterPoint().y(), bounds.width(), 1);
++  canvas->FillRect(line, GetColorProvider()->GetColor(kColorToolbarSeparator));
++}
++
+ void MultiContentsResizeArea::OnLayoutUpdated() {
+   flex_layout_manager_->SetOrientation(
+       axis() == Axis::kHorizontal ? views::LayoutOrientation::kVertical
+diff --git a/chrome/browser/ui/views/frame/multi_contents_resize_area.h b/chrome/browser/ui/views/frame/multi_contents_resize_area.h
+index 460c40a7c5..85a883fb09 100644
+--- a/chrome/browser/ui/views/frame/multi_contents_resize_area.h
++++ b/chrome/browser/ui/views/frame/multi_contents_resize_area.h
+@@ -50,7 +50,8 @@ class MultiContentsResizeArea : public views::ResizeArea {
+   METADATA_HEADER(MultiContentsResizeArea, ResizeArea)
+ 
+  public:
+-  static constexpr int kHandleResizeAxisPadding = 6;
++  // Perch: an 8 px grab area around a 1 px hairline (DESIGN.md).
++  static constexpr int kHandleResizeAxisPadding = 4;
+   static constexpr int kHandleResizeAxisSize = 4;
+ 
+   DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kMultiContentsResizeAreaElementId);
+@@ -66,6 +67,7 @@ class MultiContentsResizeArea : public views::ResizeArea {
+   void OnMouseMoved(const ui::MouseEvent& event) override;
+   void OnMouseExited(const ui::MouseEvent& event) override;
+   void SetVisible(bool visible) override;
++  void OnPaint(gfx::Canvas* canvas) override;
+ 
+  private:
+   // Sets the layout manager orientation and preferred size according to the

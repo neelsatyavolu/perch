@@ -11,6 +11,8 @@
 #include "chrome/browser/perch/side_panel/perch_side_panel_controller.h"
 
 #include <map>
+#include <set>
+#include <string>
 #include <utility>
 
 #include "base/auto_reset.h"
@@ -21,6 +23,7 @@
 #include "base/memory/weak_ptr.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
+#include "chrome/browser/perch/agent/perch_devtools.h"
 #include "chrome/browser/perch/agent/perchd_launcher.h"
 #include "chrome/browser/perch/side_panel/perch_tab_sync.h"
 #include "chrome/browser/perch/webui/perch_side_chat_ui.h"
@@ -38,6 +41,8 @@
 #include "chrome/browser/ui/tabs/tab_change_type.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/toolbar/pinned_toolbar/pinned_toolbar_actions_model.h"
+#include "chrome/browser/ui/views/frame/browser_view.h"
+#include "chrome/browser/ui/views/side_panel/side_panel.h"
 #include "chrome/browser/ui/views/side_panel/side_panel_web_ui_view.h"
 #include "chrome/browser/ui/webui/top_chrome/webui_contents_wrapper.h"
 #include "chrome/grit/generated_resources.h"
@@ -197,6 +202,15 @@ PerchSidePanelController::PerchSidePanelController(
   }
   browser->GetTabStripModel()->AddObserver(this);
   PinOnce();
+  // Once the window is up, a profile whose key needs restoring shows its
+  // restore page here.
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(&PerchSidePanelController::OnWindowReady,
+                                weak_factory_.GetWeakPtr()));
+}
+
+void PerchSidePanelController::OnWindowReady() {
+  KeyBroker::Get().OnWindowOpened(browser_);
 }
 
 PerchSidePanelController::~PerchSidePanelController() {
@@ -209,6 +223,16 @@ PerchSidePanelController::~PerchSidePanelController() {
   }
 }
 
+namespace {
+
+// Ids of tabs between leaving one window and arriving in another.
+std::set<std::string>& MovingTabs() {
+  static base::NoDestructor<std::set<std::string>> moving;
+  return *moving;
+}
+
+}  // namespace
+
 void PerchSidePanelController::OnTabStripModelChanged(
     TabStripModel* tab_strip_model,
     const TabStripModelChange& change,
@@ -217,18 +241,37 @@ void PerchSidePanelController::OnTabStripModelChanged(
   PerchTabSync& sync = PerchTabSync::Get();
   if (change.type() == TabStripModelChange::kRemoved) {
     for (const auto& removed : change.GetRemove()->contents) {
-      if (removed.tab &&
-          removed.tab_detach_reason ==
-              tabs::TabInterface::DetachReason::kDelete) {
+      if (!removed.tab) {
+        continue;
+      }
+      if (removed.tab_detach_reason ==
+          tabs::TabInterface::DetachReason::kDelete) {
         sync.Remove(profile, TabIdFor(removed.tab));
+        if (IsPerchdConnected()) {
+          EmitPerchEvent("tabClosed", base::DictValue().Set(
+                                          "tabId", TabIdFor(removed.tab)));
+        }
         ForgetTab(removed.tab);
+      } else {
+        // Leaving for another window: the insert there reports the move.
+        MovingTabs().insert(TabIdFor(removed.tab));
       }
     }
   } else if (change.type() == TabStripModelChange::kInserted) {
     for (const auto& inserted : change.GetInsert()->contents) {
       if (inserted.tab) {
         sync.Update(profile, window_id_, inserted.tab);
+        const bool moved = MovingTabs().erase(TabIdFor(inserted.tab)) > 0;
+        if (IsPerchdConnected()) {
+          EmitPerchEvent(moved ? "tabMoved" : "tabCreated",
+                         TabInfo(inserted.tab));
+        }
       }
+    }
+  } else if (change.type() == TabStripModelChange::kMoved &&
+             IsPerchdConnected()) {
+    if (tabs::TabInterface* tab = change.GetMove()->tab) {
+      EmitPerchEvent("tabMoved", TabInfo(tab));
     }
   }
   if (!selection.active_tab_changed() || !selection.new_tab) {
@@ -260,10 +303,19 @@ void PerchSidePanelController::OnTabChangedAt(tabs::TabInterface* tab,
                                               TabChangeType change_type) {
   if (change_type == TabChangeType::kAll) {
     PerchTabSync::Get().Update(browser_->GetProfile(), window_id_, tab);
+    if (IsPerchdConnected()) {
+      EmitPerchEvent("tabUpdated", TabInfo(tab));
+    }
   }
 }
 
 void PerchSidePanelController::OnEntryShown(SidePanelEntry* entry) {
+  // Each window keeps its own sidebar width (Chromium keeps one per profile).
+  if (width_ > 0) {
+    if (SidePanel* panel = Panel()) {
+      panel->SetPanelWidth(width_);
+    }
+  }
   tabs::TabInterface* tab = browser_->GetTabStripModel()->GetActiveTab();
   if (!tab) {
     return;
@@ -275,6 +327,9 @@ void PerchSidePanelController::OnEntryShown(SidePanelEntry* entry) {
 }
 
 void PerchSidePanelController::OnEntryHidden(SidePanelEntry* entry) {
+  if (SidePanel* panel = Panel(); panel && panel->width() > 0) {
+    width_ = panel->width();
+  }
   tabs::TabInterface* tab = browser_->GetTabStripModel()->GetActiveTab();
   if (tab && !switching_) {
     SetPanelOpenFor(tab, false);
@@ -293,6 +348,11 @@ std::unique_ptr<views::View> PerchSidePanelController::CreateView(
   // The page needs no handshake to be shown.
   view->ShowUI();
   return view;
+}
+
+SidePanel* PerchSidePanelController::Panel() const {
+  BrowserView* view = BrowserView::GetBrowserViewForBrowser(browser_);
+  return view ? view->side_panel() : nullptr;
 }
 
 void PerchSidePanelController::PinOnce() {

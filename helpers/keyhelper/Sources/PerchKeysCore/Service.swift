@@ -50,6 +50,7 @@ public final class Service {
         case "delete": return try delete(request.profile)
         case "recovery-wrap": return try recoveryWrap(request)
         case "recovery-unwrap": return try recoveryUnwrap(request)
+        case "import": return try importKey(request)
         default: throw .unknownOp
         }
     }
@@ -118,6 +119,24 @@ public final class Service {
             throw error
         }
         var key = try Wrap.open(wrapped, with: priv)
+        do {
+            let b = try resolved()
+            try b.store.write(profile: request.profile, blob: try Wrap.seal(key, to: try b.wrapKey.publicKey()))
+            return reply(key: &key, protected: b.wrapKey.protected)
+        } catch {
+            wipe(&key)
+            throw error
+        }
+    }
+
+    /// Restoring from a recovery key on a new Mac: stores the root key the person typed, wrapped
+    /// under this Mac's wrap key, replacing any key the profile had.
+    private func importKey(_ request: Request) throws(KeyError) -> Response {
+        guard var key = request.key.flatMap(decodeBase64) else { throw .malformed }
+        guard key.count == 32 else {
+            wipe(&key)
+            throw .malformed
+        }
         do {
             let b = try resolved()
             try b.store.write(profile: request.profile, blob: try Wrap.seal(key, to: try b.wrapKey.publicKey()))

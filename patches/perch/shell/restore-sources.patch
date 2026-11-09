@@ -1,0 +1,14 @@
+# Perch: builds the backup and restore flow.
+diff --git a/chrome/browser/ui/browser_window/internal/BUILD.gn b/chrome/browser/ui/browser_window/internal/BUILD.gn
+index c23cd724d2..a14319812b 100644
+--- a/chrome/browser/ui/browser_window/internal/BUILD.gn
++++ b/chrome/browser/ui/browser_window/internal/BUILD.gn
+@@ -136,6 +136,8 @@ source_set("internal") {
+       "//chrome/browser/perch/keys/perch_keys_host.h",
+       "//chrome/browser/perch/keys/recovery_key.cc",
+       "//chrome/browser/perch/keys/recovery_key.h",
++      "//chrome/browser/perch/keys/restore_flow.cc",
++      "//chrome/browser/perch/keys/restore_flow.h",
+       "//chrome/browser/perch/command_bar/command_bar.cc",
+       "//chrome/browser/perch/command_bar/command_bar.h",
+       "//chrome/browser/perch/spaces/spaces.cc",

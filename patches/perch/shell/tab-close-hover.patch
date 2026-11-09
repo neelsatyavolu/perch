@@ -1,0 +1,82 @@
+# Perch: inactive tabs show their close button only on hover or focus.
+diff --git a/chrome/browser/ui/views/tabs/tab.cc b/chrome/browser/ui/views/tabs/tab.cc
+index 5db520967f..b537c7b3b5 100644
+--- a/chrome/browser/ui/views/tabs/tab.cc
++++ b/chrome/browser/ui/views/tabs/tab.cc
+@@ -316,9 +316,7 @@ class Tab::TabCloseButtonObserver : public views::ViewObserver {
+   void OnViewFocused(views::View* observed_view) override {
+     controller_->UpdateHoverCard(
+         tab_, TabSlotController::HoverCardUpdateType::kFocus);
+-    if (features::IsTabStripDeclutterEnabled()) {
+-      tab_->InvalidateLayout();
+-    }
++    tab_->InvalidateLayout();  // Perch: the close button follows focus.
+   }
+ 
+   void OnViewBlurred(views::View* observed_view) override {
+@@ -327,9 +325,7 @@ class Tab::TabCloseButtonObserver : public views::ViewObserver {
+       controller_->UpdateHoverCard(
+           nullptr, TabSlotController::HoverCardUpdateType::kFocus);
+     }
+-    if (features::IsTabStripDeclutterEnabled()) {
+-      tab_->InvalidateLayout();
+-    }
++    tab_->InvalidateLayout();  // Perch: the close button follows focus.
+   }
+ 
+   base::ScopedObservation<views::View, views::ViewObserver>
+@@ -854,6 +850,7 @@ void Tab::OnMouseMoved(const ui::MouseEvent& event) {
+ 
+ void Tab::OnMouseEntered(const ui::MouseEvent& event) {
+   MaybeUpdateHoverStatus(event);
++  InvalidateLayout();  // Perch: the close button follows hover.
+ }
+ 
+ void Tab::OnMouseExited(const ui::MouseEvent& event) {
+@@ -862,6 +859,7 @@ void Tab::OnMouseExited(const ui::MouseEvent& event) {
+   }
+   mouse_hovered_ = false;
+   controller_->HideHover(this, TabStyle::HideHoverStyle::kGradual);
++  InvalidateLayout();  // Perch: the close button follows hover.
+ }
+ 
+ void Tab::OnGestureEvent(ui::GestureEvent* event) {
+@@ -961,9 +959,8 @@ void Tab::OnFocus() {
+   UpdateAccessibleName();
+   controller_->UpdateHoverCard(this,
+                                TabSlotController::HoverCardUpdateType::kFocus);
+-  if (features::IsTabStripDeclutterEnabled()) {
+-    InvalidateLayout();
+-  }
++  // Perch: the close button follows focus, so always relayout.
++  InvalidateLayout();
+ }
+ 
+ void Tab::OnBlur() {
+@@ -975,9 +972,8 @@ void Tab::OnBlur() {
+     controller_->UpdateHoverCard(
+         nullptr, TabSlotController::HoverCardUpdateType::kFocus);
+   }
+-  if (features::IsTabStripDeclutterEnabled()) {
+-    InvalidateLayout();
+-  }
++  // Perch: the close button follows focus, so always relayout.
++  InvalidateLayout();
+ }
+ 
+ void Tab::OnThemeChanged() {
+@@ -1425,8 +1421,14 @@ void Tab::UpdateIconVisibility() {
+       available_width -= favicon_width;
+     }
+ 
++    // Perch: an inactive tab shows its close button only on hover or focus
++    // (DESIGN.md), so the title gets the room otherwise.
++    const bool perch_hover_or_focus =
++        IsHovering() || HasFocus() ||
++        (close_button_ && close_button_->HasFocus());
+     showing_close_button_ =
+         should_show_close_button && large_enough_for_close_button &&
++        perch_hover_or_focus &&
+         !(declutter_eligible &&
+           features::kTabStripDeclutterInactiveTabCloseHideEnabled.Get() &&
+           available_width <=

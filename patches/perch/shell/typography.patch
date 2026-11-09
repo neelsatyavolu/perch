@@ -1,0 +1,48 @@
+# Perch: Geist for the browser's text and Geist Mono for monospaced text.
+diff --git a/chrome/browser/chrome_browser_main_mac.mm b/chrome/browser/chrome_browser_main_mac.mm
+index b269f1610a..5905b50a58 100644
+--- a/chrome/browser/chrome_browser_main_mac.mm
++++ b/chrome/browser/chrome_browser_main_mac.mm
+@@ -4,6 +4,8 @@
+ 
+ #include "chrome/browser/chrome_browser_main_mac.h"
+ 
++#include "chrome/browser/perch/theme/perch_fonts_mac.h"
++
+ #import <Cocoa/Cocoa.h>
+ 
+ #include <memory>
+@@ -170,6 +172,8 @@ int ChromeBrowserMainPartsMac::PreCreateThreads() {
+ 
+ void ChromeBrowserMainPartsMac::PreProfileInit() {
+   ChromeBrowserMainPartsPosix::PreProfileInit();
++  // Perch: Geist for the browser's own text, before any window exists.
++  perch::RegisterPerchFonts();
+ 
+   // This is called here so that the app shim socket is only created after
+   // taking the singleton lock.
+diff --git a/chrome/browser/ui/views/chrome_typography_provider.cc b/chrome/browser/ui/views/chrome_typography_provider.cc
+index 59704fdcb3..a765244bbc 100644
+--- a/chrome/browser/ui/views/chrome_typography_provider.cc
++++ b/chrome/browser/ui/views/chrome_typography_provider.cc
+@@ -4,6 +4,10 @@
+ 
+ #include "chrome/browser/ui/views/chrome_typography_provider.h"
+ 
++#if BUILDFLAG(IS_MAC)
++#include "chrome/browser/perch/theme/perch_fonts_mac.h"
++#endif
++
+ #include "build/build_config.h"
+ #include "chrome/browser/ui/color/chrome_color_id.h"
+ #include "chrome/browser/ui/views/chrome_typography.h"
+@@ -129,7 +133,8 @@ ui::ResourceBundle::FontDetails ChromeTypographyProvider::GetFontDetailsImpl(
+   if (style == views::style::STYLE_PRIMARY_MONOSPACED ||
+       style == views::style::STYLE_SECONDARY_MONOSPACED) {
+ #if BUILDFLAG(IS_MAC)
+-    details.typeface = "Menlo";
++    // Perch: Geist Mono when it shipped with the browser (DESIGN.md).
++    details.typeface = perch::HasPerchMonoFont() ? "Geist Mono" : "Menlo";
+ #elif BUILDFLAG(IS_WIN)
+     details.typeface = "Consolas";
+ #else

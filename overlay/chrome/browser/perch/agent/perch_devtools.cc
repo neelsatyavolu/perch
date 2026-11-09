@@ -16,13 +16,17 @@
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/no_destructor.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
 #include "chrome/browser/perch/agent/credential_fill.h"
 #include "chrome/browser/perch/agent/import_bundle.h"
 #include "chrome/browser/perch/agent/perch_domain_data.h"
 #include "chrome/browser/perch/agent/task_status.h"
+#include "chrome/browser/perch/side_panel/perch_tab_sync.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
 #include "chrome/browser/ui/tabs/tab_group_model.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "components/tab_groups/tab_group_color.h"
@@ -74,9 +78,15 @@ content::DevToolsAgentHostClientChannel* g_channel = nullptr;
 
 // Holds that keep claimed tabs drawing, by target id. Each hold is bound to a
 // weak pointer, so a tab that closes while claimed is safe.
-std::map<std::string, base::ScopedClosureRunner>& Claims() {
-  static base::NoDestructor<std::map<std::string, base::ScopedClosureRunner>>
-      claims;
+struct Claim {
+  // Keeps a background tab drawing and awake; empty with render: false.
+  base::ScopedClosureRunner hold;
+  // {chatId, client, label}, as perchd sent it.
+  base::DictValue owner;
+};
+
+std::map<std::string, Claim>& Claims() {
+  static base::NoDestructor<std::map<std::string, Claim>> claims;
   return *claims;
 }
 
@@ -141,7 +151,7 @@ Reply GetInfo() {
        {"setTaskStatus", "revealChat", "askRequested", "getBookmarks",
         "applyBookmarkChanges", "getHistory", "addHistory", "getOpenTabs",
         "getExtensionTabId", "applyImportBundle", "listLogins", "fillLogin",
-        "listCards", "fillCard", "perch-artifact"}) {
+        "listCards", "fillCard", "perch-artifact", "getTabs", "tabEvents"}) {
     features.Append(feature);
   }
   result.Set("features", std::move(features));
@@ -211,9 +221,19 @@ Reply ClaimTab(const base::DictValue& params) {
     return Fail(kServerError, "No tab with that target id");
   }
   if (!Claims().contains(*id)) {
-    Claims().emplace(*id, contents->IncrementCapturerCount(
-                              gfx::Size(), /*stay_hidden=*/true,
-                              /*stay_awake=*/true, /*is_activity=*/false));
+    Claim claim;
+    if (params.FindBool("render").value_or(true)) {
+      claim.hold = contents->IncrementCapturerCount(
+          gfx::Size(), /*stay_hidden=*/true,
+          /*stay_awake=*/true, /*is_activity=*/false);
+    }
+    if (const base::DictValue* owner = params.FindDict("owner")) {
+      claim.owner = owner->Clone();
+    }
+    Claims().emplace(*id, std::move(claim));
+    if (tabs::TabInterface* tab = TabFor(*id)) {
+      EmitPerchEvent("tabClaimed", TabInfo(tab));
+    }
   }
   return Ok();
 }
@@ -223,8 +243,27 @@ Reply ReleaseTab(const base::DictValue& params) {
   if (!id) {
     return Fail(kInvalidParams, "targetId is required");
   }
-  Claims().erase(*id);
+  if (Claims().erase(*id)) {
+    if (tabs::TabInterface* tab = TabFor(*id)) {
+      EmitPerchEvent("tabReleased", TabInfo(tab));
+    }
+  }
   return Ok();
+}
+
+// Every tab in every window and profile, incognito ones flagged (spec 5.8).
+Reply GetTabs() {
+  base::ListValue list;
+  for (BrowserWindowInterface* browser : GetAllBrowserWindowInterfaces()) {
+    TabStripModel* model = browser->GetTabStripModel();
+    if (!model) {
+      continue;
+    }
+    for (int i = 0; i < model->count(); ++i) {
+      list.Append(TabInfo(model->GetTabAtIndex(i)));
+    }
+  }
+  return Ok(base::DictValue().Set("tabs", std::move(list)));
 }
 
 Reply SetTaskStatusCommand(const base::DictValue& params) {
@@ -303,6 +342,9 @@ Reply Dispatch(std::string_view method, const base::DictValue& params) {
   }
   if (method == "releaseTab") {
     return ReleaseTab(params);
+  }
+  if (method == "getTabs") {
+    return GetTabs();
   }
   return Fail(kMethodNotFound, "'Perch." + std::string(method) +
                                    "' wasn't found");
@@ -413,6 +455,44 @@ void EmitPerchEvent(std::string_view method, base::DictValue params) {
   if (crdtp::json::ConvertJSONToCBOR(crdtp::SpanFrom(json), &cbor).ok()) {
     g_channel->DispatchProtocolMessageToClient(std::move(cbor));
   }
+}
+
+base::DictValue TabInfo(tabs::TabInterface* tab) {
+  content::WebContents* contents = tab->GetContents();
+  BrowserWindowInterface* browser = tab->GetBrowserWindowInterface();
+  const std::string target_id =
+      content::DevToolsAgentHost::GetOrCreateFor(contents)->GetId();
+  base::DictValue info;
+  info.Set("tabId", TabIdFor(tab));
+  info.Set("targetId", target_id);
+  info.Set("title", base::UTF16ToUTF8(contents->GetTitle()));
+  info.Set("url", contents->GetVisibleURL().spec());
+  info.Set("pinned", tab->IsPinned());
+  info.Set("active", tab->IsActivated());
+  if (browser) {
+    Profile* profile = browser->GetProfile();
+    info.Set("windowId", base::NumberToString(browser->GetSessionID().id()));
+    info.Set("profile",
+             profile->GetOriginalProfile()->GetBaseName().AsUTF8Unsafe());
+    info.Set("incognito", profile->IsOffTheRecord());
+  }
+  auto claim = Claims().find(target_id);
+  if (claim != Claims().end() && !claim->second.owner.empty()) {
+    info.Set("owner", claim->second.owner.Clone());
+  }
+  return info;
+}
+
+bool IsClaimedByAgent(const content::WebContents* contents) {
+  if (!contents) {
+    return false;
+  }
+  for (const auto& [target_id, hold] : Claims()) {
+    if (ContentsFor(target_id) == contents) {
+      return true;
+    }
+  }
+  return false;
 }
 
 bool IsPerchdConnected() {

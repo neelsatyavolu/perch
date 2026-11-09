@@ -106,7 +106,60 @@ class OneFileChooser : public ui::SelectFileDialog::Listener {
   scoped_refptr<ui::SelectFileDialog> dialog_;
 };
 
+// A save or open panel that answers with the path; owns itself until then.
+class PathChooser : public ui::SelectFileDialog::Listener {
+ public:
+  PathChooser(content::WebContents* contents,
+              ui::SelectFileDialog::Type type,
+              const std::u16string& title,
+              const base::FilePath& suggested_name,
+              const std::string& extension,
+              base::OnceCallback<void(std::optional<base::FilePath>)> reply)
+      : reply_(std::move(reply)) {
+    ui::SelectFileDialog::FileTypeInfo types;
+    types.extensions.push_back({extension});
+    dialog_ = ui::SelectFileDialog::Create(
+        this, std::make_unique<ChromeSelectFilePolicy>(contents));
+    dialog_->SelectFile(type, title, suggested_name, &types, 1, extension,
+                        contents->GetTopLevelNativeWindow());
+  }
+
+  void FileSelected(const ui::SelectedFileInfo& file, int index) override {
+    Finish(file.path());
+  }
+  void FileSelectionCanceled() override { Finish(std::nullopt); }
+
+ private:
+  ~PathChooser() override { dialog_->ListenerDestroyed(); }
+
+  void Finish(std::optional<base::FilePath> path) {
+    std::move(reply_).Run(std::move(path));
+    delete this;
+  }
+
+  base::OnceCallback<void(std::optional<base::FilePath>)> reply_;
+  scoped_refptr<ui::SelectFileDialog> dialog_;
+};
+
 }  // namespace
+
+void ChooseSavePath(
+    content::WebContents* contents,
+    const base::FilePath& suggested_name,
+    const std::string& extension,
+    base::OnceCallback<void(std::optional<base::FilePath>)> reply) {
+  new PathChooser(contents, ui::SelectFileDialog::SELECT_SAVEAS_FILE,
+                  u"Save backup", suggested_name, extension, std::move(reply));
+}
+
+void ChooseOpenPath(
+    content::WebContents* contents,
+    const std::string& extension,
+    base::OnceCallback<void(std::optional<base::FilePath>)> reply) {
+  new PathChooser(contents, ui::SelectFileDialog::SELECT_OPEN_FILE,
+                  u"Choose a backup", base::FilePath(), extension,
+                  std::move(reply));
+}
 
 void StorePickedFiles(
     Profile* profile,

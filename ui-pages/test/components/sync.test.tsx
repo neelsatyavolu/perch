@@ -40,13 +40,16 @@ describe("Sync", () => {
   });
 
   test("the recovery key shows only after a second step, and says so when the build can't", async () => {
+    // It lives with backup and restore under Privacy, so it's there without sync.
+    window.location.hash = "#privacy";
     const r = renderWithApi(<Settings />);
     fireEvent.click(await r.findByRole("button", { name: "Show" }));
     expect(r.queryByLabelText("Your recovery key")).toBeNull();
     fireEvent.click(await r.findByRole("button", { name: "Show key" }));
-    expect((await r.findByLabelText("Your recovery key")).textContent).toBe("7KQ2D-M9XHT-4WB3N-PZ6RC-V8JFA");
+    expect((await r.findByLabelText("Your recovery key")).textContent).toBe("7KQ2D-M9XHT-4WB3N-PZ6RC-V8JFA-1GHK5-N0QRS-T3VWX-YZ8AB-CDEF4-G7");
     cleanup();
 
+    window.location.hash = "#privacy";
     const u = renderWithApi(<Settings />, { recoveryKey: "unavailable" });
     fireEvent.click(await u.findByRole("button", { name: "Show" }));
     fireEvent.click(await u.findByRole("button", { name: "Show key" }));

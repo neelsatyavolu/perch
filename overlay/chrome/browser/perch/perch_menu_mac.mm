@@ -134,8 +134,15 @@ void AddPerchMenuItems() {
   NSMenuItem* bar = CommandItem(@"Command Bar", IDC_PERCH_COMMAND_BAR);
   bar.keyEquivalent = @"k";
   bar.keyEquivalentModifierMask = NSEventModifierFlagCommand;
+  // View → Show Perch Sidebar (⌘⇧.), next to Safari's ⌘⇧L sidebar.
+  NSMenuItem* sidebar =
+      CommandItem(@"Show Perch Sidebar", IDC_PERCH_TOGGLE_SIDEBAR);
+  sidebar.keyEquivalent = @".";
+  sidebar.keyEquivalentModifierMask =
+      NSEventModifierFlagCommand | NSEventModifierFlagShift;
   [view_menu insertItem:[NSMenuItem separatorItem] atIndex:0];
   [view_menu insertItem:item atIndex:0];
+  [view_menu insertItem:sidebar atIndex:0];
   [view_menu insertItem:bar atIndex:0];
 }
 

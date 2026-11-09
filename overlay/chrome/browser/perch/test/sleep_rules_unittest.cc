@@ -108,5 +108,14 @@ TEST(SleepRulesTest, RoundTripsThroughThePref) {
   EXPECT_TRUE(RulesFromList(junk).empty());
 }
 
+TEST(SleepRulesTest, MirrorsIntoChromiumsExceptionFormat) {
+  EXPECT_EQ(DiscardExceptionPattern(Parse("example.com")), "example.com");
+  EXPECT_EQ(DiscardExceptionPattern(Parse("=mail.google.com")),
+            ".mail.google.com");
+  EXPECT_EQ(DiscardExceptionPattern(Parse("*.figma.com")), "figma.com");
+  EXPECT_EQ(DiscardExceptionPattern(Parse("github.com/neel")),
+            "github.com/neel");
+}
+
 }  // namespace
 }  // namespace perch

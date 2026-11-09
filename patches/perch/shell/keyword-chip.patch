@@ -1,0 +1,23 @@
+# Perch: the search engine chip sits on the accent tint.
+diff --git a/chrome/browser/ui/views/location_bar/selected_keyword_view.cc b/chrome/browser/ui/views/location_bar/selected_keyword_view.cc
+index 395ab06d5a..51b70e0afb 100644
+--- a/chrome/browser/ui/views/location_bar/selected_keyword_view.cc
++++ b/chrome/browser/ui/views/location_bar/selected_keyword_view.cc
+@@ -27,6 +27,7 @@
+ #include "ui/base/ui_base_features.h"
+ #include "ui/gfx/font_list.h"
+ #include "ui/gfx/geometry/rect.h"
++#include "ui/color/color_id.h"
+ #include "ui/gfx/geometry/size.h"
+ #include "ui/gfx/image/image.h"
+ #include "ui/gfx/image/image_skia.h"
+@@ -135,6 +136,9 @@ SelectedKeywordView::SelectedKeywordView(
+   partial_label_.SetFontList(font_list);
+   partial_label_.SetVisible(false);
+   label()->SetElideBehavior(gfx::FADE_TAIL);
++  // Perch: the search engine chip sits on the accent tint (DESIGN.md).
++  SetBackgroundVisibility(BackgroundVisibility::kAlways);
++  SetCustomBackgroundColorId(ui::kColorTextSelectionBackground);
+ 
+   // TODO(crbug.com/40890218): `IconLabelBubbleView::GetAccessibleNodeData`
+   // would set the name to explicitly empty when the name was missing.

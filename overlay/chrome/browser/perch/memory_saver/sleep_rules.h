@@ -46,6 +46,13 @@ bool MatchesAny(const GURL& url, const std::vector<SleepRule>& rules);
 std::vector<SleepRule> RulesFromList(const base::ListValue& list);
 base::ListValue RulesToList(const std::vector<SleepRule>& rules);
 
+// The rule in the URL-blocklist pattern format of Chromium's own discard
+// exceptions (performance_tuning.tab_discarding.exceptions_with_time), so
+// Chromium's discarding and its settings agree with Perch's rules. That format
+// has no "subdomains only", so *.example.com becomes example.com there; Perch's
+// own check stays exact.
+std::string DiscardExceptionPattern(const SleepRule& rule);
+
 std::string_view KindName(SleepRule::Kind kind);
 std::optional<SleepRule::Kind> KindFromName(std::string_view name);
 

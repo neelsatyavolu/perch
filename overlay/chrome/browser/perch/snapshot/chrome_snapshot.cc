@@ -46,6 +46,15 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/translate/chrome_translate_client.h"
 #include "components/translate/core/browser/translate_manager.h"
+#include "chrome/browser/ui/browser_commands.h"
+#include "components/keyed_service/core/service_access_type.h"
+#include "components/password_manager/core/browser/password_store/password_store_interface.h"
+#include "components/password_manager/core/browser/password_store/stored_credential.h"
+#include "components/password_manager/core/browser/password_string.h"
+#include "chrome/browser/password_manager/factories/profile_password_store_factory.h"
+#include "ui/events/event.h"
+#include "chrome/browser/ui/views/location_bar/location_bar_view.h"
+#include "chrome/browser/ui/views/omnibox/omnibox_view_views.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
@@ -223,6 +232,74 @@ class Snapshotter {
                          << (result.has_value() ? result->DebugString()
                                                 : result.error());
           }));
+    } else if (state == "login-open") {
+      // A sign-in form on a local test server (http://127.0.0.1:8765/).
+      browser_->GetTabStripModel()->GetActiveWebContents()->GetController()
+          .LoadURL(GURL("http://127.0.0.1:8765/login.html"), content::Referrer(),
+                   ui::PAGE_TRANSITION_TYPED, std::string());
+    } else if (state == "login") {
+      // A saved password for that origin.
+      content::WebContents* page =
+          browser_->GetTabStripModel()->GetActiveWebContents();
+      password_manager::StoredCredential form;
+      form.signon_realm = "http://127.0.0.1:8765/";
+      form.url = GURL("http://127.0.0.1:8765/login.html");
+      form.username_value = u"test@example.com";
+      form.password_value =
+          password_manager::PasswordString(u"not-a-real-password");
+      ProfilePasswordStoreFactory::GetForProfile(
+          Profile::FromBrowserContext(page->GetBrowserContext()),
+          ServiceAccessType::EXPLICIT_ACCESS)
+          ->AddLogin(std::move(form));
+    } else if (state == "login-run") {
+      content::WebContents* page =
+          browser_->GetTabStripModel()->GetActiveWebContents();
+      const std::string target =
+          content::DevToolsAgentHost::GetOrCreateFor(page)->GetId();
+      ListLogins(
+          base::DictValue().Set("targetId", target),
+          base::BindOnce(
+              [](std::string target, base::WeakPtr<content::WebContents> page,
+                 DataResult logins) {
+                LOG(WARNING) << "Perch snapshot: logins "
+                             << (logins.has_value() ? logins->DebugString()
+                                                    : logins.error());
+                const base::ListValue* list =
+                    logins.has_value() ? logins->FindList("logins") : nullptr;
+                const std::string* id =
+                    list && !list->empty()
+                        ? (*list)[0].GetDict().FindString("loginId")
+                        : nullptr;
+                if (!id) {
+                  return;
+                }
+                FillLogin(
+                    base::DictValue().Set("targetId", target).Set("loginId", *id),
+                    base::BindOnce(
+                        [](base::WeakPtr<content::WebContents> page,
+                           DataResult result) {
+                          LOG(WARNING) << "Perch snapshot: login fill "
+                                       << (result.has_value()
+                                               ? result->DebugString()
+                                               : result.error());
+                          if (page) {
+                            page->GetPrimaryMainFrame()
+                                ->ExecuteJavaScriptForTests(
+                                    u"[...document.querySelectorAll('input')]"
+                                    u".map(i => i.value.length + ':' + "
+                                    u"i.hasAttribute('data-perch-filled'))"
+                                    u".join(' ')",
+                                    base::BindOnce([](base::Value v) {
+                                      LOG(WARNING)
+                                          << "Perch snapshot: login fields "
+                                          << v.DebugString();
+                                    }),
+                                    content::ISOLATED_WORLD_ID_GLOBAL);
+                          }
+                        },
+                        page));
+              },
+              target, page->GetWeakPtr()));
     } else if (state == "fill-open") {
       browser_->GetTabStripModel()->GetActiveWebContents()->GetController()
           .LoadURL(GURL("data:text/html,<form><input autocomplete=cc-number>"
@@ -312,6 +389,25 @@ class Snapshotter {
           FROM_HERE,
           base::BindOnce(&Snapshotter::CheckSleep, base::Unretained(this)),
           base::Milliseconds(500));
+    } else if (state == "omnibox-ask") {
+      // ⌘↵ in the address bar asks Perch's agent (Perch.askRequested).
+      OmniboxViewViews* omnibox = BrowserView::GetBrowserViewForBrowser(browser_)
+                                      ->GetLocationBarView()
+                                      ->omnibox_view();
+      omnibox->SetUserText(u"summarize this page");
+      const ui::KeyEvent key(ui::EventType::kKeyPressed, ui::VKEY_RETURN,
+                             ui::EF_COMMAND_DOWN);
+      // The controller interface is how Textfield delivers keys to it.
+      views::TextfieldController* controller = omnibox;
+      const bool handled = controller->HandleKeyEvent(omnibox, key);
+      LOG(WARNING) << "Perch snapshot: omnibox ask handled " << handled
+                   << ", text left '" << omnibox->GetText() << "'";
+    } else if (state == "split") {
+      // A side-by-side split, then ⌃⌘[ to focus its left side.
+      chrome::ExecuteCommand(browser_, IDC_NEW_SPLIT_TAB);
+      ExecutePerchCommand(browser_, IDC_PERCH_SPLIT_FOCUS_LEFT);
+      LOG(WARNING) << "Perch snapshot: split active index "
+                   << browser_->GetTabStripModel()->active_index();
     } else if (state == "tabs") {
       TabStripModel* tabs = browser_->GetTabStripModel();
       for (const char* url : {"about:blank", "chrome://version",

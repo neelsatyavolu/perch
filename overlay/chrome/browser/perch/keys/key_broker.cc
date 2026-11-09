@@ -3,6 +3,8 @@
 
 #include "chrome/browser/perch/keys/key_broker.h"
 
+#include <poll.h>
+
 #include <unistd.h>
 
 #include <utility>
@@ -27,11 +29,38 @@
 #include "base/values.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/perch/keys/backup.h"
 #include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
+#include "content/public/browser/page_navigator.h"
+#include "ui/base/window_open_disposition.h"
+#include "url/gurl.h"
 
 namespace perch {
 
 namespace {
+
+void ShowRestorePage(BrowserWindowInterface* browser) {
+  browser->OpenURL(
+        content::OpenURLParams(GURL("chrome://perch-welcome/#restore"),
+                               content::Referrer(),
+                               WindowOpenDisposition::kNewForegroundTab,
+                               ui::PAGE_TRANSITION_AUTO_TOPLEVEL, false),
+        {});
+}
+
+// Opens perch://welcome#restore in a window of the profile that needs it.
+// False when the profile has no window yet.
+bool OpenRestorePage(const base::FilePath& profile_dir) {
+  for (BrowserWindowInterface* browser : GetAllBrowserWindowInterfaces()) {
+    if (browser->GetProfile()->GetPath() == profile_dir) {
+      ShowRestorePage(browser);
+      return true;
+    }
+  }
+  return false;
+}
 
 constexpr size_t kMaxFrame = 64 * 1024;
 
@@ -143,7 +172,11 @@ std::optional<base::DictValue> AskHelper(const base::DictValue& request) {
   if (WriteFrame(write_end.get(),
                  base::WriteJson(request).value_or("{}"))) {
     write_end.reset();
-    reply = ReadFrame(read_end.get());
+    // A helper that hangs without answering mustn't hold this thread.
+    struct pollfd ready = {read_end.get(), POLLIN, 0};
+    if (HANDLE_EINTR(poll(&ready, 1, /*timeout_ms=*/10000)) == 1) {
+      reply = ReadFrame(read_end.get());
+    }
   }
   int exit_code = 0;
   if (!process.WaitForExitWithTimeout(base::Seconds(10), &exit_code)) {
@@ -160,22 +193,12 @@ std::optional<base::DictValue> AskHelper(const base::DictValue& request) {
   return std::move(*parsed).TakeDict();
 }
 
-// Runs off the UI thread: "get", and "create" when the helper has no key yet.
-std::optional<KeyBroker::Entry> FetchKey(std::string profile_id) {
-  std::optional<base::DictValue> reply = AskHelper(
-      base::DictValue().Set("op", "get").Set("profile", profile_id));
-  const std::string* error = reply ? reply->FindString("error") : nullptr;
-  if (reply && error && *error == "missing") {
-    reply = AskHelper(
-        base::DictValue().Set("op", "create").Set("profile", profile_id));
-  }
+std::optional<KeyBroker::Entry> EntryFrom(
+    const std::optional<base::DictValue>& reply) {
   const std::string* key = reply ? reply->FindString("key") : nullptr;
   std::optional<std::vector<uint8_t>> bytes =
       key ? base::Base64Decode(*key) : std::nullopt;
   if (!bytes || bytes->size() != 32) {
-    if (reply) {
-      LOG(ERROR) << "Perch: the key helper gave no key for " << profile_id;
-    }
     return std::nullopt;
   }
   KeyBroker::Entry entry;
@@ -185,6 +208,62 @@ std::optional<KeyBroker::Entry> FetchKey(std::string profile_id) {
     entry.recovery = *recovery;
   }
   return entry;
+}
+
+// Runs off the UI thread: "get", and "create" when the helper has no key yet,
+// unless the profile already has data made with a key (root.check): then a
+// new key would lock that data away, so the person restores instead.
+KeyBroker::Fetched FetchKey(base::FilePath profile_dir) {
+  const std::string profile_id = profile_dir.BaseName().value();
+  KeyBroker::Fetched fetched;
+  fetched.helper_available = base::PathExists(HelperPath());
+  std::optional<base::DictValue> reply = AskHelper(
+      base::DictValue().Set("op", "get").Set("profile", profile_id));
+  const std::string* error = reply ? reply->FindString("error") : nullptr;
+  if (reply && error && *error == "missing") {
+    // A new key would lock the profile's existing data away.
+    if (HasKeyedData(profile_dir)) {
+      fetched.needs_restore = true;
+      return fetched;
+    }
+    reply = AskHelper(
+        base::DictValue().Set("op", "create").Set("profile", profile_id));
+  }
+  fetched.entry = EntryFrom(reply);
+  if (!fetched.entry) {
+    if (reply) {
+      LOG(ERROR) << "Perch: the key helper gave no key for " << profile_id;
+    }
+    return fetched;
+  }
+  // The data was made with another key: unlock it with the recovery key
+  // rather than hand perchd a key that can't open it.
+  if (CheckRootKey(profile_dir, fetched.entry->key) == false) {
+    fetched.entry.reset();
+    fetched.needs_restore = true;
+    return fetched;
+  }
+  EnsureRootCheck(profile_dir, fetched.entry->key);
+  return fetched;
+}
+
+base::expected<KeyBroker::Entry, std::string> ImportKey(
+    base::FilePath profile_dir,
+    std::vector<uint8_t> root_key) {
+  std::optional<base::DictValue> reply =
+      AskHelper(base::DictValue()
+                    .Set("op", "import")
+                    .Set("profile", profile_dir.BaseName().value())
+                    .Set("key", base::Base64Encode(root_key)));
+  if (!reply) {
+    return base::unexpected(base::PathExists(HelperPath()) ? "failed"
+                                                           : "unavailable");
+  }
+  std::optional<KeyBroker::Entry> entry = EntryFrom(reply);
+  if (!entry) {
+    return base::unexpected("failed");
+  }
+  return std::move(*entry);
 }
 
 }  // namespace
@@ -238,7 +317,7 @@ void KeyBroker::EnsureProfile(Profile* profile) {
     return;
   }
   const base::FilePath dir = profile->GetPath();
-  if (keys_.contains(dir) ||
+  if (keys_.contains(dir) || needs_restore_.contains(dir) ||
       std::find(pending_.begin(), pending_.end(), dir) != pending_.end()) {
     return;
   }
@@ -261,21 +340,72 @@ void KeyBroker::Fetch(const base::FilePath& profile_dir) {
       {base::MayBlock(), base::WithBaseSyncPrimitives(),
        base::TaskPriority::USER_VISIBLE,
        base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN},
-      base::BindOnce(&FetchKey, profile_dir.BaseName().value()),
+      base::BindOnce(&FetchKey, profile_dir),
       base::BindOnce(&KeyBroker::OnFetched, weak_factory_.GetWeakPtr(),
                      profile_dir));
 }
 
-void KeyBroker::OnFetched(base::FilePath profile_dir,
-                          std::optional<Entry> entry) {
+void KeyBroker::OnFetched(base::FilePath profile_dir, Fetched fetched) {
   std::erase(pending_, profile_dir);
-  if (!entry) {
+  helper_available_ = fetched.helper_available;
+  if (fetched.needs_restore) {
+    needs_restore_.insert(profile_dir);
+    if (!OpenRestorePage(profile_dir)) {
+      restore_page_waiting_.insert(profile_dir);
+    }
     return;
   }
-  Send(profile_dir, *entry);
+  if (!fetched.entry) {
+    return;
+  }
+  Entry entry = std::move(*fetched.entry);
+  Send(profile_dir, entry);
   // The recovery key goes to perchd once, when the key was made.
-  entry->recovery.clear();
-  keys_[profile_dir] = std::move(*entry);
+  entry.recovery.clear();
+  keys_[profile_dir] = std::move(entry);
+}
+
+void KeyBroker::OnWindowOpened(BrowserWindowInterface* browser) {
+  const base::FilePath dir = browser->GetProfile()->GetPath();
+  if (restore_page_waiting_.erase(dir)) {
+    ShowRestorePage(browser);
+  }
+}
+
+bool KeyBroker::IsProtected(const base::FilePath& profile_dir) const {
+  auto it = keys_.find(profile_dir);
+  return it != keys_.end() && it->second.is_protected;
+}
+
+bool KeyBroker::NeedsRestore(const base::FilePath& profile_dir) const {
+  return needs_restore_.contains(profile_dir);
+}
+
+void KeyBroker::ImportRootKey(
+    const base::FilePath& profile_dir,
+    std::vector<uint8_t> root_key,
+    base::OnceCallback<void(std::optional<std::string>)> done) {
+  base::ThreadPool::PostTaskAndReplyWithResult(
+      FROM_HERE,
+      {base::MayBlock(), base::WithBaseSyncPrimitives(),
+       base::TaskPriority::USER_BLOCKING},
+      base::BindOnce(&ImportKey, profile_dir, std::move(root_key)),
+      base::BindOnce(&KeyBroker::OnRestored, weak_factory_.GetWeakPtr(),
+                     profile_dir, std::move(done)));
+}
+
+void KeyBroker::OnRestored(
+    base::FilePath profile_dir,
+    base::OnceCallback<void(std::optional<std::string>)> done,
+    base::expected<Entry, std::string> result) {
+  if (!result.has_value()) {
+    std::move(done).Run(result.error());
+    return;
+  }
+  needs_restore_.erase(profile_dir);
+  Send(profile_dir, *result);
+  keys_[profile_dir] = std::move(*result);
+  std::move(done).Run(std::nullopt);
 }
 
 void KeyBroker::Send(const base::FilePath& profile_dir, const Entry& entry) {

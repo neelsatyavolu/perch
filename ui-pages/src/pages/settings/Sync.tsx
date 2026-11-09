@@ -72,7 +72,7 @@ function Pairing({ pairing, onPaired, onCancel }: { readonly pairing: SyncPairin
   );
 }
 
-function RecoveryKey() {
+export function RecoveryKey() {
   const api = useApi();
   const [open, setOpen] = useState(false);
   const [key, setKey] = useState<string | null>(null);
@@ -177,8 +177,6 @@ export function Sync() {
           ))}
         </div>
       </Group>
-
-      <RecoveryKey />
 
       <Dialog
         open={confirmOff}

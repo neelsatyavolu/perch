@@ -22,7 +22,10 @@
 #include "chrome/browser/perch/agent/perch_devtools.h"
 #include "chrome/browser/perch/command_bar/command_bar.h"
 #include "chrome/browser/perch/extensions/perch_component_extensions.h"
+#include "base/files/file_path.h"
 #include "chrome/browser/perch/keys/key_broker.h"
+#include "chrome/browser/perch/keys/recovery_key.h"
+#include "chrome/browser/perch/keys/restore_flow.h"
 #include "chrome/browser/perch/perch_update_policy.h"
 #include "chrome/browser/perch/perch_updater_mac.h"
 #include "chrome/browser/perch/settings/site_data.h"
@@ -44,11 +47,13 @@
 #include "components/version_info/version_info.h"
 #include "content/public/browser/devtools_agent_host.h"
 #include "content/public/browser/page_navigator.h"
+#include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_ui.h"
 #include "ui/base/page_transition_types.h"
 #include "ui/base/window_open_disposition.h"
 #include "url/gurl.h"
+#include "url/origin.h"
 
 namespace perch {
 
@@ -202,34 +207,6 @@ void PerchPageHandler::Reject(base::Value callback_id,
 
 namespace {
 
-// The recovery key: the profile's root key in Crockford base32, in groups of
-// five, for writing down. It reopens Perch's sealed secrets on another Mac.
-std::string FormatRecoveryKey(const std::vector<uint8_t>& key) {
-  static constexpr char kAlphabet[] = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
-  std::string out;
-  int bits = 0;
-  uint32_t buffer = 0;
-  for (uint8_t byte : key) {
-    buffer = (buffer << 8) | byte;
-    bits += 8;
-    while (bits >= 5) {
-      out.push_back(kAlphabet[(buffer >> (bits - 5)) & 31]);
-      bits -= 5;
-    }
-  }
-  if (bits > 0) {
-    out.push_back(kAlphabet[(buffer << (5 - bits)) & 31]);
-  }
-  std::string grouped;
-  for (size_t i = 0; i < out.size(); ++i) {
-    if (i && i % 5 == 0) {
-      grouped.push_back('-');
-    }
-    grouped.push_back(out[i]);
-  }
-  return grouped;
-}
-
 }  // namespace
 
 void PerchPageHandler::RevealRecoveryKey(base::Value id) {
@@ -268,6 +245,135 @@ void PerchPageHandler::RevealRecoveryKey(base::Value id) {
                               },
                               self, std::move(callback_id), success == YES));
                     }];
+}
+
+namespace {
+
+const char* RestoreMessage(const std::string& code) {
+  return code == "wrong-key"    ? "That recovery key doesn't open this data"
+         : code == "bad-backup" ? "That file isn't a Perch backup, or it's damaged"
+         : code == "replaces-data"
+             ? "That backup replaces Perch data made with a different key"
+         : code == "busy" ? "Perch is already backing up or restoring"
+         : code == "unavailable"
+             ? "This build of Perch has no key helper, so it can't do that"
+             : "Perch couldn't finish";
+}
+
+}  // namespace
+
+bool PerchPageHandler::IsKeyPage() {
+  // Only Settings and the welcome page may see or replace keys, not every page
+  // this handler serves. The frame's origin is the WebUI's own, whatever the
+  // address bar shows (perch://settings).
+  content::RenderFrameHost* frame = web_ui()->GetRenderFrameHost();
+  if (!frame) {
+    return false;
+  }
+  const url::Origin origin = frame->GetLastCommittedOrigin();
+  return origin.scheme() == "chrome" &&
+         (origin.host() == "perch-settings" || origin.host() == "perch-welcome");
+}
+
+void PerchPageHandler::ExportBackup(base::Value id) {
+  std::optional<std::vector<uint8_t>> key =
+      KeyBroker::Get().RootKeyFor(profile()->GetPath());
+  if (!key) {
+    Reject(std::move(id), "unavailable", RestoreMessage("unavailable"));
+    return;
+  }
+  ChooseSavePath(
+      web_ui()->GetWebContents(), base::FilePath("Perch backup.perchbackup"),
+      "perchbackup",
+      base::BindOnce(
+          [](base::WeakPtr<PerchPageHandler> self, base::Value id,
+             base::FilePath profile_dir, std::vector<uint8_t> key,
+             std::optional<base::FilePath> path) {
+            if (!self) {
+              return;
+            }
+            if (!path) {
+              self->Resolve(std::move(id),
+                            base::Value(base::DictValue().Set("saved", false)));
+              return;
+            }
+            const std::string name = path->BaseName().AsUTF8Unsafe();
+            RunExport(
+                profile_dir, std::move(key), *path,
+                base::BindOnce(
+                    [](base::WeakPtr<PerchPageHandler> self, base::Value id,
+                       std::string name, std::optional<std::string> error) {
+                      if (!self) {
+                        return;
+                      }
+                      if (error) {
+                        self->Reject(std::move(id), *error,
+                                     RestoreMessage(*error));
+                        return;
+                      }
+                      self->Resolve(std::move(id),
+                                    base::Value(base::DictValue()
+                                                    .Set("saved", true)
+                                                    .Set("name", name)));
+                    },
+                    self, std::move(id), name));
+          },
+          weak_factory_.GetWeakPtr(), std::move(id), profile()->GetPath(),
+          std::move(*key)));
+}
+
+void PerchPageHandler::RestoreFromRecoveryKey(base::Value id,
+                                              const base::Value* params) {
+  const base::DictValue* dict = params ? params->GetIfDict() : nullptr;
+  const std::string* text = dict ? dict->FindString("recoveryKey") : nullptr;
+  std::optional<std::vector<uint8_t>> key =
+      text ? ParseRecoveryKey(*text) : std::nullopt;
+  if (!key) {
+    Reject(std::move(id), "wrong-key", RestoreMessage("wrong-key"));
+    return;
+  }
+  RestoreRequest request;
+  request.profile_dir = profile()->GetPath();
+  request.key = std::move(*key);
+  request.replace_data = dict->FindBool("replaceData").value_or(false);
+  auto reply = base::BindOnce(
+      [](base::WeakPtr<PerchPageHandler> self, base::Value id,
+         std::optional<std::string> error) {
+        if (!self) {
+          return;
+        }
+        if (error) {
+          self->Reject(std::move(id), *error, RestoreMessage(*error));
+          return;
+        }
+        self->Resolve(std::move(id),
+                      base::Value(base::DictValue().Set("restored", true)));
+      },
+      weak_factory_.GetWeakPtr(), id.Clone());
+  if (!dict->FindBool("fromBackup").value_or(false)) {
+    RunRestore(std::move(request), std::move(reply));
+    return;
+  }
+  ChooseOpenPath(
+      web_ui()->GetWebContents(), "perchbackup",
+      base::BindOnce(
+          [](base::WeakPtr<PerchPageHandler> self, base::Value id,
+             RestoreRequest request,
+             base::OnceCallback<void(std::optional<std::string>)> reply,
+             std::optional<base::FilePath> path) {
+            if (!self) {
+              return;
+            }
+            if (!path) {
+              self->Resolve(std::move(id), base::Value(base::DictValue().Set(
+                                               "restored", false)));
+              return;
+            }
+            request.backup = *path;
+            RunRestore(std::move(request), std::move(reply));
+          },
+          weak_factory_.GetWeakPtr(), std::move(id), std::move(request),
+          std::move(reply)));
 }
 
 void PerchPageHandler::Dispatch(const std::string& method,
@@ -511,8 +617,24 @@ void PerchPageHandler::Dispatch(const std::string& method,
       return;
     }
     Resolve(std::move(id), base::Value(About()));
+  } else if ((method == "revealRecoveryKey" || method == "exportBackup" ||
+              method == "restoreFromRecoveryKey") &&
+             !IsKeyPage()) {
+    Reject(std::move(id), "unavailable", "Only Perch's settings can do that");
   } else if (method == "revealRecoveryKey") {
     RevealRecoveryKey(std::move(id));
+  } else if (method == "getSecurity") {
+    const base::FilePath dir = profile()->GetPath();
+    Resolve(std::move(id),
+            base::Value(
+                base::DictValue()
+                    .Set("available", KeyBroker::Get().HelperAvailable())
+                    .Set("protected", KeyBroker::Get().IsProtected(dir))
+                    .Set("needsRestore", KeyBroker::Get().NeedsRestore(dir))));
+  } else if (method == "exportBackup") {
+    ExportBackup(std::move(id));
+  } else if (method == "restoreFromRecoveryKey") {
+    RestoreFromRecoveryKey(std::move(id), arg0);
   } else if (method == "listTabMemory") {
     Resolve(std::move(id), base::Value(ListTabMemory(profile())));
   } else {

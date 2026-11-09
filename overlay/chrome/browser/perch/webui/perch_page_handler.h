@@ -34,15 +34,24 @@ class PerchPageHandler : public content::WebUIMessageHandler {
   void OnJavascriptAllowed() override;
   void OnJavascriptDisallowed() override;
 
+  // Answer a page's call (used by the restore steps, which run as callbacks).
+  void Resolve(base::Value callback_id, base::Value result);
+  void Reject(base::Value callback_id, std::string code, std::string message);
+
  private:
   void HandleCall(const base::ListValue& args);
   void Dispatch(const std::string& method,
                 const base::ListValue& args,
                 base::Value callback_id);
-  void Resolve(base::Value callback_id, base::Value result);
-  void Reject(base::Value callback_id, std::string code, std::string message);
   // Shows the profile's recovery key after Touch ID (Settings › Sync).
   void RevealRecoveryKey(base::Value callback_id);
+  // Settings › Privacy › Backup and restore, and perch://welcome#restore.
+  void ExportBackup(base::Value callback_id);
+  // Whether this is Settings or the welcome page, the only pages that may
+  // reveal, export or restore keys.
+  bool IsKeyPage();
+  void RestoreFromRecoveryKey(base::Value callback_id,
+                              const base::Value* params);
   void OnAppearanceChanged();
   // Opens `url` in this page's tab.
   void Navigate(const GURL& url);

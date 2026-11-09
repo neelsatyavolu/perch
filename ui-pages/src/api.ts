@@ -42,6 +42,16 @@ export type JobProgress = {
 };
 export type Unsubscribe = () => void;
 /** What a file picked in `chooseFile` is for; perchd filters its open panel to match. */
+/** What the key helper reports about this profile's keys (spec 11.1). */
+export type SecurityInfo = {
+  /** The Perch Keys helper is in this build (false in development builds without it). */
+  readonly available: boolean;
+  /** Keys are wrapped by the Secure Enclave. False in builds signed without the provisioning profile. */
+  readonly protected: boolean;
+  /** This Mac has Perch data but no key for it (e.g. after Migration Assistant): restore needed. */
+  readonly needsRestore: boolean;
+};
+
 export type FileKind = "memory-export" | "passwords-csv";
 /** A file the person picked in perchd's open panel. `id` is opaque; the path stays in perchd. */
 export type FileChoice = { readonly id: string; readonly name: string };
@@ -485,6 +495,16 @@ export interface PerchApi {
    */
   revealRecoveryKey(): Promise<string>;
 
+  // Recovery and backup (spec 11.1); the browser answers these
+  getSecurity(): Promise<SecurityInfo>;
+  /** Save panel, then writes an encrypted backup of everything Perch keeps for this profile. saved:false = cancelled. */
+  exportBackup(): Promise<{ readonly saved: boolean; readonly name?: string }>;
+  /**
+   * Restores this profile's key from the recovery key; with fromBackup, first asks for a backup file and restores its contents too. restored:false = file picker cancelled.
+   * Rejects with code "wrong-key" (key doesn't match this profile/backup), "bad-backup" (not a Perch backup or damaged), "unavailable" (no key helper), or "failed".
+   */
+  restoreFromRecoveryKey(p: { recoveryKey: string; fromBackup: boolean; replaceData?: boolean }): Promise<{ readonly restored: boolean }>;
+
   // Memory
   getMemorySettings(): Promise<MemorySettings>;
   setMemorySettings(patch: Partial<MemorySettings>): Promise<MemorySettings>;
@@ -563,6 +583,7 @@ export const API_METHODS = [
   "getMemorySaver", "setMemorySaver", "addSleepRule", "listTabMemory",
   "queryCommandBar", "runCommandBarItem", "closeCommandBar",
   "getSync", "startSyncPairing", "checkSyncPairing", "syncNow", "removeSyncDevice", "turnOffSync", "revealRecoveryKey",
+  "getSecurity", "exportBackup", "restoreFromRecoveryKey",
   "getMemorySettings", "setMemorySettings", "listMemoryPages", "readMemoryPage", "writeMemoryPage", "deleteMemoryPage", "wipeMemory",
   "listDreamLogs", "listSetupSources", "startProfileBuild", "getProfileBuild", "getProfileDraft", "saveProfileDraft", "discardProfileDraft",
   "listRoutines", "saveRoutine", "setRoutineEnabled", "deleteRoutine", "runRoutine", "findRoutineProposals", "acceptProposal", "dismissProposal",

@@ -48,6 +48,32 @@ final class Harness {
         #expect(reply["error"] as? String == "malformed")
     }
 
+    @Test func importStoresATypedRootKey() throws {
+        let h = try Harness()
+        let created = try h.call(["op": "create", "profile": "p1"])
+        let key = try #require(created["key"] as? String)
+
+        // A new Mac with nothing stored: the recovery key brings the same root back.
+        let fresh = try Harness()
+        let imported = try fresh.call(["op": "import", "profile": "p1", "key": key])
+        #expect(imported["key"] as? String == key)
+        #expect(try fresh.call(["op": "get", "profile": "p1"])["key"] as? String == key)
+
+        // It also replaces a key the profile already had.
+        _ = try fresh.call(["op": "delete", "profile": "p1"])
+        _ = try fresh.call(["op": "create", "profile": "p1"])
+        _ = try fresh.call(["op": "import", "profile": "p1", "key": key])
+        #expect(try fresh.call(["op": "get", "profile": "p1"])["key"] as? String == key)
+    }
+
+    @Test func importRefusesAnythingButThirtyTwoBytes() throws {
+        let h = try Harness()
+        #expect(try h.call(["op": "import", "profile": "p1"])["error"] as? String == "malformed")
+        let short = Data(repeating: 7, count: 16).base64EncodedString()
+        #expect(try h.call(["op": "import", "profile": "p1", "key": short])["error"] as? String == "malformed")
+        #expect(try h.call(["op": "get", "profile": "p1"])["error"] as? String == "missing")
+    }
+
     @Test func recoveryRoundTrip() throws {
         let h = try Harness()
         let pair = try RecoveryPair()

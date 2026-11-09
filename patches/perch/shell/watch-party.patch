@@ -1,0 +1,26 @@
+# Perch: Start Watch Party in the tab menu on Backrow's streaming sites.
+diff --git a/chrome/browser/ui/tabs/tab_menu_model.cc b/chrome/browser/ui/tabs/tab_menu_model.cc
+index f2ee1058e0..64f2788d9c 100644
+--- a/chrome/browser/ui/tabs/tab_menu_model.cc
++++ b/chrome/browser/ui/tabs/tab_menu_model.cc
+@@ -4,6 +4,7 @@
+ 
+ #include "chrome/browser/ui/tabs/tab_menu_model.h"
+ 
++#include "chrome/browser/perch/extensions/watch_party.h"
+ #include "chrome/browser/perch/perch_command_ids.h"
+ 
+ #include <memory>
+@@ -717,6 +718,12 @@ void TabMenuModel::Build(int index) {
+              perch_close_older_submenu_.get());
+   AddItem(IDC_PERCH_SLEEP_TAB, u"Sleep Tab");
+   AddItem(IDC_PERCH_NEVER_SLEEP_SITE, u"Never Sleep This Site");
++  if (tab_interface_ &&
++      perch::CanStartWatchParty(
++          tab_strip_->profile(),
++          tab_interface_->GetContents()->GetLastCommittedURL())) {
++    AddItem(IDC_PERCH_START_WATCH_PARTY, u"Start Watch Party");
++  }
+ 
+   if (showing_vertical_tabs) {
+     AddItemWithStringId(TabStripModel::CommandCloseTabsToRight,

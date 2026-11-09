@@ -7,6 +7,8 @@
 #include <memory>
 
 #include "base/functional/bind.h"
+#include "base/json/values_util.h"
+#include "base/time/time.h"
 #include "base/no_destructor.h"
 #include "base/supports_user_data.h"
 #include "base/unguessable_token.h"
@@ -83,8 +85,34 @@ class RulesWatcher : public base::SupportsUserData::Data {
 
  private:
   void Read(Profile* profile) {
-    RulesByProfile()[token_] =
+    std::vector<SleepRule> rules =
         RulesFromList(profile->GetPrefs()->GetList(prefs::kMemorySaverRules));
+    MirrorIntoChromium(profile, RulesByProfile()[token_], rules);
+    RulesByProfile()[token_] = std::move(rules);
+  }
+
+  // Keeps Chromium's own discard exceptions in step: drops the patterns of
+  // rules that went away and adds the new ones, leaving any the person added
+  // in Chromium's settings.
+  static void MirrorIntoChromium(Profile* profile,
+                                 const std::vector<SleepRule>& before,
+                                 const std::vector<SleepRule>& after) {
+    PrefService* prefs = profile->GetPrefs();
+    base::DictValue exceptions =
+        prefs->GetDict(tuning_prefs::kTabDiscardingExceptionsWithTime).Clone();
+    for (const SleepRule& rule : before) {
+      exceptions.Remove(DiscardExceptionPattern(rule));
+    }
+    for (const SleepRule& rule : after) {
+      const std::string pattern = DiscardExceptionPattern(rule);
+      if (!exceptions.contains(pattern)) {
+        exceptions.Set(pattern, base::TimeToValue(base::Time::Now()));
+      }
+    }
+    if (exceptions != prefs->GetDict(tuning_prefs::kTabDiscardingExceptionsWithTime)) {
+      prefs->SetDict(tuning_prefs::kTabDiscardingExceptionsWithTime,
+                     std::move(exceptions));
+    }
   }
 
   const base::UnguessableToken token_;

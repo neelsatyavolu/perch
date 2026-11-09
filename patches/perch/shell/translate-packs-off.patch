@@ -1,0 +1,39 @@
+# Perch: with translation packs off, the error says how to turn them on.
+diff --git a/chrome/browser/ui/views/translate/translate_bubble_view.cc b/chrome/browser/ui/views/translate/translate_bubble_view.cc
+index ff78994535..311b0be675 100644
+--- a/chrome/browser/ui/views/translate/translate_bubble_view.cc
++++ b/chrome/browser/ui/views/translate/translate_bubble_view.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "chrome/browser/ui/views/translate/translate_bubble_view.h"
+ 
++#include "chrome/browser/perch/privacy/allowed_connections.h"
++
+ #include <stddef.h>
+ 
+ #include <algorithm>
+@@ -831,12 +833,22 @@ std::unique_ptr<views::View> TranslateBubbleView::CreateViewErrorNoTitle(
+   auto title_row = std::make_unique<views::View>();
+   title_row->SetLayoutManager(std::make_unique<views::FlexLayout>());
+   int error_message_id = IDS_TRANSLATE_BUBBLE_COULD_NOT_TRANSLATE_TITLE;
++  // Perch: translation runs on device, so with language pack downloads off
++  // the error says why and where to turn them on.
++  const bool packs_off =
++      !perch::IsConnectionAllowed(perch::Connection::kTranslationPacks);
+   auto error_message_label = std::make_unique<views::Label>(
+-      l10n_util::GetStringUTF16(error_message_id),
++      packs_off ? u"Translation needs a language pack download. Turn on "
++                  u"translation packs in Settings \u2192 Privacy."
++                : l10n_util::GetStringUTF16(error_message_id),
+       views::style::CONTEXT_DIALOG_TITLE, views::style::STYLE_PRIMARY);
+   const int vertical_spacing =
+       provider->GetDistanceMetric(views::DISTANCE_RELATED_CONTROL_VERTICAL);
+-  error_message_label->SetLineHeight(vertical_spacing * 5);
++  if (packs_off) {
++    error_message_label->SetMultiLine(true);
++  } else {
++    error_message_label->SetLineHeight(vertical_spacing * 5);
++  }
+   error_message_label->SetHorizontalAlignment(
+       gfx::HorizontalAlignment::ALIGN_LEFT);
+   error_message_label->SetProperty(views::kElementIdentifierKey, kErrorMessage);

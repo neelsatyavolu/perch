@@ -5,6 +5,7 @@
 #define CHROME_BROWSER_PERCH_TOOLBAR_PERCH_PROFILE_MENU_H_
 
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "base/files/file_path.h"
@@ -40,10 +41,17 @@ class PerchProfileMenuModel : public ui::SimpleMenuModel,
 
  private:
   void Build();
+  void AddRecentDownloads();
 
   raw_ptr<BrowserWindowInterface> browser_;
   // The profile each profile row switches to, by row.
   std::vector<base::FilePath> profiles_;
+  // Recent finished downloads, by row of the Downloads submenu.
+  std::vector<std::string> downloads_;
+  std::unique_ptr<ui::SimpleMenuModel> bookmarks_;
+  std::unique_ptr<ui::SimpleMenuModel> downloads_menu_;
+  std::unique_ptr<ui::SimpleMenuModel> extensions_;
+  std::unique_ptr<ui::MenuModel> history_;
   std::unique_ptr<ui::SimpleMenuModel> developers_;
 };
 

@@ -20,6 +20,8 @@ namespace views {
 class View;
 }
 
+class SidePanel;
+
 namespace perch {
 
 // The Perch sidebar in one window (spec 5.3): one window-scoped side panel
@@ -49,7 +51,9 @@ class PerchSidePanelController : public TabStripModelObserver,
  private:
   std::unique_ptr<views::View> CreateView(SidePanelEntryScope& scope);
   void PinOnce();
+  void OnWindowReady();
   bool IsShowing() const;
+  SidePanel* Panel() const;
 
   raw_ptr<BrowserWindowInterface> browser_;
   raw_ptr<SidePanelRegistry> registry_;
@@ -57,6 +61,8 @@ class PerchSidePanelController : public TabStripModelObserver,
   // Set while the panel opens or closes because of a tab switch, so that
   // does not change the tab's remembered state.
   bool switching_ = false;
+  // The width this window's sidebar last had, or 0 before it first closes.
+  int width_ = 0;
   base::WeakPtrFactory<PerchSidePanelController> weak_factory_{this};
 };
 

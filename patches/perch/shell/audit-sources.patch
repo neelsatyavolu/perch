@@ -1,0 +1,47 @@
+# Perch: sources for hide-chrome on macOS, Watch Party, backup and recovery keys, and Geist fonts.
+diff --git a/chrome/browser/ui/browser_window/internal/BUILD.gn b/chrome/browser/ui/browser_window/internal/BUILD.gn
+index 0b5b18a468..c23cd724d2 100644
+--- a/chrome/browser/ui/browser_window/internal/BUILD.gn
++++ b/chrome/browser/ui/browser_window/internal/BUILD.gn
+@@ -98,11 +98,17 @@ source_set("internal") {
+       "//chrome/browser/perch/settings/privacy.h",
+       "//chrome/browser/perch/snapshot/chrome_snapshot.cc",
+       "//chrome/browser/perch/snapshot/chrome_snapshot.h",
++      "//chrome/browser/perch/theme/perch_fonts_mac.h",
++      "//chrome/browser/perch/theme/perch_fonts_mac.mm",
+       "//chrome/browser/perch/theme/perch_theme.cc",
+       "//chrome/browser/perch/theme/perch_theme.h",
+       "//chrome/browser/perch/theme/perch_tokens.inc",
++      "//chrome/browser/perch/extensions/watch_party.cc",
++      "//chrome/browser/perch/extensions/watch_party.h",
+       "//chrome/browser/perch/hide_chrome/hide_chrome.cc",
+       "//chrome/browser/perch/hide_chrome/hide_chrome.h",
++      "//chrome/browser/perch/hide_chrome/hide_chrome_mac.h",
++      "//chrome/browser/perch/hide_chrome/hide_chrome_mac.mm",
+       "//chrome/browser/perch/layout/perch_layout.cc",
+       "//chrome/browser/perch/layout/perch_layout.h",
+       "//chrome/browser/perch/perch_command_ids.h",
+@@ -122,10 +128,14 @@ source_set("internal") {
+       "//chrome/browser/perch/agent/perch_domain_data.h",
+       "//chrome/browser/perch/agent/task_status.cc",
+       "//chrome/browser/perch/agent/task_status.h",
++      "//chrome/browser/perch/keys/backup.cc",
++      "//chrome/browser/perch/keys/backup.h",
+       "//chrome/browser/perch/keys/key_broker.cc",
+       "//chrome/browser/perch/keys/key_broker.h",
+       "//chrome/browser/perch/keys/perch_keys_host.cc",
+       "//chrome/browser/perch/keys/perch_keys_host.h",
++      "//chrome/browser/perch/keys/recovery_key.cc",
++      "//chrome/browser/perch/keys/recovery_key.h",
+       "//chrome/browser/perch/command_bar/command_bar.cc",
+       "//chrome/browser/perch/command_bar/command_bar.h",
+       "//chrome/browser/perch/spaces/spaces.cc",
+@@ -154,6 +164,8 @@ source_set("internal") {
+     deps += [
+       "//chrome/browser:global_features",
+       "//chrome/browser/actor/ui",
++      "//crypto",
++      "//third_party/zlib/google:zip",
+       "//chrome/browser/autocomplete:aim_eligibility_service",
+       "//chrome/browser/collaboration",
+       "//chrome/browser/contextual_tasks:ui",

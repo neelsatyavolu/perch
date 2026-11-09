@@ -24,6 +24,8 @@
 #include "base/files/file_util.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/functional/bind.h"
+#include "base/memory/ref_counted.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/json/json_writer.h"
 #include "base/logging.h"
 #include "base/path_service.h"
@@ -41,6 +43,31 @@
 #include "content/public/common/content_switches.h"
 
 namespace perch {
+
+// Owns perchd's settings pipe and writes lines to it on one sequence.
+class ConfigPipe : public base::RefCountedThreadSafe<ConfigPipe> {
+ public:
+  explicit ConfigPipe(base::ScopedFD fd)
+      : fd_(std::move(fd)),
+        runner_(base::ThreadPool::CreateSequencedTaskRunner(
+            {base::MayBlock(), base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN})) {}
+
+  void Write(std::string line) {
+    runner_->PostTask(FROM_HERE, base::BindOnce(&ConfigPipe::WriteNow, this,
+                                                std::move(line)));
+  }
+
+ private:
+  friend class base::RefCountedThreadSafe<ConfigPipe>;
+  ~ConfigPipe() = default;
+
+  void WriteNow(std::string line) {
+    base::WriteFileDescriptor(fd_.get(), line);
+  }
+
+  base::ScopedFD fd_;
+  scoped_refptr<base::SequencedTaskRunner> runner_;
+};
 
 namespace {
 
@@ -251,6 +278,9 @@ base::FilePath PerchdLauncher::UiDir() const {
 }
 
 void PerchdLauncher::Launch() {
+  if (paused_) {
+    return;
+  }
   base::DictValue config;
   config.Set("op", "app");
   config.Set("port", port_);
@@ -286,10 +316,15 @@ void PerchdLauncher::OnLaunched(std::unique_ptr<Launched> launched) {
     ScheduleRestart();
     return;
   }
+  if (paused_) {
+    // Paused while it was starting: it must not run now.
+    launched->process.Terminate(0, /*wait=*/false);
+    return;
+  }
   process_ = std::move(launched->process);
   browser_read_ = std::move(launched->browser_read);
   browser_write_ = std::move(launched->browser_write);
-  config_ = std::move(launched->config);
+  config_ = base::MakeRefCounted<ConfigPipe>(std::move(launched->config));
   launched_at_ = base::TimeTicks::Now();
   // Chromium's pipe handler reads the two descriptors from this switch.
   base::CommandLine::ForCurrentProcess()->AppendSwitchASCII(
@@ -298,22 +333,13 @@ void PerchdLauncher::OnLaunched(std::unique_ptr<Launched> launched) {
   content::DevToolsAgentHost::StartRemoteDebuggingPipeHandler(base::BindOnce(
       &PerchdLauncher::OnPipeClosed, weak_factory_.GetWeakPtr()));
   // Profile keys follow the settings line on the same pipe (plan 3b task 3).
+  // The pipe object owns the descriptor, so a line can never reach a number
+  // the system has since given to another file.
   KeyBroker::Get().OnPerchdLaunched(base::BindRepeating(
-      [](int fd, std::string line) {
-        base::ScopedFD copy(HANDLE_EINTR(dup(fd)));
-        if (!copy.is_valid()) {
-          return;
-        }
-        base::ThreadPool::PostTask(
-            FROM_HERE,
-            {base::MayBlock(), base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN},
-            base::BindOnce(
-                [](base::ScopedFD out, std::string text) {
-                  base::WriteFileDescriptor(out.get(), text);
-                },
-                std::move(copy), std::move(line)));
+      [](scoped_refptr<ConfigPipe> pipe, std::string line) {
+        pipe->Write(std::move(line));
       },
-      config_.get()));
+      config_));
 }
 
 void PerchdLauncher::OnPipeClosed() {
@@ -322,6 +348,7 @@ void PerchdLauncher::OnPipeClosed() {
   }
   // Dots, tab holds and the event channel belong to the perchd that left.
   OnPerchdDisconnected();
+  KeyBroker::Get().OnPerchdStopped();
   LOG(WARNING) << "Perch: the agent stopped; starting it again";
   content::DevToolsAgentHost::StopRemoteDebuggingPipeHandler();
   // The pipe handler's reader and writer threads wind down on their own after
@@ -330,18 +357,45 @@ void PerchdLauncher::OnPipeClosed() {
   // while an old writer still writes, so close them well after.
   base::ThreadPool::PostDelayedTask(
       FROM_HERE, {base::MayBlock(), base::TaskPriority::BEST_EFFORT},
-      base::BindOnce([](base::ScopedFD read, base::ScopedFD write,
-                        base::ScopedFD config) {},
-                     std::move(browser_read_), std::move(browser_write_),
-                     std::move(config_)),
+      base::BindOnce([](base::ScopedFD read, base::ScopedFD write) {},
+                     std::move(browser_read_), std::move(browser_write_)),
       kRetireFdsAfter);
+  config_.reset();
   if (process_.IsValid()) {
     base::EnsureProcessTerminated(std::move(process_));
   }
   if (base::TimeTicks::Now() - launched_at_ > base::Minutes(1)) {
     restarts_ = 0;
   }
+  if (paused_) {
+    if (pause_done_) {
+      std::move(pause_done_).Run();
+    }
+    return;
+  }
   ScheduleRestart();
+}
+
+void PerchdLauncher::Pause(base::OnceClosure stopped) {
+  paused_ = true;
+  if (!process_.IsValid()) {
+    content::GetUIThreadTaskRunner({})->PostTask(FROM_HERE, std::move(stopped));
+    return;
+  }
+  // OnPipeClosed runs `stopped` once perchd has gone.
+  pause_done_ = std::move(stopped);
+  process_.Terminate(0, /*wait=*/false);
+}
+
+void PerchdLauncher::Resume() {
+  if (!paused_) {
+    return;
+  }
+  paused_ = false;
+  if (enabled_ && !process_.IsValid()) {
+    restarts_ = 0;
+    Launch();
+  }
 }
 
 void PerchdLauncher::ScheduleRestart() {

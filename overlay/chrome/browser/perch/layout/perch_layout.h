@@ -15,6 +15,10 @@ namespace perch {
 // constants Perch leaves at Chromium's values. Touch UI keeps Chromium's.
 std::optional<int> PerchLayoutConstant(LayoutConstant constant, bool touch_ui);
 
+// Settings → Appearance → Density: Compact makes the tab strip 32 px and the
+// toolbar controls 24 px (DESIGN.md). Windows pick it up as they lay out.
+void SetCompactDensity(bool compact);
+
 }  // namespace perch
 
 #endif  // CHROME_BROWSER_PERCH_LAYOUT_PERCH_LAYOUT_H_

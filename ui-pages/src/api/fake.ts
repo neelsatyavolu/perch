@@ -7,7 +7,7 @@
 import type {
   AboutInfo, Appearance, BuiltInExtension, ChatSummary, CommandBarResult, DetectedBrowser, DraftFact, FileChoice, FileKind, JobId, JobProgress, McpImportCandidate, McpServer,
   MemoryDoc, MemorySaverSettings, SyncStatus, MemorySettings, NtpLayout, Onboarding, PerchApi, PermissionMode, Permissions, PolicyProblem, PrivacySettings, Provider, Routine, RoutineInput,
-  RoutineProposal, SiteData, SleepRule, Skill, SystemAccess, TaskModel,
+  RoutineProposal, SecurityInfo, SiteData, SleepRule, Skill, SystemAccess, TaskModel,
 } from "../api";
 import { DEFAULT_APPEARANCE } from "../theme/apply";
 import { ACCENT_NAMES, THEME_NAMES } from "../theme/tokens";
@@ -46,6 +46,7 @@ type State = {
   about: AboutInfo;
   files: readonly (FileChoice & { readonly kind: FileKind })[];
   buildJob: JobId | null;
+  security: SecurityInfo;
 };
 
 export type FakeOptions = {
@@ -60,6 +61,12 @@ export type FakeOptions = {
   readonly sync?: "on" | "off";
   /** What revealRecoveryKey does: show the key (default), or refuse as a build without the key helper. */
   readonly recoveryKey?: "shown" | "unavailable";
+  /** What getSecurity reports; by default the helper is there, keys are protected and nothing needs restoring. */
+  readonly security?: Partial<SecurityInfo>;
+  /** What the save panel for exportBackup does: save (default), get cancelled, or fail. */
+  readonly exportBackup?: "saved" | "cancelled" | "failed";
+  /** What the backup file picker in restoreFromRecoveryKey does: pick a good backup (default), get cancelled, or pick a damaged file. */
+  readonly backupFile?: "picked" | "cancelled" | "bad" | "other-key";
   readonly access?: SystemAccess;
   /** Makes every job fail at its last step with this message. */
   readonly failJobs?: string;
@@ -75,6 +82,10 @@ const policyMaxMode = (policy: FakeOptions["policy"]): Partial<Permissions> => {
   const max = policy?.MaxPermissionMode;
   return max === "ask" || max === "guard" || max === "skip" ? { maxMode: max } : {};
 };
+
+/** A refusal with a code, as the browser sends one. */
+const coded = (message: string, code: string) => Object.assign(new Error(message), { code });
+const normalizeKey = (key: string) => key.replace(/[\s-]/g, "").toUpperCase();
 
 /** perchd's answer to a write a company policy locks. */
 const MANAGED = "Managed by your organization";
@@ -165,6 +176,7 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     about: seed.ABOUT,
     files: [],
     buildJob: null,
+    security: { available: true, protected: true, needsRestore: false, ...options.security },
   };
   const memorySaverLocked = () => (options.policy?.BuiltInExtensions as { memorySaver?: unknown } | undefined)?.memorySaver !== undefined;
   const set = (patch: Partial<State>) => {
@@ -507,7 +519,29 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     async revealRecoveryKey() {
       if (options.recoveryKey === "unavailable") throw Object.assign(new Error("This build of Perch can't show the recovery key."), { code: "unavailable" });
       if (!state.sync.on) throw new Error("Sync is off.");
-      return "7KQ2D-M9XHT-4WB3N-PZ6RC-V8JFA";
+      return seed.RECOVERY_KEY;
+    },
+
+    async getSecurity() {
+      return state.security;
+    },
+    async exportBackup() {
+      if (!state.security.available) throw coded("This build of Perch has no key helper.", "unavailable");
+      if (options.exportBackup === "cancelled") return { saved: false };
+      if (options.exportBackup === "failed") throw coded("Perch couldn't write the backup.", "failed");
+      return { saved: true, name: `Perch backup ${new Date().toISOString().slice(0, 10)}.perchbackup` };
+    },
+    async restoreFromRecoveryKey({ recoveryKey, fromBackup, replaceData }) {
+      if (!state.security.available) throw coded("This build of Perch has no key helper.", "unavailable");
+      // As the browser: any case, spaces and dashes are fine; a key that doesn't decode or match is "wrong-key".
+      if (normalizeKey(recoveryKey) !== normalizeKey(seed.RECOVERY_KEY)) throw coded("That recovery key doesn't match.", "wrong-key");
+      if (fromBackup && options.backupFile === "cancelled") return { restored: false };
+      if (fromBackup && options.backupFile === "bad") throw coded("That file isn't a Perch backup.", "bad-backup");
+      if (fromBackup && options.backupFile === "other-key" && !replaceData) {
+        throw coded("That backup replaces Perch data made with a different key.", "replaces-data");
+      }
+      set({ security: { ...state.security, needsRestore: false } });
+      return { restored: true };
     },
 
     async getMemorySaver() {

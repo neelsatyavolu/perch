@@ -1,0 +1,25 @@
+# Perch: tabs the agent has claimed are never discarded.
+diff --git a/chrome/browser/performance_manager/policies/discard_eligibility_policy.cc b/chrome/browser/performance_manager/policies/discard_eligibility_policy.cc
+index 9455caca7e..412eb34e03 100644
+--- a/chrome/browser/performance_manager/policies/discard_eligibility_policy.cc
++++ b/chrome/browser/performance_manager/policies/discard_eligibility_policy.cc
+@@ -4,6 +4,7 @@
+ 
+ #include "chrome/browser/performance_manager/policies/discard_eligibility_policy.h"
+ 
++#include "chrome/browser/perch/agent/perch_devtools.h"
+ #include "chrome/browser/perch/memory_saver/sleep_controller.h"
+ 
+ #include "base/metrics/histogram_functions.h"
+@@ -359,6 +360,11 @@ DiscardEligibilityPolicy::CanDiscardWithCustomRecentVisibilityWindow(
+     add_reason_and_update_result(CannotDiscardReason::kOptedOut,
+                                  CanDiscardResult::kProtected);
+   }
++  // Perch: a tab the agent is working in never sleeps.
++  if (perch::IsClaimedByAgent(page_node->GetWebContents().get())) {
++    add_reason_and_update_result(CannotDiscardReason::kOptedOut,
++                                 CanDiscardResult::kProtected);
++  }
+ 
+   if (is_proactive_or_suggested &&
+       page_node->GetNotificationPermissionStatus() ==

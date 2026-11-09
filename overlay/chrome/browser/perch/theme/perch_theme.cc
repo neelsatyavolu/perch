@@ -11,12 +11,16 @@
 #include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
 #include "base/supports_user_data.h"
+#include "chrome/browser/perch/layout/perch_layout.h"
 #include "chrome/browser/perch/perch_pref_names.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_observer.h"
 #include "chrome/browser/themes/theme_service.h"
 #include "chrome/browser/themes/theme_service_factory.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
 #include "chrome/browser/ui/color/chrome_color_id.h"
+#include "chrome/browser/ui/views/frame/browser_view.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_service.h"
 #include "third_party/skia/include/core/SkColor.h"
@@ -133,6 +137,7 @@ void AddPerchMixer(ui::ColorProvider* provider,
   m[ui::kColorFocusableBorderFocused] = {accent};
   m[ui::kColorTextSelectionBackground] = {tint};
   m[kColorAppMenuHighlightDefault] = {accent};
+  m[kColorOmniboxKeywordSelected] = {accent};
 }
 
 void Refresh(Profile* profile) {
@@ -155,6 +160,18 @@ void Refresh(Profile* profile) {
   ui::NativeTheme::GetInstanceForNativeUi()->NotifyOnNativeThemeUpdated();
 }
 
+// Density is one setting for the browser; windows lay out again with it.
+void RefreshDensity(Profile* profile) {
+  SetCompactDensity(
+      profile->GetPrefs()->GetString(prefs::kAppearanceDensity) == "compact");
+  for (BrowserWindowInterface* browser : GetAllBrowserWindowInterfaces()) {
+    if (BrowserView* view = BrowserView::GetBrowserViewForBrowser(browser)) {
+      view->ToolbarSizeChanged(/*is_animating=*/false);
+      view->InvalidateLayout();
+    }
+  }
+}
+
 // Follows one profile's appearance prefs until the profile goes away.
 class Watcher : public base::SupportsUserData::Data, public ProfileObserver {
  public:
@@ -166,6 +183,10 @@ class Watcher : public base::SupportsUserData::Data, public ProfileObserver {
           prefs::kAppearanceMatchSystem, prefs::kAppearanceDarkTheme}) {
       registrar_.Add(pref, base::BindRepeating(&Refresh, profile));
     }
+    registrar_.Add(prefs::kAppearanceDensity,
+                   base::BindRepeating(&RefreshDensity, profile));
+    SetCompactDensity(
+        profile->GetPrefs()->GetString(prefs::kAppearanceDensity) == "compact");
   }
   ~Watcher() override {
     if (profile_) {

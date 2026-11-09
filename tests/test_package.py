@@ -33,6 +33,9 @@ def staged_build(paths, tmp_path):
     (repo / "ui" / "dist" / "assets" / "a.js").write_text("1")
     (repo / "ui-pages" / "dist").mkdir(parents=True)
     (repo / "ui-pages" / "dist" / "settings.html").write_text("<!doctype html>")
+    (repo / "branding" / "fonts").mkdir(parents=True)
+    (repo / "branding" / "fonts" / "Geist-Regular.ttf").write_bytes(b"ttf")
+    (repo / "branding" / "fonts" / "OFL.txt").write_text("licence")
     (repo / "build").mkdir()
     (repo / "build" / "keys.provisionprofile").write_bytes(b"profile")
     paths = type(paths)(repo=repo, chromium=paths.chromium, src=paths.src, depot_tools=paths.depot_tools)
@@ -180,3 +183,26 @@ def test_package_refuses_without_the_staged_helper(staged_build, recorder):
     shutil.rmtree(paths.out("release") / "Perch Keys.app")
     with pytest.raises(ValueError, match="Perch Keys.app"):
         package(paths, INFO, "adhoc", None, run=recorder, sparkle_root=sparkle, public_key="")
+
+
+def test_stage_fonts_copies_the_ttfs_and_licence(tmp_path):
+    from perchtools.package import FONTS_DIR, stage_fonts
+
+    src = tmp_path / "repo" / FONTS_DIR
+    src.mkdir(parents=True)
+    (src / "Geist-Regular.ttf").write_bytes(b"ttf")
+    (src / "OFL.txt").write_text("licence")
+    (src / "notes.md").write_text("not copied")
+    dest = stage_fonts(tmp_path / "repo", tmp_path / "out" / "perch_fonts")
+    assert sorted(p.name for p in dest.iterdir()) == ["Geist-Regular.ttf", "OFL.txt"]
+
+
+def test_stage_fonts_needs_fonts_and_licence(tmp_path):
+    import pytest
+
+    from perchtools.package import FONTS_DIR, stage_fonts
+
+    (tmp_path / FONTS_DIR).mkdir(parents=True)
+    (tmp_path / FONTS_DIR / "Geist-Regular.ttf").write_bytes(b"ttf")
+    with pytest.raises(ValueError, match="OFL.txt"):
+        stage_fonts(tmp_path, tmp_path / "out")

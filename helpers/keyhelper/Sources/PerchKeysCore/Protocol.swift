@@ -66,6 +66,8 @@ public struct Request: Decodable {
     public let recoveryPublicKey: String?
     public let recovery: String?
     public let recoveryPrivateKey: String?
+    /// For "import": the 32-byte root key, base64, from the person's recovery key.
+    public let key: String?
 }
 
 public struct Response: Encodable, Equatable {

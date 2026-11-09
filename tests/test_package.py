@@ -206,3 +206,22 @@ def test_stage_fonts_needs_fonts_and_licence(tmp_path):
     (tmp_path / FONTS_DIR / "Geist-Regular.ttf").write_bytes(b"ttf")
     with pytest.raises(ValueError, match="OFL.txt"):
         stage_fonts(tmp_path, tmp_path / "out")
+
+
+def test_signed_app_is_lifted_out_of_the_channel_folder(tmp_path):
+    from perchtools.package import APP, _lift_signed_app
+
+    signed = tmp_path / "signed"
+    (signed / "stable" / APP / "Contents").mkdir(parents=True)
+    _lift_signed_app(signed)
+    assert (signed / APP / "Contents").is_dir()
+    assert not (signed / "stable" / APP).exists()
+
+
+def test_lifting_leaves_an_app_already_in_place(tmp_path):
+    from perchtools.package import APP, _lift_signed_app
+
+    signed = tmp_path / "signed"
+    (signed / APP).mkdir(parents=True)
+    _lift_signed_app(signed)
+    assert (signed / APP).is_dir()

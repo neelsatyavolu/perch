@@ -139,6 +139,14 @@ def embed_keys_profile(helper: Path, repo: Path) -> bool:
     return True
 
 
+def _lift_signed_app(signed: Path) -> None:
+    """sign_chrome.py leaves the app in a per-channel folder (signed/stable/Perch.app); move it
+    up to signed/Perch.app, where the DMG and the checks expect it."""
+    nested = signed / "stable" / APP
+    if nested.is_dir() and not (signed / APP).exists():
+        shutil.move(nested, signed / APP)
+
+
 def packaged_app(dist: Path, mode: Mode) -> Path:
     """Where package() leaves the finished Perch.app: signed/ in release mode, stage/ ad hoc."""
     return dist / ("signed" if mode == "release" else "stage") / APP
@@ -208,6 +216,7 @@ def package(
          "--identity", creds.identity, "--disable-packaging", "--notarize", "none"],
         secrets=secrets,
     )
+    _lift_signed_app(signed)
     dmg = _make_dmg(signed / APP, dist, info, run)
     run(["codesign", "--force", "--timestamp", "--sign", creds.identity, dmg], secrets=secrets)
     run(

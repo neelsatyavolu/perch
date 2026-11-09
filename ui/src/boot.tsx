@@ -18,7 +18,10 @@ declare global {
 
 export async function boot(page: "sidebar" | "chat"): Promise<void> {
   const root = document.getElementById("app")!;
-  const config = readConfig({ href: location.href, replace: (url) => history.replaceState(null, "", url) }, window.perchApp);
+  const found = readConfig({ href: location.href, replace: (url) => history.replaceState(null, "", url) }, window.perchApp);
+  // A `--mode fake` build (marketing screenshots) always shows the demo scene, inside Perch or not.
+  const fake = import.meta.env.MODE === "fake";
+  const config = found ?? (fake ? { windowId: new URLSearchParams(location.search).get("window") ?? "main", tabId: null, theme: "system" as const, accent: "blue" as const } : null);
   if (!config) {
     applyTheme(document.documentElement, "system", "blue");
     root.innerHTML = '<p class="boot-note">This page opens inside Perch.</p>';
@@ -30,7 +33,7 @@ export async function boot(page: "sidebar" | "chat"): Promise<void> {
     cleanup();
     cleanup = applyTheme(document.documentElement, detail.theme, detail.accent);
   });
-  const client = createClient(config.api, config.token);
+  const client = fake ? (await import("./api/demo")).createDemoClient(config.windowId) : createClient(found!.api, found!.token);
   // Framed by Perch's trusted shell, host calls go to it over postMessage; otherwise config.js may set one.
   const host = window.perchHost ?? createFrameHost(window);
   if (page === "sidebar") {

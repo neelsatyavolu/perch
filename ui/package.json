@@ -8,6 +8,7 @@
   "scripts": {
     "tokens": "bun run scripts/gen-tokens.ts",
     "build": "bun run scripts/gen-tokens.ts && vite build",
+    "build:fake": "bun run scripts/gen-tokens.ts && vite build --mode fake --outDir dist-fake",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },

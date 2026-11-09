@@ -194,6 +194,20 @@ class Snapshotter {
       prefs->SetString(prefs::kAppearanceTheme, state.substr(6));
     } else if (state.starts_with("accent-")) {
       prefs->SetString(prefs::kAppearanceAccent, state.substr(7));
+    } else if (state.starts_with("open:")) {
+      // A new tab at the URL after "open:", made active.
+      Open(state.substr(5).c_str());
+      TabStripModel* tabs = browser_->GetTabStripModel();
+      tabs->ActivateTabAt(tabs->count() - 1);
+    } else if (state.starts_with("select:")) {
+      // Makes the tab at the index after "select:" active.
+      int index = 0;
+      if (base::StringToInt(state.substr(7), &index) &&
+          browser_->GetTabStripModel()->ContainsIndex(index)) {
+        browser_->GetTabStripModel()->ActivateTabAt(index);
+      }
+    } else if (state == "panel") {
+      SidePanelUI::From(browser_)->Show(SidePanelEntryId::kPerch);
     } else if (state == "hidden-chrome") {
       prefs->SetBoolean(prefs::kAppearanceHideChrome, true);
       // The address bar has focus in a new window, which shows the bars.

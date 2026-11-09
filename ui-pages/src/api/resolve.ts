@@ -21,13 +21,18 @@ export function appearanceFromQuery(search: string): Partial<Appearance> {
 
 export async function loadApi(win: Window): Promise<PerchApi | null> {
   installHostBridge(win);
+  // A fake build shows its sample data even inside Perch (screenshots of the real browser).
   const bridge = (win as Window & { perch?: unknown }).perch;
-  if (isBridge(bridge)) return createRpcApi(bridge);
+  if (isBridge(bridge) && import.meta.env?.MODE !== "fake") return createRpcApi(bridge);
   if (import.meta.env?.MODE === "fake") {
     const { createFakeApi } = await import("./fake");
     const params = new URLSearchParams(win.location.search);
     return createFakeApi({
-      appearance: appearanceFromQuery(win.location.search),
+      // Follows the browser's light or dark theme unless the URL picks one.
+      appearance: {
+        ...(win.matchMedia?.("(prefers-color-scheme: light)").matches ? { theme: "paper" as ThemeName } : {}),
+        ...appearanceFromQuery(win.location.search),
+      },
       onboarding: params.has("welcome") ? { finished: false, done: [] } : undefined,
     });
   }

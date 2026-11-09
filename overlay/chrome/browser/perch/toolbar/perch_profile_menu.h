@@ -14,7 +14,17 @@
 
 class BrowserWindowInterface;
 
+namespace gfx {
+struct VectorIcon;
+}
+
+namespace ui {
+class ImageModel;
+class MenuModel;
+}
+
 namespace views {
+class MenuRunner;
 class View;
 }
 
@@ -60,6 +70,15 @@ class PerchProfileMenuModel : public ui::SimpleMenuModel,
   std::unique_ptr<ui::MenuModel> history_;
   std::unique_ptr<ui::SimpleMenuModel> developers_;
 };
+
+// A line icon for a toolbar menu item, in the menu's icon colour.
+ui::ImageModel Icon(const gfx::VectorIcon& icon);
+
+// Runs `model` as a native macOS menu just below `anchor`, keeping the runner
+// in `runner`. Every Perch toolbar menu opens this way.
+void RunToolbarMenu(ui::MenuModel* model,
+                    std::unique_ptr<views::MenuRunner>& runner,
+                    views::View* anchor);
 
 // Open the menus below `anchor`: the profile button, or the menu button.
 void ShowPerchProfileMenu(BrowserWindowInterface* browser, views::View* anchor);

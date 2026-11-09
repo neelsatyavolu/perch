@@ -25,6 +25,11 @@
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "ui/base/mojom/menu_source_type.mojom.h"
 #include "ui/views/controls/menu/menu_runner.h"
+#include "ui/gfx/vector_icon_types.h"
+#include "ui/color/color_id.h"
+#include "ui/base/models/image_model.h"
+#include "components/vector_icons/vector_icons.h"
+#include "chrome/app/vector_icons/vector_icons.h"
 #include "ui/views/view.h"
 #include "ui/views/widget/widget.h"
 
@@ -50,6 +55,24 @@ OpenMenu& Current() {
 
 }  // namespace
 
+ui::ImageModel Icon(const gfx::VectorIcon& icon) {
+  return ui::ImageModel::FromVectorIcon(icon, ui::kColorMenuIcon, 16);
+}
+
+void RunToolbarMenu(ui::MenuModel* model,
+                    std::unique_ptr<views::MenuRunner>& runner,
+                    views::View* anchor) {
+  // A native macOS menu, with the system's own material, just below the
+  // button: the way Mac apps open their toolbar menus.
+  runner = std::make_unique<views::MenuRunner>(
+      model, views::MenuRunner::CONTEXT_MENU | views::MenuRunner::HAS_MNEMONICS);
+  const gfx::Rect button = anchor->GetAnchorBoundsInScreen();
+  runner->RunMenuAt(anchor->GetWidget(), nullptr,
+                    gfx::Rect(button.x(), button.bottom() + 4, 0, 0),
+                    views::MenuAnchorPosition::kTopLeft,
+                    ui::mojom::MenuSourceType::kMouse);
+}
+
 PerchProfileMenuModel::PerchProfileMenuModel(BrowserWindowInterface* browser,
                                              Kind kind)
     : ui::SimpleMenuModel(this), browser_(browser), kind_(kind) {
@@ -68,6 +91,7 @@ void PerchProfileMenuModel::Build() {
 
 // The profile button: who you are, and room for another.
 void PerchProfileMenuModel::BuildProfiles() {
+  AddTitle(u"Profiles");
   ProfileManager* manager = g_browser_process->profile_manager();
   if (manager) {
     for (ProfileAttributesEntry* entry :
@@ -82,53 +106,64 @@ void PerchProfileMenuModel::BuildProfiles() {
     }
   }
   AddSeparator(ui::NORMAL_SEPARATOR);
-  AddItem(IDC_PERCH_NEW_PROFILE, u"New Profile");
-  AddItem(IDC_PERCH_MANAGE_PROFILES, u"Manage Profiles");
+  AddItemWithIcon(IDC_PERCH_NEW_PROFILE, u"New Profile",
+                  Icon(vector_icons::kAccountCircleIcon));
+  AddItemWithIcon(IDC_PERCH_MANAGE_PROFILES, u"Manage Profiles",
+                  Icon(kManageAccountsIcon));
 }
 
 // The menu button that ends the toolbar (DESIGN.md): Perch's own short menu
 // in place of Chromium's app menu.
 void PerchProfileMenuModel::BuildApp() {
-  AddItem(IDC_NEW_TAB, u"New Tab");
-  AddItem(IDC_NEW_WINDOW, u"New Window");
-  AddItem(IDC_NEW_INCOGNITO_WINDOW, u"New Incognito Window");
+  AddItemWithIcon(IDC_NEW_TAB, u"New Tab", Icon(kAddIcon));
+  AddItemWithIcon(IDC_NEW_WINDOW, u"New Window", Icon(kNewWindowIcon));
+  AddItemWithIcon(IDC_NEW_INCOGNITO_WINDOW, u"New Incognito Window",
+                  Icon(kIncognitoIcon));
   AddSeparator(ui::NORMAL_SEPARATOR);
 
   zoom_ = std::make_unique<ui::SimpleMenuModel>(this);
   zoom_->AddItem(IDC_ZOOM_PLUS, u"Zoom In");
   zoom_->AddItem(IDC_ZOOM_NORMAL, u"Actual Size");
   zoom_->AddItem(IDC_ZOOM_MINUS, u"Zoom Out");
-  AddSubMenu(IDC_ZOOM_MENU, u"Zoom", zoom_.get());
-  AddItem(IDC_FIND, u"Find\u2026");
-  AddItem(IDC_PRINT, u"Print\u2026");
+  AddSubMenuWithIcon(IDC_ZOOM_MENU, u"Zoom", zoom_.get(), Icon(kZoomInIcon));
+  AddItemWithIcon(IDC_FIND, u"Find\u2026", Icon(vector_icons::kSearchIcon));
+  AddItemWithIcon(IDC_PRINT, u"Print\u2026", Icon(vector_icons::kPrintIcon));
   AddSeparator(ui::NORMAL_SEPARATOR);
 
   BrowserView* view = BrowserView::GetBrowserViewForBrowser(browser_);
   history_ = std::make_unique<RecentTabsSubMenuModel>(view, browser_);
-  AddSubMenu(IDC_RECENT_TABS_MENU, u"History",
-             static_cast<ui::SimpleMenuModel*>(history_.get()));
+  AddSubMenuWithIcon(IDC_RECENT_TABS_MENU, u"History",
+                     static_cast<ui::SimpleMenuModel*>(history_.get()),
+                     Icon(vector_icons::kHistoryIcon));
 
   downloads_menu_ = std::make_unique<ui::SimpleMenuModel>(this);
   AddRecentDownloads();
   downloads_menu_->AddItem(IDC_SHOW_DOWNLOADS, u"Show All Downloads");
-  AddSubMenu(IDC_PERCH_DOWNLOADS_MENU, u"Downloads", downloads_menu_.get());
+  AddSubMenuWithIcon(IDC_PERCH_DOWNLOADS_MENU, u"Downloads",
+                     downloads_menu_.get(), Icon(vector_icons::kDownloadIcon));
 
   bookmarks_ = std::make_unique<ui::SimpleMenuModel>(this);
   bookmarks_->AddItem(IDC_BOOKMARK_THIS_TAB, u"Bookmark This Tab");
   bookmarks_->AddItem(IDC_SHOW_BOOKMARK_BAR, u"Show Bookmarks Bar");
   bookmarks_->AddItem(IDC_SHOW_BOOKMARK_MANAGER, u"Bookmark Manager");
-  AddSubMenu(IDC_BOOKMARKS_MENU, u"Bookmarks", bookmarks_.get());
+  AddSubMenuWithIcon(IDC_BOOKMARKS_MENU, u"Bookmarks", bookmarks_.get(),
+                     Icon(kBookmarkManagerIcon));
 
   extensions_ = std::make_unique<ui::SimpleMenuModel>(this);
   extensions_->AddItem(IDC_MANAGE_EXTENSIONS, u"Manage Extensions");
   extensions_->AddItem(IDC_FIND_EXTENSIONS, u"Chrome Web Store");
-  AddSubMenu(IDC_PERCH_EXTENSIONS_MENU, u"Extensions", extensions_.get());
+  AddSubMenuWithIcon(IDC_PERCH_EXTENSIONS_MENU, u"Extensions",
+                     extensions_.get(),
+                     Icon(vector_icons::kExtensionChromeRefreshOldIcon));
 
   developers_ = std::make_unique<ToolsMenuModel>(this, browser_);
-  AddSubMenu(IDC_PERCH_DEVELOPERS_MENU, u"More Tools", developers_.get());
+  AddSubMenuWithIcon(IDC_PERCH_DEVELOPERS_MENU, u"More Tools",
+                     developers_.get(), Icon(vector_icons::kCodeIcon));
   AddSeparator(ui::NORMAL_SEPARATOR);
-  AddItem(IDC_PERCH_OPEN_SETTINGS, u"Settings");
-  AddItem(IDC_PERCH_ABOUT, u"About Perch");
+  AddItemWithIcon(IDC_PERCH_OPEN_SETTINGS, u"Settings",
+                  Icon(vector_icons::kSettingsIcon));
+  AddItemWithIcon(IDC_PERCH_ABOUT, u"About Perch",
+                  Icon(vector_icons::kInfoIcon));
 }
 
 void PerchProfileMenuModel::AddRecentDownloads() {
@@ -231,12 +266,7 @@ void ShowMenu(BrowserWindowInterface* browser,
   }
   open.runner.reset();
   open.model = std::make_unique<PerchProfileMenuModel>(browser, kind);
-  open.runner = std::make_unique<views::MenuRunner>(
-      open.model.get(), views::MenuRunner::HAS_MNEMONICS);
-  open.runner->RunMenuAt(anchor->GetWidget(), nullptr,
-                         anchor->GetAnchorBoundsInScreen(),
-                         views::MenuAnchorPosition::kTopRight,
-                         ui::mojom::MenuSourceType::kNone);
+  RunToolbarMenu(open.model.get(), open.runner, anchor);
 }
 
 }  // namespace

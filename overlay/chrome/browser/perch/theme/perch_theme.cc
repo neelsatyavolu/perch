@@ -132,9 +132,12 @@ void AddPerchMixer(ui::ColorProvider* provider,
   // Hairlines.
   for (ui::ColorId id : std::initializer_list<ui::ColorId>{kColorToolbarSeparator, kColorTabDividerFrameActive,
         kColorTabDividerFrameInactive, kColorToolbarContentAreaSeparator,
-        kColorToolbarTopSeparatorFrameActive, kColorTabStrokeFrameActive}) {
+        kColorToolbarTopSeparatorFrameActive}) {
     m[id] = {hair};
   }
+  // The active tab's outline, drawn when it sits close to the strip.
+  m[kColorTabStrokeFrameActive] = {Over(t->hair_strong, t->canvas)};
+  m[kColorTabStrokeFrameInactive] = {Over(t->hair_strong, t->canvas)};
   // The accent: focus rings, text selection and the app menu's highlight.
   m[ui::kColorFocusableBorderFocused] = {accent};
   m[ui::kColorTextSelectionBackground] = {tint};

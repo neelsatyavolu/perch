@@ -28,6 +28,7 @@
 #include "ui/views/border.h"
 #include "ui/views/controls/highlight_path_generator.h"
 #include "ui/views/animation/ink_drop.h"
+#include "chrome/browser/perch/toolbar/perch_profile_menu.h"
 #include "components/vector_icons/vector_icons.h"
 #include "ui/views/layout/flex_layout_types.h"
 #include "ui/views/view_class_properties.h"
@@ -162,11 +163,7 @@ class SpacesButton : public views::LabelButton {
 
   void ShowMenu() {
     model_ = std::make_unique<SpacesMenuModel>(browser_);
-    runner_ = std::make_unique<views::MenuRunner>(
-        model_.get(), views::MenuRunner::HAS_MNEMONICS);
-    runner_->RunMenuAt(GetWidget(), nullptr, GetAnchorBoundsInScreen(),
-                       views::MenuAnchorPosition::kTopLeft,
-                       ui::mojom::MenuSourceType::kNone);
+    RunToolbarMenu(model_.get(), runner_, this);
   }
 
   raw_ptr<BrowserWindowInterface> browser_;

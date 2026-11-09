@@ -463,6 +463,14 @@ class Snapshotter {
           FROM_HERE,
           base::BindOnce(&Snapshotter::CheckSleep, base::Unretained(this)),
           base::Milliseconds(500));
+    } else if (state == "omnibox-type") {
+      // Types into the focused address bar so its suggestions open (pair
+      // with "pause" to inspect the popup over CDP).
+      LocationBarView* bar = BrowserView::GetBrowserViewForBrowser(browser_)
+                                 ->GetLocationBarView();
+      bar->FocusLocation(/*is_user_initiated=*/true,
+                         /*clear_focus_if_failed=*/false);
+      bar->omnibox_view()->SetUserText(u"hello");
     } else if (state == "omnibox-ask") {
       // ⌘↵ in the address bar asks Perch's agent (Perch.askRequested).
       OmniboxViewViews* omnibox = BrowserView::GetBrowserViewForBrowser(browser_)

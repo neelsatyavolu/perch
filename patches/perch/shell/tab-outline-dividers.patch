@@ -1,0 +1,52 @@
+# Perch: outline the active tab when it sits close to the strip, and no rules between toolbar buttons.
+diff --git a/chrome/browser/ui/views/frame/browser_view.cc b/chrome/browser/ui/views/frame/browser_view.cc
+index d4ad05fb44..25f95bb428 100644
+--- a/chrome/browser/ui/views/frame/browser_view.cc
++++ b/chrome/browser/ui/views/frame/browser_view.cc
+@@ -1415,10 +1415,9 @@ bool BrowserView::ShouldDrawTabStrokes() const {
+         theme_service->UsingSystemTheme();
+   }
+ 
+-  if (!using_system_theme) {
+-    // Strokes are only supported for system themes.
+-    return false;
+-  }
++  // Perch: its own themes keep the active tab close to the strip on purpose,
++  // so they get the hairline outline too when the two are hard to tell apart.
++  (void)using_system_theme;
+ 
+   // The tabstrip normally avoids strokes and relies on the active tab
+   // contrasting sufficiently with the frame background.  When there isn't
+diff --git a/chrome/browser/ui/views/toolbar/toolbar_divider.cc b/chrome/browser/ui/views/toolbar/toolbar_divider.cc
+index 2a3bc5e899..6a88a10ea3 100644
+--- a/chrome/browser/ui/views/toolbar/toolbar_divider.cc
++++ b/chrome/browser/ui/views/toolbar/toolbar_divider.cc
+@@ -17,9 +17,14 @@ ToolbarDivider::ToolbarDivider() {
+   SetBackground(views::CreateRoundedRectBackground(
+       kColorToolbarExtensionSeparatorEnabled,
+       GetLayoutConstant(LayoutConstant::kToolbarDividerCornerRadius)));
++  views::View::SetVisible(false);
+ }
+ 
+ ToolbarDivider::~ToolbarDivider() = default;
+ 
++void ToolbarDivider::SetVisible(bool visible) {
++  views::View::SetVisible(false);
++}
++
+ BEGIN_METADATA(ToolbarDivider)
+ END_METADATA
+diff --git a/chrome/browser/ui/views/toolbar/toolbar_divider.h b/chrome/browser/ui/views/toolbar/toolbar_divider.h
+index 8dbcb6f4c7..eda62f0e83 100644
+--- a/chrome/browser/ui/views/toolbar/toolbar_divider.h
++++ b/chrome/browser/ui/views/toolbar/toolbar_divider.h
+@@ -13,6 +13,9 @@ class ToolbarDivider : public views::View {
+  public:
+   ToolbarDivider();
+   ~ToolbarDivider() override;
++
++  // Perch: the toolbar has no rules between buttons; gaps group them.
++  void SetVisible(bool visible) override;
+ };
+ 
+ #endif  // CHROME_BROWSER_UI_VIEWS_TOOLBAR_TOOLBAR_DIVIDER_H_

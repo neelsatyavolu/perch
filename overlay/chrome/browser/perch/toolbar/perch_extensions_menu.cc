@@ -11,7 +11,10 @@
 #include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
 #include "chrome/app/chrome_command_ids.h"
+#include "chrome/browser/perch/toolbar/perch_profile_menu.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/app/vector_icons/vector_icons.h"
+#include "components/vector_icons/vector_icons.h"
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/extensions/extensions_container.h"
@@ -102,8 +105,10 @@ class ExtensionsMenu : public ui::SimpleMenuModel,
  public:
   explicit ExtensionsMenu(BrowserWindowInterface* browser)
       : ui::SimpleMenuModel(this), browser_(browser) {
-    AddItem(IDC_MANAGE_EXTENSIONS, u"Manage Extensions");
-    AddItem(IDC_FIND_EXTENSIONS, u"Chrome Web Store");
+    AddItemWithIcon(IDC_MANAGE_EXTENSIONS, u"Manage Extensions",
+                    Icon(vector_icons::kExtensionChromeRefreshOldIcon));
+    AddItemWithIcon(IDC_FIND_EXTENSIONS, u"Chrome Web Store",
+                    Icon(kOpenInNewIcon));
 
     ToolbarActionsModel* model =
         ToolbarActionsModel::Get(browser->GetProfile());
@@ -171,12 +176,7 @@ bool ShowPerchExtensionsMenu(BrowserWindowInterface* browser,
   }
   open.runner.reset();
   open.model = std::make_unique<ExtensionsMenu>(browser);
-  open.runner = std::make_unique<views::MenuRunner>(
-      open.model.get(), views::MenuRunner::HAS_MNEMONICS);
-  open.runner->RunMenuAt(anchor->GetWidget(), nullptr,
-                         anchor->GetAnchorBoundsInScreen(),
-                         views::MenuAnchorPosition::kTopRight,
-                         ui::mojom::MenuSourceType::kNone);
+  RunToolbarMenu(open.model.get(), open.runner, anchor);
   return true;
 }
 

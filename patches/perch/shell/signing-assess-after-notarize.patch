@@ -1,9 +1,9 @@
 # Perch: Chromium's signer only runs Gatekeeper's check when it notarizes; Perch notarizes the DMG afterwards and checks then.
 diff --git a/chrome/installer/mac/signing/config.py b/chrome/installer/mac/signing/config.py
-index 8324fefd8e..dc1ffb0b52 100644
+index 8324fefd8e..bb559c55d8 100644
 --- a/chrome/installer/mac/signing/config.py
 +++ b/chrome/installer/mac/signing/config.py
-@@ -191,7 +191,10 @@ class CodeSignConfig(object):
+@@ -191,7 +191,13 @@ class CodeSignConfig(object):
          """Returns whether the final code signed binary should be assessed by
          Gatekeeper after signing.
          """
@@ -11,7 +11,10 @@ index 8324fefd8e..dc1ffb0b52 100644
 +        # Perch: Gatekeeper rejects a Developer ID app until it is notarized,
 +        # so the check can only pass when this script notarizes. Perch's
 +        # packaging notarizes the DMG afterwards and assesses the app then.
-+        return self.notarize.should_notarize()
++        # A Distribution's derived config doesn't carry `notarize` over, so
++        # read it from the config the command line made.
++        config = getattr(self, 'base_config', self)
++        return config.notarize.should_notarize()
  
      @property
      def inject_get_task_allow_entitlement(self):

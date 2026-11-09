@@ -1,0 +1,69 @@
+# Perch: 8px buttons, an 8px suggestion frame, and a hairline edge on Mac bubbles.
+diff --git a/chrome/browser/ui/views/chrome_layout_provider.cc b/chrome/browser/ui/views/chrome_layout_provider.cc
+index 6ee376f2de..925fc1d223 100644
+--- a/chrome/browser/ui/views/chrome_layout_provider.cc
++++ b/chrome/browser/ui/views/chrome_layout_provider.cc
+@@ -339,7 +339,8 @@ views::ShapeSysTokens GetShapeSysToken(views::ShapeContextToken id) {
+            views::ShapeSysTokens::kMediumSmall},
+           {kActionAppMenuBlockEntryCornerRadius,
+            views::ShapeSysTokens::kMediumSmall},
+-          {kOmniboxExpandedRadius, views::ShapeSysTokens::kMedium},
++          // Perch: the suggestions keep the address bar's 8px shape.
++          {kOmniboxExpandedRadius, views::ShapeSysTokens::kSmall},
+       });
+   const auto it = shape_token_map.find(id);
+   return it == shape_token_map.end() ? views::ShapeSysTokens::kDefault
+@@ -351,6 +352,10 @@ int ChromeLayoutProvider::GetCornerRadiusMetric(views::ShapeContextToken token,
+   CHECK_GE(token, views::kShapeContextTokenStart, base::NotFatalUntil::M162);
+   CHECK_LT(token, kChromeShapeContextTokenEnd, base::NotFatalUntil::M162);
+ 
++  // Perch: buttons are 8px, not pills (DESIGN.md).
++  if (token == views::ShapeContextTokens::kButtonRadius) {
++    return 8;
++  }
+   if (token < views::ShapeContextTokens::kShapeContextTokenEnd) {
+     return LayoutProvider::GetCornerRadiusMetric(token, size);
+   }
+diff --git a/ui/views/bubble/bubble_border.cc b/ui/views/bubble/bubble_border.cc
+index d9469da8a2..fff8226ed0 100644
+--- a/ui/views/bubble/bubble_border.cc
++++ b/ui/views/bubble/bubble_border.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "ui/views/bubble/bubble_border.h"
+ 
++#include "build/build_config.h"
++
+ #include <algorithm>
+ #include <map>
+ #include <tuple>
+@@ -722,10 +724,25 @@ bool BubbleBorder::ShouldDrawStroke() const {
+ }
+ 
+ void BubbleBorder::PaintNoShadow(const View& view, gfx::Canvas* canvas) {
+-  gfx::ScopedCanvas scoped(canvas);
+-  canvas->sk_canvas()->clipRRect(GetClientRect(view), SkClipOp::kDifference,
+-                                 true /*doAntiAlias*/);
+-  canvas->sk_canvas()->drawColor(SkColors::kTransparent, SkBlendMode::kSrc);
++  {
++    gfx::ScopedCanvas scoped(canvas);
++    canvas->sk_canvas()->clipRRect(GetClientRect(view), SkClipOp::kDifference,
++                                   true /*doAntiAlias*/);
++    canvas->sk_canvas()->drawColor(SkColors::kTransparent, SkBlendMode::kSrc);
++  }
++#if BUILDFLAG(IS_MAC)
++  // Perch: macOS draws the bubble's shadow, so the edge is a hairline here.
++  if (const ui::ColorProvider* colors = view.GetColorProvider()) {
++    SkRRect edge = GetClientRect(view);
++    edge.inset(0.5f, 0.5f);
++    cc::PaintFlags flags;
++    flags.setAntiAlias(true);
++    flags.setStyle(cc::PaintFlags::kStroke_Style);
++    flags.setStrokeWidth(1.0f);
++    flags.setColor(colors->GetColor(ui::kColorBubbleBorder));
++    canvas->sk_canvas()->drawRRect(edge, flags);
++  }
++#endif
+ }
+ 
+ void BubbleBorder::PaintVisibleArrow(const View& view, gfx::Canvas* canvas) {

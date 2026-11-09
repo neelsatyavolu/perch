@@ -1,0 +1,46 @@
+# Perch: 13px UI text, 14px medium titles, medium emphasis.
+diff --git a/chrome/browser/ui/views/chrome_typography_provider.cc b/chrome/browser/ui/views/chrome_typography_provider.cc
+index a765244bbc..005238e986 100644
+--- a/chrome/browser/ui/views/chrome_typography_provider.cc
++++ b/chrome/browser/ui/views/chrome_typography_provider.cc
+@@ -66,11 +66,12 @@ ui::ResourceBundle::FontDetails ChromeTypographyProvider::GetFontDetailsImpl(
+   }
+ 
+   // "Target" font size constants.
+-  constexpr int kTitleSize = 15;
++  // Perch: DESIGN.md sizes (13px UI text, 14px titles).
++  constexpr int kTitleSize = 14;
+   constexpr int kTouchableLabelSize = 14;
+   constexpr int kBodyTextLargeSize = 13;
+   constexpr int kCR23ButtonTextSize = 13;
+-  constexpr int kDefaultSize = 12;
++  constexpr int kDefaultSize = 13;
+   constexpr int kBadgeSize = 9;
+ 
+   ui::ResourceBundle::FontDetails details;
+@@ -95,6 +96,7 @@ ui::ResourceBundle::FontDetails ChromeTypographyProvider::GetFontDetailsImpl(
+       break;
+     case views::style::CONTEXT_DIALOG_TITLE:
+       details.size_delta = gfx::PlatformFont::GetFontSizeDelta(kTitleSize);
++      details.weight = gfx::Font::Weight::MEDIUM;
+       break;
+     case views::style::CONTEXT_TOUCH_MENU:
+       details.size_delta =
+@@ -110,7 +112,7 @@ ui::ResourceBundle::FontDetails ChromeTypographyProvider::GetFontDetailsImpl(
+   }
+ 
+   if (context == CONTEXT_TAB_HOVER_CARD_TITLE) {
+-    details.weight = gfx::Font::Weight::SEMIBOLD;
++    details.weight = gfx::Font::Weight::MEDIUM;
+   }
+ 
+   if (context == CONTEXT_TAB_COUNTER &&
+@@ -127,7 +129,7 @@ ui::ResourceBundle::FontDetails ChromeTypographyProvider::GetFontDetailsImpl(
+ 
+   if (style == views::style::STYLE_EMPHASIZED ||
+       style == views::style::STYLE_EMPHASIZED_SECONDARY) {
+-    details.weight = gfx::Font::Weight::SEMIBOLD;
++    details.weight = gfx::Font::Weight::MEDIUM;
+   }
+ 
+   if (style == views::style::STYLE_PRIMARY_MONOSPACED ||

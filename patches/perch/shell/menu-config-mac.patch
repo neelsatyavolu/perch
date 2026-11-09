@@ -1,0 +1,20 @@
+# Perch: menus Chromium draws on Mac use 6px rows in an 8px menu.
+diff --git a/ui/views/controls/menu/menu_config_mac.mm b/ui/views/controls/menu/menu_config_mac.mm
+index eabfb36489..5701640302 100644
+--- a/ui/views/controls/menu/menu_config_mac.mm
++++ b/ui/views/controls/menu/menu_config_mac.mm
+@@ -12,6 +12,14 @@ void MenuConfig::InitPlatform() {
+   use_mnemonics = false;
+   show_context_menu_accelerators = false;
+   all_menus_use_prefix_selection = true;
++  // Perch: the menus Chromium still draws (bookmark folders and the like)
++  // follow DESIGN.md: 6px rows inside an 8px menu, with tight separators.
++  item_corner_radius = 6;
++  item_vertical_margin = 6;
++  separator_height = 9;
++  separator_upper_height = 4;
++  separator_lower_height = 4;
++  corner_radius = 8;
+ }
+ 
+ }  // namespace views

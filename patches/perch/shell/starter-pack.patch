@@ -1,0 +1,17 @@
+# Perch: no @gemini or @aimode address bar shortcuts.
+diff --git a/components/search_engines/template_url_starter_pack_data.cc b/components/search_engines/template_url_starter_pack_data.cc
+index 4ad0bb0eb1..eb0de06863 100644
+--- a/components/search_engines/template_url_starter_pack_data.cc
++++ b/components/search_engines/template_url_starter_pack_data.cc
+@@ -108,6 +108,11 @@ std::vector<std::unique_ptr<TemplateURLData>> GetStarterPackEngines() {
+   std::vector<std::unique_ptr<TemplateURLData>> t_urls;
+ 
+   for (auto* engine : engines) {
++    // Perch: no @gemini or @aimode shortcuts; Perch's agent is the AI here.
++    if (engine->id == StarterPackId::kGemini ||
++        engine->id == StarterPackId::kAiMode) {
++      continue;
++    }
+     t_urls.push_back(TemplateURLDataFromStarterPackEngine(*engine));
+   }
+   return t_urls;

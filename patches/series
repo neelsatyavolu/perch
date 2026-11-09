@@ -73,3 +73,12 @@ perch/shell/address-bar.patch
 perch/shell/extensions-menu.patch
 perch/shell/tab-outline-dividers.patch
 perch/shell/layout-insets.patch
+perch/shell/tab-shape.patch
+perch/shell/bubble-shapes.patch
+perch/shell/toolbar-buttons.patch
+perch/shell/address-bar-chips.patch
+perch/shell/tab-menu-groups.patch
+perch/shell/menu-config-mac.patch
+perch/shell/starter-pack.patch
+perch/shell/typography-sizes.patch
+perch/shell/side-panel-flush.patch

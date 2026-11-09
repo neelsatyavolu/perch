@@ -1,0 +1,36 @@
+# Perch: 8px tab corners with a 4px foot, and 8px group chips.
+diff --git a/chrome/browser/ui/tabs/tab_style.cc b/chrome/browser/ui/tabs/tab_style.cc
+index cf74787987..d28db5ea10 100644
+--- a/chrome/browser/ui/tabs/tab_style.cc
++++ b/chrome/browser/ui/tabs/tab_style.cc
+@@ -96,12 +96,14 @@ int TabStyle::GetMinimumInactiveWidth() const {
+   return min_inactive_width;
+ }
+ 
++// Perch: 8px tab corners with a small 4px foot (DESIGN.md), not Chrome's
++// wide flare.
+ int TabStyle::GetTopCornerRadius() const {
+-  return 10;
++  return 8;
+ }
+ 
+ int TabStyle::GetBottomCornerRadius() const {
+-  return 12;
++  return 4;
+ }
+ 
+ int TabStyle::GetBottomExtensionWidth() const {
+diff --git a/chrome/browser/ui/views/tabs/common/tab_group_style.cc b/chrome/browser/ui/views/tabs/common/tab_group_style.cc
+index 9edd473305..f0e7d78a40 100644
+--- a/chrome/browser/ui/views/tabs/common/tab_group_style.cc
++++ b/chrome/browser/ui/views/tabs/common/tab_group_style.cc
+@@ -17,7 +17,8 @@ namespace {
+ constexpr int kHeaderChipVerticalInset = 2;
+ constexpr int kEmptyChipSize = 20;
+ constexpr int kFocusedChipHeight = 28;
+-constexpr int kCornerRadius = 6;
++// Perch: 8px group chips (DESIGN.md).
++constexpr int kCornerRadius = 8;
+ constexpr int kFocusedCornerRadius = 10;
+ constexpr int kVerticalCornerRadius = 8;
+ constexpr int kVerticalHeaderChipHorizontalInset = 8;

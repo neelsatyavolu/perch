@@ -1,0 +1,74 @@
+# Perch: 6px chips in the address bar, an empty bar on Perch's new tab page, and the Perch chip on perch:// pages.
+diff --git a/chrome/browser/ui/toolbar/chrome_location_bar_model_delegate.cc b/chrome/browser/ui/toolbar/chrome_location_bar_model_delegate.cc
+index bded739dc4..aefa685c02 100644
+--- a/chrome/browser/ui/toolbar/chrome_location_bar_model_delegate.cc
++++ b/chrome/browser/ui/toolbar/chrome_location_bar_model_delegate.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "chrome/browser/ui/toolbar/chrome_location_bar_model_delegate.h"
+ 
++#include "chrome/browser/perch/scheme/perch_scheme.h"
++
+ #include "base/check.h"
+ #include "base/feature_list.h"
+ #include "build/build_config.h"
+@@ -122,7 +124,9 @@ bool ChromeLocationBarModelDelegate::ShouldDisplayURL() const {
+   }
+ 
+   const auto is_ntp = [](const GURL& url) {
+-    return (url.SchemeIs(content::kChromeUIScheme) &&
++    // Perch: its new tab page leaves the address bar empty, like Chrome's.
++    return perch::IsPerchNewTabURL(url) ||
++           (url.SchemeIs(content::kChromeUIScheme) &&
+             url.host() == chrome::kChromeUINewTabHost) ||
+            url.spec() == chrome::kChromeUISplitViewNewTabPageURL;
+   };
+@@ -194,7 +198,8 @@ const gfx::VectorIcon* ChromeLocationBarModelDelegate::GetVectorIconOverride()
+     return &vector_icons::kGoogleColorIcon;
+   }
+ 
+-  if (url.SchemeIs(content::kChromeUIScheme)) {
++  if (url.SchemeIs(content::kChromeUIScheme) ||
++      url.SchemeIs(perch::kPerchScheme)) {
+     return &(features::IsRoundedIconsEnabled()
+                  ? omnibox::kChromeProductIcon
+                  : omnibox::kProductChromeRefreshOldIcon);
+diff --git a/chrome/browser/ui/views/location_bar/icon_label_bubble_view.cc b/chrome/browser/ui/views/location_bar/icon_label_bubble_view.cc
+index 8dc5172864..f841d3eb97 100644
+--- a/chrome/browser/ui/views/location_bar/icon_label_bubble_view.cc
++++ b/chrome/browser/ui/views/location_bar/icon_label_bubble_view.cc
+@@ -593,7 +593,10 @@ gfx::RoundedCornersF IconLabelBubbleView::GetCornerRadii() const {
+   if (radii_.has_value()) {
+     return radii_.value();
+   }
+-  return gfx::RoundedCornersF(GetPreferredSize().height() / 2);
++  // Perch: chips are small rounded rectangles inside the 8px address bar.
++  return gfx::RoundedCornersF(std::min<float>(
++      GetLayoutConstant(LayoutConstant::kLocationBarChildCornerRadius),
++      GetPreferredSize().height() / 2));
+ }
+ 
+ void IconLabelBubbleView::SetCornerRadii(const gfx::RoundedCornersF& radii) {
+diff --git a/chrome/browser/ui/views/location_bar/location_icon_state_helper.cc b/chrome/browser/ui/views/location_bar/location_icon_state_helper.cc
+index 2611503829..3281253aae 100644
+--- a/chrome/browser/ui/views/location_bar/location_icon_state_helper.cc
++++ b/chrome/browser/ui/views/location_bar/location_icon_state_helper.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "chrome/browser/ui/views/location_bar/location_icon_state_helper.h"
+ 
++#include "chrome/browser/perch/scheme/perch_scheme.h"
++
+ #include "build/branding_buildflags.h"
+ #include "chrome/browser/extensions/extension_ui_util.h"
+ #include "chrome/browser/ui/omnibox/omnibox_controller.h"
+@@ -42,7 +44,9 @@ std::u16string GetSecurityChipText(const LocationBarModel* model,
+     return std::u16string();
+   }
+ 
++  // Perch: perch:// pages are Perch's own, with the same chip.
+   if (model->GetURL().SchemeIs(content::kChromeUIScheme) ||
++      model->GetURL().SchemeIs(perch::kPerchScheme) ||
+       (contextual_tasks::ShouldShowExpandedSecurityChip() &&
+        model->IsContextualTasksPage())) {
+     return l10n_util::GetStringUTF16(IDS_SHORT_PRODUCT_NAME);

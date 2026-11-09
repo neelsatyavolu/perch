@@ -1,0 +1,87 @@
+# Perch: the tab menu groups sleep and Watch Party, keeps the close actions together, and gives Perch's rows icons.
+diff --git a/chrome/app/vector_icons/BUILD.gn b/chrome/app/vector_icons/BUILD.gn
+index d08b8c017e..6a9356bfcf 100644
+--- a/chrome/app/vector_icons/BUILD.gn
++++ b/chrome/app/vector_icons/BUILD.gn
+@@ -257,6 +257,7 @@ aggregate_vector_icons("chrome_vector_icons") {
+     "person_filled_padded_small_old.icon",
+     "picture_in_picture_alt.icon",
+     "picture_in_picture_alt_old.icon",
++    "perch_moon.icon",
+     "play_circle.icon",
+     "print.icon",
+     "print_menu_old.icon",
+diff --git a/chrome/browser/ui/tabs/tab_menu_model.cc b/chrome/browser/ui/tabs/tab_menu_model.cc
+index 64f2788d9c..4d0bbd8756 100644
+--- a/chrome/browser/ui/tabs/tab_menu_model.cc
++++ b/chrome/browser/ui/tabs/tab_menu_model.cc
+@@ -6,6 +6,7 @@
+ 
+ #include "chrome/browser/perch/extensions/watch_party.h"
+ #include "chrome/browser/perch/perch_command_ids.h"
++#include "chrome/browser/perch/toolbar/perch_profile_menu.h"
+ 
+ #include <memory>
+ #include <optional>
+@@ -700,31 +701,24 @@ void TabMenuModel::Build(int index) {
+   }
+ #endif
+ 
+-  // Separator Close Tab items
++  // Perch: sleep and Watch Party in their own group.
+   AddSeparator(ui::NORMAL_SEPARATOR);
+-  AddItemWithStringId(TabStripModel::CommandCloseTab, IDS_TAB_CXMENU_CLOSETAB);
+-  AddItemWithStringId(TabStripModel::CommandCloseOtherTabs,
+-                      IDS_TAB_CXMENU_CLOSEOTHERTABS);
+-  // Perch: tab tools.
+-  AddItem(IDC_PERCH_CLOSE_DUPLICATE_TABS, u"Close Duplicate Tabs");
+-  perch_close_older_submenu_ = std::make_unique<ui::SimpleMenuModel>(delegate());
+-  perch_close_older_submenu_->AddItem(IDC_PERCH_CLOSE_TABS_OLDER_THAN_DAY,
+-                                      u"1 Day");
+-  perch_close_older_submenu_->AddItem(IDC_PERCH_CLOSE_TABS_OLDER_THAN_WEEK,
+-                                      u"1 Week");
+-  perch_close_older_submenu_->AddItem(IDC_PERCH_CLOSE_TABS_OLDER_THAN_MONTH,
+-                                      u"1 Month");
+-  AddSubMenu(IDC_PERCH_CLOSE_TABS_OLDER_THAN_MENU, u"Close Tabs Older Than",
+-             perch_close_older_submenu_.get());
+-  AddItem(IDC_PERCH_SLEEP_TAB, u"Sleep Tab");
++  AddItemWithIcon(IDC_PERCH_SLEEP_TAB, u"Sleep Tab",
++                  perch::Icon(kPerchMoonIcon));
+   AddItem(IDC_PERCH_NEVER_SLEEP_SITE, u"Never Sleep This Site");
+   if (tab_interface_ &&
+       perch::CanStartWatchParty(
+           tab_strip_->profile(),
+           tab_interface_->GetContents()->GetLastCommittedURL())) {
+-    AddItem(IDC_PERCH_START_WATCH_PARTY, u"Start Watch Party");
++    AddItemWithIcon(IDC_PERCH_START_WATCH_PARTY, u"Start Watch Party",
++                    perch::Icon(kPlayCircleIcon));
+   }
+ 
++  // Separator Close Tab items
++  AddSeparator(ui::NORMAL_SEPARATOR);
++  AddItemWithStringId(TabStripModel::CommandCloseTab, IDS_TAB_CXMENU_CLOSETAB);
++  AddItemWithStringId(TabStripModel::CommandCloseOtherTabs,
++                      IDS_TAB_CXMENU_CLOSEOTHERTABS);
+   if (showing_vertical_tabs) {
+     AddItemWithStringId(TabStripModel::CommandCloseTabsToRight,
+                         IDS_TAB_CXMENU_CLOSETABSBELOW);
+@@ -737,6 +731,19 @@ void TabMenuModel::Build(int index) {
+                tab_strip_->IsContextMenuCommandEnabled(
+                    index,
+                    TabStripModel::CommandCloseTabsToRight));
++  // Perch: tab tools, with the other close actions.
++  AddItemWithIcon(IDC_PERCH_CLOSE_DUPLICATE_TABS, u"Close Duplicate Tabs",
++                  perch::Icon(kTabCloseIcon));
++  perch_close_older_submenu_ = std::make_unique<ui::SimpleMenuModel>(delegate());
++  perch_close_older_submenu_->AddItem(IDC_PERCH_CLOSE_TABS_OLDER_THAN_DAY,
++                                      u"1 Day");
++  perch_close_older_submenu_->AddItem(IDC_PERCH_CLOSE_TABS_OLDER_THAN_WEEK,
++                                      u"1 Week");
++  perch_close_older_submenu_->AddItem(IDC_PERCH_CLOSE_TABS_OLDER_THAN_MONTH,
++                                      u"1 Month");
++  AddSubMenuWithIcon(IDC_PERCH_CLOSE_TABS_OLDER_THAN_MENU,
++                     u"Close Tabs Older Than", perch_close_older_submenu_.get(),
++                     perch::Icon(kScheduleIcon));
+ }
+ 
+ DEFINE_CLASS_ELEMENT_IDENTIFIER_VALUE(TabMenuModel,

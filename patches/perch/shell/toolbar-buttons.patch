@@ -1,0 +1,60 @@
+# Perch: 8px toolbar button shapes, and native back, forward and reload menus on Mac.
+diff --git a/chrome/browser/ui/views/toolbar/toolbar_button.cc b/chrome/browser/ui/views/toolbar/toolbar_button.cc
+index 6f2feb0481..a96a273a1a 100644
+--- a/chrome/browser/ui/views/toolbar/toolbar_button.cc
++++ b/chrome/browser/ui/views/toolbar/toolbar_button.cc
+@@ -165,8 +165,8 @@ void ToolbarButton::ClearHighlight() {
+ }
+ 
+ int ToolbarButton::GetRoundedCornerRadius() const {
+-  return ChromeLayoutProvider::Get()->GetCornerRadiusMetric(
+-      views::Emphasis::kMaximum, GetTargetSize());
++  // Perch: 8px hover and press shapes, not circles (DESIGN.md).
++  return 8;
+ }
+ 
+ float ToolbarButton::GetCornerRadiusFor(ToolbarButton::Edge edge) const {
+@@ -618,6 +618,22 @@ void ToolbarButton::ShowMenuForModel(ui::mojom::MenuSourceType source_type,
+     return;
+   }
+ 
++#if BUILDFLAG(IS_MAC)
++  // Perch: a native menu with the system material, like Perch's other toolbar
++  // menus. It returns once the menu has closed.
++  base::WeakPtr<ToolbarButton> self = perch_menu_factory_.GetWeakPtr();
++  menu_runner_ = std::make_unique<views::MenuRunner>(
++      menu_model,
++      views::MenuRunner::CONTEXT_MENU | views::MenuRunner::HAS_MNEMONICS);
++  menu_runner_->RunMenuAt(
++      GetWidget(), nullptr,
++      gfx::Rect(menu_anchor_bounds.x(), menu_anchor_bounds.bottom() + 4, 0, 0),
++      views::MenuAnchorPosition::kTopLeft, source_type);
++  if (self) {
++    self->OnMenuClosed();
++  }
++  return;
++#else
+   // Create and run menu.
+   menu_model_adapter_ = std::make_unique<views::MenuModelAdapter>(
+       menu_model, base::BindRepeating(&ToolbarButton::OnMenuClosed,
+@@ -629,6 +645,7 @@ void ToolbarButton::ShowMenuForModel(ui::mojom::MenuSourceType source_type,
+       std::move(root), views::MenuRunner::HAS_MNEMONICS);
+   menu_runner_->RunMenuAt(GetWidget(), nullptr, menu_anchor_bounds,
+                           views::MenuAnchorPosition::kTopLeft, source_type);
++#endif
+ }
+ 
+ void ToolbarButton::OnMenuClosed() {
+diff --git a/chrome/browser/ui/views/toolbar/toolbar_button.h b/chrome/browser/ui/views/toolbar/toolbar_button.h
+index d07788186e..cb1320b42f 100644
+--- a/chrome/browser/ui/views/toolbar/toolbar_button.h
++++ b/chrome/browser/ui/views/toolbar/toolbar_button.h
+@@ -391,6 +391,8 @@ class ToolbarButton : public views::LabelButton,
+ 
+   // A factory for tasks that show the dropdown context menu for the button.
+   base::WeakPtrFactory<ToolbarButton> show_menu_factory_{this};
++  // Perch: outlives a native dropdown menu's nested run loop.
++  base::WeakPtrFactory<ToolbarButton> perch_menu_factory_{this};
+ };
+ 
+ class ToolbarButtonActionViewInterface

@@ -42,6 +42,7 @@
 #include "ui/views/layout/box_layout_view.h"
 #include "ui/views/style/typography.h"
 #include "ui/views/view.h"
+#include "ui/views/view_utils.h"
 #include "ui/views/widget/widget.h"
 
 namespace perch {
@@ -75,6 +76,7 @@ class ExtensionsPanel : public views::View,
     AddChildView(
         Command(IDC_FIND_EXTENSIONS, u"Get Extensions", kOpenInNewIcon));
     if (!model_ || model_->action_ids().empty()) {
+      PlainText(this);
       return;
     }
     observation_.Observe(model_.get());
@@ -120,6 +122,7 @@ class ExtensionsPanel : public views::View,
         views::ScrollView::ScrollBarMode::kDisabled);
     scroll->SetBackgroundColor(std::nullopt);
     scroll->SetContents(std::move(list));
+    PlainText(this);
   }
 
   // ToolbarActionsModel::Observer: the list is short-lived, so a change to
@@ -158,6 +161,16 @@ class ExtensionsPanel : public views::View,
         base::BindRepeating(&ExtensionsPanel::Run, base::Unretained(this),
                             command),
         RowIcon(icon), label);
+  }
+
+  // The panel's background is see-through, where subpixel text can't be drawn.
+  static void PlainText(views::View* view) {
+    if (auto* label = views::AsViewClass<views::Label>(view)) {
+      label->SetSubpixelRenderingEnabled(false);
+    }
+    for (views::View* child : view->children()) {
+      PlainText(child);
+    }
   }
 
   void Run(int command) {

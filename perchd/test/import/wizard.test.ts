@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync, readFileSync, statSync, symlinkSync } from "node:
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { BUNDLED_MESSAGE } from "../../src/import/apply";
-import { readAsideChats, readAsideMemory, readAsideSkills } from "../../src/import/aside";
+import { readAsideChats, asideSaid, readAsideMemory, readAsideSkills } from "../../src/import/aside";
 import { BUNDLE_SERVICE, discardBundle, openBundle, pendingBundles, sealBundle } from "../../src/import/bundle";
 import { readChromeBookmarks } from "../../src/import/chrome/bookmarks";
 import { readChromeHistory } from "../../src/import/chrome/history";
@@ -225,4 +225,13 @@ test("files: a password CSV goes to the bundle, a bookmarks HTML file is written
     { kind: "folder", title: "Imported from bookmarks.html", added: expect.any(Number), children: [{ kind: "url", title: "X", url: "https://x.example.com/", added: expect.any(Number) }] },
   ]);
   await expect(importFile({ path: join(env.home, "x.exe"), target: { userDataDir: perch }, keychain })).rejects.toMatchObject({ reason: "invalid" });
+});
+
+test("Aside stores each side of a turn as a message list; only what was said is kept", () => {
+  expect(asideSaid("plain text", "user")).toBe("plain text");
+  expect(asideSaid('[{"role":"assistant","content":[{"type":"text","text":"One."},{"type":"tool_use","id":"t"},{"type":"text","text":"Two."}]}]', "assistant")).toBe("One.\n\nTwo.");
+  expect(asideSaid('[{"role":"system-message","content":"hidden"},{"role":"user-message-metadata"},{"role":"user","content":"Find flights"}]', "user")).toBe("Find flights");
+  expect(asideSaid('[{"role":"system-message","content":"hidden"}]', "user")).toBe("");
+  expect(asideSaid("[1, 2] is a list", "user")).toBe("[1, 2] is a list");
+  expect(asideSaid(null, "assistant")).toBe("");
 });

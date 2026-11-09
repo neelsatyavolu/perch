@@ -18,6 +18,10 @@
 #include "chrome/browser/perch/agent/perchd_launcher.h"
 #include "content/public/browser/web_ui_data_source.h"
 #include "services/network/public/mojom/content_security_policy.mojom.h"
+#include "chrome/browser/perch/webui/perch_chat_ui.h"
+#include "chrome/browser/perch/webui/perch_side_chat_ui.h"
+#include "url/gurl.h"
+#include "url/origin.h"
 
 namespace perch {
 
@@ -107,6 +111,11 @@ void HandleRequest(const std::string& default_page,
 }
 
 }  // namespace
+
+bool IsPerchLoopbackOrigin(const url::Origin& origin) {
+  return origin.IsSameOriginWith(GURL(kChatFrameURL)) ||
+         origin.IsSameOriginWith(GURL(kSideChatURL));
+}
 
 base::FilePath PagesDir() {
   base::FilePath dir =

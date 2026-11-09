@@ -12,6 +12,10 @@ namespace content {
 class WebUIDataSource;
 }
 
+namespace url {
+class Origin;
+}
+
 namespace perch {
 
 enum class PageKind {
@@ -31,6 +35,11 @@ enum class PageKind {
 void ServePerchPages(content::WebUIDataSource* source,
                      std::string_view default_page,
                      PageKind kind);
+
+// Whether `origin` is one of Perch's two chat pages, which talk to perchd on
+// this Mac. Chromium asks before a page may reach a loopback address and
+// can't ask on these pages; ChromeContentBrowserClient lets these through.
+bool IsPerchLoopbackOrigin(const url::Origin& origin);
 
 // Where ui-pages/dist is: --perch-pages-dir, else Resources/perch_pages.
 base::FilePath PagesDir();

@@ -1,0 +1,27 @@
+# Perch: Perch's own chat pages may reach the agent on this Mac without the local network prompt.
+diff --git a/chrome/browser/chrome_content_browser_client.cc b/chrome/browser/chrome_content_browser_client.cc
+index a67b1a69e7..ec013be4a5 100644
+--- a/chrome/browser/chrome_content_browser_client.cc
++++ b/chrome/browser/chrome_content_browser_client.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "chrome/browser/chrome_content_browser_client.h"
+ 
++#include "chrome/browser/perch/webui/perch_ui_source.h"
++
+ #include "chrome/browser/perch/agent/artifact_scheme.h"
+ 
+ #include <algorithm>
+@@ -8483,6 +8485,12 @@ ChromeContentBrowserClient::ShouldOverrideLocalNetworkAccessRequestPolicy(
+   }
+ #endif
+ 
++  // Perch: its own chat pages reach the agent on this Mac.
++  if (perch::IsPerchLoopbackOrigin(origin)) {
++    return content::ContentBrowserClient::
++        LocalNetworkAccessRequestPolicyOverride::kForceAllow;
++  }
++
+   Profile* profile = Profile::FromBrowserContext(browser_context);
+ 
+   // The opt-out preference below is only registered for profiles that support

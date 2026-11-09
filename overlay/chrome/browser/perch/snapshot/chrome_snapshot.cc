@@ -62,6 +62,9 @@
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
+#include "chrome/browser/ui/views/toolbar/toolbar_view.h"
+#include "chrome/browser/ui/views/extensions/extensions_toolbar_desktop.h"
+#include "chrome/browser/ui/views/extensions/extensions_toolbar_button.h"
 #include "extensions/browser/extension_registry.h"
 #include "components/autofill/core/browser/data_manager/addresses/address_data_manager.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
@@ -211,6 +214,13 @@ class Snapshotter {
       }
     } else if (state == "panel") {
       SidePanelUI::From(browser_)->Show(SidePanelEntryId::kPerch);
+    } else if (state == "extensions-panel") {
+      // Opens Perch's extensions list from its toolbar button.
+      BrowserView::GetBrowserViewForBrowser(browser_)
+          ->toolbar()
+          ->extensions_container_for_testing()
+          ->GetExtensionsButton()
+          ->ToggleExtensionsMenu();
     } else if (state == "hidden-chrome") {
       prefs->SetBoolean(prefs::kAppearanceHideChrome, true);
       // The address bar has focus in a new window, which shows the bars.

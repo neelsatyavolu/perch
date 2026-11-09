@@ -6,6 +6,7 @@
 
 import type { Pointer } from "bun:ffi";
 import { addPassword, deletePassword, readPassword, writePassword } from "./mac-security";
+import { ownService } from "./service-name";
 
 export interface SecretStore {
   get(account: string): Promise<string | null>;
@@ -57,8 +58,9 @@ export class MacKeychain implements SecretStore {
 
   /** keychain: a keychain file opened by mac-security (tests); by default the login keychain. */
   constructor(opts: { service?: string; keychain?: Pointer } = {}) {
-    this.service = opts.service ?? "Perch";
-    if (!SERVICE.test(this.service)) throw new Error("not a valid Keychain service name");
+    const service = opts.service ?? "Perch";
+    if (!SERVICE.test(service)) throw new Error("not a valid Keychain service name");
+    this.service = ownService(service);
     this.keychain = opts.keychain ?? null;
   }
 

@@ -18,8 +18,9 @@ import { join } from "node:path";
 import type { Keychain } from "./keychain";
 import { ImportError, type ImportData } from "./types";
 import { writeAtomically } from "./write/atomic";
+import { ownService } from "../secure/service-name";
 
-export const BUNDLE_SERVICE = "Perch Import";
+export const BUNDLE_SERVICE = ownService("Perch Import");
 const MAGIC = Buffer.from("PRCHIMP1");
 const SUFFIX = ".perchimport";
 

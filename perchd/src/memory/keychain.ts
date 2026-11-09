@@ -4,6 +4,8 @@
  * Tests use mockKeychain(); no test touches the user's Keychain.
  */
 
+import { ownService } from "../secure/service-name";
+
 export interface KeyStore {
   get(account: string): Promise<string | null>;
   set(account: string, secret: string): Promise<void>;
@@ -13,7 +15,7 @@ export interface KeyStore {
 export type SecurityResult = { code: number; stdout: string; stderr: string };
 export type SecurityRunner = (args: string[], stdin?: string) => Promise<SecurityResult>;
 
-const SERVICE = "Perch";
+const SERVICE = ownService("Perch");
 const NOT_FOUND = 44;
 /** security -i splits commands on spaces, so names and secrets must not contain any. */
 const ACCOUNT = /^[A-Za-z0-9_.:-]{1,128}$/;

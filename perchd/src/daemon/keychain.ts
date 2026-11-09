@@ -3,6 +3,8 @@
  * interactive mode with commands on stdin, so a token never appears in a process list.
  */
 
+import { ownService } from "../secure/service-name";
+
 export interface Keychain {
   get(account: string): Promise<string | null>;
   set(account: string, secret: string): Promise<void>;
@@ -33,7 +35,10 @@ function checkAccount(account: string): void {
 }
 
 export class MacKeychain implements Keychain {
-  constructor(readonly service = "Perch clients", private readonly run: Runner = runSecurity) {}
+  readonly service: string;
+  constructor(service = "Perch clients", private readonly run: Runner = runSecurity) {
+    this.service = ownService(service);
+  }
 
   async get(account: string): Promise<string | null> {
     checkAccount(account);

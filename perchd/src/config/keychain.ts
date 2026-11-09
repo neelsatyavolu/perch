@@ -11,6 +11,7 @@
  */
 
 import { secrets } from "bun";
+import { ownService } from "../secure/service-name";
 
 export interface Keychain {
   get(name: string): Promise<string | null>;
@@ -18,7 +19,7 @@ export interface Keychain {
   delete(name: string): Promise<boolean>;
 }
 
-export const KEYCHAIN_SERVICE = "com.perch.perchd";
+export const KEYCHAIN_SERVICE = ownService("com.perch.perchd");
 const NAME = /^[a-z0-9][a-z0-9:._-]{0,127}$/;
 const MAX_VALUE = 64 * 1024;
 

@@ -8,13 +8,15 @@
  * Perch's code signature needs a signed Perch binary (Chromium track); see plan 7, Deferred.
  */
 
+import { ownService } from "../secure/service-name";
+
 export type SecretStore = {
   get(name: string): Promise<string | null>;
   set(name: string, value: string): Promise<void>;
   delete(name: string): Promise<void>;
 };
 
-export const KEYCHAIN_SERVICE = "co.xanom.perch.sync";
+export const KEYCHAIN_SERVICE = ownService("co.xanom.perch.sync");
 export const SECRET_NAMES = ["session-token", "device-keys", "sync-keys", "recovery-public-key"] as const;
 
 export type Runner = (args: string[], stdin?: string) => Promise<{ code: number; stdout: string }>;

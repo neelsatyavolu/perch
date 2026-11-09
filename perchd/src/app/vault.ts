@@ -7,8 +7,9 @@
  */
 
 import type { Keychain } from "./keychain";
+import { ownService } from "../secure/service-name";
 
-const SERVICE = "Perch Data Key";
+const SERVICE = ownService("Perch Data Key");
 const VERSION = 1;
 const IV_BYTES = 12;
 const KEY_BYTES = 32;

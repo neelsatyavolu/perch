@@ -21,6 +21,7 @@ import { join } from "node:path";
 import { syncAllowed, syncBaseUrl, type PolicyView } from "../policy/policy";
 import { MacKeychain, type SecretStore as SealKeychain } from "../secure/keychain";
 import { dataKey, readSealedJson, writeSealedJson } from "../secure/sealed";
+import { KEYCHAIN_SERVICE } from "./keychain";
 
 export const SYNC_INTERVAL_MS = 15 * 60_000;
 
@@ -229,7 +230,7 @@ export function sealedStateFile(path: string, keychain: SealKeychain): StateFile
  * and the company policy allows it. Returns the service (for Settings › Sync) and a stop function.
  */
 export function startBrowserSync(opts: { domain: Domain; dataDir: string; policy?: PolicyView; keychain?: SealKeychain; deviceName?: string }): { sync: BrowserSync; stop: () => void } {
-  const keychain = opts.keychain ?? new MacKeychain({ service: "co.xanom.perch.sync" });
+  const keychain = opts.keychain ?? new MacKeychain({ service: KEYCHAIN_SERVICE });
   const policy = () => opts.policy?.current() ?? {};
   const sync = new BrowserSync({
     domain: opts.domain,

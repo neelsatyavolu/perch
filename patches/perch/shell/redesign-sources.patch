@@ -1,0 +1,14 @@
+# Perch: builds Perch's extensions menu.
+diff --git a/chrome/browser/ui/browser_window/internal/BUILD.gn b/chrome/browser/ui/browser_window/internal/BUILD.gn
+index a14319812b..6b38282116 100644
+--- a/chrome/browser/ui/browser_window/internal/BUILD.gn
++++ b/chrome/browser/ui/browser_window/internal/BUILD.gn
+@@ -144,6 +144,8 @@ source_set("internal") {
+       "//chrome/browser/perch/spaces/spaces.h",
+       "//chrome/browser/perch/spaces/spaces_button.mm",
+       "//chrome/browser/perch/tab_tools/tab_tools.cc",
++      "//chrome/browser/perch/toolbar/perch_extensions_menu.cc",
++      "//chrome/browser/perch/toolbar/perch_extensions_menu.h",
+       "//chrome/browser/perch/toolbar/perch_profile_menu.cc",
+       "//chrome/browser/perch/toolbar/perch_profile_menu.h",
+       "//chrome/browser/perch/tab_tools/tab_tools.h",

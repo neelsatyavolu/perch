@@ -24,6 +24,11 @@
 #include "ui/views/controls/button/label_button.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/controls/menu/menu_runner.h"
+#include "ui/base/models/image_model.h"
+#include "ui/views/border.h"
+#include "ui/views/controls/highlight_path_generator.h"
+#include "ui/views/animation/ink_drop.h"
+#include "components/vector_icons/vector_icons.h"
 #include "ui/views/layout/flex_layout_types.h"
 #include "ui/views/view_class_properties.h"
 
@@ -105,7 +110,8 @@ class SpacesMenuModel : public ui::SimpleMenuModel,
   std::vector<SpaceInfo> spaces_;
 };
 
-// The space's name in 13 px text with a chevron; a press opens the menu.
+// The active space as a quiet chip at the start of the tab strip: its name,
+// then a chevron icon centred beside it; a press opens the menu.
 class SpacesButton : public views::LabelButton {
   METADATA_HEADER(SpacesButton, views::LabelButton)
 
@@ -116,10 +122,27 @@ class SpacesButton : public views::LabelButton {
                                 base::Unretained(this))),
         browser_(browser) {
     label()->SetFontList(gfx::FontList().DeriveWithSizeDelta(
-        13 - gfx::FontList().GetFontSize()));
+        12 - gfx::FontList().GetFontSize()));
     // The tab strip draws on a see-through layer.
     label()->SetSubpixelRenderingEnabled(false);
     SetEnabledTextColors(kColorTabForegroundInactiveFrameActive);
+    // The chevron follows the name and sits on its centre line.
+    SetImageModel(views::Button::STATE_NORMAL,
+                  ui::ImageModel::FromVectorIcon(
+                      vector_icons::kKeyboardArrowDownIcon,
+                      kColorTabForegroundInactiveFrameActive, 14));
+    SetHorizontalAlignment(gfx::ALIGN_RIGHT);
+    SetImageLabelSpacing(2);
+    SetBorder(views::CreateEmptyBorder(gfx::Insets::TLBR(0, 8, 0, 4)));
+    SetMinSize(gfx::Size(0, 26));
+    SetMaxSize(gfx::Size(160, 26));
+    // An 8 px rounded fill on hover and press, like the strip's other
+    // controls.
+    views::InstallRoundRectHighlightPathGenerator(this, gfx::Insets(), 8);
+    views::InkDrop::Get(this)->SetMode(views::InkDropHost::InkDropMode::ON);
+    views::InkDrop::Get(this)->SetBaseColor(kColorTabForegroundInactiveFrameActive);
+    views::InkDrop::Get(this)->SetHighlightOpacity(0.08f);
+    views::InkDrop::Get(this)->SetVisibleOpacity(0.12f);
     SetTooltipText(u"Spaces");
     SetProperty(views::kCrossAxisAlignmentKey,
                 views::LayoutAlignment::kCenter);
@@ -134,7 +157,7 @@ class SpacesButton : public views::LabelButton {
 
  private:
   void UpdateName() {
-    SetText(ActiveSpaceName(browser_->GetProfile()) + u" ⌄");
+    SetText(ActiveSpaceName(browser_->GetProfile()));
   }
 
   void ShowMenu() {

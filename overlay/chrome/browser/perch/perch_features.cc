@@ -11,6 +11,7 @@
 #include "components/omnibox/common/omnibox_features.h"
 #include "components/optimization_guide/core/optimization_guide_features.h"
 #include "components/safe_browsing/core/common/features.h"
+#include "components/sync/base/features.h"
 #include "extensions/common/extension_features.h"
 #include "media/base/media_switches.h"
 #include "services/network/public/cpp/features.h"
@@ -43,6 +44,8 @@ const base::Feature* const kDisabled[] = {
     &optimization_guide::features::kOptimizationHints,
     &safe_browsing::kHashPrefixRealTimeLookups,
     &network_time::kNetworkTimeServiceQuerying,
+    // Google sync promos (history and elsewhere): Perch syncs its own way.
+    &syncer::kUnoPhase2FollowUp,
 };
 
 }  // namespace

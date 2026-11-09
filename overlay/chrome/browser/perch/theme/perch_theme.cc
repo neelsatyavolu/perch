@@ -114,6 +114,8 @@ void AddPerchMixer(ui::ColorProvider* provider,
   // Elevated: the address bar.
   m[kColorLocationBarBackground] = {t->raised};
   m[kColorLocationBarBackgroundHovered] = {Over(t->hair_strong, t->raised)};
+  m[kColorLocationBarBorder] = {Over(t->hair_strong, t->card)};
+  m[kColorLocationBarBorderOpaque] = {Over(t->hair_strong, t->card)};
   // Text and icons.
   for (ui::ColorId id : std::initializer_list<ui::ColorId>{kColorTabForegroundActiveFrameActive,
         kColorTabForegroundActiveFrameInactive, kColorOmniboxText,
@@ -184,6 +186,87 @@ void AddPerchMixer(ui::ColorProvider* provider,
   m[kColorOmniboxResultsUrl] = {accent};
   m[kColorOmniboxResultsUrlSelected] = {accent};
   m[kColorOmniboxSelectionBackground] = {tint};
+
+  // Chromium's Material system colours, which its bubbles, dialogs, menus
+  // and own pages (history, downloads, extensions, settings) all derive
+  // from: Perch's tokens, so every surface is one design.
+  const SkColor hair_on_card = Over(t->hair, t->card);
+  const SkColor strong_on_card = Over(t->hair_strong, t->card);
+  for (ui::ColorId id : std::initializer_list<ui::ColorId>{
+           ui::kColorSysBase, ui::kColorSysHeader, ui::kColorSysHeaderInactive}) {
+    m[id] = {t->canvas};
+  }
+  for (ui::ColorId id : std::initializer_list<ui::ColorId>{
+           ui::kColorSysSurface, ui::kColorSysSurfaceContainerLowest,
+           ui::kColorSysSurfaceContainerLow, ui::kColorSysBaseContainer,
+           ui::kColorSysHeaderContainer, ui::kColorSysHeaderContainerInactive,
+           ui::kColorSysSurfaceSection}) {
+    m[id] = {t->card};
+  }
+  for (ui::ColorId id : std::initializer_list<ui::ColorId>{
+           ui::kColorSysSurfaceContainer, ui::kColorSysSurfaceContainerHigh,
+           ui::kColorSysSurfaceContainerHighest, ui::kColorSysSurfaceVariant,
+           ui::kColorSysBaseContainerElevated, ui::kColorSysNeutralContainer,
+           ui::kColorSysSecondaryContainer, ui::kColorSysOmniboxContainer,
+           ui::kColorSysBaseContainerOnSurface}) {
+    m[id] = {t->raised};
+  }
+  for (ui::ColorId id : std::initializer_list<ui::ColorId>{
+           ui::kColorSysOnSurface, ui::kColorSysOnHeaderPrimary,
+           ui::kColorSysOnHeaderPrimaryInactive,
+           ui::kColorSysOnSecondaryContainer, ui::kColorSysOnPrimaryContainer,
+           ui::kColorSysOnTonalContainer, ui::kColorSysOnBaseTonalContainer,
+           ui::kColorSysOnSurfacePrimary}) {
+    m[id] = {t->ink};
+  }
+  for (ui::ColorId id : std::initializer_list<ui::ColorId>{
+           ui::kColorSysOnSurfaceSecondary, ui::kColorSysOnSurfaceVariant,
+           ui::kColorSysOnSurfacePrimaryInactive}) {
+    m[id] = {body};
+  }
+  m[ui::kColorSysOnSurfaceSubtle] = {Over(t->mute, t->card)};
+  for (ui::ColorId id : std::initializer_list<ui::ColorId>{
+           ui::kColorSysDivider, ui::kColorSysNeutralOutline,
+           ui::kColorSysTonalOutline, ui::kColorSysOnHeaderDivider,
+           ui::kColorSysOnHeaderDividerInactive}) {
+    m[id] = {hair_on_card};
+  }
+  m[ui::kColorSysOutline] = {strong_on_card};
+  for (ui::ColorId id : std::initializer_list<ui::ColorId>{
+           ui::kColorSysPrimary, ui::kColorSysStateFocusRing,
+           ui::kColorSysGradientPrimary}) {
+    m[id] = {accent};
+  }
+  for (ui::ColorId id : std::initializer_list<ui::ColorId>{
+           ui::kColorSysPrimaryContainer, ui::kColorSysTonalContainer,
+           ui::kColorSysBaseTonalContainer, ui::kColorSysStateTextHighlight}) {
+    m[id] = {tint};
+  }
+  for (ui::ColorId id : std::initializer_list<ui::ColorId>{
+           ui::kColorSysStateHover, ui::kColorSysStateHoverOnSubtle,
+           ui::kColorSysStateHeaderHover, ui::kColorSysStateHeaderHoverInactive}) {
+    m[id] = {t->hair};
+  }
+  for (ui::ColorId id : std::initializer_list<ui::ColorId>{
+           ui::kColorSysStatePressed, ui::kColorSysStateHeaderSelect}) {
+    m[id] = {t->hair_strong};
+  }
+
+  // Prominent buttons use the theme's own button colours (an off-white on
+  // dark themes), not Material blue; menus and bubbles sit on the raised and
+  // card surfaces with hairline edges.
+  m[ui::kColorButtonBackgroundProminent] = {t->button_bg};
+  m[ui::kColorButtonForegroundProminent] = {t->button_fg};
+  m[ui::kColorButtonBorder] = {strong_on_card};
+  for (ui::ColorId id : std::initializer_list<ui::ColorId>{
+           ui::kColorDialogBackground, ui::kColorBubbleBackground,
+           ui::kColorBubbleFooterBackground}) {
+    m[id] = {t->card};
+  }
+  m[ui::kColorBubbleBorder] = {strong_on_card};
+  m[ui::kColorMenuBackground] = {t->raised};
+  m[ui::kColorMenuItemBackgroundHighlighted] = {Over(t->hair_strong, t->raised)};
+  m[ui::kColorMenuSeparator] = {Over(t->hair, t->raised)};
 
   // No rules between the toolbar's buttons: the gaps group them (DESIGN.md).
   m[kColorToolbarExtensionSeparatorEnabled] = {SK_ColorTRANSPARENT};

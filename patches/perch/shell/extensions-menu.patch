@@ -1,0 +1,25 @@
+# Perch: the extensions button opens Perch's extensions list.
+diff --git a/chrome/browser/ui/views/extensions/extensions_toolbar_button.cc b/chrome/browser/ui/views/extensions/extensions_toolbar_button.cc
+index 8fc27552d9..9b04872c2f 100644
+--- a/chrome/browser/ui/views/extensions/extensions_toolbar_button.cc
++++ b/chrome/browser/ui/views/extensions/extensions_toolbar_button.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "chrome/browser/ui/views/extensions/extensions_toolbar_button.h"
+ 
++#include "chrome/browser/perch/toolbar/perch_extensions_menu.h"
++
+ #include "base/feature_list.h"
+ #include "base/metrics/user_metrics.h"
+ #include "base/metrics/user_metrics_action.h"
+@@ -144,6 +146,10 @@ void ExtensionsToolbarButton::OnWidgetDestroying(views::Widget* widget) {
+ }
+ 
+ void ExtensionsToolbarButton::ToggleExtensionsMenu() {
++  // Perch: the button opens Perch's extensions list.
++  if (perch::ShowPerchExtensionsMenu(browser_, this)) {
++    return;
++  }
+   if (extensions_menu_coordinator_ &&
+       extensions_menu_coordinator_->IsShowing()) {
+     extensions_menu_coordinator_->Hide();

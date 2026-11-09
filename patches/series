@@ -68,3 +68,6 @@ perch/shell/restore-sources.patch
 perch/agent/microphone-usage.patch
 perch/shell/perch-menus.patch
 perch/shell/cookie-icon.patch
+perch/shell/redesign-sources.patch
+perch/shell/address-bar.patch
+perch/shell/extensions-menu.patch

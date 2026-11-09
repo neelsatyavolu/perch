@@ -1,0 +1,83 @@
+# Perch: an 8px address bar with a hairline edge, and its suggestions in the same shape with no accent bar.
+diff --git a/chrome/browser/resources/omnibox_popup/omnibox_popup_searchbox.css b/chrome/browser/resources/omnibox_popup/omnibox_popup_searchbox.css
+index 3dc4074dbd..4a9e23a1e2 100644
+--- a/chrome/browser/resources/omnibox_popup/omnibox_popup_searchbox.css
++++ b/chrome/browser/resources/omnibox_popup/omnibox_popup_searchbox.css
+@@ -12,7 +12,8 @@
+ 
+ :host {
+   --cr-searchbox-icon-top-position: 0;
+-  --cr-searchbox-border-radius: calc(0.5 * var(--cr-searchbox-height));
++  /* Perch: 8px, the same as the address bar (DESIGN.md). */
++  --cr-searchbox-border-radius: 8px;
+   --cr-searchbox-font-size: var(--omnibox-primary-font-size);
+   --cr-searchbox-height: var(--location-bar-height);
+   --cr-searchbox-icon-size-in-searchbox: var(--location-bar-icon-size);
+diff --git a/chrome/browser/ui/views/location_bar/location_bar_view.cc b/chrome/browser/ui/views/location_bar/location_bar_view.cc
+index 972bd7bc04..6894ec7053 100644
+--- a/chrome/browser/ui/views/location_bar/location_bar_view.cc
++++ b/chrome/browser/ui/views/location_bar/location_bar_view.cc
+@@ -525,8 +525,8 @@ int LocationBarView::GetBorderRadius() const {
+ 
+ // static
+ int LocationBarView::ComputeBorderRadius(gfx::Size size) {
+-  return ChromeLayoutProvider::Get()->GetCornerRadiusMetric(
+-      views::Emphasis::kMaximum, size);
++  // Perch: an 8px field, not a pill (DESIGN.md), matching its suggestions.
++  return 8;
+ }
+ 
+ // static
+@@ -1416,7 +1416,8 @@ void LocationBarView::RefreshBackground() {
+     background_color_ = gfx::Tween::ColorValueBetween(opacity, normal, hovered);
+   }
+ 
+-  SkColor border_color = SK_ColorTRANSPARENT;
++  // Perch: a hairline edge always, as a field reads in DESIGN.md.
++  SkColor border_color = color_provider->GetColor(kColorLocationBarBorder);
+   if (high_contrast) {
+     // High contrast schemes get a border stroke even on a rounded omnibox.
+     border_color =
+diff --git a/ui/webui/resources/cr_components/searchbox/searchbox_dropdown.css b/ui/webui/resources/cr_components/searchbox/searchbox_dropdown.css
+index 8ea2646507..a43bce5453 100644
+--- a/ui/webui/resources/cr_components/searchbox/searchbox_dropdown.css
++++ b/ui/webui/resources/cr_components/searchbox/searchbox_dropdown.css
+@@ -16,7 +16,8 @@
+ 
+ #content {
+   background-color: var(--color-searchbox-results-background);
+-  border-radius: calc(0.5 * var(--cr-searchbox-height));
++  /* Perch: the address bar's 8px radius carries on into its suggestions. */
++  border-radius: var(--cr-searchbox-border-radius, 8px);
+   box-shadow: var(--cr-searchbox-shadow);
+   display: flex;
+   gap: 16px;
+diff --git a/ui/webui/resources/cr_components/searchbox/searchbox_match.css b/ui/webui/resources/cr_components/searchbox/searchbox_match.css
+index ffb7f79a23..cc20bacc7c 100644
+--- a/ui/webui/resources/cr_components/searchbox/searchbox_match.css
++++ b/ui/webui/resources/cr_components/searchbox/searchbox_match.css
+@@ -72,9 +72,10 @@
+ }
+ 
+ :host(:not([is-lens-searchbox_])) .container:not(.actions) {
+-  margin-inline-end: 16px;
+-  border-start-end-radius: 24px;
+-  border-end-end-radius: 24px;
++  /* Perch: rows are inset with an even 8px radius (DESIGN.md), not half
++     pills against a focus bar. */
++  margin-inline: 8px;
++  border-radius: 8px;
+ }
+ 
+ :host-context([has-secondary-side]):host-context([can-show-secondary-side]) .container:not(.actions) {
+@@ -143,9 +144,7 @@
+ }
+ 
+ /* Focus indicator only shown for vertically rendered matches. */
+-:host-context(.vertical):host(:is(:focus-visible, [selected]:not(:focus-within))) #focusIndicator:not(.selected-within) {
+-  display: block;
+-}
++/* Perch: the selected row's fill is the indicator; no accent bar. */
+ 
+ :host-context(cr-searchbox-match:-webkit-any(:focus-within, [selected])) #icon {
+   --color-searchbox-search-icon-background:

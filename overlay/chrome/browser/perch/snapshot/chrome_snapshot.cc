@@ -47,6 +47,10 @@
 #include "chrome/browser/translate/chrome_translate_client.h"
 #include "components/translate/core/browser/translate_manager.h"
 #include "chrome/browser/ui/browser_commands.h"
+#include "ui/shell_dialogs/selected_file_info.h"
+#include "ui/shell_dialogs/select_file_policy.h"
+#include "ui/shell_dialogs/select_file_dialog_factory.h"
+#include "ui/shell_dialogs/select_file_dialog.h"
 #include "components/keyed_service/core/service_access_type.h"
 #include "components/password_manager/core/browser/password_store/password_store_interface.h"
 #include "components/password_manager/core/browser/password_store/stored_credential.h"
@@ -75,6 +79,71 @@ namespace perch {
 namespace {
 
 constexpr char kSnapshotSwitch[] = "perch-chrome-snapshot";
+
+// Off-screen tests: --perch-test-pick-file=<path> answers every open or save
+// panel with that path at once, so no panel ever opens on the screen.
+constexpr char kTestPickFileSwitch[] = "perch-test-pick-file";
+
+class PickedFileDialog : public ui::SelectFileDialog {
+ public:
+  PickedFileDialog(Listener* listener,
+                   std::unique_ptr<ui::SelectFilePolicy> policy,
+                   base::FilePath file)
+      : ui::SelectFileDialog(listener, std::move(policy)),
+        file_(std::move(file)) {}
+
+  bool IsRunning(gfx::NativeWindow owning_window) const override {
+    return false;
+  }
+  void ListenerDestroyed() override { listener_ = nullptr; }
+
+ protected:
+  void SelectFileImpl(Type type,
+                      const std::u16string& title,
+                      const base::FilePath& default_path,
+                      const FileTypeInfo* file_types,
+                      int file_type_index,
+                      const base::FilePath::StringType& default_extension,
+                      gfx::NativeWindow owning_window,
+                      const GURL* caller) override {
+    LOG(WARNING) << "Perch test: file panel '" << title << "' answered with "
+                 << file_.value();
+    if (listener_) {
+      listener_->FileSelected(ui::SelectedFileInfo(file_), 0);
+    }
+  }
+  bool HasMultipleFileTypeChoicesImpl() override { return false; }
+
+ private:
+  ~PickedFileDialog() override = default;
+  base::FilePath file_;
+};
+
+class PickedFileFactory : public ui::SelectFileDialogFactory {
+ public:
+  explicit PickedFileFactory(base::FilePath file) : file_(std::move(file)) {}
+  ui::SelectFileDialog* Create(
+      ui::SelectFileDialog::Listener* listener,
+      std::unique_ptr<ui::SelectFilePolicy> policy) override {
+    return new PickedFileDialog(listener, std::move(policy), file_);
+  }
+
+ private:
+  base::FilePath file_;
+};
+
+void MaybeInstallTestFilePicker() {
+  static bool installed = false;
+  const base::CommandLine* command_line =
+      base::CommandLine::ForCurrentProcess();
+  if (installed || !command_line->HasSwitch(kTestPickFileSwitch)) {
+    return;
+  }
+  installed = true;
+  ui::SelectFileDialog::SetFactory(std::make_unique<PickedFileFactory>(
+      command_line->GetSwitchValuePath(kTestPickFileSwitch)));
+}
+
 constexpr char kStatesSwitch[] = "perch-snapshot-states";
 constexpr base::TimeDelta kSettle = base::Milliseconds(1500);
 
@@ -512,6 +581,7 @@ class Snapshotter {
 }  // namespace
 
 void MaybeStartChromeSnapshot(BrowserWindowInterface* browser) {
+  MaybeInstallTestFilePicker();
   const base::CommandLine* command_line =
       base::CommandLine::ForCurrentProcess();
   if (g_started || !command_line->HasSwitch(kSnapshotSwitch)) {

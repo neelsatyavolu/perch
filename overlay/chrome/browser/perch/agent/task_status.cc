@@ -3,6 +3,8 @@
 
 #include "chrome/browser/perch/agent/task_status.h"
 
+#include "base/command_line.h"
+
 #include <map>
 #include <set>
 
@@ -126,6 +128,14 @@ void Notify(const std::string& chat_id,
                 RevealChat(chat, tab, /*side=*/!tab.empty());
               },
               chat_id, target)));
+  // Off-screen tests record the notice and press it instead of showing it.
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
+          "perch-test-notifications")) {
+    LOG(WARNING) << "Perch test: notification '" << notification.title()
+                 << "' / '" << notification.message() << "'";
+    notification.delegate()->Click(std::nullopt, std::nullopt);
+    return;
+  }
   service->Display(NotificationHandler::Type::TRANSIENT, notification,
                    /*metadata=*/nullptr);
 }

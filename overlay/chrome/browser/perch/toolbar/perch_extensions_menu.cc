@@ -6,30 +6,41 @@
 #include <algorithm>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
+#include "base/functional/bind.h"
+#include "base/i18n/case_conversion.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/no_destructor.h"
+#include "base/scoped_observation.h"
 #include "chrome/app/chrome_command_ids.h"
-#include "chrome/browser/perch/toolbar/perch_profile_menu.h"
-#include "chrome/browser/profiles/profile.h"
 #include "chrome/app/vector_icons/vector_icons.h"
-#include "components/vector_icons/vector_icons.h"
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
-#include "chrome/browser/ui/extensions/extensions_container.h"
-#include "chrome/browser/ui/tabs/tab_strip_model.h"
-#include "chrome/browser/ui/toolbar/toolbar_action_view_model.h"
+#include "chrome/browser/ui/extensions/extension_action_view_model.h"
 #include "chrome/browser/ui/toolbar/toolbar_actions_model.h"
-#include "content/public/browser/page_navigator.h"
-#include "extensions/browser/extension_registry.h"
-#include "extensions/common/extension.h"
-#include "extensions/common/manifest_handlers/options_page_info.h"
-#include "ui/base/mojom/menu_source_type.mojom.h"
-#include "ui/base/window_open_disposition.h"
-#include "ui/gfx/geometry/size.h"
-#include "ui/menus/simple_menu_model.h"
-#include "ui/views/controls/menu/menu_runner.h"
+#include "chrome/browser/ui/views/controls/hover_button.h"
+#include "chrome/browser/ui/views/extensions/extension_action_delegate_desktop.h"
+#include "chrome/browser/ui/views/extensions/extensions_menu_item_view.h"
+#include "components/vector_icons/vector_icons.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/models/image_model.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
+#include "ui/color/color_id.h"
+#include "ui/gfx/geometry/insets.h"
+#include "ui/views/border.h"
+#include "ui/views/bubble/bubble_border.h"
+#include "ui/views/bubble/bubble_dialog_delegate_view.h"
+#include "ui/views/controls/label.h"
+#include "ui/views/controls/menu/menu_host_glass_mac.h"
+#include "ui/views/controls/scroll_view.h"
+#include "ui/views/controls/separator.h"
+#include "ui/views/layout/box_layout.h"
+#include "ui/views/layout/box_layout_view.h"
+#include "ui/views/style/typography.h"
 #include "ui/views/view.h"
 #include "ui/views/widget/widget.h"
 
@@ -37,157 +48,182 @@ namespace perch {
 
 namespace {
 
-enum ExtensionCommand { kOpen = 0, kPin, kOptions, kCommandCount };
+constexpr int kWidth = 320;
+constexpr int kMaxListHeight = 420;
+constexpr int kCornerRadius = 12;
 
-// One extension's submenu: Open, Pin to Toolbar, Options. Views menus need
-// ids unique across the whole menu, so each submenu has its own range from
-// `base`.
-class ExtensionSubmenu : public ui::SimpleMenuModel,
-                         public ui::SimpleMenuModel::Delegate {
+ui::ImageModel RowIcon(const gfx::VectorIcon& icon) {
+  return ui::ImageModel::FromVectorIcon(icon, ui::kColorMenuIcon, 16);
+}
+
+// The panel's contents; the bubble around it is made in ShowPerchExtensionsMenu.
+class ExtensionsPanel : public views::View,
+                        public ToolbarActionsModel::Observer {
+  METADATA_HEADER(ExtensionsPanel, views::View)
+
  public:
-  ExtensionSubmenu(BrowserWindowInterface* browser, std::string id, int base)
-      : ui::SimpleMenuModel(this),
-        browser_(browser),
-        id_(std::move(id)),
-        base_(base) {
-    AddItem(base_ + kOpen, u"Open");
-    AddCheckItem(base_ + kPin, u"Pin to Toolbar");
-    if (OptionsUrl().is_valid()) {
-      AddItem(base_ + kOptions, u"Options");
-    }
-  }
+  ExtensionsPanel(BrowserWindowInterface* browser,
+                  ExtensionsContainer* container,
+                  ExtensionsContainerViews* container_views)
+      : browser_(browser),
+        model_(ToolbarActionsModel::Get(browser->GetProfile())) {
+    SetLayoutManager(std::make_unique<views::BoxLayout>(
+        views::BoxLayout::Orientation::kVertical));
 
-  bool IsCommandIdChecked(int command_id) const override {
-    ToolbarActionsModel* model =
-        ToolbarActionsModel::Get(browser_->GetProfile());
-    return command_id == base_ + kPin && model && model->IsActionPinned(id_);
-  }
-
-  void ExecuteCommand(int command_id, int event_flags) override {
-    switch (command_id - base_) {
-      case kOpen:
-        if (ExtensionsContainer* container =
-                ExtensionsContainer::From(*browser_)) {
-          if (ToolbarActionViewModel* action =
-                  container->GetActionForId(id_)) {
-            action->ExecuteUserAction(
-                ToolbarActionViewModel::InvocationSource::kMenuEntry);
-          }
-        }
-        return;
-      case kPin:
-        if (ToolbarActionsModel* model =
-                ToolbarActionsModel::Get(browser_->GetProfile())) {
-          model->SetActionVisibility(id_, !model->IsActionPinned(id_));
-        }
-        return;
-      case kOptions:
-        browser_->OpenURL(
-            content::OpenURLParams(OptionsUrl(), content::Referrer(),
-                                   WindowOpenDisposition::kNewForegroundTab,
-                                   ui::PAGE_TRANSITION_AUTO_TOPLEVEL, false),
-            {});
-        return;
-    }
-  }
-
- private:
-  GURL OptionsUrl() const {
-    const extensions::Extension* extension =
-        extensions::ExtensionRegistry::Get(browser_->GetProfile())
-            ->enabled_extensions()
-            .GetByID(id_);
-    return extension ? extensions::OptionsPageInfo::GetOptionsPage(extension)
-                     : GURL();
-  }
-
-  raw_ptr<BrowserWindowInterface> browser_;
-  const std::string id_;
-  const int base_;
-};
-
-class ExtensionsMenu : public ui::SimpleMenuModel,
-                       public ui::SimpleMenuModel::Delegate {
- public:
-  explicit ExtensionsMenu(BrowserWindowInterface* browser)
-      : ui::SimpleMenuModel(this), browser_(browser) {
-    AddItemWithIcon(IDC_MANAGE_EXTENSIONS, u"Manage Extensions",
-                    Icon(vector_icons::kExtensionChromeRefreshOldIcon));
-    AddItemWithIcon(IDC_FIND_EXTENSIONS, u"Get Extensions",
-                    Icon(kOpenInNewIcon));
-
-    ToolbarActionsModel* model =
-        ToolbarActionsModel::Get(browser->GetProfile());
-    ExtensionsContainer* container = ExtensionsContainer::From(*browser);
-    if (!model || !container || model->action_ids().empty()) {
+    AddChildView(Command(IDC_MANAGE_EXTENSIONS, u"Manage Extensions",
+                         vector_icons::kExtensionChromeRefreshOldIcon));
+    AddChildView(
+        Command(IDC_FIND_EXTENSIONS, u"Get Extensions", kOpenInNewIcon));
+    if (!model_ || model_->action_ids().empty()) {
       return;
     }
-    struct Row {
-      std::string id;
-      std::u16string name;
-      ui::ImageModel icon;
-    };
-    std::vector<Row> rows;
-    content::WebContents* page =
-        browser->GetTabStripModel()->GetActiveWebContents();
-    for (const std::string& id : model->action_ids()) {
-      ToolbarActionViewModel* action = container->GetActionForId(id);
+    observation_.Observe(model_.get());
+
+    auto* separator = AddChildView(std::make_unique<views::Separator>());
+    separator->SetProperty(views::kMarginsKey, gfx::Insets::VH(6, 0));
+    separator->SetColorId(ui::kColorMenuSeparator);
+    auto* title = AddChildView(std::make_unique<views::Label>(
+        u"Installed extensions", views::style::CONTEXT_LABEL,
+        views::style::STYLE_SECONDARY));
+    title->SetHorizontalAlignment(gfx::ALIGN_LEFT);
+    title->SetBorder(views::CreateEmptyBorder(gfx::Insets::TLBR(2, 16, 4, 16)));
+
+    auto list = std::make_unique<views::BoxLayoutView>();
+    list->SetOrientation(views::BoxLayout::Orientation::kVertical);
+    std::vector<std::unique_ptr<ExtensionMenuItemView>> rows;
+    for (const std::string& id : model_->action_ids()) {
+      std::unique_ptr<ExtensionActionViewModel> action =
+          ExtensionActionViewModel::Create(
+              id, browser_,
+              std::make_unique<ExtensionActionDelegateDesktop>(
+                  browser_, container, container_views));
       if (!action) {
         continue;
       }
-      rows.push_back({id, action->GetActionName(),
-                      action->GetIcon(page, gfx::Size(16, 16))});
+      rows.push_back(std::make_unique<ExtensionMenuItemView>(
+          browser_, std::move(action),
+          ToolbarActionsModel::CanShowActionsInToolbar(*browser_)));
     }
-    std::ranges::sort(rows, [](const Row& a, const Row& b) {
-      return a.name < b.name;
+    std::ranges::sort(rows, [](const auto& a, const auto& b) {
+      return base::i18n::ToLower(a->view_model()->GetActionName()) <
+             base::i18n::ToLower(b->view_model()->GetActionName());
     });
-    AddSeparator(ui::NORMAL_SEPARATOR);
-    AddTitle(u"Installed extensions");
-    int command = kFirstExtension;
-    int submenu_base = kFirstSubmenuCommand;
-    for (Row& row : rows) {
-      submenus_.push_back(
-          std::make_unique<ExtensionSubmenu>(browser, row.id, submenu_base));
-      submenu_base += kCommandCount;
-      AddSubMenuWithIcon(command++, row.name, submenus_.back().get(),
-                         row.icon);
+    for (auto& row : rows) {
+      rows_.push_back(list->AddChildView(std::move(row)));
+    }
+    UpdatePins();
+
+    auto* scroll = AddChildView(std::make_unique<views::ScrollView>());
+    scroll->ClipHeightTo(0, kMaxListHeight);
+    scroll->SetDrawOverflowIndicator(false);
+    scroll->SetHorizontalScrollBarMode(
+        views::ScrollView::ScrollBarMode::kDisabled);
+    scroll->SetBackgroundColor(std::nullopt);
+    scroll->SetContents(std::move(list));
+  }
+
+  // ToolbarActionsModel::Observer: the list is short-lived, so a change to
+  // what is installed just closes it; pins update in place.
+  void OnToolbarActionAdded(const ToolbarActionsModel::ActionId& id) override {
+    Close();
+  }
+  void OnToolbarActionRemoved(
+      const ToolbarActionsModel::ActionId& id) override {
+    Close();
+  }
+  void OnToolbarActionUpdated(
+      const ToolbarActionsModel::ActionId& id) override {}
+  void OnToolbarModelInitialized() override {}
+  void OnToolbarPinnedActionsChanged() override { UpdatePins(); }
+  void OnToolbarActionsModelShutdown() override {
+    observation_.Reset();
+    model_ = nullptr;
+  }
+
+  void Close() {
+    if (GetWidget()) {
+      GetWidget()->Close();
     }
   }
 
-  void ExecuteCommand(int command_id, int event_flags) override {
-    chrome::ExecuteCommand(browser_, command_id);
+  base::WeakPtr<ExtensionsPanel> AsWeakPtr() {
+    return weak_factory_.GetWeakPtr();
   }
 
  private:
-  static constexpr int kFirstExtension = 1000;
-  // Clear of the submenu rows above (one per extension).
-  static constexpr int kFirstSubmenuCommand = 20000;
+  std::unique_ptr<HoverButton> Command(int command,
+                                       const std::u16string& label,
+                                       const gfx::VectorIcon& icon) {
+    return std::make_unique<HoverButton>(
+        base::BindRepeating(&ExtensionsPanel::Run, base::Unretained(this),
+                            command),
+        RowIcon(icon), label);
+  }
+
+  void Run(int command) {
+    BrowserWindowInterface* browser = browser_;
+    Close();
+    chrome::ExecuteCommand(browser, command);
+  }
+
+  void UpdatePins() {
+    if (!model_) {
+      return;
+    }
+    for (ExtensionMenuItemView* row : rows_) {
+      const std::string id = row->view_model()->GetId();
+      row->UpdatePinButton(model_->IsActionForcePinned(id),
+                           model_->IsActionPinned(id));
+    }
+  }
 
   raw_ptr<BrowserWindowInterface> browser_;
-  std::vector<std::unique_ptr<ExtensionSubmenu>> submenus_;
+  raw_ptr<ToolbarActionsModel> model_;
+  std::vector<raw_ptr<ExtensionMenuItemView>> rows_;
+  base::ScopedObservation<ToolbarActionsModel, ToolbarActionsModel::Observer>
+      observation_{this};
+  base::WeakPtrFactory<ExtensionsPanel> weak_factory_{this};
 };
 
-struct OpenMenu {
-  std::unique_ptr<ExtensionsMenu> model;
-  std::unique_ptr<views::MenuRunner> runner;
-};
+BEGIN_METADATA(ExtensionsPanel)
+END_METADATA
 
-OpenMenu& Current() {
-  static base::NoDestructor<OpenMenu> open;
+base::WeakPtr<ExtensionsPanel>& Current() {
+  static base::NoDestructor<base::WeakPtr<ExtensionsPanel>> open;
   return *open;
 }
 
 }  // namespace
 
 bool ShowPerchExtensionsMenu(BrowserWindowInterface* browser,
-                             views::View* anchor) {
-  OpenMenu& open = Current();
-  if (open.runner && open.runner->IsRunning()) {
-    open.runner->Cancel();
+                             views::View* anchor,
+                             ExtensionsContainer* container,
+                             ExtensionsContainerViews* container_views) {
+  if (Current()) {
+    Current()->Close();
+    Current().reset();
+    return true;
   }
-  open.runner.reset();
-  open.model = std::make_unique<ExtensionsMenu>(browser);
-  RunToolbarMenu(open.model.get(), open.runner, anchor);
+  auto panel =
+      std::make_unique<ExtensionsPanel>(browser, container, container_views);
+  Current() = panel->AsWeakPtr();
+  auto bubble = std::make_unique<views::BubbleDialogDelegate>(
+      anchor, views::BubbleBorder::TOP_RIGHT);
+  bubble->SetButtons(static_cast<int>(ui::mojom::DialogButton::kNone));
+  bubble->SetShowTitle(false);
+  bubble->SetShowCloseButton(false);
+  bubble->set_margins(gfx::Insets::VH(6, 0));
+  bubble->set_fixed_width(kWidth);
+  bubble->set_corner_radius(kCornerRadius);
+  // Thin enough for the frosted material behind the panel to show.
+  bubble->SetBackgroundColor(ui::kColorMenuBackground);
+  bubble->SetEnableArrowKeyTraversal(true);
+  bubble->SetContentsView(std::move(panel));
+  views::Widget* widget =
+      views::BubbleDialogDelegate::CreateBubbleDeprecated(
+          std::move(bubble), views::Widget::InitParams::NATIVE_WIDGET_OWNS_WIDGET);
+  views::ApplyPerchMenuGlass(widget, kCornerRadius);
+  widget->Show();
   return true;
 }
 

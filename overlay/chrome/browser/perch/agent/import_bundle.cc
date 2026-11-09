@@ -121,10 +121,17 @@ int ApplyBookmarks(ProfileWriter& writer,
                    const base::DictValue& bookmarks,
                    const std::u16string& from) {
   std::vector<user_data_importer::ImportedBookmarkEntry> entries;
-  std::vector<std::u16string> path;
   for (const auto [name, in_toolbar] :
        {std::pair("bar", true), std::pair("other", false),
         std::pair("mobile", false)}) {
+    // ProfileWriter takes a toolbar entry's first path part to be the source
+    // browser's name for its bookmarks bar and drops it, so one is given;
+    // without it each top-level folder was dropped and its bookmarks spilled
+    // onto the bar.
+    std::vector<std::u16string> path;
+    if (in_toolbar) {
+      path.push_back(u"Bookmarks Bar");
+    }
     if (const base::ListValue* list = bookmarks.FindList(name)) {
       AddBookmarkEntries(*list, in_toolbar, path, entries);
     }

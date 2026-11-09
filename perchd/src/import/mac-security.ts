@@ -29,6 +29,7 @@ function load() {
     SecKeychainFindGenericPassword: { args: [P, u32, P, u32, P, P, P, P], returns: i32 },
     SecKeychainItemFreeContent: { args: [P, P], returns: i32 },
     SecKeychainItemDelete: { args: [P], returns: i32 },
+    SecKeychainSetUserInteractionAllowed: { args: [FFIType.bool], returns: i32 },
     SecKeychainItemCreateFromContent: { args: [u32, P, u32, P, P, P, P], returns: i32 },
     SecTrustedApplicationCreateFromPath: { args: [P, P], returns: i32 },
     SecAccessCreate: { args: [P, P, P], returns: i32 },
@@ -150,5 +151,24 @@ function addItem(kc: Ref | null, service: string, account: string, value: string
     return status;
   } finally {
     for (const ref of [...release, ...apps]) if (ref) f.CFRelease(ref);
+  }
+}
+
+/**
+ * Runs `fn` with Keychain prompts off for this process: an item that would ask the user fails
+ * with errSecInteractionNotAllowed instead. For housekeeping nobody asked for, like moving old
+ * items at launch; an import the user started keeps its prompts.
+ */
+export async function withoutKeychainPrompts<T>(fn: () => Promise<T>): Promise<T> {
+  let off = false;
+  try {
+    off = api().SecKeychainSetUserInteractionAllowed(false) === 0;
+  } catch {
+    // Not macOS, or Security.framework didn't load; nothing can prompt then.
+  }
+  try {
+    return await fn();
+  } finally {
+    if (off) api().SecKeychainSetUserInteractionAllowed(true);
   }
 }

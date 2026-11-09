@@ -93,3 +93,4 @@ perch/shell/menu-hairline.patch
 perch/shell/signing-assess-after-notarize.patch
 perch/shell/onboarding-build.patch
 perch/shell/no-chromium-intro.patch
+perch/shell/extensions-panel.patch

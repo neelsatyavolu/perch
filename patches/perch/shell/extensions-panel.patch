@@ -1,0 +1,16 @@
+# Perch: the extensions button passes its container to Perch's extensions panel.
+diff --git a/chrome/browser/ui/views/extensions/extensions_toolbar_button.cc b/chrome/browser/ui/views/extensions/extensions_toolbar_button.cc
+index 9b04872c2f..ed749cafaa 100644
+--- a/chrome/browser/ui/views/extensions/extensions_toolbar_button.cc
++++ b/chrome/browser/ui/views/extensions/extensions_toolbar_button.cc
+@@ -147,7 +147,9 @@ void ExtensionsToolbarButton::OnWidgetDestroying(views::Widget* widget) {
+ 
+ void ExtensionsToolbarButton::ToggleExtensionsMenu() {
+   // Perch: the button opens Perch's extensions list.
+-  if (perch::ShowPerchExtensionsMenu(browser_, this)) {
++  if (perch::ShowPerchExtensionsMenu(
++          browser_, this, extensions_toolbar_->GetToolbarViewModel(),
++          extensions_toolbar_)) {
+     return;
+   }
+   if (extensions_menu_coordinator_ &&

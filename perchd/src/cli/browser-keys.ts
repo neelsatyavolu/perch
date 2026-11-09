@@ -6,6 +6,7 @@
  */
 
 import { join } from "node:path";
+import { withoutKeychainPrompts } from "../import/mac-security";
 import type { KeyChannel } from "../secure/key-channel";
 import { legacySources } from "../secure/legacy-sources";
 import { migrateLegacy, type LegacySource } from "../secure/migrate";
@@ -38,7 +39,8 @@ export async function browserSecrets(channel: KeyChannel, opts: BrowserSecretsOp
   }
   const sources = opts.sources ?? legacySources({ agentDir: join(opts.dataDir, "Perch Agent"), clientsFile: opts.clientsFile, profile: opts.profile });
   try {
-    const moved = (await migrateLegacy(sources, secrets.store)).reduce((n, r) => n + r.moved, 0);
+    // Old items another build made would each ask the user to allow perchd; this move is never worth a prompt.
+    const moved = (await withoutKeychainPrompts(() => migrateLegacy(sources, secrets.store))).reduce((n, r) => n + r.moved, 0);
     if (moved) opts.log(`perchd: moved ${moved} secrets from the Keychain into the profile's sealed files\n`);
   } catch (error) {
     // The rest stays in the Keychain until the next launch finishes the move.

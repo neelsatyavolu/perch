@@ -65,3 +65,4 @@ perch/shell/watch-party.patch
 perch/shell/translate-packs-off.patch
 perch/shell/typography.patch
 perch/shell/restore-sources.patch
+perch/agent/microphone-usage.patch

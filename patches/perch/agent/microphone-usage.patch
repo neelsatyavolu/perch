@@ -1,0 +1,14 @@
+# Perch: the microphone usage description dictation needs.
+diff --git a/chrome/app/app-Info.plist b/chrome/app/app-Info.plist
+index 572c90155e..769ab1a45d 100644
+--- a/chrome/app/app-Info.plist
++++ b/chrome/app/app-Info.plist
+@@ -217,6 +217,8 @@
+ 	<true/>
+ 	<key>NSCameraReactionEffectGesturesEnabledDefault</key>
+ 	<false/>
++	<key>NSMicrophoneUsageDescription</key>
++	<string>Perch uses the microphone for dictation in chats and for sites you allow.</string>
+ 	<key>NSPrincipalClass</key>
+ 	<string>BrowserCrApplication</string>
+ 	<key>NSSpeechRecognitionUsageDescription</key>

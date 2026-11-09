@@ -34,10 +34,18 @@ struct PerchDictation::State {
   }
 
   // Runs on the UI thread once macOS has answered the authorization request.
-  void Begin(StartedCallback started, SFSpeechRecognizerAuthorizationStatus status) {
+  void Begin(StartedCallback started,
+             SFSpeechRecognizerAuthorizationStatus status,
+             bool microphone) {
     if (status != SFSpeechRecognizerAuthorizationStatusAuthorized) {
       std::move(started).Run(
           "Speech recognition is off for Perch in System Settings › Privacy");
+      return;
+    }
+    // Without microphone access the audio engine still runs, on silence.
+    if (!microphone) {
+      std::move(started).Run(
+          "The microphone is off for Perch in System Settings › Privacy");
       return;
     }
     recognizer = [[SFSpeechRecognizer alloc] initWithLocale:NSLocale.currentLocale];
@@ -117,17 +125,25 @@ void PerchDictation::Start(TextCallback on_text, StartedCallback started) {
       base::SequencedTaskRunner::GetCurrentDefault();
   base::WeakPtr<State> self = state_->weak_factory.GetWeakPtr();
   __block StartedCallback callback = std::move(started);
+  // Speech recognition first, then the microphone; each asks once.
   [SFSpeechRecognizer requestAuthorization:^(
                           SFSpeechRecognizerAuthorizationStatus status) {
-    runner->PostTask(FROM_HERE,
-                     base::BindOnce(
-                         [](base::WeakPtr<State> self, StartedCallback started,
-                            SFSpeechRecognizerAuthorizationStatus status) {
-                           if (self) {
-                             self->Begin(std::move(started), status);
-                           }
-                         },
-                         self, std::move(callback), status));
+    [AVCaptureDevice
+        requestAccessForMediaType:AVMediaTypeAudio
+                completionHandler:^(BOOL granted) {
+                  runner->PostTask(
+                      FROM_HERE,
+                      base::BindOnce(
+                          [](base::WeakPtr<State> self, StartedCallback started,
+                             SFSpeechRecognizerAuthorizationStatus status,
+                             bool microphone) {
+                            if (self) {
+                              self->Begin(std::move(started), status,
+                                          microphone);
+                            }
+                          },
+                          self, std::move(callback), status, granted == YES));
+                }];
   }];
 }
 

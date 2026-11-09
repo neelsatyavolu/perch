@@ -55,6 +55,7 @@
 #include "ui/base/window_open_disposition.h"
 #include "url/gurl.h"
 #include "url/origin.h"
+#include "third_party/blink/public/common/web_preferences/web_preferences.h"
 
 namespace perch {
 
@@ -184,6 +185,17 @@ void PerchPageHandler::HandleCall(const base::ListValue& args) {
       Reject(args[0].Clone(), "bad-request", "Perch couldn't read that call");
     }
     return;
+  }
+  // The welcome page opens with a soft chime, before any click. Its first
+  // call arrives once the page is in, when the setting sticks.
+  content::WebContents* contents = web_ui()->GetWebContents();
+  if (!sound_allowed_ && IsWelcomeURL(contents->GetLastCommittedURL())) {
+    sound_allowed_ = true;
+    blink::web_pref::WebPreferences prefs =
+        contents->GetOrCreateWebPreferences();
+    prefs.autoplay_policy =
+        blink::mojom::AutoplayPolicy::kNoUserGestureRequired;
+    contents->SetWebPreferences(prefs);
   }
   Dispatch(args[1].GetString(), args[2].GetList(), args[0].Clone());
 }
@@ -449,7 +461,7 @@ void PerchPageHandler::Dispatch(const std::string& method,
     // The welcome page leaves for another page only when setup is finished
     // or skipped.
     if (IsWelcomeURL(web_ui()->GetWebContents()->GetLastCommittedURL())) {
-      MarkOnboardingFinished(profile());
+      FinishOnboarding(web_ui()->GetWebContents());
     }
     std::string url = "chrome://perch-" + *page + "/";
     if (args.size() > 1 && args[1].is_string() && !args[1].GetString().empty()) {

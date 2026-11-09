@@ -1,0 +1,17 @@
+# Perch: Chromium's first-run intro never opens; Perch's welcome page is the first-run experience.
+diff --git a/chrome/browser/ui/startup/first_run_service.cc b/chrome/browser/ui/startup/first_run_service.cc
+index 7ba1ffbb32..142fd6c369 100644
+--- a/chrome/browser/ui/startup/first_run_service.cc
++++ b/chrome/browser/ui/startup/first_run_service.cc
+@@ -298,6 +298,11 @@ FirstRunServiceFactory::BuildServiceInstanceForBrowserContext(
+ // Helpers ---------------------------------------------------------------------
+ 
+ bool ShouldOpenFirstRun(Profile* profile) {
++  // Perch: Perch's own welcome page (chrome/browser/perch/onboarding) is the
++  // first-run experience; Chromium's intro never opens.
++  if ((true)) {
++    return false;
++  }
+   return IsFirstRunEligibleProcess() && IsFirstRunEligibleProfile(profile) &&
+          !IsFirstRunMarkedFinishedInPrefs();
+ }

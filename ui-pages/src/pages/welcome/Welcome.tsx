@@ -1,5 +1,5 @@
 import type preact from "preact";
-import { useRef, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { OnboardingStep, Provider } from "../../api";
 import { ACCENTS, ACCENT_NAMES, THEMES, THEME_NAMES } from "../../theme/tokens";
 import { errorText, useAction, useApi, useAppearance, useLoad } from "../../ui/frame";
@@ -8,6 +8,7 @@ import { ProviderMark } from "../../ui/ProviderMark";
 import { ImportWizard } from "../import/ImportWizard";
 import { RestoreForm } from "../settings/Backup";
 import { Swatches } from "../../ui/Swatches";
+import { createSound, type Sound } from "./sound";
 import "./welcome.css";
 
 const ORDER: readonly OnboardingStep[] = ["appearance", "models", "import", "memory"];
@@ -65,7 +66,9 @@ const COPY: Readonly<Record<OnboardingStep, { title: string; lead: string }>> = 
  * The welcome page fills the window: on first run Perch hides the tab strip and toolbar while it
  * shows, leaving only the window's own buttons at the top left, which the bar keeps clear of.
  */
-function Stage({ step, children }: { readonly step?: number; readonly children: preact.ComponentChildren }) {
+type Mute = { readonly muted: boolean; readonly toggle: () => void };
+
+function Stage({ step, mute, children }: { readonly step?: number; readonly mute?: Mute; readonly children: preact.ComponentChildren }) {
   return (
     <div class="wl-stage">
       <header class="wl-top">
@@ -76,10 +79,35 @@ function Stage({ step, children }: { readonly step?: number; readonly children: 
             <p class="cap">Step {step + 1} of {ORDER.length}</p>
           </>
         )}
+        {mute && <button type="button" class="btn quiet wl-mute" aria-pressed={!mute.muted} onClick={mute.toggle}>{mute.muted ? "Sound off" : "Sound on"}</button>}
       </header>
       {children}
     </div>
   );
+}
+
+/** The mark assembling itself: the bar draws out, then the dot comes down and settles on it. */
+function LandingMark() {
+  return (
+    <svg class="wl-mark" viewBox="0 0 240 120" width="240" height="120" aria-hidden="true">
+      <rect class="wl-mark-bar" x="24" y="78" width="192" height="14" rx="4" />
+      <circle class="wl-mark-dot" cx="158" cy="58" r="20" />
+    </svg>
+  );
+}
+
+/** The page's sounds, with a mute switch; one audio context for the life of the page. */
+function useSound(): { readonly sound: Sound; readonly mute: Mute } {
+  const ref = useRef<Sound | null>(null);
+  if (!ref.current) ref.current = createSound();
+  const sound = ref.current;
+  const [muted, setMuted] = useState(false);
+  useEffect(() => () => sound.close(), [sound]);
+  const toggle = () => {
+    sound.setMuted(!muted);
+    setMuted(!muted);
+  };
+  return { sound, mute: { muted, toggle } };
 }
 
 /** perch://welcome#restore: this Mac has Perch data but not its key (spec 11.1). */
@@ -156,8 +184,15 @@ function Setup() {
   const [step, setStep] = useState<OnboardingStep | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const focus = () => requestAnimationFrame(() => heading.current?.focus());
+  const { sound, mute } = useSound();
+  // The opening chime lands as the dot settles on the bar.
+  useEffect(() => {
+    const timer = setTimeout(() => sound.play("open"), 700);
+    return () => clearTimeout(timer);
+  }, [sound]);
 
   const finish = async (page: "newtab" | "memory" = "newtab") => {
+    sound.play("done");
     await act(() => api.finishOnboarding());
     await act(() => api.openPage(page, page === "memory" ? "setup" : undefined));
   };
@@ -166,6 +201,7 @@ function Setup() {
     if (completed) await act(() => api.completeOnboardingStep(step));
     const next = ORDER[ORDER.indexOf(step) + 1];
     if (next) {
+      sound.play("step");
       setStep(next);
       focus();
     } else await finish();
@@ -173,13 +209,13 @@ function Setup() {
 
   if (!step) {
     return (
-      <Stage>
+      <Stage mute={mute}>
         <main class="wl wl-hero">
-          <PerchMark size={64} />
+          <LandingMark />
           <h1 class="serif-title" ref={heading} tabIndex={-1}>Welcome to Perch</h1>
           <p class="wl-lead">A browser with an agent that works on the sites you're signed in to. What it learns stays on this Mac, encrypted.</p>
           <div class="wl-actions">
-            <button type="button" class="btn primary" onClick={() => { setStep("appearance"); focus(); }}>Set up Perch</button>
+            <button type="button" class="btn primary" onClick={() => { sound.play("step"); setStep("appearance"); focus(); }}>Set up Perch</button>
             <button type="button" class="btn quiet" onClick={() => finish()}>Skip setup</button>
           </div>
           <p class="cap">Four short steps. You can skip any of them.</p>
@@ -191,7 +227,7 @@ function Setup() {
   const index = ORDER.indexOf(step);
   const back = () => { setStep(ORDER[index - 1] ?? null); focus(); };
   return (
-    <Stage step={index}>
+    <Stage step={index} mute={mute}>
     <main class="wl" key={step}>
       <h1 class="serif-title" ref={heading} tabIndex={-1}>{COPY[step].title}</h1>
       <p class="wl-lead">{COPY[step].lead}</p>

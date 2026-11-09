@@ -5,7 +5,10 @@ html:has(.wl-stage), body:has(.wl-stage) { background: var(--card); }
 .wl-stage { min-height: 100vh; display: grid; grid-template-rows: 52px 1fr; background: var(--card); }
 
 /* The bar starts right of the window's close, minimise and zoom buttons. */
-.wl-top { position: relative; display: flex; align-items: center; justify-content: space-between; padding: 0 24px 0 92px; }
+.wl-top { position: relative; display: flex; align-items: center; gap: 16px; padding: 0 24px 0 92px; }
+.wl-top .cap { margin-left: auto; }
+.wl-mute { margin-left: auto; font-size: 12px; }
+.cap + .wl-mute { margin-left: 0; }
 .wl-brand { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--ink); }
 .wl-dots { position: absolute; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .wl-dots li { width: 28px; height: 3px; border-radius: 2px; background: var(--hair-strong); transition: background-color 240ms var(--ease); }
@@ -38,3 +41,19 @@ html:has(.wl-stage), body:has(.wl-stage) { background: var(--card); }
 
 /* Headings take focus when a step changes, for screen readers; no ring for that. */
 .wl h1:focus { outline: none; }
+
+/* The opening: the bar draws out from its middle, the dot comes down and settles on it, and the
+   words follow. The chime (sound.ts) lands with the dot. */
+.wl-mark { display: block; overflow: visible; }
+.wl-mark-bar { fill: var(--ink); transform-origin: 120px 85px; }
+.wl-mark-dot { fill: var(--accent); }
+@media (prefers-reduced-motion: no-preference) {
+  .wl-mark-bar { animation: wl-bar 600ms var(--ease) 150ms backwards; }
+  .wl-mark-dot { animation: wl-dot 700ms cubic-bezier(0.3, 1.3, 0.5, 1) 450ms backwards; }
+  .wl-hero > .wl-mark { animation: none; }
+  .wl-hero > :nth-child(2) { animation-delay: 900ms; }
+  .wl-hero > :nth-child(3) { animation-delay: 1050ms; }
+  .wl-hero > :nth-child(n + 4) { animation-delay: 1200ms; }
+}
+@keyframes wl-bar { from { transform: scaleX(0); opacity: 0; } }
+@keyframes wl-dot { from { transform: translateY(-64px); opacity: 0; } }

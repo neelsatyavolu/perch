@@ -59,6 +59,8 @@ class PerchPageHandler : public content::WebUIMessageHandler {
   Profile* profile();
 
   PrefChangeRegistrar appearance_registrar_;
+  // Whether the welcome page has been let play its opening sound.
+  bool sound_allowed_ = false;
   base::WeakPtrFactory<PerchPageHandler> weak_factory_{this};
 };
 

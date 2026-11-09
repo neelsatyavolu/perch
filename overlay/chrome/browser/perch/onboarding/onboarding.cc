@@ -11,8 +11,10 @@
 #include "chrome/browser/perch/perch_pref_names.h"
 #include "chrome/browser/perch/scheme/perch_scheme.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "chrome/browser/ui/webui/webui_embedding_context.h"
 #include "chrome/common/chrome_switches.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/navigation_controller.h"
@@ -80,11 +82,20 @@ void MaybeStartOnboarding(BrowserWindowInterface* browser) {
                              ui::PAGE_TRANSITION_AUTO_TOPLEVEL,
                              /*is_renderer_initiated=*/false),
       {});
-  browser->GetWindow()->Maximize();
+  if (!browser->GetWindow()->IsFullscreen()) {
+    chrome::ToggleFullscreenMode(browser);
+  }
 }
 
-void MarkOnboardingFinished(Profile* profile) {
-  profile->GetPrefs()->SetBoolean(prefs::kOnboardingFinished, true);
+void FinishOnboarding(content::WebContents* welcome) {
+  Profile::FromBrowserContext(welcome->GetBrowserContext())
+      ->GetPrefs()
+      ->SetBoolean(prefs::kOnboardingFinished, true);
+  // Back out of the full screen the welcome page went into.
+  BrowserWindowInterface* browser = webui::GetBrowserWindowInterface(welcome);
+  if (browser && browser->GetWindow()->IsFullscreen()) {
+    chrome::ToggleFullscreenMode(browser);
+  }
 }
 
 }  // namespace perch

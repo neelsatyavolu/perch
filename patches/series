@@ -97,3 +97,4 @@ perch/shell/extensions-panel.patch
 perch/shell/spaces-trailing.patch
 perch/shell/native-hosts-from-chrome.patch
 perch/agent/chat-pages-loopback.patch
+perch/shell/bubble-glass.patch

@@ -106,7 +106,8 @@ std::string IdAt(const base::ListValue& spaces, size_t index) {
 
 void AddTabsAsleep(BrowserWindowInterface* browser,
                    const std::vector<SpaceTab>& tabs,
-                   bool at_front);
+                   bool at_front,
+                   bool select);
 
 std::string NextId(const base::ListValue& spaces) {
   int highest = 0;
@@ -275,21 +276,27 @@ void DeleteActiveSpace(BrowserWindowInterface* browser) {
   spaces[previous].GetDict().Set(kTabs, base::ListValue());
   spaces.erase(spaces.begin() + active);
   Write(browser, std::move(spaces), previous < active ? previous : 0);
-  AddTabsAsleep(browser, previous_tabs, /*at_front=*/true);
+  AddTabsAsleep(browser, previous_tabs, /*at_front=*/true, /*select=*/false);
 }
 
 void OpenTabsAsleep(BrowserWindowInterface* browser,
                     const std::vector<SpaceTab>& tabs) {
-  AddTabsAsleep(browser, tabs, /*at_front=*/false);
+  AddTabsAsleep(browser, tabs, /*at_front=*/false, /*select=*/true);
+}
+
+void AppendTabsAsleep(BrowserWindowInterface* browser,
+                      const std::vector<SpaceTab>& tabs) {
+  AddTabsAsleep(browser, tabs, /*at_front=*/false, /*select=*/false);
 }
 
 namespace {
 
-// At the front, the tabs keep their order before the window's unpinned tabs
-// and none is selected, so the tab in use stays in use.
+// At the front, the tabs keep their order before the window's unpinned tabs.
+// Without `select_one` none is selected, so the tab in use stays in use.
 void AddTabsAsleep(BrowserWindowInterface* browser,
                    const std::vector<SpaceTab>& tabs,
-                   bool at_front) {
+                   bool at_front,
+                   bool select_one) {
   TabStripModel* model = browser->GetTabStripModel();
   const bool any_active = std::ranges::any_of(
       tabs, [](const SpaceTab& tab) { return tab.active; });
@@ -306,7 +313,7 @@ void AddTabsAsleep(BrowserWindowInterface* browser,
     const std::vector<sessions::SerializedNavigationEntry> navigations = {
         entry};
     const bool select =
-        !at_front && (tab.active || (!any_active && i == 0));
+        select_one && (tab.active || (!any_active && i == 0));
     int index = tab.pinned ? model->IndexOfFirstNonPinnedTab()
                            : (at_front ? front++ : model->count());
     if (tab.pinned && at_front) {

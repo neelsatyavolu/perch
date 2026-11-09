@@ -19,14 +19,15 @@ import type { PagesDeps } from "./deps";
 
 const BROWSERS: readonly BrowserId[] = ["aside", "chrome", "arc", "dia", "brave", "edge", "vivaldi", "opera", "helium", "safari", "firefox", "zen"];
 const ASIDE_AGENT = "aside-agent";
-const KINDS: Readonly<Record<ImportKind, { type: DataType | null; noun: string }>> = {
+/** `also`: types that ride along with the kind when the source has them. */
+const KINDS: Readonly<Record<ImportKind, { type: DataType | null; noun: string; also?: readonly DataType[] }>> = {
   tabs: { type: "tabs", noun: "tabs" },
   bookmarks: { type: "bookmarks", noun: "bookmarks" },
   history: { type: "history", noun: "history entries" },
   passwords: { type: "passwords", noun: "passwords" },
   cookies: { type: "cookies", noun: "sites with logins" },
   extensions: { type: "extensions", noun: "extensions" },
-  settings: { type: "searchEngines", noun: "search engines" },
+  settings: { type: "searchEngines", noun: "search engines", also: ["addresses"] },
   "aside-memory": { type: "memory", noun: "memory pages" },
   "aside-skills": { type: "skills", noun: "skills" },
   "aside-chats": { type: "chats", noun: "chats" },
@@ -103,7 +104,9 @@ export function importPages(deps: PagesDeps): Methods<"detectBrowsers" | "getSys
       const all = sources();
       if (!all.find((s) => s.browser === browser)?.profiles.some((p) => p.id === profile)) throw new AppError("That browser profile wasn't found");
       const agent = all.find((s) => s.browser === ASIDE_AGENT);
-      const types = (list: readonly ImportKind[]) => kinds.filter((k) => list.includes(k)).map((k) => KINDS[k].type!);
+      const source = all.find((s) => s.browser === browser);
+      const has = (t: DataType) => Boolean(source?.types.includes(t) && !source.unsupported[t]);
+      const types = (list: readonly ImportKind[]) => kinds.filter((k) => list.includes(k)).flatMap((k) => [KINDS[k].type!, ...(KINDS[k].also ?? []).filter(has)]);
       const parts = [
         { source: { browser, profile }, types: types(BROWSER_KINDS) },
         ...(browser === "aside" && agent?.profiles[0] ? [{ source: { browser: ASIDE_AGENT, profile: agent.profiles[0].id }, types: types(AGENT_KINDS) }] : []),

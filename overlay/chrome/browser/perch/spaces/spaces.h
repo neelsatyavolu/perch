@@ -55,6 +55,9 @@ void DeleteActiveSpace(BrowserWindowInterface* browser);
 // active loads and is selected. Import (plan 3b) uses this too.
 void OpenTabsAsleep(BrowserWindowInterface* browser,
                     const std::vector<SpaceTab>& tabs);
+// The same, but no tab is selected: the tab in use stays in use.
+void AppendTabsAsleep(BrowserWindowInterface* browser,
+                      const std::vector<SpaceTab>& tabs);
 
 // The button at the tab strip's leading edge: the space's name and a menu.
 std::unique_ptr<views::View> CreateSpacesButton(BrowserWindowInterface* browser);

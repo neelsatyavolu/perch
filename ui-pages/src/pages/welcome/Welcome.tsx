@@ -1,3 +1,4 @@
+import type preact from "preact";
 import { useRef, useState } from "preact/hooks";
 import type { OnboardingStep, Provider } from "../../api";
 import { ACCENTS, ACCENT_NAMES, THEMES, THEME_NAMES } from "../../theme/tokens";
@@ -56,9 +57,30 @@ function Models() {
 const COPY: Readonly<Record<OnboardingStep, { title: string; lead: string }>> = {
   appearance: { title: "Pick a look", lead: "Five themes and five accents. The pages you visit keep their own colours." },
   models: { title: "Connect a model", lead: "Perch's agent uses your own subscription. Claude runs through Claude Code on this Mac, which keeps its own sign-in." },
-  import: { title: "Bring your tabs and bookmarks", lead: "Import from a browser on this Mac. Tabs open asleep, so a big import won't slow anything down." },
+  import: { title: "Bring everything over", lead: "Windows and tabs, bookmarks, history, passwords, extensions, and the cookies that keep you signed in. Each window comes over as its own window, with its tabs asleep until you click them." },
   memory: { title: "Set up your memory", lead: "Perch can learn about you from sources you pick, so you explain less. You review every fact before it's saved, and it stays on this Mac, encrypted." },
 };
+
+/**
+ * The welcome page fills the window: on first run Perch hides the tab strip and toolbar while it
+ * shows, leaving only the window's own buttons at the top left, which the bar keeps clear of.
+ */
+function Stage({ step, children }: { readonly step?: number; readonly children: preact.ComponentChildren }) {
+  return (
+    <div class="wl-stage">
+      <header class="wl-top">
+        <span class="wl-brand"><PerchMark size={20} />Perch</span>
+        {step !== undefined && (
+          <>
+            <ol class="wl-dots" aria-hidden="true">{ORDER.map((id, i) => <li key={id} class={i < step ? "done" : i === step ? "on" : ""} />)}</ol>
+            <p class="cap">Step {step + 1} of {ORDER.length}</p>
+          </>
+        )}
+      </header>
+      {children}
+    </div>
+  );
+}
 
 /** perch://welcome#restore: this Mac has Perch data but not its key (spec 11.1). */
 function Restore({ onDone }: { readonly onDone: () => void }) {
@@ -78,6 +100,7 @@ function Restore({ onDone }: { readonly onDone: () => void }) {
   };
 
   return (
+    <Stage>
     <main class="wl">
       <h1 class="serif-title" tabIndex={-1}>Restore your Perch data</h1>
       <p class="wl-lead">This Mac has your Perch data but not its key. Enter your recovery key to unlock it.</p>
@@ -101,6 +124,7 @@ function Restore({ onDone }: { readonly onDone: () => void }) {
         </div>
       )}
     </main>
+    </Stage>
   );
 }
 
@@ -149,22 +173,26 @@ function Setup() {
 
   if (!step) {
     return (
-      <main class="wl wl-hero">
-        <PerchMark size={56} />
-        <h1 class="serif-title" ref={heading} tabIndex={-1}>Welcome to Perch</h1>
-        <p class="wl-lead">A browser with an agent that works on the sites you're signed in to. What it learns stays on this Mac, encrypted.</p>
-        <div class="wl-actions">
-          <button type="button" class="btn primary" onClick={() => { setStep("appearance"); focus(); }}>Set up Perch</button>
-          <button type="button" class="btn quiet" onClick={() => finish()}>Skip setup</button>
-        </div>
-      </main>
+      <Stage>
+        <main class="wl wl-hero">
+          <PerchMark size={64} />
+          <h1 class="serif-title" ref={heading} tabIndex={-1}>Welcome to Perch</h1>
+          <p class="wl-lead">A browser with an agent that works on the sites you're signed in to. What it learns stays on this Mac, encrypted.</p>
+          <div class="wl-actions">
+            <button type="button" class="btn primary" onClick={() => { setStep("appearance"); focus(); }}>Set up Perch</button>
+            <button type="button" class="btn quiet" onClick={() => finish()}>Skip setup</button>
+          </div>
+          <p class="cap">Four short steps. You can skip any of them.</p>
+        </main>
+      </Stage>
     );
   }
 
   const index = ORDER.indexOf(step);
+  const back = () => { setStep(ORDER[index - 1] ?? null); focus(); };
   return (
-    <main class="wl">
-      <p class="cap">Step {index + 1} of {ORDER.length}</p>
+    <Stage step={index}>
+    <main class="wl" key={step}>
       <h1 class="serif-title" ref={heading} tabIndex={-1}>{COPY[step].title}</h1>
       <p class="wl-lead">{COPY[step].lead}</p>
       <div class="wl-body">
@@ -186,7 +214,9 @@ function Setup() {
             {step !== "appearance" && <button type="button" class="btn quiet" onClick={() => advance(false)}>Skip</button>}
           </>
         )}
+        <button type="button" class="btn quiet wl-back" onClick={back}>Back</button>
       </div>
     </main>
+    </Stage>
   );
 }

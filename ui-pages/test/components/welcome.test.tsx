@@ -22,7 +22,7 @@ describe("Welcome", () => {
     await waitFor(() => expect(r.getByText("Connected · neel@example.com", { selector: "#prov-grok .status" })).toBeTruthy());
     fireEvent.click(r.getByRole("button", { name: "Continue" }));
 
-    expect(await r.findByRole("heading", { level: 1, name: "Bring your tabs and bookmarks" })).toBeTruthy();
+    expect(await r.findByRole("heading", { level: 1, name: "Bring everything over" })).toBeTruthy();
     expect(r.getAllByRole("main").length).toBe(1);
     fireEvent.click(await r.findByRole("radio", { name: /Chrome/ }));
     fireEvent.click(r.getByRole("button", { name: "Continue" }));

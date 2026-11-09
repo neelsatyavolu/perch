@@ -10,17 +10,30 @@
 #include <vector>
 
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/logging.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/files/file_util.h"
 #include "base/json/json_reader.h"
 #include "base/path_service.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
+#include "chrome/browser/autofill/personal_data_manager_factory.h"
+#include "chrome/browser/extensions/webstore_install_with_prompt.h"
 #include "chrome/browser/importer/profile_writer.h"
 #include "chrome/browser/perch/spaces/spaces.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
+#include "chrome/browser/ui/browser_window/public/create_browser_window.h"
 #include "chrome/common/chrome_paths.h"
+#include "components/autofill/core/browser/data_manager/addresses/address_data_manager.h"
+#include "components/autofill/core/browser/data_manager/personal_data_manager.h"
+#include "components/autofill/core/browser/data_model/addresses/autofill_profile.h"
+#include "components/autofill/core/browser/field_types.h"
+#include "components/autofill/core/browser/geo/country_data.h"
+#include "components/crx_file/id_util.h"
 #include "components/history/core/browser/history_types.h"
 #include "components/history/core/browser/url_row.h"
 #include "components/password_manager/core/browser/password_form.h"
@@ -28,6 +41,9 @@
 #include "components/search_engines/template_url.h"
 #include "components/search_engines/template_url_data.h"
 #include "components/user_data_importer/common/imported_bookmark_entry.h"
+#include "extensions/browser/extension_registry.h"
+#include "ui/base/base_window.h"
+#include "ui/gfx/native_ui_types.h"
 #include "url/gurl.h"
 
 namespace perch {
@@ -194,16 +210,24 @@ int ApplySearchEngines(ProfileWriter& writer, const base::ListValue& engines) {
   return count;
 }
 
-int ApplyTabs(const base::ListValue& windows) {
-  BrowserWindowInterface* browser =
+// The windows come over as windows. The first joins the window you are in,
+// asleep, so the tab you are on stays where it is; each of the others gets a
+// window of its own, with the tab that was selected there loaded.
+int ApplyTabs(Profile* profile, const base::ListValue& windows) {
+  BrowserWindowInterface* current =
       GetLastActiveBrowserWindowInterfaceWithAnyProfile();
-  if (!browser) {
-    return 0;
+  if (current && current->GetProfile() != profile) {
+    current = nullptr;
   }
-  std::vector<SpaceTab> tabs;
+  int count = 0;
+  bool first = true;
   for (const base::Value& item : windows) {
     const base::DictValue* window = item.GetIfDict();
     const base::ListValue* list = window ? window->FindList("tabs") : nullptr;
+    const int selected =
+        window ? window->FindInt("selected").value_or(0) : 0;
+    const bool into_current = first && current;
+    std::vector<SpaceTab> tabs;
     for (size_t i = 0; list && i < list->size(); ++i) {
       const base::DictValue* tab = (*list)[i].GetIfDict();
       const std::string* url = tab ? tab->FindString("url") : nullptr;
@@ -212,15 +236,119 @@ int ApplyTabs(const base::ListValue& windows) {
       }
       const std::string* title = tab->FindString("title");
       tabs.push_back({GURL(*url), title ? base::UTF8ToUTF16(*title) : u"",
-                      tab->FindBool("pinned").value_or(false), false});
+                      tab->FindBool("pinned").value_or(false),
+                      !into_current && static_cast<int>(i) == selected});
     }
+    if (tabs.empty()) {
+      continue;
+    }
+    first = false;
+    if (into_current) {
+      AppendTabsAsleep(current, tabs);
+    } else {
+      BrowserWindowInterface* created = CreateBrowserWindow(
+          BrowserWindowCreateParams(profile, /*from_user_gesture=*/false));
+      if (!created) {
+        continue;
+      }
+      OpenTabsAsleep(created, tabs);
+      created->GetWindow()->ShowInactive();
+    }
+    count += static_cast<int>(tabs.size());
   }
-  if (tabs.empty()) {
+  return count;
+}
+
+// Installs from the Chrome Web Store without asking again: the person ticked
+// Extensions in the import, and had each of these installed already.
+class ImportedExtensionInstaller : public extensions::WebstoreInstallWithPrompt {
+ public:
+  using WebstoreInstallWithPrompt::WebstoreInstallWithPrompt;
+
+ private:
+  ~ImportedExtensionInstaller() override = default;
+
+  std::unique_ptr<extensions::InstallPromptData> CreateInstallPrompt()
+      const override {
+    return nullptr;
+  }
+  bool ShouldShowPostInstallUI() const override { return false; }
+};
+
+// Starts the installs and returns how many; each finishes on its own.
+int ApplyExtensions(Profile* profile, const base::ListValue& list) {
+  extensions::ExtensionRegistry* registry =
+      extensions::ExtensionRegistry::Get(profile);
+  int started = 0;
+  for (const base::Value& item : list) {
+    const base::DictValue* entry = item.GetIfDict();
+    const std::string* id = entry ? entry->FindString("id") : nullptr;
+    // Only extensions with a store page can be fetched again.
+    if (!id || !entry->FindString("storeUrl") ||
+        !crx_file::id_util::IdIsValid(*id) ||
+        registry->GetInstalledExtension(*id)) {
+      continue;
+    }
+    base::MakeRefCounted<ImportedExtensionInstaller>(
+        *id, profile, gfx::NativeWindow(),
+        base::BindOnce([](const std::string& id, bool success,
+                          const std::string& error,
+                          extensions::webstore_install::Result) {
+          LOG_IF(WARNING, !success)
+              << "Perch import: extension " << id << " not installed: "
+              << error;
+        }, *id))
+        ->BeginInstall();
+    ++started;
+  }
+  return started;
+}
+
+int ApplyAddresses(Profile* profile, const base::ListValue& list) {
+  autofill::PersonalDataManager* data =
+      autofill::PersonalDataManagerFactory::GetForBrowserContext(profile);
+  if (!data) {
     return 0;
   }
-  // Imported tabs come in asleep; the one you are on stays where it is.
-  OpenTabsAsleep(browser, tabs);
-  return static_cast<int>(tabs.size());
+  int added = 0;
+  for (const base::Value& item : list) {
+    const base::DictValue* entry = item.GetIfDict();
+    if (!entry) {
+      continue;
+    }
+    auto text = [&](const char* key) {
+      const std::string* value = entry->FindString(key);
+      return value ? base::UTF8ToUTF16(*value) : std::u16string();
+    };
+    const std::string* country = entry->FindString("country");
+    autofill::AutofillProfile address{autofill::AddressCountryCode(
+        country && country->size() == 2 ? *country : std::string())};
+    const std::pair<autofill::FieldType, const char*> fields[] = {
+        {autofill::NAME_FULL, "name"},
+        {autofill::COMPANY_NAME, "organization"},
+        {autofill::ADDRESS_HOME_STREET_ADDRESS, "street"},
+        {autofill::ADDRESS_HOME_CITY, "city"},
+        {autofill::ADDRESS_HOME_STATE, "state"},
+        {autofill::ADDRESS_HOME_ZIP, "zip"},
+        {autofill::PHONE_HOME_WHOLE_NUMBER, "phone"},
+        {autofill::EMAIL_ADDRESS, "email"},
+    };
+    bool any = false;
+    for (const auto& [type, key] : fields) {
+      const std::u16string value = text(key);
+      if (!value.empty()) {
+        address.SetRawInfo(type, value);
+        any = true;
+      }
+    }
+    if (!any) {
+      continue;
+    }
+    address.FinalizeAfterImport();
+    data->address_data_manager().AddProfile(address);
+    ++added;
+  }
+  return added;
 }
 
 void Apply(Profile* profile,
@@ -248,14 +376,21 @@ void Apply(Profile* profile,
   applied.Set("passwords", passwords ? ApplyPasswords(*writer, *passwords) : 0);
   applied.Set("cookies", 0);
   const base::ListValue* tabs = data->FindList("tabs");
-  applied.Set("tabs", tabs ? ApplyTabs(*tabs) : 0);
+  applied.Set("tabs", tabs ? ApplyTabs(profile, *tabs) : 0);
   const base::ListValue* engines = data->FindList("searchEngines");
   applied.Set("searchEngines", engines ? ApplySearchEngines(*writer, *engines) : 0);
+  const base::ListValue* extensions = data->FindList("extensions");
+  applied.Set("extensions",
+              extensions ? ApplyExtensions(profile, *extensions) : 0);
+  const base::ListValue* addresses = data->FindList("addresses");
+  applied.Set("addresses",
+              addresses ? ApplyAddresses(profile, *addresses) : 0);
   // Everything else stays sealed for a later version.
   base::ListValue skipped;
   for (const auto [key, value] : *data) {
     if (key != "bookmarks" && key != "history" && key != "passwords" &&
-        key != "tabs" && key != "searchEngines") {
+        key != "tabs" && key != "searchEngines" && key != "extensions" &&
+        key != "addresses") {
       skipped.Append(key);
     }
   }

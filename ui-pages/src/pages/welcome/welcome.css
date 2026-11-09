@@ -1,10 +1,40 @@
-/* Welcome screen: one of the few places Geist Serif appears (DESIGN.md). */
+/* Welcome: fills the window (Perch hides its bars on first run) and is one of the few places
+   Geist Serif appears (DESIGN.md). */
 
-.wl { min-height: 100vh; background: var(--card); width: 560px; max-width: calc(100% - 32px); margin: 0 auto; padding: 72px 0 48px; display: grid; gap: 14px; align-content: start; }
-.wl-hero { justify-items: center; text-align: center; align-content: center; gap: 18px; }
-.wl-lead { color: var(--body); font-size: 14px; max-width: 52ch; }
-.wl-body { margin-top: 12px; }
+html:has(.wl-stage), body:has(.wl-stage) { background: var(--card); }
+.wl-stage { min-height: 100vh; display: grid; grid-template-rows: 52px 1fr; background: var(--card); }
+
+/* The bar starts right of the window's close, minimise and zoom buttons. */
+.wl-top { position: relative; display: flex; align-items: center; justify-content: space-between; padding: 0 24px 0 92px; }
+.wl-brand { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--ink); }
+.wl-dots { position: absolute; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.wl-dots li { width: 28px; height: 3px; border-radius: 2px; background: var(--hair-strong); transition: background-color 240ms var(--ease); }
+.wl-dots li.done { background: var(--mute); }
+.wl-dots li.on { background: var(--ink); }
+
+.wl { width: 600px; max-width: calc(100% - 48px); margin: 0 auto; padding: clamp(32px, 11vh, 128px) 0 72px; display: grid; gap: 16px; align-content: start; }
+.wl .serif-title { font-size: 44px; }
+.wl-lead { color: var(--body); font-size: 15px; line-height: 1.6; max-width: 56ch; }
+.wl-body { margin-top: 16px; }
 .wl-grid { display: grid; gap: 20px; }
-.wl-actions { display: flex; gap: 8px; margin-top: 16px; }
-.wl-hero .wl-actions { justify-content: center; }
-html:has(.wl), body:has(.wl) { background: var(--card); }
+.wl-actions { display: flex; align-items: center; gap: 8px; margin-top: 20px; }
+.wl-actions .btn.primary { height: 36px; padding: 0 18px; font-size: 14px; }
+.wl-back { margin-left: auto; }
+
+.wl-hero { justify-items: center; text-align: center; align-content: center; gap: 22px; padding-top: 0; padding-bottom: 14vh; }
+.wl-hero { width: 880px; }
+.wl-hero .serif-title { font-size: clamp(44px, 6vw, 76px); text-wrap: balance; }
+.wl-hero .wl-lead { font-size: 17px; max-width: 46ch; }
+.wl-hero .wl-actions { justify-content: center; margin-top: 12px; }
+
+/* Each step arrives once, top to bottom. */
+@media (prefers-reduced-motion: no-preference) {
+  .wl > * { animation: wl-in 240ms var(--ease) backwards; }
+  .wl > :nth-child(2) { animation-delay: 40ms; }
+  .wl > :nth-child(3) { animation-delay: 80ms; }
+  .wl > :nth-child(n + 4) { animation-delay: 120ms; }
+}
+@keyframes wl-in { from { opacity: 0; transform: translateY(8px); } }
+
+/* Headings take focus when a step changes, for screen readers; no ring for that. */
+.wl h1:focus { outline: none; }

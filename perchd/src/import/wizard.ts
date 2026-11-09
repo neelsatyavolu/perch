@@ -19,6 +19,7 @@ import { parseBookmarksHtml } from "./files/bookmarks-html";
 import { parsePasswordsCsv } from "./files/passwords-csv";
 import type { Keychain } from "./keychain";
 import { countAll, readerFor } from "./reader";
+import { copyExtensionData } from "./chrome/extension-data";
 import { readSafariExport } from "./safari/export-zip";
 import { DATA_TYPES, ImportError, isDataType, type Counts, type DataType, type ImportData } from "./types";
 import { writeAtomically } from "./write/atomic";
@@ -135,6 +136,9 @@ export async function importSource(input: ImportInput): Promise<Report> {
       input.onProgress?.({ type, state: "failed", index, total: types.length });
     }
   }
+  // Each extension's own data goes over before Perch installs it, so it starts as it was left.
+  const extensions = parts.find((p) => p.type === "extensions")?.data.extensions;
+  if (browser.family === "chromium" && extensions?.length) copyExtensionData(profile.path, join(input.target.userDataDir, input.target.profileDir ?? "Default"), extensions.map((e) => e.id));
   const applied = await applyImport({ target: input.target, keychain: input.keychain, source: { browser: browser.name, profile: profile.name }, parts, onProgress: input.onProgress, now: input.now, running: input.running, browser: input.browser });
   const order = (r: TypeResult) => types.indexOf(r.type);
   const results = [...applied.results, ...failed].sort((a, b) => order(a) - order(b));

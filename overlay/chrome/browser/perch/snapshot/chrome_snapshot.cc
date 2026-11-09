@@ -62,6 +62,9 @@
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
+#include "extensions/browser/extension_registry.h"
+#include "components/autofill/core/browser/data_manager/addresses/address_data_manager.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
 #include "content/public/browser/render_widget_host_view.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
 #include "chrome/browser/ui/views/side_panel/side_panel.h"
@@ -313,7 +316,22 @@ class Snapshotter {
         "visitCount":3,"typedCount":1,"lastVisit":1700000000000}],
         "searchEngines":[{"name":"Kagi","keyword":"kagi",
         "url":"https://kagi.com/search?q={searchTerms}","isDefault":false}],
-        "extensions":[{"id":"x","name":"X","version":"1"}]}})");
+        "tabs":[
+          {"selected":1,"groups":[],"tabs":[
+            {"url":"https://example.com/a","title":"A","pinned":false},
+            {"url":"https://example.com/b","title":"B","pinned":false}]},
+          {"selected":0,"groups":[],"tabs":[
+            {"url":"https://example.org/c","title":"C","pinned":true},
+            {"url":"https://example.org/d","title":"D","pinned":false},
+            {"url":"https://example.org/e","title":"E","pinned":false}]},
+          {"selected":0,"groups":[],"tabs":[
+            {"url":"https://example.net/f","title":"F","pinned":false}]}],
+        "addresses":[{"name":"Maya Chen","organization":"","street":"1 Main St",
+          "city":"Palo Alto","state":"CA","zip":"94301","country":"US",
+          "phone":"","email":"maya@example.com"}],
+        "extensions":[{"id":"x","name":"X","version":"1"},
+          {"id":"ddkjiahejlhfcafbddmgiahcphecmpfh","name":"uBlock Origin Lite",
+           "version":"1","storeUrl":"https://chromewebstore.google.com/detail/ddkjiahejlhfcafbddmgiahcphecmpfh"}]}})");
       ApplyImportBundle(
           browser_->GetProfile(),
           base::DictValue().Set("path", file.value()),
@@ -322,6 +340,26 @@ class Snapshotter {
                          << (result.has_value() ? result->DebugString()
                                                 : result.error());
           }));
+    } else if (state == "import-check") {
+      // After "import": the windows it made, and whether the extension and
+      // the address arrived.
+      std::string windows;
+      for (BrowserWindowInterface* window : GetAllBrowserWindowInterfaces()) {
+        TabStripModel* tabs = window->GetTabStripModel();
+        windows += " [" + base::NumberToString(tabs->count()) + " tabs, active " +
+                   base::NumberToString(tabs->active_index()) + "]";
+      }
+      Profile* profile = browser_->GetProfile();
+      autofill::PersonalDataManager* data =
+          autofill::PersonalDataManagerFactory::GetForBrowserContext(profile);
+      LOG(WARNING) << "Perch snapshot: import-check windows:" << windows
+                   << " / extension installed "
+                   << !!extensions::ExtensionRegistry::Get(profile)
+                            ->GetInstalledExtension(
+                                "ddkjiahejlhfcafbddmgiahcphecmpfh")
+                   << " / addresses "
+                   << (data ? data->address_data_manager().GetProfiles().size()
+                            : 0);
     } else if (state == "login-open") {
       // A sign-in form on a local test server (http://127.0.0.1:8765/).
       browser_->GetTabStripModel()->GetActiveWebContents()->GetController()

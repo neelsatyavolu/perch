@@ -21,6 +21,7 @@
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/perch/agent/perch_devtools.h"
 #include "chrome/browser/perch/command_bar/command_bar.h"
+#include "chrome/browser/perch/onboarding/onboarding.h"
 #include "chrome/browser/perch/extensions/perch_component_extensions.h"
 #include "base/files/file_path.h"
 #include "chrome/browser/perch/keys/key_broker.h"
@@ -444,6 +445,11 @@ void PerchPageHandler::Dispatch(const std::string& method,
                      std::end(kPages)) {
       Reject(std::move(id), "invalid", "Unknown page");
       return;
+    }
+    // The welcome page leaves for another page only when setup is finished
+    // or skipped.
+    if (IsWelcomeURL(web_ui()->GetWebContents()->GetLastCommittedURL())) {
+      MarkOnboardingFinished(profile());
     }
     std::string url = "chrome://perch-" + *page + "/";
     if (args.size() > 1 && args[1].is_string() && !args[1].GetString().empty()) {

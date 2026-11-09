@@ -91,3 +91,4 @@ perch/shell/menu-glass.patch
 perch/shell/sidebar-keep-alive.patch
 perch/shell/menu-hairline.patch
 perch/shell/signing-assess-after-notarize.patch
+perch/shell/onboarding-build.patch

@@ -84,7 +84,7 @@ export type ApplyInput = {
 };
 
 /** The types the browser writes from a bundle; the rest wait in it. */
-const BROWSER_TYPES = ["bookmarks", "history", "passwords", "cookies", "tabs", "searchEngines"] as const satisfies readonly (keyof ImportApplied & DataType)[];
+const BROWSER_TYPES = ["bookmarks", "history", "passwords", "cookies", "tabs", "searchEngines", "extensions", "addresses"] as const satisfies readonly (keyof ImportApplied & DataType)[];
 
 type BrowserOutcome = { applied: ImportApplied; skipped: readonly string[] };
 
@@ -156,7 +156,7 @@ export async function applyImport(input: ApplyInput): Promise<{ results: TypeRes
     const done = new Set<DataType>(BROWSER_TYPES.filter((t) => typeof outcome.applied[t] === "number" && !outcome.skipped.includes(t)));
     const written = bundled.map((r): TypeResult => {
       if (!done.has(r.type)) return r;
-      const count = outcome.applied[r.type as (typeof BROWSER_TYPES)[number]];
+      const count = outcome.applied[r.type as (typeof BROWSER_TYPES)[number]] ?? 0;
       const left = r.count - count + (r.skipped ?? 0);
       return { type: r.type, status: "written", count, ...(left > 0 ? { skipped: left } : {}) };
     });

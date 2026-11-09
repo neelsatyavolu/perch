@@ -24,7 +24,8 @@ export type BookmarkChange =
 export type HistoryVisit = { url: string; title: string; time: number };
 export type OpenTab = { tabId: string; url: string; title: string; pinned: boolean; groupId?: string };
 export type OpenWindow = { windowId: string; incognito: boolean; tabs: OpenTab[]; groups: { groupId: string; title: string; color: string }[]; splits: [string, string][] };
-export type ImportApplied = { bookmarks: number; history: number; passwords: number; cookies: number; tabs: number; searchEngines: number };
+/** Counts of what the browser added. Older browsers leave out `extensions` and `addresses`, which then stay sealed. */
+export type ImportApplied = { bookmarks: number; history: number; passwords: number; cookies: number; tabs: number; searchEngines: number; extensions?: number; addresses?: number };
 export type AskRequest = { text: string; tabId?: string; profile?: string };
 
 /** The domain's calls. Each returns null when this browser lacks the method. */

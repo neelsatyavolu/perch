@@ -93,3 +93,13 @@ test("a failed browser call removes the temp file and leaves everything bundled"
   expect(r.results.every((x) => x.status === "bundled")).toBe(true);
   expect(pendingBundles(dir)).toEqual([r.bundle!.id]);
 });
+
+test("a browser that adds addresses and extensions leaves nothing sealed", async () => {
+  const keychain = memoryKeychain();
+  const withExtensions = [...parts, { type: "extensions" as const, data: { extensions: [{ id: "a".repeat(32), name: "One", version: "1", storeUrl: "https://chromewebstore.google.com/detail/" + "a".repeat(32) }] } as ImportData }];
+  const { browser } = fakeBrowser(() => ({ applied: { ...none, passwords: 1, searchEngines: 2, addresses: 1, extensions: 1 }, skipped: [] }));
+  const out = await applyImport({ target: { userDataDir: dir }, keychain, source: { browser: "chrome", profile: "Default" }, parts: withExtensions, browser });
+  expect(out.results.map((r) => [r.type, r.status, r.count])).toEqual([["passwords", "written", 1], ["searchEngines", "written", 2], ["addresses", "written", 1], ["extensions", "written", 1]]);
+  expect(out.bundle).toBeUndefined();
+  expect(pendingBundles(dir)).toEqual([]);
+});

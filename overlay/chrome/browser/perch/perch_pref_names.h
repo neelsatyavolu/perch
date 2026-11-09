@@ -23,6 +23,9 @@ inline constexpr char kAppearanceMatchSystem[] =
 inline constexpr char kAppearanceDarkTheme[] = "perch.appearance.dark_theme";
 inline constexpr char kAppearanceHideChrome[] = "perch.appearance.hide_chrome";
 
+// Whether the welcome page has been finished or skipped (onboarding/).
+inline constexpr char kOnboardingFinished[] = "perch.onboarding_finished";
+
 // Never-sleep rules, [{"kind", "pattern"}] as in Lulltab (memory_saver/).
 inline constexpr char kMemorySaverRules[] = "perch.memory_saver.rules";
 

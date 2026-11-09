@@ -10,13 +10,18 @@
 #include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
 #include "chrome/browser/perch/hide_chrome/hide_chrome_mac.h"
+#include "chrome/browser/perch/onboarding/onboarding.h"
 #include "chrome/browser/perch/perch_pref_names.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+#include "chrome/browser/ui/tabs/tab_change_type.h"
+#include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "chrome/browser/ui/tabs/tab_strip_model_observer.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/location_bar/location_bar_view.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_service.h"
+#include "content/public/browser/web_contents.h"
 #include "ui/views/focus/focus_manager.h"
 
 namespace perch {
@@ -43,8 +48,54 @@ class FocusWatcher : public views::FocusChangeListener {
   raw_ptr<BrowserWindowInterface> browser_;
 };
 
+void Relayout(BrowserWindowInterface* browser);
+
+// Tracks whether the welcome page is the window's active tab: while it is,
+// the bars are hidden whatever the setting, and nothing reveals them.
+class WelcomeWatcher : public TabStripModelObserver {
+ public:
+  explicit WelcomeWatcher(BrowserWindowInterface* browser) : browser_(browser) {
+    browser_->GetTabStripModel()->AddObserver(this);
+    showing_ = Showing();
+  }
+  ~WelcomeWatcher() override {
+    if (TabStripModel* model = browser_->GetTabStripModel()) {
+      model->RemoveObserver(this);
+    }
+  }
+
+  bool showing() const { return showing_; }
+
+  void OnTabStripModelChanged(TabStripModel* model,
+                              const TabStripModelChange& change,
+                              const TabStripSelectionChange& selection) override {
+    Update();
+  }
+  void OnTabChangedAt(tabs::TabInterface* tab, TabChangeType type) override {
+    Update();
+  }
+
+ private:
+  bool Showing() const {
+    content::WebContents* active =
+        browser_->GetTabStripModel()->GetActiveWebContents();
+    return active && IsWelcomeURL(active->GetVisibleURL());
+  }
+  void Update() {
+    const bool now = Showing();
+    if (now != showing_) {
+      showing_ = now;
+      Relayout(browser_);
+    }
+  }
+
+  raw_ptr<BrowserWindowInterface> browser_;
+  bool showing_ = false;
+};
+
 struct WindowState {
   PrefChangeRegistrar registrar;
+  std::unique_ptr<WelcomeWatcher> welcome;
   bool revealed = false;
   std::unique_ptr<FocusWatcher> focus;
   raw_ptr<views::FocusManager> focus_manager = nullptr;
@@ -59,8 +110,16 @@ Windows() {
   return *windows;
 }
 
+bool WelcomeShowing(const BrowserWindowInterface* browser) {
+  auto it = Windows().find(browser);
+  return it != Windows().end() && it->second->welcome &&
+         it->second->welcome->showing();
+}
+
 void Relayout(BrowserWindowInterface* browser) {
-  SetTrafficLightsHidden(browser, IsChromeHidden(browser));
+  // The welcome page keeps the window's close, minimise and zoom buttons.
+  SetTrafficLightsHidden(browser,
+                         IsChromeHidden(browser) && !WelcomeShowing(browser));
   if (BrowserView* view = BrowserView::GetBrowserViewForBrowser(browser)) {
     view->ToolbarSizeChanged(/*is_animating=*/false);
     view->InvalidateLayout();
@@ -71,7 +130,13 @@ void Relayout(BrowserWindowInterface* browser) {
 
 bool IsChromeHidden(const BrowserWindowInterface* browser) {
   auto it = Windows().find(browser);
-  if (it == Windows().end() || it->second->revealed) {
+  if (it == Windows().end()) {
+    return false;
+  }
+  if (it->second->welcome && it->second->welcome->showing()) {
+    return true;
+  }
+  if (it->second->revealed) {
     return false;
   }
   const PrefService* prefs = it->second->registrar.prefs();
@@ -109,6 +174,7 @@ void WatchHideChrome(BrowserWindowInterface* browser) {
     }
   }
   state->monitor = CreateHideChromeMonitor(browser);
+  state->welcome = std::make_unique<WelcomeWatcher>(browser);
   Windows()[browser] = std::move(state);
   if (IsChromeHidden(browser)) {
     Relayout(browser);

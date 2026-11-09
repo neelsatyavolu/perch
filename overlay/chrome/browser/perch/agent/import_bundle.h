@@ -15,7 +15,8 @@ namespace perch {
 // perchd wrote under "<user data>/Perch Import/applying/", and adds its
 // bookmarks, history, passwords, tabs (asleep) and search engines to
 // `profile` through Chromium's importer. Replies
-// {applied: {bookmarks, history, passwords, cookies, tabs, searchEngines},
+// {applied: {bookmarks, history, passwords, cookies, tabs, searchEngines, extensions,
+// addresses},
 // skipped: [types left in the sealed bundle]}. perchd deletes the file.
 void ApplyImportBundle(Profile* profile,
                        const base::DictValue& params,

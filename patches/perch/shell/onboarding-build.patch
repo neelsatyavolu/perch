@@ -1,0 +1,14 @@
+# Perch: build the first-run onboarding module.
+diff --git a/chrome/browser/ui/browser_window/internal/BUILD.gn b/chrome/browser/ui/browser_window/internal/BUILD.gn
+index 6b38282116..4435990188 100644
+--- a/chrome/browser/ui/browser_window/internal/BUILD.gn
++++ b/chrome/browser/ui/browser_window/internal/BUILD.gn
+@@ -108,6 +108,8 @@ source_set("internal") {
+       "//chrome/browser/perch/hide_chrome/hide_chrome.cc",
+       "//chrome/browser/perch/hide_chrome/hide_chrome.h",
+       "//chrome/browser/perch/hide_chrome/hide_chrome_mac.h",
++      "//chrome/browser/perch/onboarding/onboarding.cc",
++      "//chrome/browser/perch/onboarding/onboarding.h",
+       "//chrome/browser/perch/hide_chrome/hide_chrome_mac.mm",
+       "//chrome/browser/perch/layout/perch_layout.cc",
+       "//chrome/browser/perch/layout/perch_layout.h",

@@ -5,6 +5,7 @@
 #include "chrome/browser/perch/hide_chrome/hide_chrome.h"
 #include "chrome/browser/perch/keys/key_broker.h"
 #include "chrome/browser/perch/memory_saver/sleep_controller.h"
+#include "chrome/browser/perch/onboarding/onboarding.h"
 #include "chrome/browser/perch/perch_menu_mac.h"
 #include "chrome/browser/perch/snapshot/chrome_snapshot.h"
 #include "chrome/browser/perch/theme/perch_theme.h"
@@ -215,6 +216,7 @@ PerchSidePanelController::PerchSidePanelController(
 
 void PerchSidePanelController::OnWindowReady() {
   KeyBroker::Get().OnWindowOpened(browser_);
+  MaybeStartOnboarding(browser_);
 }
 
 PerchSidePanelController::~PerchSidePanelController() {

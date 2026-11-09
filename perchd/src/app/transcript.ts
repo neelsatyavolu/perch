@@ -54,18 +54,21 @@ function earlierTurns(history: ChatMessage[]): string {
   return lines.join("\n");
 }
 
+/** The tab the user is looking at, then every other open tab: a chat always has all of them. */
 function tabContext(input: TaskInput): string {
   const line = (t: TabInfo) => `- ${oneLine(t.title) || "(untitled)"} (${oneLine(t.url)})`;
-  if (input.scope === "current" && input.tab && input.inTab) {
-    return `The user is looking at this tab, and you are already in it: read and act on it directly instead of opening it again.\n${line(input.tab)}`;
+  const current = input.tab;
+  const others = input.tabs.filter((t) => !current || t.url !== current.url).slice(0, 50);
+  const parts: string[] = [];
+  if (current) {
+    parts.push(
+      input.inTab
+        ? `The user is looking at this tab, and you are already in it: read and act on it directly instead of opening it again.\n${line(current)}`
+        : `The user is looking at this tab, which you may open and use:\n${line(current)}`,
+    );
   }
-  if (input.scope === "current" && input.tab) {
-    return `The user is looking at this tab, which you may open and use:\n${line(input.tab)}`;
-  }
-  if (input.scope === "all" && input.tabs.length) {
-    return `The user's open tabs, which you may open and use:\n${input.tabs.slice(0, 50).map(line).join("\n")}`;
-  }
-  return "";
+  if (others.length) parts.push(`The user's ${current ? "other " : ""}open tabs, which you may open and use:\n${others.map(line).join("\n")}`);
+  return parts.join("\n\n");
 }
 
 function mentionContext(tabs: TabInfo[]): string {

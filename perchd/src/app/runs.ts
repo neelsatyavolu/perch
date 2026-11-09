@@ -139,7 +139,7 @@ export class RunManager {
       ...(files.length ? { attachments: files.map((f) => ({ id: f.id, name: f.name })) } : {}),
       ...(mentions.length ? { mentions } : {}),
     };
-    const tab = chat.settings.scope === "current" && context?.targetId ? context : undefined;
+    const tab = context?.targetId ? context : undefined;
     const task = buildTask({ history: chat.messages, text, scope: chat.settings.scope, tab: context, tabs: this.deps.tabs(), inTab: Boolean(tab), mentions, files });
     const run: Run = { runId: crypto.randomUUID(), chatId, controller: new AbortController(), text: "", steps: [], pending: null, done: Promise.resolve() };
     this.runs.set(chatId, run);

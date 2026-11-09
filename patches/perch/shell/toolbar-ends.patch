@@ -1,0 +1,71 @@
+# Perch: no menu or profile button in the toolbar; the tab strip's chevron opens Perch's menu, and the chat button reads Ask Perch.
+diff --git a/chrome/browser/ui/views/tab_search_bubble_host.cc b/chrome/browser/ui/views/tab_search_bubble_host.cc
+index 350220b587..a012355163 100644
+--- a/chrome/browser/ui/views/tab_search_bubble_host.cc
++++ b/chrome/browser/ui/views/tab_search_bubble_host.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "chrome/browser/ui/views/tab_search_bubble_host.h"
+ 
++#include "chrome/browser/perch/toolbar/perch_profile_menu.h"
++
+ #include "base/functional/bind.h"
+ #include "base/i18n/rtl.h"
+ #include "base/metrics/histogram_functions.h"
+@@ -251,6 +253,10 @@ BrowserWindowInterface* TabSearchBubbleHost::GetBrowser() {
+ }
+ 
+ void TabSearchBubbleHost::ButtonPressed(const ui::Event& event) {
++  // Perch: the chevron opens Perch's menu. Tab search keeps its shortcut.
++  if (perch::ShowPerchAppMenu(browser_window_interface_, button_)) {
++    return;
++  }
+   if (ShowTabSearchBubble()) {
+     // Only log the open action if it resulted in creating a new instance of the
+     // Tab Search bubble.
+diff --git a/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.cc b/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.cc
+index 31da4534bb..67855d075e 100644
+--- a/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.cc
++++ b/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.cc
+@@ -2,6 +2,7 @@
+ // Use of this source code is governed by a BSD-style license that can be
+ // found in the LICENSE file.
+ 
++#include "chrome/browser/ui/actions/chrome_action_id.h"
+ #include "chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.h"
+ 
+ #include <string>
+@@ -88,6 +89,10 @@ PinnedActionToolbarButton::PinnedActionToolbarButton(
+   }
+   ConfigureInkDrop(this);
+   SetHorizontalAlignment(gfx::ALIGN_CENTER);
++  // Perch: the chat button says what it does.
++  if (action_id == kActionSidePanelShowPerch) {
++    SetHighlight(u"Ask Perch", std::nullopt);
++  }
+   // Pinned action toolbar buttons have right margin and no left margin.
+   SetProperty(
+       views::kMarginsKey,
+diff --git a/chrome/browser/ui/views/toolbar/toolbar_view.cc b/chrome/browser/ui/views/toolbar/toolbar_view.cc
+index 7f404c6864..1d605028f1 100644
+--- a/chrome/browser/ui/views/toolbar/toolbar_view.cc
++++ b/chrome/browser/ui/views/toolbar/toolbar_view.cc
+@@ -607,6 +607,9 @@ void ToolbarView::Init() {
+     avatar_ = AddChildView(std::make_unique<AvatarToolbarButton>(browser_));
+     bool show_avatar_toolbar_button =
+         AvatarToolbarButtonInterface::CanShowForProfile(browser_->GetProfile());
++    // Perch: profiles are in the tab strip's menu, with everything else the
++    // menu button held.
++    show_avatar_toolbar_button = false;
+     avatar_->SetVisible(show_avatar_toolbar_button);
+   }
+ 
+@@ -629,6 +632,8 @@ void ToolbarView::Init() {
+         l10n_util::GetStringUTF16(IDS_APPMENU_TOOLTIP));
+     app_menu_button->SetID(VIEW_ID_APP_MENU);
+     app_menu_button_ = AddChildView(std::move(app_menu_button));
++    // Perch: its menu opens from the chevron that ends the tab strip.
++    app_menu_button_->SetVisible(false);
+   }
+ 
+   if (base::FeatureList::IsEnabled(contextual_tasks::kContextualTasks) &&

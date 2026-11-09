@@ -109,25 +109,38 @@ void AddPerchMixer(ui::ColorProvider* provider,
                                  : SkColorSetRGB(0xD9, 0x2D, 0x3F);
 
   ui::ColorMixer& m = provider->AddMixer();
-  // Canvas: the tab strip and the frame around it.
+  // Raised: the tab strip and the frame around it, a step off the toolbar so
+  // the active tab reads as part of the toolbar.
   for (ui::ColorId id : std::initializer_list<ui::ColorId>{ui::kColorFrameActive, ui::kColorFrameInactive,
                          kColorTabBackgroundInactiveFrameActive,
                          kColorTabBackgroundInactiveFrameInactive,
-                         kColorNewTabButtonBackgroundFrameActive}) {
+                         kColorNewTabButtonBackgroundFrameActive,
+                         kColorNewTabButtonBackgroundFrameInactive,
+                         kColorNewTabButtonCRBackgroundFrameActive,
+                         kColorNewTabButtonCRBackgroundFrameInactive}) {
+    m[id] = {t->raised};
+  }
+  // Canvas: the active tab and the toolbar are one piece, with no line or
+  // outline between them, and the address bar is plain text on it until it
+  // is hovered.
+  for (ui::ColorId id : std::initializer_list<ui::ColorId>{kColorTabBackgroundActiveFrameActive,
+                         kColorTabBackgroundActiveFrameInactive,
+                         kColorTabStrokeFrameActive,
+                         kColorTabStrokeFrameInactive,
+                         kColorToolbar, kColorBookmarkBarBackground,
+                         kColorToolbarTopSeparatorFrameActive,
+                         kColorToolbarTopSeparatorFrameInactive,
+                         kColorLocationBarBackground,
+                         kColorLocationBarBorderOpaque}) {
     m[id] = {t->canvas};
   }
-  // Card: the toolbar and the active tab, which join into one piece.
-  for (ui::ColorId id : std::initializer_list<ui::ColorId>{kColorToolbar, kColorTabBackgroundActiveFrameActive,
-        kColorTabBackgroundActiveFrameInactive, kColorBookmarkBarBackground,
-        kColorSidePanelBackground, kColorSidePanelContentBackground,
+  // Card: the side panel.
+  for (ui::ColorId id : std::initializer_list<ui::ColorId>{kColorSidePanelBackground, kColorSidePanelContentBackground,
         kColorTabHoverCardBackground}) {
     m[id] = {t->card};
   }
-  // Elevated: the address bar.
-  m[kColorLocationBarBackground] = {t->raised};
-  m[kColorLocationBarBackgroundHovered] = {Over(t->hair_strong, t->raised)};
-  m[kColorLocationBarBorder] = {Over(t->hair_strong, t->card)};
-  m[kColorLocationBarBorderOpaque] = {Over(t->hair_strong, t->card)};
+  m[kColorLocationBarBackgroundHovered] = {Over(t->hair, t->canvas)};
+  m[kColorLocationBarBorder] = {SK_ColorTRANSPARENT};
   // Text and icons.
   for (ui::ColorId id : std::initializer_list<ui::ColorId>{kColorTabForegroundActiveFrameActive,
         kColorTabForegroundActiveFrameInactive, kColorOmniboxText,
@@ -143,13 +156,9 @@ void AddPerchMixer(ui::ColorProvider* provider,
   }
   // Hairlines.
   for (ui::ColorId id : std::initializer_list<ui::ColorId>{kColorToolbarSeparator, kColorTabDividerFrameActive,
-        kColorTabDividerFrameInactive, kColorToolbarContentAreaSeparator,
-        kColorToolbarTopSeparatorFrameActive}) {
+        kColorTabDividerFrameInactive, kColorToolbarContentAreaSeparator}) {
     m[id] = {hair};
   }
-  // The active tab's outline, drawn when it sits close to the strip.
-  m[kColorTabStrokeFrameActive] = {Over(t->hair_strong, t->canvas)};
-  m[kColorTabStrokeFrameInactive] = {Over(t->hair_strong, t->canvas)};
   // The accent: focus rings, text selection and the app menu's highlight.
   m[ui::kColorFocusableBorderFocused] = {accent};
   m[ui::kColorTextSelectionBackground] = {tint};
@@ -353,9 +362,6 @@ void AddPerchMixer(ui::ColorProvider* provider,
   m[kColorNewTabButtonForegroundFrameInactive] = {t->mute};
   m[kColorNewTabButtonCRForegroundFrameActive] = {t->mute};
   m[kColorNewTabButtonCRForegroundFrameInactive] = {t->mute};
-  m[kColorNewTabButtonCRBackgroundFrameActive] = {t->canvas};
-  m[kColorNewTabButtonCRBackgroundFrameInactive] = {t->canvas};
-  m[kColorNewTabButtonBackgroundFrameInactive] = {t->canvas};
   m[kColorNewTabButtonInkDropFrameActive] = {t->hair_strong};
   m[kColorNewTabButtonInkDropFrameInactive] = {t->hair_strong};
   m[kColorTabGroupTabStripFrameActiveBlue] = {tint};

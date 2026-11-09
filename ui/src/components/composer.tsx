@@ -1,10 +1,11 @@
 /**
- * The composer (spec 7.6): the current tab chip, the message field, attach and dictate, send or
- * stop, and under it the real mode, tab scope and model pickers.
+ * The composer (spec 7.6): one box holding the current tab chip, the message field and a single
+ * row with attach, the permission mode, the model and effort pickers, and one round button that
+ * dictates while the field is empty, sends once there is text, and stops a running task.
  */
 
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { ChatSettings, Effort, Mode, ModelInfo, Scope, TabInfo } from "../api/types";
+import type { ChatSettings, Effort, Mode, ModelInfo, TabInfo } from "../api/types";
 import type { PageHost } from "../host/frame-host";
 import type { AttachedFile } from "../host/protocol";
 import { Icon } from "./icon";
@@ -22,12 +23,7 @@ const MODES: Choice<Mode>[] = [
   { value: "guard", label: "Guard", hint: "Asks before it sends, buys or deletes" },
   { value: "skip", label: "Skip confirmation", hint: "Runs without asking; payments still ask" },
 ];
-const SCOPES: Choice<Scope>[] = [
-  { value: "current", label: "Current tab", hint: "The tab this chat is in" },
-  { value: "all", label: "All tabs", hint: "Any tab you have open" },
-  { value: "agent", label: "New agent tabs", hint: "Only tabs the agent opens" },
-];
-const EFFORT_LABEL: Record<Effort, string> = { low: "low", medium: "medium", high: "high" };
+const EFFORT_LABEL: Record<Effort, string> = { low: "Low", medium: "Medium", high: "High" };
 
 type ComposerProps = {
   draft: string;
@@ -168,11 +164,12 @@ export function Composer(p: ComposerProps) {
   const canAttach = Boolean(p.host?.chooseFiles);
   const canDictate = Boolean(p.host?.startDictation);
   const model = p.models.find((m) => m.id === p.settings.model);
-  const modelChoices: Choice<string>[] = [
-    ...p.models.map((m) => ({ value: `model:${m.id}`, label: m.label, hint: m.provider, group: "Model", icon: <ProviderMark provider={m.provider} /> })),
-    ...(model?.efforts ?? []).map((e) => ({ value: `effort:${e}`, label: EFFORT_LABEL[e], group: "Effort" })),
-  ];
-  const modelLabel = model ? `${model.label} · ${p.settings.effort}` : p.models.length ? "Pick a model" : "No model signed in";
+  const modelChoices: Choice<string>[] = p.models.map((m) => ({ value: m.id, label: m.label, hint: m.provider, icon: <ProviderMark provider={m.provider} /> }));
+  const effortChoices: Choice<Effort>[] = (model?.efforts ?? []).map((e) => ({ value: e, label: EFFORT_LABEL[e] }));
+  const modelLabel = model ? model.label : p.models.length ? "Pick a model" : "No model signed in";
+  // The round button: stop while a task runs, the microphone while there is nothing to send, send
+  // otherwise (with a small microphone beside it, to dictate after what is typed).
+  const showMic = !p.running && canDictate && (dictating || !p.draft.trim());
 
   return (
     <div class="composer-block">
@@ -210,7 +207,7 @@ export function Composer(p: ComposerProps) {
             ))}
           </div>
         )}
-        {p.tab && p.settings.scope === "current" && (
+        {p.tab && (
           <span class="chip" title={p.tab.url}>
             <span class="fav">{(host(p.tab.url) || "?").charAt(0).toUpperCase()}</span>
             <span class="chip-t">{p.tab.title || "Untitled"}</span>
@@ -238,56 +235,58 @@ export function Composer(p: ComposerProps) {
           >
             <Icon name="plus" />
           </button>
+          <Menu label="Permission mode" choices={MODES} selected={[p.settings.mode]} onPick={(c) => p.onSettings({ mode: c.value })}>
+            <Icon name="shield" size={13} />
+            {MODES.find((m) => m.value === p.settings.mode)?.label}
+          </Menu>
           {note && <span class="cnote" role="status">{note}</span>}
           <div class="grow" />
-          <button
-            type="button"
-            class="ib"
-            aria-label={dictating ? "Stop dictation" : "Dictate"}
-            aria-pressed={dictating}
-            title={canDictate ? (dictating ? "Stop dictation" : "Dictate (on this Mac, nothing leaves it)") : "Dictation works in the Perch build"}
-            disabled={!canDictate}
-            onClick={() => void dictate()}
+          <Menu
+            label="Model"
+            align="end"
+            choices={modelChoices}
+            selected={[p.settings.model]}
+            onPick={(c) => {
+              const next = p.models.find((m) => m.id === c.value);
+              p.onSettings({ model: c.value, ...(next && !next.efforts.includes(p.settings.effort) ? { effort: next.efforts[0] ?? "medium" } : {}) });
+            }}
           >
-            <Icon name="mic" />
-          </button>
+            {model && <ProviderMark provider={model.provider} size={12} />}
+            {modelLabel}
+          </Menu>
+          {effortChoices.length > 0 && (
+            <Menu label="Effort" align="end" choices={effortChoices} selected={[p.settings.effort]} onPick={(c) => p.onSettings({ effort: c.value })}>
+              {EFFORT_LABEL[p.settings.effort]}
+            </Menu>
+          )}
           {p.running ? (
             <button type="button" class="ib send stop" aria-label="Stop task" title="Stop task" onClick={p.onStop}>
               <Icon name="stop" />
             </button>
-          ) : (
-            <button type="button" class="ib send" aria-label="Send message" title="Send message" disabled={!p.draft.trim()} onClick={send}>
-              <Icon name="send" />
+          ) : showMic ? (
+            <button
+              type="button"
+              class="ib send"
+              aria-label={dictating ? "Stop dictation" : "Dictate"}
+              aria-pressed={dictating}
+              title={dictating ? "Stop dictation" : "Dictate (on this Mac, nothing leaves it)"}
+              onClick={() => void dictate()}
+            >
+              <Icon name="mic" />
             </button>
+          ) : (
+            <>
+              {canDictate && (
+                <button type="button" class="ib" aria-label="Dictate" title="Dictate (on this Mac, nothing leaves it)" onClick={() => void dictate()}>
+                  <Icon name="mic" />
+                </button>
+              )}
+              <button type="button" class="ib send" aria-label="Send message" title="Send message" disabled={!p.draft.trim()} onClick={send}>
+                <Icon name="send" />
+              </button>
+            </>
           )}
         </div>
-      </div>
-      <div class="under">
-        <Menu label="Permission mode" choices={MODES} selected={[p.settings.mode]} onPick={(c) => p.onSettings({ mode: c.value })}>
-          <Icon name="shield" size={13} />
-          {MODES.find((m) => m.value === p.settings.mode)?.label}
-        </Menu>
-        <Menu label="Tabs the agent may use" choices={SCOPES} selected={[p.settings.scope]} onPick={(c) => p.onSettings({ scope: c.value })}>
-          {SCOPES.find((s) => s.value === p.settings.scope)?.label}
-        </Menu>
-        <span class="grow" />
-        <Menu
-          label="Model and effort"
-          mono
-          align="end"
-          choices={modelChoices}
-          selected={[`model:${p.settings.model}`, `effort:${p.settings.effort}`]}
-          onPick={(c) => {
-            const [kind, value] = [c.value.slice(0, c.value.indexOf(":")), c.value.slice(c.value.indexOf(":") + 1)];
-            if (kind === "model") {
-              const next = p.models.find((m) => m.id === value);
-              p.onSettings({ model: value, ...(next && !next.efforts.includes(p.settings.effort) ? { effort: next.efforts[0] ?? "medium" } : {}) });
-            } else p.onSettings({ effort: value as Effort });
-          }}
-        >
-          {model && <ProviderMark provider={model.provider} size={12} />}
-          {modelLabel}
-        </Menu>
       </div>
     </div>
   );

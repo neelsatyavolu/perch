@@ -120,9 +120,11 @@ void PerchProfileMenuModel::BuildProfiles() {
                   Icon(kManageAccountsIcon));
 }
 
-// The menu button that ends the toolbar (DESIGN.md): Perch's own short menu
+// The chevron that ends the tab strip: profiles, then Perch's own short menu
 // in place of Chromium's app menu.
 void PerchProfileMenuModel::BuildApp() {
+  BuildProfiles();
+  AddSeparator(ui::NORMAL_SEPARATOR);
   AddItemWithIcon(IDC_NEW_TAB, u"New Tab", Icon(kAddIcon));
   AddItemWithIcon(IDC_NEW_WINDOW, u"New Window", Icon(kNewWindowIcon));
   AddItemWithIcon(IDC_NEW_INCOGNITO_WINDOW, u"New Incognito Window",

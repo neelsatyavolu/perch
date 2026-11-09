@@ -120,8 +120,8 @@ test("the composer shows the tab chip, the placeholder and real pickers", () => 
   expect(el.querySelector(".chip")!.textContent).toContain("Inbox (3)");
   expect(el.querySelector(".chip .d")!.textContent).toBe("mail.example");
   expect(el.querySelector("textarea")!.getAttribute("placeholder")).toBe(PLACEHOLDER);
-  const pills = [...el.querySelectorAll(".under .pill")].map((p) => p.textContent);
-  expect(pills).toEqual(["Guard", "Current tab", "GPT-6 Astra · high"]);
+  const pills = [...el.querySelectorAll(".crow .pill")].map((p) => p.textContent);
+  expect(pills).toEqual(["Guard", "GPT-6 Astra", "High"]);
 });
 
 test("Enter sends, Shift+Enter does not, and typing reports the draft", () => {
@@ -143,17 +143,18 @@ test("while a task runs the send button becomes Stop", () => {
   expect(calls.stop).toBe(1);
 });
 
-test("mode, scope and model pickers change the chat's settings", () => {
+test("mode, effort and model pickers change the chat's settings", () => {
   const { el, calls } = composer();
   click(el.querySelector('[aria-label="Permission mode"]'));
   const options = [...el.querySelectorAll('[role="option"]')];
   expect(options.map((o) => o.querySelector(".opt-label")!.textContent)).toEqual(["Ask", "Guard", "Skip confirmation"]);
   click(options[2]!);
   expect(calls.settings.at(-1)).toEqual({ mode: "skip" });
-  click(el.querySelector('[aria-label="Tabs the agent may use"]'));
-  click([...el.querySelectorAll('[role="option"]')].find((o) => o.textContent!.startsWith("New agent tabs"))!);
-  expect(calls.settings.at(-1)).toEqual({ scope: "agent" });
-  click(el.querySelector('[aria-label="Model and effort"]'));
+  expect(el.querySelector('[aria-label="Tabs the agent may use"]')).toBeNull();
+  click(el.querySelector('[aria-label="Effort"]'));
+  click([...el.querySelectorAll('[role="option"]')].find((o) => o.textContent!.startsWith("Medium"))!);
+  expect(calls.settings.at(-1)).toEqual({ effort: "medium" });
+  click(el.querySelector('[aria-label="Model"]'));
   click([...el.querySelectorAll('[role="option"]')].find((o) => o.textContent!.startsWith("Claude Opus 5.5"))!);
   // Opus has no "high" effort here, so the effort falls back to one it has.
   expect(calls.settings.at(-1)).toEqual({ model: "opus", effort: "medium" });

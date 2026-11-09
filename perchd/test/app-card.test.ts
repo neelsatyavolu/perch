@@ -87,15 +87,16 @@ test("the task carries earlier turns, the tab and the artifact format", () => {
   expect(task).toContain(ARTIFACT_FORMAT);
 });
 
-test("scopes change what the agent is told about tabs", () => {
+test("every chat is told the tab in view and the other open tabs, whatever scope an old chat stored", () => {
   const tabs = [
     { id: "t1", windowId: "w1", title: "Mail", url: "https://mail.example" },
     { id: "t2", windowId: "w1", title: "Docs", url: "https://docs.example" },
   ];
-  const all = buildTask({ history: [], text: "Summarise", scope: "all", tab: tabs[0], tabs });
-  expect(all).toContain("https://docs.example");
-  const agent = buildTask({ history: [], text: "Summarise", scope: "agent", tab: tabs[0], tabs });
-  expect(agent).not.toContain("https://mail.example");
+  for (const scope of ["current", "all", "agent"] as const) {
+    const task = buildTask({ history: [], text: "Summarise", scope, tab: tabs[0], tabs });
+    expect(task).toContain("looking at this tab, which you may open and use:\n- Mail (https://mail.example)");
+    expect(task).toContain("other open tabs, which you may open and use:\n- Docs (https://docs.example)");
+  }
   const none = buildTask({ history: [], text: "Hello", scope: "current", tabs: [] });
   expect(none.trimEnd().endsWith("Hello")).toBe(true);
 });

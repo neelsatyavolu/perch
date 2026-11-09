@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Sourcepoint fixture</title>
+<style>#sp_message_container_1 { position: fixed; inset: 0; background: rgb(0 0 0 / 0.5); } iframe { width: 600px; height: 300px; border: 0; background: #fff; }</style>
+</head>
+<body>
+  <h1>Newspaper</h1>
+  <div id="sp_message_container_1"></div>
+  <script>
+    // Sourcepoint shows its message in an iframe from another origin and reports the choice back.
+    window.consent = null;
+    const frame = document.createElement("iframe");
+    frame.id = "sp_message_iframe_1";
+    frame.src = `${location.protocol}//cmp.localhost:${location.port}/sp-message.html`;
+    document.getElementById("sp_message_container_1").append(frame);
+    addEventListener("message", (event) => {
+      if (event.origin !== new URL(frame.src).origin) return;
+      window.consent = event.data;
+      document.getElementById("sp_message_container_1").remove();
+    });
+  </script>
+</body>
+</html>

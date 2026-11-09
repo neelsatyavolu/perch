@@ -1,0 +1,9 @@
+[Adblock Plus 2.0]
+! Title: Fixture EasyList
+! Version: fixture-1
+||ads.localhost^
+||ads2.localhost^
+/banner-ad.js$script
+! The fixture server has a port, so exceptions avoid host-anchored paths.
+@@/allowed.js$script,domain=site.localhost
+example.com##.ad

@@ -1,0 +1,7 @@
+// Copyright 2026 The Perch Authors
+// Use of this source code is governed by the MIT license in Perch's LICENSE file.
+
+// The Perch mark in one colour: the perch (a bar) and the dot resting on it.
+CANVAS_DIMENSIONS, 24,
+ROUND_RECT, 4, 14, 16, 3.5, 0.75,
+CIRCLE, 15.5, 9.5, 3.25

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>TrustArc fixture</title>
+<style>#truste-consent-track { position: fixed; bottom: 0; left: 0; right: 0; padding: 16px; background: #fff; border-top: 1px solid #ccc; }</style>
+</head>
+<body>
+  <h1>Retailer</h1>
+  <script>
+    // Markup follows TrustArc's banner: Accept All, Required Only and Cookie Preferences.
+    window.consent = null;
+    setTimeout(() => {
+      const root = document.createElement("div");
+      root.id = "consent_blackbar";
+      root.innerHTML = `
+        <div id="truste-consent-track" role="dialog" aria-label="Cookie consent">
+          <div id="truste-consent-content">This site uses cookies.</div>
+          <div id="truste-consent-buttons">
+            <button id="truste-consent-button" class="truste-button1">Accept All Cookies</button>
+            <button id="truste-consent-required" class="truste-button2">Required Cookies Only</button>
+            <button id="truste-show-consent" class="truste-button3">Cookie Preferences</button>
+          </div>
+        </div>`;
+      document.body.append(root);
+      const close = (value) => { window.consent = value; document.getElementById("truste-consent-track").remove(); };
+      document.getElementById("truste-consent-button").onclick = () => close("accepted");
+      document.getElementById("truste-consent-required").onclick = () => close("required");
+    }, 300);
+  </script>
+</body>
+</html>

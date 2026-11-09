@@ -101,9 +101,8 @@ export function Sidebar({ client, windowId, fallbackTab = null, host }: Props) {
 
   return (
     <aside class="side" aria-label="Perch" data-ready={info ? "true" : undefined}>
-      {/* The panel's only header: the browser draws none above it, so close lives here too. */}
       <header class="side-h">
-        <h1 class="title">{view.chat?.title ?? "New chat"}</h1>
+        <span class="title">{view.chat?.title ?? "New chat"}</span>
         <PerchDot status={status} />
         {status !== "idle" && <span class="state">{status === "running" ? "Working" : "Waiting for you"}</span>}
         <Menu label="Recent chats" align="end" choices={others.map((c) => ({ value: c.id, label: c.title, hint: c.tab ? "In another tab" : undefined }))} selected={[]} onPick={(c) => void attach(c.value)}>
@@ -112,7 +111,7 @@ export function Sidebar({ client, windowId, fallbackTab = null, host }: Props) {
         <button type="button" class="ib" aria-label="New chat" title="New chat" disabled={!view.chat} onClick={() => void attach()}>
           <Icon name="pen" />
         </button>
-        <button type="button" class="ib" aria-label="Close side chat" title="Close side chat" onClick={() => host?.close?.()}>
+        <button type="button" class="ib" aria-label="Close sidebar" title="Close sidebar" onClick={() => host?.close?.()}>
           <Icon name="x" />
         </button>
       </header>

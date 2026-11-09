@@ -71,7 +71,7 @@ textarea.field { height: auto; min-height: 88px; padding: 8px 10px; resize: vert
 .label > span:first-child, .label > label:first-child { color: var(--body); font-size: 13px; }
 
 .check { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
-.check input { width: 16px; height: 16px; accent-color: var(--ink); margin: 0; }
+.check input { width: 16px; height: 16px; accent-color: var(--accent); margin: 0; }
 
 /* Cards and rows (Settings, Memory, Routines, Import). */
 .group { display: grid; gap: 8px; }
@@ -124,7 +124,7 @@ textarea.field { height: auto; min-height: 88px; padding: 8px 10px; resize: vert
 .panel-h .cap { font-weight: 400; }
 .panel-f { padding: 12px 16px 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .bar { height: 4px; border-radius: 2px; background: var(--hair-strong); overflow: hidden; }
-.bar > i { display: block; height: 100%; background: var(--ink); transform-origin: left; transition: transform 240ms var(--ease); }
+.bar > i { display: block; height: 100%; background: var(--accent); transform-origin: left; transition: transform 240ms var(--ease); }
 
 /* Dialogs: native <dialog> for focus trapping, Escape and an inert page behind it. */
 dialog.dlg {

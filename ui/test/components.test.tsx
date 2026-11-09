@@ -8,7 +8,6 @@ import { ChatList } from "../src/components/chat-list";
 import { Composer, PLACEHOLDER } from "../src/components/composer";
 import { PerchDot } from "../src/components/icon";
 import { LiveRun, Message, Steps } from "../src/components/message";
-import { providerPath } from "../src/components/provider-mark";
 import { resolveTheme } from "../src/theme/theme";
 
 let root: HTMLElement;
@@ -218,13 +217,4 @@ test("a run waiting for approval still counts its last step; a working run shows
   const working = mount(<LiveRun text="" steps={["Read the message", "Checked the calendar"]} waiting={false} />);
   expect(working.querySelector(".steps")?.textContent).toContain("1 step · Read the message");
   expect(working.querySelector(".work")?.textContent).toContain("Checked the calendar");
-});
-
-test("the model picker draws each provider's own mark, and none for providers without one", () => {
-  expect(providerPath("Claude Code")).not.toBeNull();
-  expect(providerPath("Claude Code")).not.toBe(providerPath("Anthropic API key"));
-  expect(providerPath("Codex")).toBe(providerPath("ChatGPT"));
-  expect(providerPath("Grok")).toBe(providerPath("xAI API key"));
-  expect(providerPath("Perch")).toBeNull();
-  expect(providerPath("Ollama")).toBeNull();
 });

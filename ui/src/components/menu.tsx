@@ -1,11 +1,10 @@
 /** A pill that opens a list of choices above it. Arrow keys move, Enter picks, Escape closes. */
 
-import { Fragment, type ComponentChildren, type VNode } from "preact";
+import { Fragment, type ComponentChildren } from "preact";
 import { useEffect, useId, useRef, useState } from "preact/hooks";
 import { Icon } from "./icon";
 
-/** `icon` is a small mark before the label, such as the model provider's. */
-export type Choice<T extends string> = { value: T; label: string; hint?: string; group?: string; icon?: VNode | null };
+export type Choice<T extends string> = { value: T; label: string; hint?: string; group?: string };
 
 type MenuProps<T extends string> = {
   label: string;
@@ -75,10 +74,7 @@ export function Menu<T extends string>({ label, children, choices, selected, onP
                 onPointerEnter={() => setActive(i)}
                 onClick={() => pick(i)}
               >
-                <span class="opt-label">
-                  {c.icon}
-                  {c.label}
-                </span>
+                <span class="opt-label">{c.label}</span>
                 {c.hint && <span class="opt-hint">{c.hint}</span>}
                 {selected.includes(c.value) && <Icon name="check" size={14} />}
               </li>

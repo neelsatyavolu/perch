@@ -10,7 +10,6 @@ import type { AttachedFile } from "../host/protocol";
 import { Icon } from "./icon";
 import { applyMention, keptMentions, matchTabs, mentionLabel, mentionQuery } from "./mentions";
 import { Menu, type Choice } from "./menu";
-import { ProviderMark } from "./provider-mark";
 
 /** What a message carries besides its text. */
 export type SendExtras = { files: AttachedFile[]; mentions: TabInfo[] };
@@ -160,7 +159,7 @@ export function Composer(p: ComposerProps) {
   const canDictate = Boolean(p.host?.startDictation);
   const model = p.models.find((m) => m.id === p.settings.model);
   const modelChoices: Choice<string>[] = [
-    ...p.models.map((m) => ({ value: `model:${m.id}`, label: m.label, hint: m.provider, group: "Model", icon: <ProviderMark provider={m.provider} /> })),
+    ...p.models.map((m) => ({ value: `model:${m.id}`, label: m.label, hint: m.provider, group: "Model" })),
     ...(model?.efforts ?? []).map((e) => ({ value: `effort:${e}`, label: EFFORT_LABEL[e], group: "Effort" })),
   ];
   const modelLabel = model ? `${model.label} · ${p.settings.effort}` : p.models.length ? "Pick a model" : "No model signed in";
@@ -276,7 +275,6 @@ export function Composer(p: ComposerProps) {
             } else p.onSettings({ effort: value as Effort });
           }}
         >
-          {model && <ProviderMark provider={model.provider} size={12} />}
           {modelLabel}
         </Menu>
       </div>

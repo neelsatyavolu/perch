@@ -1,0 +1,34 @@
+{
+  "_comment": "The only hosts an idle Perch may contact, by allowed connection (spec 5.1). perch-build netaudit fails on anything else. *.x matches subdomains of x.",
+  "connections": {
+    "extension_updates": [
+      "clients2.google.com",
+      "clients2.googleusercontent.com",
+      "update.googleapis.com",
+      "edgedl.me.gvt1.com"
+    ],
+    "safe_browsing_lists": [
+      "safebrowsing.googleapis.com"
+    ],
+    "components": [
+      "update.googleapis.com",
+      "redirector.gvt1.com",
+      "*.gvt1.com",
+      "dl.google.com"
+    ],
+    "translation_packs": [
+      "update.googleapis.com",
+      "*.gvt1.com"
+    ],
+    "perch_updates": [
+      "github.com",
+      "objects.githubusercontent.com",
+      "release-assets.githubusercontent.com"
+    ],
+    "encrypted_dns": [
+      "chrome.cloudflare-dns.com",
+      "dns.quad9.net",
+      "dns.mullvad.net"
+    ]
+  }
+}

@@ -1,0 +1,49 @@
+// Perch account, sync and relay server. Nothing here is secret: the Resend key is a Worker
+// secret (`wrangler secret put RESEND_API_KEY`), and the D1 id below is the hosted database's id,
+// which is not a secret. Self-hosters replace it after `wrangler d1 create perch` (see README.md).
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "perch-server",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "routes": [
+    { "pattern": "api.perchbrowser.com", "custom_domain": true },
+    { "pattern": "relay.perchbrowser.com", "custom_domain": true }
+  ],
+  "vars": {
+    "API_ORIGIN": "https://api.perchbrowser.com",
+    "RP_ID": "perchbrowser.com",
+    "RP_NAME": "Perch",
+    "PASSKEY_ORIGINS": "https://perchbrowser.com,https://api.perchbrowser.com",
+    "MAIL_FROM": "Perch <sign-in@perchbrowser.com>",
+    "QUOTA_BYTES": "104857600",
+    // A company server (docs/enterprise/company-server.md) signs people in only through the
+    // company's OpenID Connect provider. Uncomment and fill these in, then
+    // `wrangler secret put OIDC_CLIENT_SECRET`. The hosted server stays in public mode.
+    // "AUTH_MODE": "company",
+    // "OIDC_ISSUER": "https://login.example.com",
+    // "OIDC_CLIENT_ID": "perch",
+    // "OIDC_ADMIN_GROUP": "perch-admins"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "perch",
+      "database_id": "b51aa21b-4cd9-44f8-be96-1a70cecfd84e",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [{ "binding": "BLOBS", "bucket_name": "perch-sync" }],
+  "durable_objects": {
+    "bindings": [
+      { "name": "RELAY", "class_name": "RelayRoom" },
+      { "name": "LIMITER", "class_name": "RateLimiter" }
+    ]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RelayRoom", "RateLimiter"] }],
+  "triggers": { "crons": ["17 3 * * *"] },
+  // Invocation logs would record request metadata; the Worker writes its own PII-free logs instead.
+  "observability": { "enabled": true, "logs": { "invocation_logs": false } }
+}

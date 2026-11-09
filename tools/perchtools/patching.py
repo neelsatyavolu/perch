@@ -110,7 +110,7 @@ def export_series(src: Path, tag: str, patches_dir: Path) -> list[Path]:
         if subject.startswith(GENERATED):
             continue
         body = _git(src, "log", "-1", "--format=%b", commit).stdout.strip()
-        diff = _git(src, "diff", "--no-color", "--no-ext-diff", "--binary", f"{commit}^", commit).stdout
+        diff = _git(src, "diff", "--no-color", "--no-ext-diff", f"{commit}^", commit).stdout
         target = patches_dir / subject
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(f"{body}\n{diff}" if body else diff)

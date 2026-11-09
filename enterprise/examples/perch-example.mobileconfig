@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>PayloadContent</key>
+	<array>
+		<dict>
+			<key>AgentEnabled</key>
+			<true/>
+			<key>MaxPermissionMode</key>
+			<string>guard</string>
+			<key>PayloadDisplayName</key>
+			<string>Perch</string>
+			<key>PayloadEnabled</key>
+			<true/>
+			<key>PayloadIdentifier</key>
+			<string>co.xanom.perch.policies.perch</string>
+			<key>PayloadType</key>
+			<string>co.xanom.perch</string>
+			<key>PayloadUUID</key>
+			<string>34C72D59-CBD7-5E0A-B418-4DFD813D502E</string>
+			<key>PayloadVersion</key>
+			<integer>1</integer>
+			<key>RemoteControlEnabled</key>
+			<false/>
+		</dict>
+	</array>
+	<key>PayloadDescription</key>
+	<string>Policies for the Perch browser.</string>
+	<key>PayloadDisplayName</key>
+	<string>Perch policies</string>
+	<key>PayloadIdentifier</key>
+	<string>co.xanom.perch.policies</string>
+	<key>PayloadOrganization</key>
+	<string>Perch example</string>
+	<key>PayloadRemovalDisallowed</key>
+	<false/>
+	<key>PayloadScope</key>
+	<string>System</string>
+	<key>PayloadType</key>
+	<string>Configuration</string>
+	<key>PayloadUUID</key>
+	<string>53D51896-35BD-5F6F-B535-EAA59923165A</string>
+	<key>PayloadVersion</key>
+	<integer>1</integer>
+</dict>
+</plist>

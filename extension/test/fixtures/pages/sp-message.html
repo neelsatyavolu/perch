@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Privacy message</title></head>
+<body>
+  <div class="message-container">
+    <p class="message-component">We value your privacy.</p>
+    <button class="message-component message-button no-children focusable sp_choice_type_12" title="Options">Options</button>
+    <button class="message-component message-button no-children focusable sp_choice_type_11" title="Accept">Accept</button>
+    <button class="message-component message-button no-children focusable sp_choice_type_13" title="Reject">Reject</button>
+  </div>
+  <script>
+    document.querySelector(".sp_choice_type_11").onclick = () => parent.postMessage("accepted", "*");
+    document.querySelector(".sp_choice_type_13").onclick = () => parent.postMessage("rejected", "*");
+  </script>
+</body>
+</html>

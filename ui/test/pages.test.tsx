@@ -45,20 +45,6 @@ test("the sidebar's first message opens a side chat for the tab and sends with i
   expect(send.args[2]).toEqual(tabA);
 });
 
-test("the side chat's own header is the panel header: history, new chat and close, which asks the browser to close the panel", async () => {
-  const client = fakeClient();
-  client.windows.set("w1", { windowId: "w1", tab: tabA, chatId: null });
-  let closed = 0;
-  const el = await mount(<Sidebar client={client} windowId="w1" host={{ close: () => void closed++ }} />);
-  const header = el.querySelectorAll("header");
-  expect(header.length).toBe(1);
-  expect(header[0]!.querySelector("h1.title")!.textContent).toBe("New chat");
-  expect(header[0]!.querySelector('[aria-label="Recent chats"]')).not.toBeNull();
-  expect(header[0]!.querySelector('[aria-label="New chat"]')).not.toBeNull();
-  await act(async () => (header[0]!.querySelector('[aria-label="Close side chat"]') as HTMLElement).click());
-  expect(closed).toBe(1);
-});
-
 test("switching tabs hides a side chat and switching back restores its draft", async () => {
   const client = fakeClient();
   const side = await client.openSideChat("tA", "w1");

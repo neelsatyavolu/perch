@@ -286,7 +286,7 @@ void AddPerchMixer(ui::ColorProvider* provider,
   m[ui::kColorBubbleBorder] = {strong_on_card};
   // Menus are frosted glass: the macOS menu material shows through a thin
   // Perch tint, with ink-tinted rows, separators and a hairline edge.
-  m[ui::kColorMenuBackground] = {SkColorSetA(t->raised, 0x66)};
+  m[ui::kColorMenuBackground] = {SkColorSetA(t->raised, 0x40)};
   m[ui::kColorMenuItemBackgroundHighlighted] = {SkColorSetA(t->ink, 0x1A)};
   m[ui::kColorMenuSeparator] = {SkColorSetA(t->ink, 0x14)};
   m[ui::kColorMenuBorder] = {SkColorSetA(t->ink, 0x1F)};

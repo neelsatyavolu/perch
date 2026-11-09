@@ -39,15 +39,27 @@ void ApplyPerchMenuGlass(Widget* menu_host, int corner_radius) {
   if (!content) {
     return;
   }
-  NSVisualEffectView* glass =
-      [[NSVisualEffectView alloc] initWithFrame:content.bounds];
-  glass.material = NSVisualEffectMaterialMenu;
-  glass.blendingMode = NSVisualEffectBlendingModeBehindWindow;
-  glass.state = NSVisualEffectStateActive;
-  glass.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
-  if (corner_radius > 0) {
-    glass.maskImage = RoundedMask(corner_radius);
+  NSView* glass = nil;
+  if (@available(macOS 26, *)) {
+    // Liquid Glass: bends and blurs what is behind the window, and clips to
+    // its own corner radius.
+    NSGlassEffectView* liquid =
+        [[NSGlassEffectView alloc] initWithFrame:content.bounds];
+    liquid.style = NSGlassEffectViewStyleRegular;
+    liquid.cornerRadius = corner_radius;
+    glass = liquid;
+  } else {
+    NSVisualEffectView* frosted =
+        [[NSVisualEffectView alloc] initWithFrame:content.bounds];
+    frosted.material = NSVisualEffectMaterialMenu;
+    frosted.blendingMode = NSVisualEffectBlendingModeBehindWindow;
+    frosted.state = NSVisualEffectStateActive;
+    if (corner_radius > 0) {
+      frosted.maskImage = RoundedMask(corner_radius);
+    }
+    glass = frosted;
   }
+  glass.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
   [content addSubview:glass positioned:NSWindowBelow relativeTo:nil];
 }
 

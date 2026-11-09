@@ -1,0 +1,16 @@
+# Perch: builds the site data list and the file chooser behind Settings.
+diff --git a/chrome/browser/ui/browser_window/internal/BUILD.gn b/chrome/browser/ui/browser_window/internal/BUILD.gn
+index d6eae3fe89..0b5b18a468 100644
+--- a/chrome/browser/ui/browser_window/internal/BUILD.gn
++++ b/chrome/browser/ui/browser_window/internal/BUILD.gn
+@@ -79,6 +79,10 @@ source_set("internal") {
+       "//chrome/browser/perch/webui/perch_chat_ui.cc",
+       "//chrome/browser/perch/webui/perch_dictation.h",
+       "//chrome/browser/perch/webui/perch_dictation.mm",
++      "//chrome/browser/perch/webui/perch_file_chooser.cc",
++      "//chrome/browser/perch/webui/perch_file_chooser.h",
++      "//chrome/browser/perch/settings/site_data.cc",
++      "//chrome/browser/perch/settings/site_data.h",
+       "//chrome/browser/perch/webui/perch_shell_handler.cc",
+       "//chrome/browser/perch/webui/perch_shell_handler.h",
+       "//chrome/browser/perch/webui/perch_chat_ui.h",

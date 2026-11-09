@@ -54,3 +54,4 @@ perch/agent/dictation.patch
 perch/agent/agent-status-ui.patch
 perch/policy/built-in-policy.patch
 perch/agent/artifact-lock.patch
+perch/shell/settings-methods.patch

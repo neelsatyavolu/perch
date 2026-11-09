@@ -31,7 +31,7 @@ function SiteDataCard() {
       <div class="card">
         {sites.data && list.length === 0 && <p class="empty">No sites have stored data.</p>}
         {list.map((s) => (
-          <Row key={s.host} title={<span class="mono">{s.host}</span>} detail={`${formatBytes(s.bytes)} · ${s.cookies} cookies · used ${relativeTime(s.lastUsed).toLowerCase()}`}>
+          <Row key={s.host} title={<span class="mono">{s.host}</span>} detail={`${formatBytes(s.bytes)} · ${s.cookies} cookies${s.lastUsed ? ` · used ${relativeTime(s.lastUsed).toLowerCase()}` : ""}`}>
             <button type="button" class="btn" aria-label={`Forget ${s.host}`} onClick={() => setForget(s)}>Forget</button>
           </Row>
         ))}

@@ -16,6 +16,7 @@
 @protocol PerchSparkleUpdater <NSObject>
 @property(nonatomic) BOOL automaticallyChecksForUpdates;
 @property(nonatomic) BOOL automaticallyDownloadsUpdates;
+@property(nonatomic, readonly) NSDate* lastUpdateCheckDate;
 - (void)checkForUpdatesInBackground;
 @end
 
@@ -143,6 +144,37 @@ void StartUpdater() {
         IsConnectionAllowed(Connection::kPerchUpdates);
   }
   AddCheckForUpdatesItem(g_updater_controller);
+}
+
+UpdaterInfo GetUpdaterInfo() {
+  UpdaterInfo info;
+  info.managed = !ReadUpdatePolicy().auto_update;
+  if (!g_updater_controller) {
+    return info;
+  }
+  id<PerchSparkleUpdater> updater = g_updater_controller.updater;
+  info.available = true;
+  info.auto_update = updater.automaticallyChecksForUpdates;
+  if (NSDate* last = updater.lastUpdateCheckDate) {
+    info.last_checked = base::Time::FromNSDate(last);
+  }
+  return info;
+}
+
+bool SetAutoUpdate(bool on) {
+  if (!g_updater_controller || !ReadUpdatePolicy().auto_update) {
+    return false;
+  }
+  g_updater_controller.updater.automaticallyChecksForUpdates = on;
+  return true;
+}
+
+bool CheckForUpdatesNow() {
+  if (!g_updater_controller || !ReadUpdatePolicy().auto_update) {
+    return false;
+  }
+  [g_updater_controller checkForUpdates:nil];
+  return true;
 }
 
 }  // namespace perch

@@ -3,6 +3,7 @@
 
 #include "chrome/browser/perch/webui/perch_page_handler.h"
 
+#import <AppKit/AppKit.h>
 #import <Foundation/Foundation.h>
 #import <LocalAuthentication/LocalAuthentication.h>
 
@@ -22,6 +23,11 @@
 #include "chrome/browser/perch/command_bar/command_bar.h"
 #include "chrome/browser/perch/extensions/perch_component_extensions.h"
 #include "chrome/browser/perch/keys/key_broker.h"
+#include "chrome/browser/perch/perch_update_policy.h"
+#include "chrome/browser/perch/perch_updater_mac.h"
+#include "chrome/browser/perch/settings/site_data.h"
+#include "chrome/browser/perch/webui/perch_file_chooser.h"
+#include "base/i18n/time_formatting.h"
 #include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/perch/memory_saver/memory_saver_settings.h"
 #include "chrome/browser/perch/perch_pref_names.h"
@@ -74,8 +80,13 @@ base::DictValue About() {
   about.Set("version", version);
   about.Set("chromium", std::string(version_info::GetVersionNumber()));
   about.Set("perchd", version);
-  about.Set("channel", "stable");
-  about.Set("autoUpdate", true);
+  about.Set("channel", ReadUpdatePolicy().channel == "beta" ? "beta" : "stable");
+  const UpdaterInfo updates = GetUpdaterInfo();
+  about.Set("autoUpdate", updates.auto_update);
+  if (updates.last_checked) {
+    about.Set("lastChecked",
+              base::TimeFormatAsIso8601(*updates.last_checked));
+  }
   return about;
 }
 
@@ -441,6 +452,65 @@ void PerchPageHandler::Dispatch(const std::string& method,
   } else if (method == "closeCommandBar") {
     Resolve(std::move(id), base::Value());
     CloseCommandBarNow(web_ui());
+  } else if (method == "listSiteData") {
+    ListSiteData(profile(),
+                 base::BindOnce(
+                     [](base::WeakPtr<PerchPageHandler> self, base::Value id,
+                        base::ListValue sites) {
+                       if (self) {
+                         self->Resolve(std::move(id),
+                                       base::Value(std::move(sites)));
+                       }
+                     },
+                     weak_factory_.GetWeakPtr(), id.Clone()));
+  } else if (method == "chooseFile") {
+    const std::string* kind = arg0 ? arg0->GetIfString() : nullptr;
+    std::vector<std::string> extensions;
+    if (kind && *kind == "passwords-csv") {
+      extensions = {"csv"};
+    } else if (kind && *kind == "memory-export") {
+      extensions = {"zip", "json", "html"};
+    } else {
+      Reject(std::move(id), "invalid", "Unknown kind of file");
+      return;
+    }
+    ChooseOneFile(web_ui()->GetWebContents(), extensions,
+                  base::BindOnce(
+                      [](base::WeakPtr<PerchPageHandler> self, base::Value id,
+                         std::optional<base::Value> choice) {
+                        if (self) {
+                          self->Resolve(std::move(id),
+                                        choice ? std::move(*choice)
+                                               : base::Value());
+                        }
+                      },
+                      weak_factory_.GetWeakPtr(), id.Clone()));
+  } else if (method == "openFullDiskAccess") {
+    [NSWorkspace.sharedWorkspace
+        openURL:[NSURL URLWithString:@"x-apple.systempreferences:com.apple."
+                                     @"preference.security?Privacy_AllFiles"]];
+    Resolve(std::move(id), base::Value());
+  } else if (method == "checkForUpdates" || method == "installUpdate") {
+    if (!CheckForUpdatesNow()) {
+      Resolve(std::move(id),
+              base::Value(base::DictValue()
+                              .Set("state", "error")
+                              .Set("message", GetUpdaterInfo().managed
+                                                  ? "Updates are managed by "
+                                                    "your organization"
+                                                  : "This build of Perch "
+                                                    "doesn't update itself")));
+      return;
+    }
+    Resolve(std::move(id),
+            base::Value(base::DictValue().Set("state", "checking")));
+  } else if (method == "setAutoUpdate") {
+    if (!arg0 || !arg0->is_bool() || !SetAutoUpdate(arg0->GetBool())) {
+      Reject(std::move(id), "managed",
+             "Perch can't change automatic updates here");
+      return;
+    }
+    Resolve(std::move(id), base::Value(About()));
   } else if (method == "revealRecoveryKey") {
     RevealRecoveryKey(std::move(id));
   } else if (method == "listTabMemory") {

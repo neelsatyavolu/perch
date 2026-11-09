@@ -284,9 +284,12 @@ void AddPerchMixer(ui::ColorProvider* provider,
     m[id] = {t->card};
   }
   m[ui::kColorBubbleBorder] = {strong_on_card};
-  m[ui::kColorMenuBackground] = {t->raised};
-  m[ui::kColorMenuItemBackgroundHighlighted] = {Over(t->hair_strong, t->raised)};
-  m[ui::kColorMenuSeparator] = {Over(t->hair, t->raised)};
+  // Menus are frosted glass: the macOS menu material shows through a thin
+  // Perch tint, with ink-tinted rows, separators and a hairline edge.
+  m[ui::kColorMenuBackground] = {SkColorSetA(t->raised, 0x99)};
+  m[ui::kColorMenuItemBackgroundHighlighted] = {SkColorSetA(t->ink, 0x1A)};
+  m[ui::kColorMenuSeparator] = {SkColorSetA(t->ink, 0x14)};
+  m[ui::kColorMenuBorder] = {SkColorSetA(t->ink, 0x1F)};
 
   // The surface audit (2026-11-08): buttons, switches, checkboxes, badges,
   // errors, toasts, promos, tab details, popup chips, the sidebar and split

@@ -1,0 +1,65 @@
+# Perch: views menus on Mac get the frosted menu material, 12px corners and 8px rows.
+diff --git a/ui/views/BUILD.gn b/ui/views/BUILD.gn
+index a07afd253b..5494947aef 100644
+--- a/ui/views/BUILD.gn
++++ b/ui/views/BUILD.gn
+@@ -761,6 +761,8 @@ component("views") {
+       "controls/menu/menu_closure_animation_mac.mm",
+       "controls/menu/menu_cocoa_watcher_mac.mm",
+       "controls/menu/menu_config_mac.mm",
++      "controls/menu/menu_host_glass_mac.h",
++      "controls/menu/menu_host_glass_mac.mm",
+       "controls/menu/menu_controller_cocoa_delegate_params.cc",
+       "controls/menu/menu_pre_target_handler_mac.h",
+       "controls/menu/menu_pre_target_handler_mac.mm",
+diff --git a/ui/views/controls/menu/menu_config_mac.mm b/ui/views/controls/menu/menu_config_mac.mm
+index 5701640302..84941b0d58 100644
+--- a/ui/views/controls/menu/menu_config_mac.mm
++++ b/ui/views/controls/menu/menu_config_mac.mm
+@@ -12,14 +12,16 @@ void MenuConfig::InitPlatform() {
+   use_mnemonics = false;
+   show_context_menu_accelerators = false;
+   all_menus_use_prefix_selection = true;
+-  // Perch: the menus Chromium still draws (bookmark folders and the like)
+-  // follow DESIGN.md: 6px rows inside an 8px menu, with tight separators.
+-  item_corner_radius = 6;
++  // Perch: frosted 12px menus (see menu_host_glass_mac.mm) with 8px rows
++  // inset 6px from the edge and tight separators (DESIGN.md).
++  item_corner_radius = 8;
+   item_vertical_margin = 6;
+   separator_height = 9;
+   separator_upper_height = 4;
+   separator_lower_height = 4;
+-  corner_radius = 8;
++  corner_radius = 12;
++  rounded_menu_vertical_border_size = 6;
++  menu_horizontal_border_size = 6;
+ }
+ 
+ }  // namespace views
+diff --git a/ui/views/controls/menu/menu_host.cc b/ui/views/controls/menu/menu_host.cc
+index 293bacaa70..ec60edcc2a 100644
+--- a/ui/views/controls/menu/menu_host.cc
++++ b/ui/views/controls/menu/menu_host.cc
+@@ -34,6 +34,10 @@
+ #include "ui/views/widget/native_widget_private.h"
+ #include "ui/views/widget/widget.h"
+ 
++#if BUILDFLAG(IS_MAC)
++#include "ui/views/controls/menu/menu_host_glass_mac.h"
++#endif
++
+ #if defined(USE_AURA)
+ #include "ui/aura/client/aura_constants.h"
+ #include "ui/aura/window.h"
+@@ -166,6 +170,10 @@ void MenuHost::InitMenuHost(const InitParams& init_params) {
+   }
+ 
+   Init(std::move(params));
++#if BUILDFLAG(IS_MAC)
++  // Perch: frosted macOS material behind the menu.
++  ApplyPerchMenuGlass(this, bubble_border ? 0 : corner_radius);
++#endif
+   std::optional<std::string> show_menu_host_duration_histogram =
+       menu_controller->TakeShowMenuHostDurationHistogram();
+   CHECK(!menu_controller->TakeShowMenuHostDurationHistogram().has_value());

@@ -62,10 +62,10 @@ ui::ImageModel Icon(const gfx::VectorIcon& icon) {
 void RunToolbarMenu(ui::MenuModel* model,
                     std::unique_ptr<views::MenuRunner>& runner,
                     views::View* anchor) {
-  // A native macOS menu, with the system's own material, just below the
-  // button: the way Mac apps open their toolbar menus.
+  // A Perch menu drawn by views (frosted, rounded, in Perch's type and
+  // tokens) just below the button, not a system NSMenu.
   runner = std::make_unique<views::MenuRunner>(
-      model, views::MenuRunner::CONTEXT_MENU | views::MenuRunner::HAS_MNEMONICS);
+      model, views::MenuRunner::HAS_MNEMONICS);
   const gfx::Rect button = anchor->GetAnchorBoundsInScreen();
   runner->RunMenuAt(anchor->GetWidget(), nullptr,
                     gfx::Rect(button.x(), button.bottom() + 4, 0, 0),

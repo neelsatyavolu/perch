@@ -87,3 +87,4 @@ perch/shell/webui-shapes.patch
 perch/shell/error-pages.patch
 perch/shell/settings-history-trim.patch
 perch/shell/webui-geist.patch
+perch/shell/menu-glass.patch

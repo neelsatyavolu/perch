@@ -55,7 +55,10 @@ GURL WithSchemeAndHost(const GURL& url,
 bool RewritePerchURL(GURL* url, content::BrowserContext* context) {
   // A new tab opens Perch's own page, never a search engine's remote one.
   // An enterprise or extension override registered earlier still wins.
-  if (url->SchemeIs(content::kChromeUIScheme) && url->host() == "newtab") {
+  // Google's new tab page hosts too.
+  if (url->SchemeIs(content::kChromeUIScheme) &&
+      (url->host() == "newtab" || url->host() == "new-tab-page" ||
+       url->host() == "new-tab-page-third-party")) {
     *url = WithSchemeAndHost(*url, content::kChromeUIScheme, "perch-newtab");
     return true;
   }

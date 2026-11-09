@@ -72,3 +72,4 @@ perch/shell/redesign-sources.patch
 perch/shell/address-bar.patch
 perch/shell/extensions-menu.patch
 perch/shell/tab-outline-dividers.patch
+perch/shell/layout-insets.patch

@@ -1,0 +1,17 @@
+# Perch: DESIGN.md's toolbar button insets.
+diff --git a/chrome/browser/ui/layout_constants.cc b/chrome/browser/ui/layout_constants.cc
+index 058b58b8f5..c1e2711fac 100644
+--- a/chrome/browser/ui/layout_constants.cc
++++ b/chrome/browser/ui/layout_constants.cc
+@@ -203,6 +203,11 @@ int GetLayoutConstant(LayoutConstant constant) {
+ 
+ gfx::Insets GetLayoutInsets(LayoutInset inset) {
+   const bool touch_ui = ui::TouchUiController::Get()->touch_ui();
++  // Perch: DESIGN.md's toolbar button insets.
++  if (std::optional<gfx::Insets> perch_inset =
++          perch::PerchLayoutInsets(inset, touch_ui)) {
++    return *perch_inset;
++  }
+   switch (inset) {
+     case DOWNLOAD_ICON:
+       return gfx::Insets(4);

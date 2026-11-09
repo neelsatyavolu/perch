@@ -5,6 +5,7 @@
 
 #include <functional>
 
+#include "chrome/browser/ui/ui_features.h"
 #include "chrome/common/chrome_features.h"
 #include "components/network_time/network_time_tracker.h"
 #include "components/omnibox/browser/aim_eligibility_service_features.h"
@@ -16,6 +17,7 @@
 #include "media/base/media_switches.h"
 #include "services/network/public/cpp/features.h"
 #include "third_party/blink/public/common/features.h"
+#include "ui/base/ui_base_features.h"
 
 namespace perch {
 
@@ -28,6 +30,11 @@ const base::Feature* const kEnabled[] = {
     &network::features::kReduceAcceptLanguage,
     &blink::features::kBrowserInitiatedAutomaticPictureInPicture,
     &media::kEnableTabMuting,
+    // Native-feeling menus with line icons (the design audit, 2026-11-08).
+    &features::kMenuSimplification,
+    &features::kRoundedIcons,
+    // History's submenu without the "Your devices" sync promo.
+    &syncer::kCrossDeviceTabsInAppMenu,
 };
 
 // Features Perch turns off (spec 5.1): Gemini in Chrome and Google's AI mode
@@ -46,6 +53,8 @@ const base::Feature* const kDisabled[] = {
     &network_time::kNetworkTimeServiceQuerying,
     // Google sync promos (history and elsewhere): Perch syncs its own way.
     &syncer::kUnoPhase2FollowUp,
+    // A solid tab strip: the see-through glass frame isn't Perch's look.
+    &features::kGlassFrame,
 };
 
 }  // namespace

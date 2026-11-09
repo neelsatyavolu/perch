@@ -27,6 +27,29 @@ std::optional<int> PerchLayoutConstant(LayoutConstant constant, bool touch_ui) {
     case LayoutConstant::kLocationBarHeight:
     case LayoutConstant::kToolbarButtonHeight:
       return g_compact ? 24 : 28;
+    // No rules between toolbar buttons, so no room for them either.
+    case LayoutConstant::kToolbarDividerSpacing:
+    case LayoutConstant::kToolbarDividerWidth:
+      return 0;
+    // Chips inside the 8px address bar.
+    case LayoutConstant::kLocationBarChildCornerRadius:
+      return 6;
+    default:
+      return std::nullopt;
+  }
+}
+
+std::optional<gfx::Insets> PerchLayoutInsets(LayoutInset inset,
+                                             bool touch_ui) {
+  if (touch_ui) {
+    return std::nullopt;
+  }
+  switch (inset) {
+    case TOOLBAR_BUTTON:
+      return gfx::Insets(g_compact ? 2 : 4);
+    case BROWSER_APP_MENU_CHIP_PADDING:
+      return g_compact ? gfx::Insets::TLBR(2, 4, 2, 6)
+                       : gfx::Insets::TLBR(4, 4, 4, 6);
     default:
       return std::nullopt;
   }

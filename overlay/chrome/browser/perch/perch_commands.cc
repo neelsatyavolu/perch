@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "base/time/time.h"
+#include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/command_updater.h"
 #include "chrome/browser/perch/command_bar/command_bar.h"
 #include "chrome/browser/perch/extensions/watch_party.h"
@@ -134,6 +135,18 @@ bool ExecutePerchCommand(BrowserWindowInterface* browser, int id) {
     case IDC_PERCH_TOGGLE_HIDE_CHROME:
       ToggleHideChrome(browser);
       return true;
+    case IDC_HELP_PAGE_VIA_MENU:
+    case IDC_HELP_PAGE_VIA_KEYBOARD:
+      // Perch's help, not Chrome's.
+      browser->OpenURL(
+          content::OpenURLParams(GURL("https://perchbrowser.com/"),
+                                 content::Referrer(),
+                                 WindowOpenDisposition::kNewForegroundTab,
+                                 ui::PAGE_TRANSITION_AUTO_BOOKMARK, false),
+          {});
+      return true;
+    // The menu bar's About Perch opens Perch's About, not Chromium's.
+    case IDC_ABOUT:
     case IDC_PERCH_ABOUT:
       browser->OpenURL(
           content::OpenURLParams(GURL("chrome://perch-settings/#about"),

@@ -83,11 +83,20 @@ void AddPerchMixer(ui::ColorProvider* provider,
                ? now.dark_theme
                : std::string("paper");
   }
+  // Incognito windows (ThemeService gives them a grayscale key): Graphite
+  // with the mono accent, so a private window looks different at a glance.
+  const bool incognito =
+      key.user_color_source ==
+      ui::ColorProviderKey::UserColorSource::kGrayscale;
+  if (incognito) {
+    name = "graphite";
+  }
   if (key.contrast_mode == ui::ColorProviderKey::ContrastMode::kHigh) {
     name = "contrast";
   }
   const PerchThemeTokens* t = FindPerchTheme(name);
-  const PerchAccentTokens* a = FindPerchAccent(now.accent);
+  const PerchAccentTokens* a =
+      FindPerchAccent(incognito ? std::string("mono") : now.accent);
   if (!t || !a) {
     return;
   }
@@ -95,6 +104,9 @@ void AddPerchMixer(ui::ColorProvider* provider,
   const SkColor hair = Over(t->hair, t->canvas);
   const SkColor body = Over(t->body, t->card);
   const SkColor tint = Mix(accent, t->raised, t->dark ? 0.22f : 0.10f);
+  // Errors: a red that holds 4.5:1 on each theme's card.
+  const SkColor danger = t->dark ? SkColorSetRGB(0xFF, 0x45, 0x3A)
+                                 : SkColorSetRGB(0xD9, 0x2D, 0x3F);
 
   ui::ColorMixer& m = provider->AddMixer();
   // Canvas: the tab strip and the frame around it.
@@ -146,7 +158,7 @@ void AddPerchMixer(ui::ColorProvider* provider,
 
   // Tabs that are hovered or picked for a multi-tab action step up from the
   // canvas; Chromium's own selection blue doesn't belong in a Perch theme.
-  const SkColor tab_hover = Over(t->hair_strong, t->canvas);
+  const SkColor tab_hover = Over(t->hair, t->canvas);
   for (ui::ColorId id : std::initializer_list<ui::ColorId>{
            kColorTabBackgroundInactiveHoverFrameActive,
            kColorTabBackgroundInactiveHoverFrameInactive}) {
@@ -157,7 +169,7 @@ void AddPerchMixer(ui::ColorProvider* provider,
            kColorTabBackgroundSelectedFrameInactive,
            kColorTabBackgroundSelectedHoverFrameActive,
            kColorTabBackgroundSelectedHoverFrameInactive}) {
-    m[id] = {t->raised};
+    m[id] = {tab_hover};
   }
   for (ui::ColorId id : std::initializer_list<ui::ColorId>{
            kColorTabForegroundInactiveHoverFrameActive,
@@ -166,9 +178,9 @@ void AddPerchMixer(ui::ColorProvider* provider,
   }
 
   // The address bar's suggestions: an elevated surface, rows that step up on
-  // hover and selection, ink and mute text, and URLs in the accent.
+  // hover and selection, ink and mute text, and URLs in mute.
   const SkColor row_hover = Over(t->hair, t->raised);
-  const SkColor row_selected = Over(t->hair_strong, t->raised);
+  const SkColor row_selected = Over(t->hair, t->raised);
   m[kColorOmniboxResultsBackground] = {t->raised};
   m[kColorOmniboxResultsBackgroundHovered] = {row_hover};
   m[kColorOmniboxResultsBackgroundSelected] = {row_selected};
@@ -186,8 +198,8 @@ void AddPerchMixer(ui::ColorProvider* provider,
            kColorOmniboxResultsButtonIconSelected}) {
     m[id] = {t->mute};
   }
-  m[kColorOmniboxResultsUrl] = {accent};
-  m[kColorOmniboxResultsUrlSelected] = {accent};
+  m[kColorOmniboxResultsUrl] = {t->mute};
+  m[kColorOmniboxResultsUrlSelected] = {t->mute};
   m[kColorOmniboxSelectionBackground] = {tint};
 
   // Chromium's Material system colours, which its bubbles, dialogs, menus
@@ -241,9 +253,14 @@ void AddPerchMixer(ui::ColorProvider* provider,
     m[id] = {accent};
   }
   for (ui::ColorId id : std::initializer_list<ui::ColorId>{
-           ui::kColorSysPrimaryContainer, ui::kColorSysTonalContainer,
-           ui::kColorSysBaseTonalContainer, ui::kColorSysStateTextHighlight}) {
+           ui::kColorSysStateTextHighlight}) {
     m[id] = {tint};
+  }
+  // Tonal containers are surfaces, not the accent (DESIGN.md: accent sparingly).
+  for (ui::ColorId id : std::initializer_list<ui::ColorId>{
+           ui::kColorSysPrimaryContainer, ui::kColorSysTonalContainer,
+           ui::kColorSysBaseTonalContainer}) {
+    m[id] = {t->raised};
   }
   for (ui::ColorId id : std::initializer_list<ui::ColorId>{
            ui::kColorSysStateHover, ui::kColorSysStateHoverOnSubtle,
@@ -270,6 +287,85 @@ void AddPerchMixer(ui::ColorProvider* provider,
   m[ui::kColorMenuBackground] = {t->raised};
   m[ui::kColorMenuItemBackgroundHighlighted] = {Over(t->hair_strong, t->raised)};
   m[ui::kColorMenuSeparator] = {Over(t->hair, t->raised)};
+
+  // The surface audit (2026-11-08): buttons, switches, checkboxes, badges,
+  // errors, toasts, promos, tab details, popup chips, the sidebar and split
+  // view in Perch's tokens instead of Material's.
+  m[ui::kColorSysOnPrimary] = {t->button_fg};
+  m[ui::kColorButtonForeground] = {t->ink};
+  m[ui::kColorButtonBackground] = {t->card};
+  m[ui::kColorButtonBackgroundTonal] = {t->raised};
+  m[ui::kColorButtonBackgroundTonalFocused] = {t->raised};
+  m[ui::kColorButtonForegroundTonal] = {t->ink};
+  m[ui::kColorSysStateHoverOnProminent] = {SkColorSetA(t->button_fg, 0x14)};
+  m[ui::kColorToggleButtonTrackOn] = {t->button_bg};
+  m[ui::kColorToggleButtonThumbOn] = {t->button_fg};
+  m[ui::kColorToggleButtonThumbOnHover] = {t->button_fg};
+  m[ui::kColorToggleButtonTrackOff] = {t->raised};
+  m[ui::kColorToggleButtonThumbOff] = {t->mute};
+  m[ui::kColorCheckboxContainer] = {t->button_bg};
+  m[ui::kColorCheckboxForegroundChecked] = {t->button_bg};
+  m[ui::kColorCheckboxCheck] = {t->button_fg};
+  m[ui::kColorRadioButtonForegroundChecked] = {t->ink};
+  m[kColorNavMenuItemSelected] = {t->ink};
+  m[kColorNavMenuItemBackgroundSelected] = {t->raised};
+  m[kColorDownloadToolbarButtonActive] = {t->ink};
+  m[kColorDownloadToolbarButtonRingBackground] = {strong_on_card};
+  m[kColorDownloadBubblePrimaryIcon] = {body};
+  m[kColorPageInfoPermissionUsedIcon] = {body};
+  m[ui::kColorBadgeBackground] = {t->raised};
+  m[ui::kColorBadgeForeground] = {t->ink};
+  m[kColorToolbarActionItemEngaged] = {t->ink};
+  m[ui::kColorSysError] = {danger};
+  m[ui::kColorSysOnError] = {t->button_fg};
+  m[ui::kColorSysErrorContainer] = {Mix(danger, t->raised, t->dark ? 0.22f : 0.10f)};
+  m[ui::kColorSysStateDisabled] = {Over(t->mute, t->card)};
+  m[ui::kColorSysStateDisabledContainer] = {hair_on_card};
+  m[ui::kColorSysSecondary] = {t->mute};
+  m[ui::kColorSysStateOnHeaderHover] = {t->ink};
+  m[ui::kColorSysInverseSurface] = {t->raised};
+  m[ui::kColorSysInverseOnSurface] = {t->ink};
+  m[ui::kColorSysInversePrimary] = {t->ink};
+  m[ui::kColorToastBackground] = {t->raised};
+  m[ui::kColorToastBackgroundProminent] = {t->raised};
+  m[ui::kColorToastForeground] = {t->ink};
+  m[ui::kColorToastButton] = {t->ink};
+  m[kColorFeaturePromoBubbleBackground] = {t->card};
+  m[kColorFeaturePromoBubbleForeground] = {t->ink};
+  m[kColorFeaturePromoBubbleDefaultButtonBackground] = {t->button_bg};
+  m[kColorFeaturePromoBubbleDefaultButtonForeground] = {t->button_fg};
+  m[kColorFeaturePromoBubbleButtonBorder] = {strong_on_card};
+  m[kColorFeaturePromoBubbleCloseButtonInkDrop] = {t->hair};
+  m[kColorTabFocusRingActive] = {accent};
+  m[kColorTabFocusRingInactive] = {accent};
+  m[kColorTabCloseButtonFocusRingActive] = {accent};
+  m[kColorTabCloseButtonFocusRingInactive] = {accent};
+  m[kColorTabHoverCardForeground] = {Over(t->hair_strong, t->card)};
+  m[kColorTabHoverCardSecondaryText] = {t->mute};
+  m[kColorTabDiscardRingFrameActive] = {t->mute};
+  m[kColorTabDiscardRingFrameInactive] = {t->mute};
+  m[kColorNewTabButtonForegroundFrameActive] = {t->mute};
+  m[kColorNewTabButtonForegroundFrameInactive] = {t->mute};
+  m[kColorNewTabButtonCRForegroundFrameActive] = {t->mute};
+  m[kColorNewTabButtonCRForegroundFrameInactive] = {t->mute};
+  m[kColorNewTabButtonCRBackgroundFrameActive] = {t->canvas};
+  m[kColorNewTabButtonCRBackgroundFrameInactive] = {t->canvas};
+  m[kColorNewTabButtonBackgroundFrameInactive] = {t->canvas};
+  m[kColorNewTabButtonInkDropFrameActive] = {t->hair_strong};
+  m[kColorNewTabButtonInkDropFrameInactive] = {t->hair_strong};
+  m[kColorTabGroupTabStripFrameActiveBlue] = {tint};
+  m[kColorTabGroupTabStripFrameInactiveBlue] = {tint};
+  m[kColorOmniboxResultsButtonBorder] = {strong_on_card};
+  m[kColorOmniboxAnswerIconGM3Background] = {Over(t->hair_strong, t->raised)};
+  m[kColorOmniboxAnswerIconGM3Foreground] = {t->ink};
+  m[kColorSidePanelContentAreaSeparator] = {hair};
+  m[kColorMultiContentsViewMiniToolbarForeground] = {t->mute};
+  m[kColorSplitViewBackground] = {t->canvas};
+  m[kColorTabForegroundActiveFrameInactive] = {body};
+  m[kColorTabForegroundInactiveFrameInactive] = {Mix(t->mute, t->canvas, 0.8f)};
+  m[kColorTabStrokeFrameInactive] = {hair};
+  m[kColorSidePanelBackground] = {t->canvas};
+  m[kColorSidePanelContentBackground] = {t->canvas};
 
   // No rules between the toolbar's buttons: the gaps group them (DESIGN.md).
   m[kColorToolbarExtensionSeparatorEnabled] = {SK_ColorTRANSPARENT};

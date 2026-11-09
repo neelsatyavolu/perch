@@ -140,8 +140,10 @@ class SpacesButton : public views::LabelButton {
     // An 8 px rounded fill on hover and press, like the strip's other
     // controls.
     views::InstallRoundRectHighlightPathGenerator(this, gfx::Insets(), 8);
-    views::InkDrop::Get(this)->SetMode(views::InkDropHost::InkDropMode::ON);
-    views::InkDrop::Get(this)->SetBaseColor(kColorTabForegroundInactiveFrameActive);
+    views::InkDrop::Get(this)->SetMode(
+        views::InkDropHost::InkDropMode::ON_NO_ANIMATE);
+    views::InkDrop::Get(this)->SetBaseColor(
+        kColorTabBackgroundInactiveHoverFrameActive);
     views::InkDrop::Get(this)->SetHighlightOpacity(0.08f);
     views::InkDrop::Get(this)->SetVisibleOpacity(0.12f);
     SetTooltipText(u"Spaces");

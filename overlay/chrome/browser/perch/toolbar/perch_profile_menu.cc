@@ -144,14 +144,14 @@ void PerchProfileMenuModel::BuildApp() {
 
   bookmarks_ = std::make_unique<ui::SimpleMenuModel>(this);
   bookmarks_->AddItem(IDC_BOOKMARK_THIS_TAB, u"Bookmark This Tab");
-  bookmarks_->AddItem(IDC_SHOW_BOOKMARK_BAR, u"Show Bookmarks Bar");
+  bookmarks_->AddItem(IDC_SHOW_BOOKMARK_BAR, u"Always Show Bookmarks Bar");
   bookmarks_->AddItem(IDC_SHOW_BOOKMARK_MANAGER, u"Bookmark Manager");
   AddSubMenuWithIcon(IDC_BOOKMARKS_MENU, u"Bookmarks", bookmarks_.get(),
                      Icon(kBookmarkManagerIcon));
 
   extensions_ = std::make_unique<ui::SimpleMenuModel>(this);
   extensions_->AddItem(IDC_MANAGE_EXTENSIONS, u"Manage Extensions");
-  extensions_->AddItem(IDC_FIND_EXTENSIONS, u"Chrome Web Store");
+  extensions_->AddItem(IDC_FIND_EXTENSIONS, u"Get Extensions");
   AddSubMenuWithIcon(IDC_PERCH_EXTENSIONS_MENU, u"Extensions",
                      extensions_.get(),
                      Icon(vector_icons::kExtensionChromeRefreshOldIcon));

@@ -5,6 +5,8 @@
 
 #import <AppKit/AppKit.h>
 
+#include <initializer_list>
+
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/perch/perch_command_ids.h"
 
@@ -119,7 +121,22 @@ void AddPerchMenuItems() {
   SetKeyEquivalent(main_menu, IDC_NEW_SPLIT_TAB, @"n",
                    NSEventModifierFlagControl | NSEventModifierFlagCommand);
   AddTabTools(main_menu);
+  // The app menu's Settings opens Perch's settings (IDC_OPTIONS is routed).
+  if (NSMenuItem* settings = [[main_menu itemWithTag:IDC_CHROME_MENU].submenu
+                                 itemWithTag:IDC_OPTIONS]) {
+    settings.title = @"Settings\u2026";
+  }
   NSMenu* view_menu = [main_menu itemWithTag:IDC_VIEW_MENU].submenu;
+  // Google-only View items: Lens, AI mode and the search tools, and vertical
+  // tabs, which Perch doesn't offer.
+  for (NSInteger tag :
+       {IDC_SHOW_GOOGLE_LENS_SHORTCUT, IDC_SHOW_AI_MODE_OMNIBOX_BUTTON,
+        IDC_SHOW_SEARCH_TOOLS, IDC_TOGGLE_VERTICAL_TABS,
+        IDC_TOGGLE_VERTICAL_TABS_COLLAPSE}) {
+    if (NSMenuItem* item = [view_menu itemWithTag:tag]) {
+      [view_menu removeItem:item];
+    }
+  }
   if (!view_menu || [view_menu itemWithTag:IDC_PERCH_TOGGLE_HIDE_CHROME]) {
     return;
   }

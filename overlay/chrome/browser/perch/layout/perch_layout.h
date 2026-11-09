@@ -6,7 +6,9 @@
 
 #include <optional>
 
-enum class LayoutConstant;
+#include "chrome/browser/ui/layout_constants.h"
+#include "ui/gfx/geometry/insets.h"
+
 
 namespace perch {
 
@@ -14,6 +16,10 @@ namespace perch {
 // toolbar with a 28 px address bar and 28 px buttons. Returns nothing for the
 // constants Perch leaves at Chromium's values. Touch UI keeps Chromium's.
 std::optional<int> PerchLayoutConstant(LayoutConstant constant, bool touch_ui);
+
+// Insets Perch sizes itself: toolbar buttons are 28px squares (DESIGN.md),
+// the avatar and menu buttons included.
+std::optional<gfx::Insets> PerchLayoutInsets(LayoutInset inset, bool touch_ui);
 
 // Settings → Appearance → Density: Compact makes the tab strip 32 px and the
 // toolbar controls 24 px (DESIGN.md). Windows pick it up as they lay out.

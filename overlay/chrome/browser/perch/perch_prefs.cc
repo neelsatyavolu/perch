@@ -92,6 +92,9 @@ void OverrideChromiumDefaults(user_prefs::PrefRegistrySyncable* registry) {
   // The tab strip starts with Perch's space switcher only: tab search lives
   // in the command bar (⌘K, and ⌃Tab with the bars hidden).
   SetDefault(registry, ::prefs::kTabSearchPinnedToTabstrip, base::Value(false));
+  // No Cast menu items, and no Material Privacy Guide card in settings.
+  SetDefault(registry, ::prefs::kEnableMediaRouter, base::Value(false));
+  SetDefault(registry, ::prefs::kPrivacyGuideViewed, base::Value(true));
   SetDefault(registry, ::prefs::kEverythingMenuPinnedToTabstrip,
              base::Value(false));
 }

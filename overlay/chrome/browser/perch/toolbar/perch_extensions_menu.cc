@@ -107,7 +107,7 @@ class ExtensionsMenu : public ui::SimpleMenuModel,
       : ui::SimpleMenuModel(this), browser_(browser) {
     AddItemWithIcon(IDC_MANAGE_EXTENSIONS, u"Manage Extensions",
                     Icon(vector_icons::kExtensionChromeRefreshOldIcon));
-    AddItemWithIcon(IDC_FIND_EXTENSIONS, u"Chrome Web Store",
+    AddItemWithIcon(IDC_FIND_EXTENSIONS, u"Get Extensions",
                     Icon(kOpenInNewIcon));
 
     ToolbarActionsModel* model =

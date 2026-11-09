@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds, signs and notarizes the release DMG unattended.
 #
-#   scripts/overnight-release.sh          JOBS=8 by default
+#   scripts/overnight-release.sh          JOBS=12, normal priority (PERCH_BUILD_NICE=0) by default
 #
 # Everything that needs 1Password happens in the first minute, while someone is there to
 # approve it: the Safe Browsing key (kept in this process's environment only) and the
@@ -10,13 +10,15 @@
 # After "1Password done" nothing else asks for anything.
 #
 # Then, like scripts/overnight-build.sh: refuses to start off the charger, keeps the Mac awake
-# (lid open unless an external display is attached), compiles at low priority with capped jobs,
+# (lid open unless an external display is attached), compiles with capped jobs (6 of 18 cores
+# left free; a full-core build once shut the Mac down),
 # and scripts/build-watchdog.sh stops the build on heat, slowdown or the charger coming out.
 # Writes dist/Perch-<version>.dmg (no .pkg until the Developer ID Installer certificate exists).
 # Everything is logged to dist/overnight-release.log.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-JOBS="${JOBS:-8}"
+JOBS="${JOBS:-12}"
+export PERCH_BUILD_NICE="${PERCH_BUILD_NICE:-0}"
 LOG="dist/overnight-release.log"
 mkdir -p dist
 say() { echo "$(date '+%Y-%m-%d %H:%M') $*" | tee -a "$LOG"; }
@@ -45,7 +47,7 @@ say "1Password done; nothing else needs approval. Building with $JOBS jobs."
 # --- Compile ---------------------------------------------------------------------------------
 caffeinate -i -w $$ &
 scripts/build-watchdog.sh "$LOG" &
-if ! nice -n 10 uv run perch-build build --config release --jobs "$JOBS" >> "$LOG" 2>&1; then
+if ! uv run perch-build build --config release --jobs "$JOBS" >> "$LOG" 2>&1; then
     say "build failed or was stopped; see above. Nothing was signed."
     exit 1
 fi

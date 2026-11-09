@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Literal
@@ -87,6 +89,6 @@ def build(paths: Paths, config: Config, run=default_run, jobs: int = DEFAULT_JOB
         args_gn.chmod(0o600)
     env = depot_env(paths)
     run(["gn", "gen", out], cwd=paths.src, env=env)
-    run(["nice", "-n", NICENESS, "autoninja", "-C", out, "-local_jobs", str(jobs),
+    run(["nice", "-n", os.environ.get("PERCH_BUILD_NICE", NICENESS), "autoninja", "-C", out, "-local_jobs", str(jobs),
          *([ninja_target(t) for t in targets] or TARGETS[config])], cwd=paths.src, env=env)
     return out

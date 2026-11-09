@@ -1,0 +1,49 @@
+# Perch: the menu button opens Perch's own menu, and Settings opens Perch's settings.
+diff --git a/chrome/browser/ui/browser_command_controller.cc b/chrome/browser/ui/browser_command_controller.cc
+index 13177b64ca..ec9e86dc4f 100644
+--- a/chrome/browser/ui/browser_command_controller.cc
++++ b/chrome/browser/ui/browser_command_controller.cc
+@@ -2,6 +2,7 @@
+ // Use of this source code is governed by a BSD-style license that can be
+ // found in the LICENSE file.
+ 
++#include "chrome/browser/perch/perch_command_ids.h"
+ #include "chrome/browser/perch/perch_commands.h"
+ #include "chrome/browser/ui/browser_command_controller.h"
+ 
+@@ -1353,7 +1354,9 @@ void BrowserCommandController::HandleCommandWithDisposition(
+                           chrome::kPerformanceSubPage);
+       break;
+     case IDC_OPTIONS:
+-      ShowSettings(webui::GetBrowserForOpeningWebUi(browser_));
++      // Perch: Settings (and ⌘,) open Perch's settings; Chromium's stay at
++      // chrome://settings for the few things only they cover.
++      perch::ExecutePerchCommand(browser_, IDC_PERCH_OPEN_SETTINGS);
+       break;
+     case IDC_EDIT_SEARCH_ENGINES:
+       ShowSearchEngineSettings(webui::GetBrowserForOpeningWebUi(browser_));
+diff --git a/chrome/browser/ui/views/toolbar/browser_app_menu_button.cc b/chrome/browser/ui/views/toolbar/browser_app_menu_button.cc
+index e0a1557cae..13d17df16f 100644
+--- a/chrome/browser/ui/views/toolbar/browser_app_menu_button.cc
++++ b/chrome/browser/ui/views/toolbar/browser_app_menu_button.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "chrome/browser/ui/views/toolbar/browser_app_menu_button.h"
+ 
++#include "chrome/browser/perch/toolbar/perch_profile_menu.h"
++
+ #include <set>
+ 
+ #include "base/feature_list.h"
+@@ -96,6 +98,11 @@ void BrowserAppMenuButton::ShowMenuWithFlags(int run_types) {
+ 
+   BrowserWindowInterface* browser = toolbar_view_->browser();
+ 
++  // Perch: the menu button opens Perch's own menu.
++  if (perch::ShowPerchAppMenu(browser, this)) {
++    return;
++  }
++
+   if (base::FeatureList::IsEnabled(features::kAppMenuGlowUp)) {
+     RunActionMenu(browser, run_types);
+     return;

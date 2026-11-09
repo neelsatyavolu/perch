@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <!-- The Perch mark: a perch (ink bar) with the perch dot (accent) resting on it. Flat, no effects. -->
-  <rect x="100" y="100" width="824" height="824" rx="185" fill="#000000"/>
-  <rect x="102" y="102" width="820" height="820" rx="183" fill="none" stroke="#FFFFFF" stroke-opacity="0.14" stroke-width="4"/>
-  <rect x="272" y="560" width="480" height="88" rx="12" fill="#FCFDFF"/>
-  <circle cx="632" cy="472" r="88" fill="#4C8DFF"/>
-</svg>

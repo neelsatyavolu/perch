@@ -192,11 +192,15 @@ PerchSidePanelController::PerchSidePanelController(
     : browser_(browser),
       registry_(&registry),
       window_id_(base::NumberToString(browser->GetSessionID().id())) {
-  registry.Register(std::make_unique<SidePanelEntry>(
+  auto perch_entry = std::make_unique<SidePanelEntry>(
       PerchKey(),
       base::BindRepeating(&PerchSidePanelController::CreateView,
                           base::Unretained(this)),
-      base::BindRepeating([] { return kDefaultWidth; })));
+      base::BindRepeating([] { return kDefaultWidth; }));
+  // The chat draws its own header (title, history, new chat, close), so
+  // Chromium's "Perch" header with pin and close would be a second one.
+  perch_entry->set_should_show_header(false);
+  registry.Register(std::move(perch_entry));
   if (SidePanelEntry* entry = registry.GetEntryForKey(PerchKey())) {
     entry->AddObserver(this);
   }

@@ -1,9 +1,0 @@
-# Shared by every Perch build. Later files (dev.gn, release.gn) override keys here.
-target_cpu = "arm64"
-enable_widevine = true
-ignore_missing_widevine_signing_cert = true  # until Google issues the VMP certificate (spec 5.2)
-proprietary_codecs = true
-ffmpeg_branding = "Chrome"
-use_official_google_api_keys = false
-enable_hangout_services_extension = false
-enable_reporting = false

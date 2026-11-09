@@ -89,6 +89,11 @@ void OverrideChromiumDefaults(user_prefs::PrefRegistrySyncable* registry) {
              unified_consent::prefs::kUrlKeyedAnonymizedDataCollectionEnabled,
              base::Value(false));
   SetDefault(registry, ::prefs::kSafeBrowsingEnhanced, base::Value(false));
+  // The tab strip starts with Perch's space switcher only: tab search lives
+  // in the command bar (⌘K, and ⌃Tab with the bars hidden).
+  SetDefault(registry, ::prefs::kTabSearchPinnedToTabstrip, base::Value(false));
+  SetDefault(registry, ::prefs::kEverythingMenuPinnedToTabstrip,
+             base::Value(false));
 }
 
 }  // namespace perch

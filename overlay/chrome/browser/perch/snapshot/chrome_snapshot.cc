@@ -435,19 +435,24 @@ class Snapshotter {
                                      << results.DebugString();
                       }));
     } else if (state == "profile-menu") {
-      // The profile menu's items, then New Tab run from it.
-      PerchProfileMenuModel menu(browser_);
-      std::string items;
-      for (size_t i = 0; i < menu.GetItemCount(); ++i) {
-        items += menu.GetTypeAt(i) == ui::MenuModel::TYPE_SEPARATOR
-                     ? std::string(" |")
-                     : " " + base::UTF16ToUTF8(menu.GetLabelAt(i));
-      }
+      // Both toolbar menus' items, then New Tab run from the menu button's.
+      auto labels = [](ui::MenuModel& menu) {
+        std::string items;
+        for (size_t i = 0; i < menu.GetItemCount(); ++i) {
+          items += menu.GetTypeAt(i) == ui::MenuModel::TYPE_SEPARATOR
+                       ? std::string(" |")
+                       : " " + base::UTF16ToUTF8(menu.GetLabelAt(i));
+        }
+        return items;
+      };
+      PerchProfileMenuModel profiles(browser_,
+                                     PerchProfileMenuModel::Kind::kProfile);
+      PerchProfileMenuModel app(browser_, PerchProfileMenuModel::Kind::kApp);
       const int before = browser_->GetTabStripModel()->count();
-      menu.ExecuteCommand(IDC_NEW_TAB, 0);
-      LOG(WARNING) << "Perch snapshot: profile menu:" << items
-                   << " / tabs " << before << " -> "
-                   << browser_->GetTabStripModel()->count();
+      app.ExecuteCommand(IDC_NEW_TAB, 0);
+      LOG(WARNING) << "Perch snapshot: profile menu:" << labels(profiles)
+                   << " / app menu:" << labels(app) << " / tabs " << before
+                   << " -> " << browser_->GetTabStripModel()->count();
     } else if (state == "sleep-open") {
       Open("chrome://version");
       Open("chrome://history");

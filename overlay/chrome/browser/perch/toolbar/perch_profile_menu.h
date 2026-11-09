@@ -20,14 +20,16 @@ class View;
 
 namespace perch {
 
-// The menu behind the toolbar's profile button (spec 5.3): the profiles,
-// then Bookmarks, Downloads, Extensions, History and Developers, then
-// Settings, New Tab and Incognito Window. It replaces Chromium's profile
-// bubble.
+// Perch's two toolbar menus, in place of Chromium's profile bubble and app
+// menu: the profile button lists the profiles (spec 5.3); the menu button at
+// the end of the toolbar has new tabs and windows, zoom, find and print,
+// History, Downloads, Bookmarks, Extensions, More Tools, Settings and About.
 class PerchProfileMenuModel : public ui::SimpleMenuModel,
                               public ui::SimpleMenuModel::Delegate {
  public:
-  explicit PerchProfileMenuModel(BrowserWindowInterface* browser);
+  enum class Kind { kProfile, kApp };
+
+  PerchProfileMenuModel(BrowserWindowInterface* browser, Kind kind);
   PerchProfileMenuModel(const PerchProfileMenuModel&) = delete;
   PerchProfileMenuModel& operator=(const PerchProfileMenuModel&) = delete;
   ~PerchProfileMenuModel() override;
@@ -41,13 +43,17 @@ class PerchProfileMenuModel : public ui::SimpleMenuModel,
 
  private:
   void Build();
+  void BuildProfiles();
+  void BuildApp();
   void AddRecentDownloads();
 
   raw_ptr<BrowserWindowInterface> browser_;
+  const Kind kind_;
   // The profile each profile row switches to, by row.
   std::vector<base::FilePath> profiles_;
   // Recent finished downloads, by row of the Downloads submenu.
   std::vector<std::string> downloads_;
+  std::unique_ptr<ui::SimpleMenuModel> zoom_;
   std::unique_ptr<ui::SimpleMenuModel> bookmarks_;
   std::unique_ptr<ui::SimpleMenuModel> downloads_menu_;
   std::unique_ptr<ui::SimpleMenuModel> extensions_;
@@ -55,8 +61,10 @@ class PerchProfileMenuModel : public ui::SimpleMenuModel,
   std::unique_ptr<ui::SimpleMenuModel> developers_;
 };
 
-// Opens the menu below `anchor`, the profile button.
+// Open the menus below `anchor`: the profile button, or the menu button.
 void ShowPerchProfileMenu(BrowserWindowInterface* browser, views::View* anchor);
+// True once it is open (Chromium's menu then stays closed).
+bool ShowPerchAppMenu(BrowserWindowInterface* browser, views::View* anchor);
 
 }  // namespace perch
 

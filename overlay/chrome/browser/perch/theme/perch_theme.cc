@@ -138,6 +138,56 @@ void AddPerchMixer(ui::ColorProvider* provider,
   m[ui::kColorTextSelectionBackground] = {tint};
   m[kColorAppMenuHighlightDefault] = {accent};
   m[kColorOmniboxKeywordSelected] = {accent};
+
+  // Tabs that are hovered or picked for a multi-tab action step up from the
+  // canvas; Chromium's own selection blue doesn't belong in a Perch theme.
+  const SkColor tab_hover = Over(t->hair_strong, t->canvas);
+  for (ui::ColorId id : std::initializer_list<ui::ColorId>{
+           kColorTabBackgroundInactiveHoverFrameActive,
+           kColorTabBackgroundInactiveHoverFrameInactive}) {
+    m[id] = {tab_hover};
+  }
+  for (ui::ColorId id : std::initializer_list<ui::ColorId>{
+           kColorTabBackgroundSelectedFrameActive,
+           kColorTabBackgroundSelectedFrameInactive,
+           kColorTabBackgroundSelectedHoverFrameActive,
+           kColorTabBackgroundSelectedHoverFrameInactive}) {
+    m[id] = {t->raised};
+  }
+  for (ui::ColorId id : std::initializer_list<ui::ColorId>{
+           kColorTabForegroundInactiveHoverFrameActive,
+           kColorTabForegroundInactiveHoverFrameInactive}) {
+    m[id] = {body};
+  }
+
+  // The address bar's suggestions: an elevated surface, rows that step up on
+  // hover and selection, ink and mute text, and URLs in the accent.
+  const SkColor row_hover = Over(t->hair, t->raised);
+  const SkColor row_selected = Over(t->hair_strong, t->raised);
+  m[kColorOmniboxResultsBackground] = {t->raised};
+  m[kColorOmniboxResultsBackgroundHovered] = {row_hover};
+  m[kColorOmniboxResultsBackgroundSelected] = {row_selected};
+  m[kColorOmniboxResultsFocusIndicator] = {accent};
+  for (ui::ColorId id : std::initializer_list<ui::ColorId>{
+           kColorOmniboxResultsTextSelected, kColorOmniboxSelectionForeground}) {
+    m[id] = {t->ink};
+  }
+  for (ui::ColorId id : std::initializer_list<ui::ColorId>{
+           kColorOmniboxResultsTextDimmed, kColorOmniboxResultsTextDimmedSelected,
+           kColorOmniboxResultsTextSecondary,
+           kColorOmniboxResultsTextSecondarySelected, kColorOmniboxResultsIcon,
+           kColorOmniboxResultsIconHovered,
+           kColorOmniboxResultsIconSelected, kColorOmniboxResultsButtonIcon,
+           kColorOmniboxResultsButtonIconSelected}) {
+    m[id] = {t->mute};
+  }
+  m[kColorOmniboxResultsUrl] = {accent};
+  m[kColorOmniboxResultsUrlSelected] = {accent};
+  m[kColorOmniboxSelectionBackground] = {tint};
+
+  // No rules between the toolbar's buttons: the gaps group them (DESIGN.md).
+  m[kColorToolbarExtensionSeparatorEnabled] = {SK_ColorTRANSPARENT};
+  m[kColorToolbarExtensionSeparatorDisabled] = {SK_ColorTRANSPARENT};
 }
 
 void Refresh(Profile* profile) {

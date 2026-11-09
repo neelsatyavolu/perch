@@ -64,6 +64,8 @@ header .menu { top: calc(100% + 6px); bottom: auto; }
 .menu li[aria-selected="true"] { color: var(--ink); }
 .menu .opt-hint { grid-column: 1; color: var(--mute); font-size: 12px; font-family: var(--sans); }
 .menu li svg.i { grid-column: 2; grid-row: 1; }
+.menu .opt-label > .pmark { vertical-align: -2px; margin-right: 8px; color: var(--ink); }
+svg.pmark { flex: none; }
 .menu-group { color: var(--mute); font-size: 12px; padding: 8px 8px 2px; }
 
 /* Thread and messages */
@@ -155,10 +157,17 @@ button.artifact-card:hover { background: var(--hover); }
 /* Sidebar */
 .side { height: 100%; display: flex; flex-direction: column; background: var(--canvas); min-height: 0; }
 .side-h, .fc-h, .art-h { height: 44px; flex: none; display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--hair); }
-.side-h { padding: 0 8px 0 16px; gap: 8px; }
-.side-h .title, .art-h .title { flex: 1; min-width: 0; color: var(--ink); font-weight: 500; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The side chat's header is the panel's only header (the browser draws none): flush to the panel edges,
+   the title on the thread's 16px edge, the three buttons packed at the end. */
+.side-h { padding: 0 6px 0 16px; gap: 4px; background: var(--canvas); }
+.side-h .dot { margin: 0 4px; }
+.side-h .state { margin-right: 4px; }
+.side-h .title, .art-h .title { margin: 0; flex: 1; min-width: 0; color: var(--ink); font-weight: 500; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .side-h > .menu-wrap .pill, .fc-h > .menu-wrap .pill { background: none; width: 28px; height: 28px; padding: 0; justify-content: center; color: var(--mute); }
 .side-h > .menu-wrap .pill > svg:last-child, .fc-h > .menu-wrap .pill > svg:last-child { display: none; }
+/* The history icon sits alone in its 28px button: drop the gap the pill keeps for a label. */
+.side-h > .menu-wrap .pill-t > svg, .fc-h > .menu-wrap .pill-t > svg { margin-right: 0; vertical-align: middle; }
+.side-h > .menu-wrap .pill-t, .fc-h > .menu-wrap .pill-t { display: grid; place-items: center; }
 .side-h > .menu-wrap .pill:hover, .fc-h > .menu-wrap .pill:hover { background: var(--hover); color: var(--ink); }
 
 /* Full-page chat */

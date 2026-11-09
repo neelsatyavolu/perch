@@ -1,4 +1,0 @@
-# Release builds: official optimisations, including PGO profiles from the checkout.
-is_official_build = true
-is_component_build = false
-symbol_level = 1

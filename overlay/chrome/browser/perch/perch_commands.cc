@@ -72,7 +72,7 @@ void EnablePerchCommands(CommandUpdater* updater) {
                  IDC_PERCH_SPACE_NEXT, IDC_PERCH_SPACE_PREVIOUS,
                  IDC_PERCH_NEW_SPACE, IDC_PERCH_SPLIT_FOCUS_LEFT,
                  IDC_PERCH_SPLIT_FOCUS_RIGHT, IDC_PERCH_START_WATCH_PARTY,
-                 IDC_PERCH_TOGGLE_SIDEBAR}) {
+                 IDC_PERCH_TOGGLE_SIDEBAR, IDC_PERCH_ABOUT}) {
     updater->UpdateCommandEnabled(id, true);
   }
   for (int id = IDC_PERCH_SPACE_1; id <= IDC_PERCH_SPACE_9; ++id) {
@@ -134,8 +134,26 @@ bool ExecutePerchCommand(BrowserWindowInterface* browser, int id) {
     case IDC_PERCH_TOGGLE_HIDE_CHROME:
       ToggleHideChrome(browser);
       return true;
-    case IDC_PERCH_OPEN_SETTINGS:
-      // Perch's settings; Chromium's stay at chrome://settings.
+    case IDC_PERCH_ABOUT:
+      browser->OpenURL(
+          content::OpenURLParams(GURL("chrome://perch-settings/#about"),
+                                 content::Referrer(),
+                                 WindowOpenDisposition::kNewForegroundTab,
+                                 ui::PAGE_TRANSITION_AUTO_BOOKMARK, false),
+          {});
+      return true;
+    case IDC_PERCH_OPEN_SETTINGS: {
+      // Perch's settings, in the tab that already shows them if there is one;
+      // Chromium's stay at chrome://settings.
+      TabStripModel* tabs = browser->GetTabStripModel();
+      for (int i = 0; i < tabs->count(); ++i) {
+        const GURL& url = tabs->GetWebContentsAt(i)->GetLastCommittedURL();
+        if ((url.SchemeIs("chrome") && url.host() == "perch-settings") ||
+            (url.SchemeIs("perch") && url.host() == "settings")) {
+          tabs->ActivateTabAt(i);
+          return true;
+        }
+      }
       browser->OpenURL(
           content::OpenURLParams(GURL("chrome://perch-settings/"),
                                  content::Referrer(),
@@ -143,6 +161,7 @@ bool ExecutePerchCommand(BrowserWindowInterface* browser, int id) {
                                  ui::PAGE_TRANSITION_AUTO_BOOKMARK, false),
           {});
       return true;
+    }
     case IDC_PERCH_COMMAND_BAR:
       ToggleCommandBar(browser);
       return true;

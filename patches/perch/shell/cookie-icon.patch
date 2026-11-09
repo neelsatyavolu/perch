@@ -1,0 +1,17 @@
+# Perch: the cookie icon shows only for a site the person let third-party cookies through.
+diff --git a/chrome/browser/ui/views/location_bar/cookie_controls/cookie_controls_page_action_controller.cc b/chrome/browser/ui/views/location_bar/cookie_controls/cookie_controls_page_action_controller.cc
+index 0a5e9cce40..cdb558e768 100644
+--- a/chrome/browser/ui/views/location_bar/cookie_controls/cookie_controls_page_action_controller.cc
++++ b/chrome/browser/ui/views/location_bar/cookie_controls/cookie_controls_page_action_controller.cc
+@@ -239,7 +239,10 @@ void CookieControlsPageActionController::OnCookieControlsIconStatusChanged(
+ }
+ 
+ bool CookieControlsPageActionController::ShouldShowIcon() const {
+-  return controls_state_ != CookieControlsState::kHidden ||
++  // Perch: blocking third-party cookies is the default, so the address bar
++  // shows the icon only for a site the person let through (and while its
++  // bubble is open). Site settings still reach the control everywhere.
++  return controls_state_ == CookieControlsState::kAllowed3pc ||
+          bubble_delegate_->HasBubble();
+ }
+ 

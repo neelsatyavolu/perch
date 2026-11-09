@@ -39,6 +39,8 @@
 #define IDC_PERCH_START_WATCH_PARTY 46032
 // View → Show Perch Sidebar, ⌘⇧. (side_panel/).
 #define IDC_PERCH_TOGGLE_SIDEBAR 46033
+// The menu button's About Perch: Settings › About.
+#define IDC_PERCH_ABOUT 46034
 // One per profile row.
 #define IDC_PERCH_PROFILE_FIRST 46100
 #define IDC_PERCH_PROFILE_LAST 46149

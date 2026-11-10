@@ -86,6 +86,9 @@ class WelcomeWatcher : public TabStripModelObserver {
     if (now != showing_) {
       showing_ = now;
       Relayout(browser_);
+      if (!now) {
+        LeftWelcomeUnfinished(browser_);
+      }
     }
   }
 

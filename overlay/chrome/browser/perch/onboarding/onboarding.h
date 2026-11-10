@@ -27,6 +27,10 @@ bool IsWelcomeURL(const GURL& url);
 // its first tabs are in.
 void MaybeStartOnboarding(BrowserWindowInterface* browser);
 
+// The window showing the welcome page moved on to another tab or page without
+// finishing setup: leaves the full screen the welcome page put it in.
+void LeftWelcomeUnfinished(BrowserWindowInterface* browser);
+
 // The welcome page in `welcome` is done (finished or skipped): never start it
 // again, and leave full screen.
 void FinishOnboarding(content::WebContents* welcome);

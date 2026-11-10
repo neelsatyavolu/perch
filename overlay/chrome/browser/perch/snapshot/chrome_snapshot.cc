@@ -214,6 +214,12 @@ class Snapshotter {
       }
     } else if (state == "panel") {
       SidePanelUI::From(browser_)->Show(SidePanelEntryId::kPerch);
+    } else if (state == "paint-active") {
+      // Draws the window as the active one without taking focus, for looking
+      // at active-only painting from a background window.
+      paint_as_active_ = BrowserView::GetBrowserViewForBrowser(browser_)
+                             ->GetWidget()
+                             ->LockPaintAsActive();
     } else if (state == "extensions-panel") {
       // Opens Perch's extensions list from its toolbar button.
       BrowserView::GetBrowserViewForBrowser(browser_)
@@ -605,6 +611,8 @@ class Snapshotter {
     }
     LOG(WARNING) << "Perch snapshot: tabs " << when << ":" << list;
   }
+
+  std::unique_ptr<views::Widget::PaintAsActiveLock> paint_as_active_;
 
   views::View* SidebarContent() {
     SidePanel* panel =

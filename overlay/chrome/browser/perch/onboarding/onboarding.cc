@@ -87,6 +87,19 @@ void MaybeStartOnboarding(BrowserWindowInterface* browser) {
   }
 }
 
+void LeftWelcomeUnfinished(BrowserWindowInterface* browser) {
+  // The welcome page took the window full screen. Someone who walks away
+  // from it (a new tab, another page) gets their ordinary window back; one
+  // who finishes is taken out by FinishOnboarding.
+  if (browser->GetProfile()->GetPrefs()->GetBoolean(
+          prefs::kOnboardingFinished) ||
+      !Started().contains(browser->GetProfile()->GetPath()) ||
+      !browser->GetWindow()->IsFullscreen()) {
+    return;
+  }
+  chrome::ToggleFullscreenMode(browser);
+}
+
 void FinishOnboarding(content::WebContents* welcome) {
   Profile::FromBrowserContext(welcome->GetBrowserContext())
       ->GetPrefs()

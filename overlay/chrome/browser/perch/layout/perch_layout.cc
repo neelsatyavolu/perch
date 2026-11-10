@@ -23,7 +23,11 @@ std::optional<int> PerchLayoutConstant(LayoutConstant constant, bool touch_ui) {
     // 29 + the 1 px overlap with the toolbar + 6 px padding = a 36 px strip
     // (32 px when compact).
     case LayoutConstant::kTabHeight:
-      return g_compact ? 26 : 30;
+      return g_compact ? 27 : 31;
+    // The toolbar keeps its first row for a line Perch doesn't draw, so the
+    // active tab reaches one row further down and meets the toolbar's fill.
+    case LayoutConstant::kTabstripToolbarOverlap:
+      return 2;
     case LayoutConstant::kLocationBarHeight:
     case LayoutConstant::kToolbarButtonHeight:
       return g_compact ? 24 : 28;

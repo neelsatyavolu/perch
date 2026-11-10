@@ -1,0 +1,31 @@
+# Perch: a browser window keeps its tab strip and toolbar inside the window in full screen (non-immersive), so full screen is laid out exactly as a window: the active tab joins the toolbar and the chat runs up beside it.
+diff --git a/chrome/browser/ui/window_feature_controller/window_feature_controller.cc b/chrome/browser/ui/window_feature_controller/window_feature_controller.cc
+index 4380222265..4896b2c311 100644
+--- a/chrome/browser/ui/window_feature_controller/window_feature_controller.cc
++++ b/chrome/browser/ui/window_feature_controller/window_feature_controller.cc
+@@ -60,18 +60,17 @@ bool WindowFeatureController::IsTrustedSource() const {
+ }
+ 
+ #if BUILDFLAG(IS_MAC)
++// Perch: a browser window keeps its tab strip and toolbar inside the window in
++// full screen, laid out exactly as in a window (the chat beside the toolbar,
++// the active tab joined to it). Immersive full screen moves them into macOS
++// title bar strips above the page, which can't match that layout. Apps keep
++// immersive full screen.
+ bool WindowFeatureController::UsesImmersiveFullscreenMode() const {
+-  const bool is_pwa = app_controller_ != nullptr;
+-  const bool is_tabbed_window =
+-      CanSupportWindowFeature(WindowFeature::kFeatureTabStrip);
+-  return is_pwa || is_tabbed_window;
++  return app_controller_ != nullptr;
+ }
+ 
+ bool WindowFeatureController::UsesImmersiveFullscreenTabbedMode() const {
+-  const bool is_pwa = app_controller_ != nullptr;
+-  const bool is_tabbed_window =
+-      CanSupportWindowFeature(WindowFeature::kFeatureTabStrip);
+-  return is_tabbed_window && !is_pwa;
++  return false;
+ }
+ #endif
+ 

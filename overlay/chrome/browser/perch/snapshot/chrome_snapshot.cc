@@ -214,6 +214,9 @@ class Snapshotter {
       }
     } else if (state == "panel") {
       SidePanelUI::From(browser_)->Show(SidePanelEntryId::kPerch);
+    } else if (state == "fullscreen") {
+      // The browser's own full screen (View > Enter Full Screen).
+      chrome::ToggleFullscreenMode(browser_);
     } else if (state == "paint-active") {
       // Draws the window as the active one without taking focus, for looking
       // at active-only painting from a background window.
@@ -711,6 +714,11 @@ class Snapshotter {
       Next();
       return;
     }
+    LOG(WARNING) << "Perch snapshot: " << states_[index_] << " window "
+                 << widget->GetWindowBoundsInScreen().ToString() << " layer "
+                 << layer->bounds().ToString() << " browser view "
+                 << (view ? view->bounds().ToString() : std::string("-"))
+                 << " fullscreen " << (view && view->IsFullscreen());
     const base::FilePath path = dir_.AppendASCII(states_[index_] + ".png");
     layer->RequestCopyOfOutput(std::make_unique<viz::CopyOutputRequest>(
         viz::CopyOutputRequest::ResultFormat::RGBA,

@@ -166,7 +166,7 @@ button.artifact-card:hover { background: var(--hover); }
 
 /* Sidebar */
 .side { height: 100%; display: flex; flex-direction: column; background: var(--canvas); min-height: 0; }
-.side-h, .fc-h, .art-h { height: 40px; flex: none; display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--hair); }
+.side-h, .fc-h, .art-h { height: 41px; flex: none; display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--hair); }
 /* The side chat's header is the panel's only header (the browser draws none): flush to the panel edges,
    the title on the thread's 16px edge, the three buttons packed at the end. */
 .side-h { padding: 0 6px 0 16px; gap: 4px; background: var(--canvas); }

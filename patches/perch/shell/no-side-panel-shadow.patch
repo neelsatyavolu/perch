@@ -1,0 +1,40 @@
+# Perch: no shadow around the page while a side panel is open; the panel's hairline parts them (DESIGN.md: no shadows).
+diff --git a/chrome/browser/ui/views/frame/layout/browser_view_tabbed_layout_impl.cc b/chrome/browser/ui/views/frame/layout/browser_view_tabbed_layout_impl.cc
+index b1ea4a69f4..ceed92f66d 100644
+--- a/chrome/browser/ui/views/frame/layout/browser_view_tabbed_layout_impl.cc
++++ b/chrome/browser/ui/views/frame/layout/browser_view_tabbed_layout_impl.cc
+@@ -287,12 +287,15 @@ BrowserViewTabbedLayoutImpl::CalculateSeparatorInfo() const {
+   const bool is_split_view = layout_data_->horizontal_layout.is_split_view;
+ 
+   const bool would_have_separator = has_infobar || !is_split_view;
++  // Perch: no shadow around the page when a side panel is open (DESIGN.md: no
++  // shadows); the panel is parted from the page by its hairline edge.
++  const bool shadow_box_for_side_panel = false;
+   switch (layout_data_->window_state) {
+     case WindowState::kNormal:
+     case WindowState::kMaximized: {
+       // In content-height mode, split view outline serves as shadow box.
+       info.shadow_box =
+-          has_side_panel && (has_infobar || !is_split_view || !is_force_to_top);
++          shadow_box_for_side_panel && (has_infobar || !is_split_view || !is_force_to_top);
+       const bool suppress_separator = info.shadow_box && is_force_to_top;
+       info.multi_contents_separator = !suppress_separator && !has_infobar;
+       info.top_container_separator = !suppress_separator && has_infobar;
+@@ -303,7 +306,7 @@ BrowserViewTabbedLayoutImpl::CalculateSeparatorInfo() const {
+     }
+     case WindowState::kFullscreen:
+       // In fullscreen, split view outline serves as shadow box.
+-      info.shadow_box = has_side_panel && (has_infobar || !is_split_view);
++      info.shadow_box = shadow_box_for_side_panel && (has_infobar || !is_split_view);
+       // Mac and ChromeOS display separators on their slide-in top containers.
+       // However, if top container elements are not visible (for example,
+       // because they are offscreen), the separator is not shown.
+@@ -313,7 +316,7 @@ BrowserViewTabbedLayoutImpl::CalculateSeparatorInfo() const {
+       break;
+     case WindowState::kFullscreenWithToolbar:
+       // In fullscreen, split view outline serves as shadow box.
+-      info.shadow_box = has_side_panel && (has_infobar || !is_split_view);
++      info.shadow_box = shadow_box_for_side_panel && (has_infobar || !is_split_view);
+       info.top_container_separator = !info.shadow_box && would_have_separator;
+       info.adjust_for_missing_separator =
+           info.shadow_box && would_have_separator;

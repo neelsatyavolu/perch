@@ -1,0 +1,82 @@
+# Perch: pinned tabs sit in one rounded tray with no rules between them.
+diff --git a/chrome/browser/ui/views/tabs/common/horizontal_tab_style_views.cc b/chrome/browser/ui/views/tabs/common/horizontal_tab_style_views.cc
+index cd28bdde26..5e840f99bb 100644
+--- a/chrome/browser/ui/views/tabs/common/horizontal_tab_style_views.cc
++++ b/chrome/browser/ui/views/tabs/common/horizontal_tab_style_views.cc
+@@ -523,6 +523,11 @@ TabStyle::SeparatorOpacities HorizontalTabStyleViews::GetSeparatorOpacities(
+   // In addition, separators should smoothly fade in and out between states,
+   // particularly during the hover animation.
+ 
++  // Perch: pinned tabs share one tray, with no rules between them.
++  if (delegate_->IsPinned()) {
++    return {0.0f, 0.0f};
++  }
++
+   float leading_opacity = GetSeparatorOpacity(for_layout, true);
+   float trailing_opacity = GetSeparatorOpacity(for_layout, false);
+ 
+diff --git a/chrome/browser/ui/views/tabs/tab_container.cc b/chrome/browser/ui/views/tabs/tab_container.cc
+index 77a9f492c7..ea9f41b53b 100644
+--- a/chrome/browser/ui/views/tabs/tab_container.cc
++++ b/chrome/browser/ui/views/tabs/tab_container.cc
+@@ -32,6 +32,11 @@
+ #include "ui/base/metadata/metadata_impl_macros.h"
+ #include "ui/base/mojom/menu_source_type.mojom.h"
+ #include "ui/display/screen.h"
++#include "cc/paint/paint_flags.h"
++#include "chrome/browser/ui/color/chrome_color_id.h"
++#include "ui/color/color_provider.h"
++#include "ui/gfx/canvas.h"
++#include "ui/gfx/geometry/rect_f.h"
+ #include "ui/gfx/image/image_skia.h"
+ #include "ui/gfx/image/image_skia_operations.h"
+ #include "ui/views/accessibility/view_accessibility.h"
+@@ -894,6 +899,35 @@ void TabContainer::Layout(PassKey) {
+   UpdateAccessibleTabIndicesIfNeeded();
+ }
+ 
++// Perch: pinned tabs sit together in one rounded tray, a faint fill with a
++// hairline edge, drawn under the tabs.
++void TabContainer::OnPaint(gfx::Canvas* canvas) {
++  views::View::OnPaint(canvas);
++  gfx::Rect tray;
++  for (int i = 0; i < GetTabCount(); ++i) {
++    const Tab* tab = GetTabAtModelIndex(i);
++    if (tab && tab->data().pinned && tab->GetVisible() && !tab->closing()) {
++      tray.Union(tab->bounds());
++    }
++  }
++  const ui::ColorProvider* colors = GetColorProvider();
++  if (tray.IsEmpty() || !colors) {
++    return;
++  }
++  gfx::RectF edge(tray);
++  edge.Inset(gfx::InsetsF::TLBR(5.5f, 4.5f, 5.5f, 4.5f));
++  const SkColor ink = colors->GetColor(kColorTabForegroundActiveFrameActive);
++  constexpr float kRadius = 10;
++  cc::PaintFlags flags;
++  flags.setAntiAlias(true);
++  flags.setColor(SkColorSetA(ink, 0x12));
++  canvas->DrawRoundRect(edge, kRadius, flags);
++  flags.setStyle(cc::PaintFlags::kStroke_Style);
++  flags.setStrokeWidth(1);
++  flags.setColor(SkColorSetA(ink, 0x24));
++  canvas->DrawRoundRect(edge, kRadius, flags);
++}
++
+ void TabContainer::PaintChildren(const views::PaintInfo& paint_info) {
+   // N.B. We override PaintChildren only to define paint order for our children.
+   // We do this instead of GetChildrenInZOrder because GetChildrenInZOrder is
+diff --git a/chrome/browser/ui/views/tabs/tab_container.h b/chrome/browser/ui/views/tabs/tab_container.h
+index 0cb7bd56fd..6100035467 100644
+--- a/chrome/browser/ui/views/tabs/tab_container.h
++++ b/chrome/browser/ui/views/tabs/tab_container.h
+@@ -205,6 +205,8 @@ class TabContainer : public views::View,
+   // views::View
+   void Layout(PassKey) override;
+   void PaintChildren(const views::PaintInfo& paint_info) override;
++  // Perch: pinned tabs sit together in one rounded tray.
++  void OnPaint(gfx::Canvas* canvas) override;
+   gfx::Size GetMinimumSize() const override;
+   gfx::Size CalculatePreferredSize(
+       const views::SizeBounds& available_size) const override;

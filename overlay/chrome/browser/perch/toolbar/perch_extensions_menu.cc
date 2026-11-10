@@ -85,10 +85,12 @@ class ExtensionsPanel : public views::View,
         u"Installed extensions", views::style::CONTEXT_LABEL,
         views::style::STYLE_SECONDARY));
     title->SetHorizontalAlignment(gfx::ALIGN_LEFT);
-    title->SetBorder(views::CreateEmptyBorder(gfx::Insets::TLBR(2, 16, 4, 16)));
+    title->SetBorder(views::CreateEmptyBorder(gfx::Insets::TLBR(2, 12, 4, 12)));
 
     auto list = std::make_unique<views::BoxLayoutView>();
     list->SetOrientation(views::BoxLayout::Orientation::kVertical);
+    // The rows' icons line up under the icons of the two commands above.
+    list->SetInsideBorderInsets(gfx::Insets::TLBR(0, 10, 0, 6));
     std::vector<std::unique_ptr<ExtensionMenuItemView>> rows;
     for (const std::string& id : model_->action_ids()) {
       std::unique_ptr<ExtensionActionViewModel> action =

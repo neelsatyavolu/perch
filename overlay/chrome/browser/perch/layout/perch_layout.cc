@@ -38,6 +38,10 @@ std::optional<int> PerchLayoutConstant(LayoutConstant constant, bool touch_ui) {
     // Chips inside the 4px address bar.
     case LayoutConstant::kLocationBarChildCornerRadius:
       return 4;
+    // The chat sits flush beside the toolbar and the page: no gap that would
+    // part the active tab from the toolbar or leave a frame around the page.
+    case LayoutConstant::kSidePanelInset:
+      return 0;
     // The address bar has no outline, so its last icon sits close to the
     // toolbar buttons after it and the gaps along the toolbar's end are even.
     case LayoutConstant::kLocationBarTrailingDecorationEdgePadding:

@@ -107,3 +107,4 @@ perch/shell/ask-perch-fill.patch
 perch/shell/ledger-shapes.patch
 perch/shell/toolbar-edge-fill.patch
 perch/shell/ask-perch-open.patch
+perch/shell/fullscreen-strip-height.patch

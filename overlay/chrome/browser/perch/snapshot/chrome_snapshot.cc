@@ -610,6 +610,16 @@ class Snapshotter {
               tabs->GetWebContentsAt(i)->GetVisibleURL().spec();
     }
     LOG(WARNING) << "Perch snapshot: tabs " << when << ":" << list;
+    BrowserView* view = BrowserView::GetBrowserViewForBrowser(browser_);
+    views::View* strip = view->tab_strip_view();
+    views::View* tab = view->tab_strip_view()->GetTabAnchorView(
+        tabs->GetActiveTab()->GetHandle());
+    gfx::Rect tab_in_strip =
+        tab ? tab->ConvertRectToTarget(tab, strip, tab->GetLocalBounds())
+            : gfx::Rect();
+    LOG(WARNING) << "Perch snapshot: strip " << strip->bounds().ToString()
+                 << " active tab in strip " << tab_in_strip.ToString()
+                 << " toolbar " << view->toolbar()->bounds().ToString();
   }
 
   std::unique_ptr<views::Widget::PaintAsActiveLock> paint_as_active_;

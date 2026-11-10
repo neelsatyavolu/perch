@@ -1,0 +1,37 @@
+# Perch: in full screen the tab strip is sized to its tabs, so the active tab meets the toolbar strip below with no line.
+diff --git a/chrome/browser/ui/views/frame/immersive_mode_controller_mac.mm b/chrome/browser/ui/views/frame/immersive_mode_controller_mac.mm
+index 34b52a6fd0..e79b7cb943 100644
+--- a/chrome/browser/ui/views/frame/immersive_mode_controller_mac.mm
++++ b/chrome/browser/ui/views/frame/immersive_mode_controller_mac.mm
+@@ -2,6 +2,7 @@
+ // Use of this source code is governed by a BSD-style license that can be
+ // found in the LICENSE file.
+ 
++#include "chrome/browser/ui/layout_constants.h"
+ #include "chrome/browser/ui/views/frame/immersive_mode_controller_mac.h"
+ 
+ #include <AppKit/AppKit.h>
+@@ -104,7 +105,11 @@ void ImmersiveModeControllerMac::SetEnabled(bool enabled) {
+     // Vertical tab strip should stay visible and will not be reparented to the
+     // tab overlay.
+     if (separate_tab_strip_ && !browser_view_->ShouldDrawVerticalTabStrip()) {
+-      tab_widget_height_ = browser_view_->tab_strip_view()->height();
++      // Perch: the strip's buttons make it a row taller than its tabs. A
++      // window hides that row under the toolbar; here the strip stands
++      // alone, so it is sized to the tabs and the active tab reaches the
++      // toolbar below with no line between them.
++      tab_widget_height_ = GetLayoutConstant(LayoutConstant::kTabStripHeight);
+       tab_widget_height_ += static_cast<BrowserFrameViewMac*>(
+                                 browser_view_->browser_widget()->GetFrameView())
+                                 ->GetTopInset(false);
+@@ -373,8 +378,8 @@ void ImmersiveModeControllerMac::OnViewBoundsChanged(
+     gfx::Size new_size(bounds.width(), tab_widget_height_);
+     browser_view_->tab_overlay_widget()->SetSize(new_size);
+     browser_view_->tab_overlay_view()->SetSize(new_size);
+-    browser_view_->tab_strip_view()->SetBoundsRect(gfx::Rect(gfx::Size(
+-        new_size.width(), browser_view_->tab_strip_view()->height())));
++    browser_view_->tab_strip_view()->SetBoundsRect(
++        gfx::Rect(gfx::Size(new_size.width(), tab_widget_height_)));
+     overlay_height_ += tab_widget_height_;
+   }
+   browser_view_->overlay_widget()->SetSize(bounds.size());

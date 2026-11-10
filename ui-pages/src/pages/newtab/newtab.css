@@ -20,7 +20,7 @@
 
 .addr { display: grid; gap: 10px; }
 .box {
-  width: 100%; height: 48px; display: flex; align-items: center; gap: 12px; padding: 0 8px 0 16px; border-radius: 12px;
+  width: 100%; height: 48px; display: flex; align-items: center; gap: 12px; padding: 0 8px 0 16px; border-radius: 6px;
   background: var(--raised); border: 1px solid var(--hair-strong); color: var(--mute);
 }
 /* The input itself has no ring (it would sit inside the box); the box carries DESIGN.md's 2px accent ring. */
@@ -47,7 +47,7 @@
 .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .cards-empty { grid-column: 1 / -1; color: var(--mute); font-size: 13px; padding: 16px 2px; }
 .ccard {
-  background: var(--raised); border: 1px solid transparent; border-radius: 12px; padding: 16px; display: grid; gap: 6px;
+  background: var(--raised); border: 1px solid transparent; border-radius: 6px; padding: 16px; display: grid; gap: 6px;
   align-content: start; min-height: 112px; cursor: pointer; text-align: left; font: inherit; color: inherit;
   transition: background 120ms var(--ease);
 }

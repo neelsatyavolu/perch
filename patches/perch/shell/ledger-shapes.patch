@@ -1,0 +1,164 @@
+# Perch: Ledger's shapes in the native chrome: 4px fields, buttons and rows, 6px menus and trays, and Ask Perch's words centred.
+diff --git a/chrome/browser/resources/omnibox_popup/omnibox_popup_searchbox.css b/chrome/browser/resources/omnibox_popup/omnibox_popup_searchbox.css
+index 4a9e23a1e2..8640c7bff4 100644
+--- a/chrome/browser/resources/omnibox_popup/omnibox_popup_searchbox.css
++++ b/chrome/browser/resources/omnibox_popup/omnibox_popup_searchbox.css
+@@ -13,7 +13,7 @@
+ :host {
+   --cr-searchbox-icon-top-position: 0;
+   /* Perch: 8px, the same as the address bar (DESIGN.md). */
+-  --cr-searchbox-border-radius: 8px;
++  --cr-searchbox-border-radius: 4px;
+   --cr-searchbox-font-size: var(--omnibox-primary-font-size);
+   --cr-searchbox-height: var(--location-bar-height);
+   --cr-searchbox-icon-size-in-searchbox: var(--location-bar-icon-size);
+diff --git a/chrome/browser/ui/views/chrome_layout_provider.cc b/chrome/browser/ui/views/chrome_layout_provider.cc
+index 925fc1d223..3289dd7613 100644
+--- a/chrome/browser/ui/views/chrome_layout_provider.cc
++++ b/chrome/browser/ui/views/chrome_layout_provider.cc
+@@ -339,8 +339,8 @@ views::ShapeSysTokens GetShapeSysToken(views::ShapeContextToken id) {
+            views::ShapeSysTokens::kMediumSmall},
+           {kActionAppMenuBlockEntryCornerRadius,
+            views::ShapeSysTokens::kMediumSmall},
+-          // Perch: the suggestions keep the address bar's 8px shape.
+-          {kOmniboxExpandedRadius, views::ShapeSysTokens::kSmall},
++          // Perch: the suggestions keep the address bar's 4px shape.
++          {kOmniboxExpandedRadius, views::ShapeSysTokens::kXSmall},
+       });
+   const auto it = shape_token_map.find(id);
+   return it == shape_token_map.end() ? views::ShapeSysTokens::kDefault
+@@ -352,9 +352,9 @@ int ChromeLayoutProvider::GetCornerRadiusMetric(views::ShapeContextToken token,
+   CHECK_GE(token, views::kShapeContextTokenStart, base::NotFatalUntil::M162);
+   CHECK_LT(token, kChromeShapeContextTokenEnd, base::NotFatalUntil::M162);
+ 
+-  // Perch: buttons are 8px, not pills (DESIGN.md).
++  // Perch: buttons are 4px, not pills (DESIGN.md).
+   if (token == views::ShapeContextTokens::kButtonRadius) {
+-    return 8;
++    return 4;
+   }
+   if (token < views::ShapeContextTokens::kShapeContextTokenEnd) {
+     return LayoutProvider::GetCornerRadiusMetric(token, size);
+diff --git a/chrome/browser/ui/views/location_bar/location_bar_view.cc b/chrome/browser/ui/views/location_bar/location_bar_view.cc
+index 14ce1f3adc..2c5f3dc5a7 100644
+--- a/chrome/browser/ui/views/location_bar/location_bar_view.cc
++++ b/chrome/browser/ui/views/location_bar/location_bar_view.cc
+@@ -557,8 +557,8 @@ int LocationBarView::GetBorderRadius() const {
+ 
+ // static
+ int LocationBarView::ComputeBorderRadius(gfx::Size size) {
+-  // Perch: an 8px field, not a pill (DESIGN.md), matching its suggestions.
+-  return 8;
++  // Perch: a 4px field, not a pill (DESIGN.md), matching its suggestions.
++  return 4;
+ }
+ 
+ // static
+@@ -1102,7 +1102,9 @@ void LocationBarView::LayoutPerchTitle(const gfx::Rect& location_bounds) {
+   const int x =
+       location_bounds.x() + omnibox_view_->GetUnelidedTextWidth() + kGap;
+   const int room = location_bounds.right() - x;
+-  const bool show = !title.empty() && !omnibox_view_->HasFocus() &&
++  // A page with no title of its own reports its address; don't say it twice.
++  const bool show = !title.empty() && title != omnibox_view_->GetText() &&
++                    !omnibox_view_->HasFocus() &&
+                     !omnibox_view_->GetText().empty() && room >= kMinWidth;
+   perch_title_->SetVisible(show);
+   if (!show) {
+diff --git a/chrome/browser/ui/views/tabs/tab_container.cc b/chrome/browser/ui/views/tabs/tab_container.cc
+index ea9f41b53b..feb447872b 100644
+--- a/chrome/browser/ui/views/tabs/tab_container.cc
++++ b/chrome/browser/ui/views/tabs/tab_container.cc
+@@ -917,7 +917,7 @@ void TabContainer::OnPaint(gfx::Canvas* canvas) {
+   gfx::RectF edge(tray);
+   edge.Inset(gfx::InsetsF::TLBR(5.5f, 4.5f, 5.5f, 4.5f));
+   const SkColor ink = colors->GetColor(kColorTabForegroundActiveFrameActive);
+-  constexpr float kRadius = 10;
++  constexpr float kRadius = 6;
+   cc::PaintFlags flags;
+   flags.setAntiAlias(true);
+   flags.setColor(SkColorSetA(ink, 0x12));
+diff --git a/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.cc b/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.cc
+index 735a773272..84ae4d5a9d 100644
+--- a/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.cc
++++ b/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.cc
+@@ -230,6 +230,11 @@ gfx::Size PinnedActionToolbarButton::CalculatePreferredSize(
+ 
+ void PinnedActionToolbarButton::Layout(PassKey) {
+   LayoutSuperclass<ToolbarButton>(this);
++  // Perch: Ask Perch's words sit in the middle of its pill.
++  if (action_id_ == kActionSidePanelShowPerch) {
++    label()->SetHorizontalAlignment(gfx::ALIGN_CENTER);
++    label()->SetBoundsRect(GetLocalBounds());
++  }
+   gfx::Rect status_rect(kStatusIndicatorWidth, kStatusIndicatorHeight);
+   const gfx::Rect image_container_bounds =
+       image_container_view()->GetLocalBounds();
+diff --git a/chrome/browser/ui/views/toolbar/toolbar_button.cc b/chrome/browser/ui/views/toolbar/toolbar_button.cc
+index a96a273a1a..2d6825901b 100644
+--- a/chrome/browser/ui/views/toolbar/toolbar_button.cc
++++ b/chrome/browser/ui/views/toolbar/toolbar_button.cc
+@@ -165,8 +165,8 @@ void ToolbarButton::ClearHighlight() {
+ }
+ 
+ int ToolbarButton::GetRoundedCornerRadius() const {
+-  // Perch: 8px hover and press shapes, not circles (DESIGN.md).
+-  return 8;
++  // Perch: 4px hover and press shapes, not circles (DESIGN.md).
++  return 4;
+ }
+ 
+ float ToolbarButton::GetCornerRadiusFor(ToolbarButton::Edge edge) const {
+diff --git a/ui/views/controls/menu/menu_config_mac.mm b/ui/views/controls/menu/menu_config_mac.mm
+index db8e801278..3670ecbea2 100644
+--- a/ui/views/controls/menu/menu_config_mac.mm
++++ b/ui/views/controls/menu/menu_config_mac.mm
+@@ -12,16 +12,16 @@ void MenuConfig::InitPlatform() {
+   use_mnemonics = false;
+   show_context_menu_accelerators = false;
+   all_menus_use_prefix_selection = true;
+-  // Perch: frosted 12px menus (see menu_host_glass_mac.mm) with 8px rows
+-  // inset 6px from the edge and tight separators (DESIGN.md).
+-  item_corner_radius = 8;
++  // Perch: glass 6px menus (see menu_host_glass_mac.mm) with 4px rows
++  // inset 4px from the edge and tight separators (DESIGN.md).
++  item_corner_radius = 4;
+   item_vertical_margin = 6;
+   separator_height = 9;
+   separator_upper_height = 4;
+   separator_lower_height = 4;
+-  corner_radius = 12;
+-  rounded_menu_vertical_border_size = 6;
+-  menu_horizontal_border_size = 6;
++  corner_radius = 6;
++  rounded_menu_vertical_border_size = 4;
++  menu_horizontal_border_size = 4;
+   // The hairline edge (kColorMenuBorder) around the frosted fill.
+   use_outer_border = true;
+ }
+diff --git a/ui/webui/resources/cr_components/searchbox/searchbox_dropdown.css b/ui/webui/resources/cr_components/searchbox/searchbox_dropdown.css
+index a43bce5453..91ead8209c 100644
+--- a/ui/webui/resources/cr_components/searchbox/searchbox_dropdown.css
++++ b/ui/webui/resources/cr_components/searchbox/searchbox_dropdown.css
+@@ -17,7 +17,7 @@
+ #content {
+   background-color: var(--color-searchbox-results-background);
+   /* Perch: the address bar's 8px radius carries on into its suggestions. */
+-  border-radius: var(--cr-searchbox-border-radius, 8px);
++  border-radius: var(--cr-searchbox-border-radius, 4px);
+   box-shadow: var(--cr-searchbox-shadow);
+   display: flex;
+   gap: 16px;
+diff --git a/ui/webui/resources/cr_components/searchbox/searchbox_match.css b/ui/webui/resources/cr_components/searchbox/searchbox_match.css
+index 4119d259e6..dd991e078e 100644
+--- a/ui/webui/resources/cr_components/searchbox/searchbox_match.css
++++ b/ui/webui/resources/cr_components/searchbox/searchbox_match.css
+@@ -75,7 +75,7 @@
+   /* Perch: rows are inset with an even 8px radius (DESIGN.md), not half
+      pills against a focus bar. */
+   margin-inline: 8px;
+-  border-radius: 8px;
++  border-radius: 4px;
+ }
+ 
+ :host-context([has-secondary-side]):host-context([can-show-secondary-side]) .container:not(.actions) {

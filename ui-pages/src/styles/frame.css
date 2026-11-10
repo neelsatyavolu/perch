@@ -1,8 +1,8 @@
 /* The status line that announces results and errors. Bottom left, out of the way. */
 .toast {
   position: fixed; left: 16px; bottom: 16px; z-index: 20; max-width: min(480px, calc(100vw - 32px));
-  padding: 8px 12px; border-radius: 8px; background: var(--raised); color: var(--ink); border: 1px solid var(--hair-strong);
-  box-shadow: var(--pop); font-size: 13px; opacity: 0; transform: translateY(4px); pointer-events: none;
+  padding: 8px 12px; border-radius: 4px; background: color-mix(in srgb, var(--raised) 72%, transparent); -webkit-backdrop-filter: blur(28px) saturate(1.5); backdrop-filter: blur(28px) saturate(1.5); color: var(--ink); border: 1px solid var(--hair-strong);
+  font-size: 13px; opacity: 0; transform: translateY(4px); pointer-events: none;
   transition: opacity 180ms var(--ease), transform 180ms var(--ease);
 }
 .toast.on { opacity: 1; transform: none; }

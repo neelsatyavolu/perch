@@ -5,14 +5,14 @@ describe("theme tokens (DESIGN.md)", () => {
   test("five themes and five accents, Ink and Blue first", () => {
     expect(THEME_NAMES).toEqual(["ink", "graphite", "dusk", "paper", "contrast"]);
     expect(ACCENT_NAMES).toEqual(["blue", "teal", "amber", "rose", "mono"]);
-    expect(THEMES.ink.canvas).toBe("#000000");
-    expect(THEMES.ink.card).toBe("#0E0E10");
-    expect(THEMES.paper.raised).toBe("#ECEEF1");
+    expect(THEMES.ink.canvas).toBe("#0E0E0D");
+    expect(THEMES.ink.card).toBe("#141413");
+    expect(THEMES.paper.raised).toBe("#EFECE4");
   });
 
   test("accents use the darker shade on Paper", () => {
     expect(accentFor("blue", "ink")).toBe("#4C8DFF");
-    expect(accentFor("blue", "paper")).toBe("#2B68D6");
+    expect(accentFor("blue", "paper")).toBe("#2A63CC");
     expect(accentFor("mono", "paper")).toBe(ACCENTS.mono.light);
   });
 
@@ -39,13 +39,13 @@ describe("theme tokens (DESIGN.md)", () => {
 
   test("tokenVars sets every surface, text and accent variable", () => {
     const vars = tokenVars("paper", "teal");
-    expect(vars["--canvas"]).toBe("#F4F5F7");
+    expect(vars["--canvas"]).toBe("#F7F5EF");
     expect(vars["--accent"]).toBe("#0B7C73");
-    expect(vars["--danger"]).toBe("#D92D3F");
+    expect(vars["--danger"]).toBe("#BC2E23");
     expect(vars["--accent-soft"]).toBe("rgba(11,124,115,0.1)");
     const dark = tokenVars("ink", "blue");
-    expect(dark["--danger"]).toBe("#FF453A");
-    expect(dark["--accent-soft"]).toBe("color-mix(in srgb, #4C8DFF 22%, #1A1A1E)");
+    expect(dark["--danger"]).toBe("#EE5A4B");
+    expect(dark["--accent-soft"]).toBe("color-mix(in srgb, #4C8DFF 22%, #1A1A18)");
     for (const key of ["--card", "--raised", "--ink", "--body", "--mute", "--hair", "--hair-strong", "--btn-bg", "--btn-fg", "--ok", "--warn", "--pop"]) {
       expect(dark[key]).toBeTruthy();
     }

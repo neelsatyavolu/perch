@@ -53,7 +53,8 @@ svg.i { stroke: currentColor; fill: none; stroke-width: 1.5; stroke-linecap: rou
 /* Menus: one soft neutral shadow is allowed on floating layers */
 .menu-wrap { position: relative; min-width: 0; display: inline-flex; }
 .menu { position: absolute; bottom: calc(100% + 6px); z-index: 10; min-width: 220px; max-width: 320px; max-height: 360px; overflow-y: auto; margin: 0; padding: 4px; list-style: none;
-  background: var(--raised); border: 1px solid var(--hair-strong); border-radius: var(--r-panel); box-shadow: var(--pop); color: var(--body); font-size: 13px;
+  /* Popups are glass (DESIGN.md): a blurred backdrop under a thin tint, a hairline edge, no shadow. */
+  background: color-mix(in srgb, var(--raised) 72%, transparent); -webkit-backdrop-filter: blur(28px) saturate(1.5); backdrop-filter: blur(28px) saturate(1.5); border: 1px solid var(--hair-strong); border-radius: var(--r-panel); color: var(--body); font-size: 13px;
   animation: menu-in var(--t-menu) var(--ease); }
 .menu.start { left: 0; }
 .menu.end { right: 0; }
@@ -135,7 +136,7 @@ button.artifact-card:hover { background: var(--hover); }
 /* Composer: real controls, 24px pills on the elevated fill */
 .composer-block { flex: none; }
 /* One quiet box: no outline, the pickers inside it as plain text until hovered. */
-.composer { margin: 0 12px 12px; border-radius: 16px; background: var(--raised); padding: 12px 10px 8px 12px; display: grid; gap: 8px; }
+.composer { margin: 0 12px 12px; border-radius: 6px; background: var(--raised); padding: 12px 10px 8px 12px; display: grid; gap: 8px; }
 .composer .chip { background: var(--hover); }
 .composer .pill { background: none; color: var(--mute); padding: 0 6px; }
 .composer .pill:hover, .composer .pill[aria-expanded="true"] { background: var(--hover); color: var(--ink); }

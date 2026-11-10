@@ -1,5 +1,5 @@
 /* Welcome: fills the window (Perch hides its bars on first run) and is one of the few places
-   Geist Serif appears (DESIGN.md). */
+   Newsreader appears (DESIGN.md). */
 
 html:has(.wl-stage), body:has(.wl-stage) { background: var(--card); }
 .wl-stage { min-height: 100vh; display: grid; grid-template-rows: 52px 1fr; background: var(--card); }

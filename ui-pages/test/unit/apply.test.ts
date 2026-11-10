@@ -22,7 +22,7 @@ describe("applyAppearance", () => {
   test("writes tokens, theme name, colour scheme and density on the root", () => {
     const root = document.createElement("div");
     applyAppearance(root, { ...DEFAULT_APPEARANCE, theme: "paper", accent: "rose", density: "compact" }, light);
-    expect(root.style.getPropertyValue("--canvas")).toBe("#F4F5F7");
+    expect(root.style.getPropertyValue("--canvas")).toBe("#F7F5EF");
     expect(root.style.getPropertyValue("--accent")).toBe("#C93558");
     expect(root.dataset.theme).toBe("paper");
     expect(root.dataset.density).toBe("compact");

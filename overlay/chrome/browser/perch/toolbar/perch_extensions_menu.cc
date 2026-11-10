@@ -49,7 +49,7 @@ namespace {
 
 constexpr int kWidth = 320;
 constexpr int kMaxListHeight = 420;
-constexpr int kCornerRadius = 12;
+constexpr int kCornerRadius = 6;
 
 ui::ImageModel RowIcon(const gfx::VectorIcon& icon) {
   return ui::ImageModel::FromVectorIcon(icon, ui::kColorMenuIcon, 16);

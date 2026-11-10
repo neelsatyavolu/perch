@@ -1,7 +1,7 @@
 /* Shared controls: buttons, switches, segmented controls, pickers, fields, cards and rows. */
 
 .btn {
-  height: 32px; padding: 0 14px; border-radius: 8px; font-weight: 500; font-size: 13px; line-height: 1;
+  height: 32px; padding: 0 14px; border-radius: 4px; font-weight: 500; font-size: 13px; line-height: 1;
   display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap;
   border: 1px solid var(--hair-strong); background: var(--raised); color: var(--ink); cursor: pointer;
   transition: opacity 120ms var(--ease), background 120ms var(--ease);
@@ -14,7 +14,7 @@
 .btn.quiet:hover { color: var(--ink); background: var(--hover); opacity: 1; }
 
 .ib {
-  width: 28px; height: 28px; display: inline-grid; place-items: center; border-radius: 8px; flex: none;
+  width: 28px; height: 28px; display: inline-grid; place-items: center; border-radius: 4px; flex: none;
   color: var(--mute); border: 0; background: none; cursor: pointer; padding: 0;
   transition: background 120ms var(--ease), color 120ms var(--ease);
 }
@@ -24,7 +24,7 @@
 
 /* Switch: on uses the primary button's colours, so the accent stays for focus and the perch dot. */
 .switch {
-  width: 32px; height: 20px; border-radius: 10px; background: var(--hair-strong); border: 0; padding: 0;
+  width: 32px; height: 20px; border-radius: 6px; background: var(--hair-strong); border: 0; padding: 0;
   position: relative; cursor: pointer; flex: none; transition: background 120ms var(--ease);
 }
 .switch::after {
@@ -37,7 +37,7 @@
 .switch:disabled { opacity: 0.5; cursor: default; }
 
 /* Segmented control (radio group). */
-.seg { display: inline-flex; padding: 2px; border-radius: 8px; background: var(--card); border: 1px solid var(--hair); gap: 2px; }
+.seg { display: inline-flex; padding: 2px; border-radius: 4px; background: var(--card); border: 1px solid var(--hair); gap: 2px; }
 .seg button {
   height: 26px; padding: 0 10px; border: 0; border-radius: 6px; background: none; color: var(--mute);
   font-weight: 500; font-size: 12px; cursor: pointer; transition: background 120ms var(--ease), color 120ms var(--ease);
@@ -47,12 +47,12 @@
 
 /* Tabs that switch a panel (Chats / Routines, Memory folders). */
 .tabs { display: inline-flex; gap: 4px; }
-.tabs button { font-weight: 500; font-size: 13px; background: none; border: 0; color: var(--mute); height: 28px; padding: 0 10px; border-radius: 8px; cursor: pointer; }
+.tabs button { font-weight: 500; font-size: 13px; background: none; border: 0; color: var(--mute); height: 28px; padding: 0 10px; border-radius: 4px; cursor: pointer; }
 .tabs button[aria-selected="true"] { background: var(--raised); color: var(--ink); }
 
 /* Pickers are native selects, so the keyboard and VoiceOver work as on any Mac pop-up menu. */
 .picker {
-  appearance: none; height: 32px; padding: 0 30px 0 10px; border-radius: 8px; border: 1px solid var(--hair-strong);
+  appearance: none; height: 32px; padding: 0 30px 0 10px; border-radius: 4px; border: 1px solid var(--hair-strong);
   background: var(--card) no-repeat right 8px center / 14px; color: var(--ink); font-size: 13px; cursor: pointer; max-width: 260px;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23A1A4A5' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
 }
@@ -60,7 +60,7 @@
 .picker option { background: var(--card); color: var(--ink); }
 
 .field {
-  height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--hair-strong); background: var(--card);
+  height: 32px; padding: 0 10px; border-radius: 4px; border: 1px solid var(--hair-strong); background: var(--card);
   color: var(--ink); font-size: 13px; min-width: 0; width: 100%;
 }
 .field::placeholder { color: var(--mute); }
@@ -76,7 +76,7 @@ textarea.field { height: auto; min-height: 88px; padding: 8px 10px; resize: vert
 /* Cards and rows (Settings, Memory, Routines, Import). */
 .group { display: grid; gap: 8px; }
 .group > .lbl { color: var(--mute); font-size: 12px; padding-left: 4px; }
-.card { border: 1px solid var(--hair-strong); border-radius: 12px; background: var(--canvas); overflow: hidden; }
+.card { border: 1px solid var(--hair-strong); border-radius: 6px; background: var(--canvas); overflow: hidden; }
 .srow {
   display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center;
   min-height: 56px; padding: 8px 12px 8px 16px; border-bottom: 1px solid var(--hair);
@@ -89,7 +89,7 @@ textarea.field { height: auto; min-height: 88px; padding: 8px 10px; resize: vert
 .srow.sub { min-height: 44px; }
 .srow.hit { background: var(--hover); }
 .tile {
-  width: 28px; height: 28px; border-radius: 8px; background: var(--raised); color: var(--ink);
+  width: 28px; height: 28px; border-radius: 4px; background: var(--raised); color: var(--ink);
   display: grid; place-items: center; font-weight: 500; font-size: 12px; flex: none;
 }
 .more-row {
@@ -105,7 +105,7 @@ textarea.field { height: auto; min-height: 88px; padding: 8px 10px; resize: vert
 .status.bad .dotc { background: var(--danger); }
 .chip2 { font: 12px var(--mono); color: var(--mute); padding: 2px 6px; border-radius: 6px; background: var(--raised); white-space: nowrap; }
 .row {
-  height: var(--row); display: flex; align-items: center; gap: 8px; padding: 0 10px; border-radius: 8px; color: var(--body);
+  height: var(--row); display: flex; align-items: center; gap: 8px; padding: 0 10px; border-radius: 4px; color: var(--body);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: none; border: 0; width: 100%; text-align: left; cursor: pointer;
 }
 .row:hover { background: var(--hover); }
@@ -116,7 +116,7 @@ textarea.field { height: auto; min-height: 88px; padding: 8px 10px; resize: vert
 .err-note { color: var(--danger); font-size: 12px; }
 
 /* Panels (Memory setup, Import wizard). */
-.panel { border: 1px solid var(--hair-strong); border-radius: 12px; background: var(--canvas); }
+.panel { border: 1px solid var(--hair-strong); border-radius: 6px; background: var(--canvas); }
 .panel-h {
   min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 16px;
   border-bottom: 1px solid var(--hair); color: var(--ink); font-weight: 500;
@@ -128,8 +128,8 @@ textarea.field { height: auto; min-height: 88px; padding: 8px 10px; resize: vert
 
 /* Dialogs: native <dialog> for focus trapping, Escape and an inert page behind it. */
 dialog.dlg {
-  border: 1px solid var(--hair-strong); border-radius: 12px; background: var(--card); color: var(--body);
-  padding: 0; width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 64px); box-shadow: var(--pop);
+  border: 1px solid var(--hair-strong); border-radius: 6px; background: var(--card); color: var(--body);
+  padding: 0; width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 64px);
 }
 dialog.dlg::backdrop { background: rgba(0, 0, 0, 0.5); }
 .dlg-h { display: flex; align-items: center; gap: 8px; padding: 16px 12px 8px 20px; }
@@ -139,7 +139,7 @@ dialog.dlg::backdrop { background: rgba(0, 0, 0, 0.5); }
 
 /* A search field with its icon (Settings nav, Memory list). */
 .snav-search {
-  display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; margin-bottom: 10px; border-radius: 8px;
+  display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; margin-bottom: 10px; border-radius: 4px;
   background: var(--raised); color: var(--mute);
 }
 .snav-search:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -151,7 +151,7 @@ dialog.dlg::backdrop { background: rgba(0, 0, 0, 0.5); }
 /* Theme and accent swatches (Settings, Welcome). */
 .swatches { display: flex; flex-wrap: wrap; gap: 12px; }
 .sw { display: grid; justify-items: center; gap: 6px; background: none; border: 0; padding: 0; cursor: pointer; color: var(--mute); font-size: 12px; }
-.sw-box { width: 44px; height: 32px; border-radius: 8px; border: 1px solid var(--hair-strong); display: grid; place-items: center; }
+.sw-box { width: 44px; height: 32px; border-radius: 4px; border: 1px solid var(--hair-strong); display: grid; place-items: center; }
 .sw-box i { width: 14px; height: 14px; border-radius: 4px; display: block; }
 .sw[aria-checked="true"] { color: var(--ink); }
 .sw[aria-checked="true"] .sw-box { outline: 2px solid var(--ink); outline-offset: 2px; }

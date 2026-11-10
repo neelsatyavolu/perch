@@ -9,11 +9,11 @@ const design = parseDesign(md);
 test("every theme and accent in DESIGN.md is read", () => {
   expect(design.themes.map((t) => t.name)).toEqual(["ink", "graphite", "dusk", "paper", "contrast"]);
   expect(design.accents.map((a) => a.name)).toEqual(["blue", "teal", "amber", "rose", "mono"]);
-  expect(design.themes[0]).toMatchObject({ canvas: "#000000", card: "#0E0E10", raised: "#1A1A1E", ink: "#FCFDFF", mute: "#A1A4A5", btnBg: "#FCFDFF", btnFg: "#000000" });
-  expect(design.themes[0]!.body).toBe("rgba(252, 253, 255, 0.86)");
-  expect(design.themes[3]).toMatchObject({ name: "paper", dark: false, hair: "rgba(0, 0, 0, 0.06)", btnBg: "#0A0A0C", btnFg: "#FFFFFF" });
-  expect(design.accents[0]).toEqual({ name: "blue", dark: "#4C8DFF", light: "#2B68D6" });
-  expect(design.danger).toEqual({ dark: "#FF453A", light: "#D92D3F" });
+  expect(design.themes[0]).toMatchObject({ canvas: "#0E0E0D", card: "#141413", raised: "#1A1A18", ink: "#F2F0EA", mute: "#8B8A87", btnBg: "#F2F0EA", btnFg: "#0E0E0D" });
+  expect(design.themes[0]!.body).toBe("rgba(242, 240, 234, 0.86)");
+  expect(design.themes[3]).toMatchObject({ name: "paper", dark: false, hair: "rgba(22, 22, 26, 0.1)", btnBg: "#16161A", btnFg: "#F7F5EF" });
+  expect(design.accents[0]).toEqual({ name: "blue", dark: "#4C8DFF", light: "#2A63CC" });
+  expect(design.danger).toEqual({ dark: "#EE5A4B", light: "#BC2E23" });
 });
 
 test("Paper uses the light accent shades and the 10% tint", () => {

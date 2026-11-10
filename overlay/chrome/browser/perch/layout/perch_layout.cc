@@ -35,9 +35,13 @@ std::optional<int> PerchLayoutConstant(LayoutConstant constant, bool touch_ui) {
     case LayoutConstant::kToolbarDividerSpacing:
     case LayoutConstant::kToolbarDividerWidth:
       return 0;
-    // Chips inside the 8px address bar.
+    // Chips inside the 4px address bar.
     case LayoutConstant::kLocationBarChildCornerRadius:
-      return 6;
+      return 4;
+    // The address bar has no outline, so its last icon sits close to the
+    // toolbar buttons after it and the gaps along the toolbar's end are even.
+    case LayoutConstant::kLocationBarTrailingDecorationEdgePadding:
+      return 4;
     default:
       return std::nullopt;
   }

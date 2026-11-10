@@ -79,7 +79,7 @@
 
 /* Sync: the pairing QR sits on its own white square so any camera reads it in every theme. */
 .pairing { display: grid; grid-template-columns: 168px 1fr; gap: 20px; align-items: start; padding: 16px; }
-.qr { width: 168px; height: 168px; border-radius: 8px; display: block; }
+.qr { width: 168px; height: 168px; border-radius: 4px; display: block; }
 .pairing-text { display: grid; gap: 10px; justify-items: start; }
 .pairing-code, .recovery { font-size: 18px; letter-spacing: 0.06em; user-select: all; }
 @media (max-width: 560px) { .pairing { grid-template-columns: 1fr; } }

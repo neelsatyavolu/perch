@@ -29,9 +29,9 @@ export type Theme = {
 
 export const THEMES: Readonly<Record<ThemeName, Theme>> = Object.freeze({
   ink: {
-    label: "Ink", dark: true, canvas: "#000000", card: "#0E0E10", raised: "#1A1A1E",
-    ink: "#FCFDFF", body: "rgba(252,253,255,0.86)", mute: "#A1A4A5",
-    hair: "rgba(255,255,255,0.06)", hairStrong: "rgba(255,255,255,0.14)", hover: "rgba(255,255,255,0.08)",
+    label: "Ink", dark: true, canvas: "#0E0E0D", card: "#141413", raised: "#1A1A18",
+    ink: "#F2F0EA", body: "rgba(242,240,234,0.86)", mute: "#8B8A87",
+    hair: "rgba(242,240,234,0.08)", hairStrong: "rgba(242,240,234,0.18)", hover: "rgba(255,255,255,0.08)",
     btnBg: "#FCFDFF", btnFg: "#000000",
   },
   graphite: {
@@ -47,10 +47,10 @@ export const THEMES: Readonly<Record<ThemeName, Theme>> = Object.freeze({
     btnBg: "#EEF2F8", btnFg: "#0E1116",
   },
   paper: {
-    label: "Paper", dark: false, canvas: "#F4F5F7", card: "#FFFFFF", raised: "#ECEEF1",
-    ink: "#0A0A0C", body: "rgba(10,10,12,0.82)", mute: "#5F6366",
-    hair: "rgba(0,0,0,0.06)", hairStrong: "rgba(0,0,0,0.12)", hover: "rgba(0,0,0,0.04)",
-    btnBg: "#0A0A0C", btnFg: "#FFFFFF",
+    label: "Paper", dark: false, canvas: "#F7F5EF", card: "#FBFAF6", raised: "#EFECE4",
+    ink: "#16161A", body: "rgba(22,22,26,0.86)", mute: "#676667",
+    hair: "rgba(22,22,26,0.10)", hairStrong: "rgba(22,22,26,0.22)", hover: "rgba(0,0,0,0.04)",
+    btnBg: "#16161A", btnFg: "#F7F5EF",
   },
   contrast: {
     label: "Contrast", dark: true, canvas: "#000000", card: "#000000", raised: "#141414",
@@ -63,14 +63,14 @@ export const THEMES: Readonly<Record<ThemeName, Theme>> = Object.freeze({
 export type Accent = { readonly label: string; readonly dark: string; readonly light: string };
 
 export const ACCENTS: Readonly<Record<AccentName, Accent>> = Object.freeze({
-  blue: { label: "Blue", dark: "#4C8DFF", light: "#2B68D6" },
+  blue: { label: "Blue", dark: "#4C8DFF", light: "#2A63CC" },
   teal: { label: "Teal", dark: "#2EC4B6", light: "#0B7C73" },
   amber: { label: "Amber", dark: "#F5A524", light: "#9C5A00" },
   rose: { label: "Rose", dark: "#FF6B8A", light: "#C93558" },
   mono: { label: "Mono", dark: "#E6E8EB", light: "#2A2C30" },
 });
 
-export const STATE_COLOURS = Object.freeze({ ok: "#3DD68C", warn: "#FFC53D", dangerDark: "#FF453A", dangerLight: "#D92D3F" });
+export const STATE_COLOURS = Object.freeze({ ok: "#4FBF85", warn: "#D9A23A", dangerDark: "#EE5A4B", dangerLight: "#BC2E23" });
 
 export function accentFor(accent: AccentName, theme: ThemeName): string {
   return THEMES[theme].dark ? ACCENTS[accent].dark : ACCENTS[accent].light;
@@ -95,9 +95,9 @@ export function tokenVars(theme: ThemeName, accent: AccentName): Readonly<Record
     "--accent": a,
     "--accent-soft": t.dark ? `color-mix(in srgb, ${a} 22%, ${t.raised})` : rgba(a, 0.1),
     "--ok": STATE_COLOURS.ok,
-    "--warn": t.dark ? STATE_COLOURS.warn : "#8A5A00",
+    "--warn": t.dark ? STATE_COLOURS.warn : "#8A5E12",
     "--danger": t.dark ? STATE_COLOURS.dangerDark : STATE_COLOURS.dangerLight,
-    "--pop": t.dark ? "0 8px 24px rgba(0,0,0,0.45)" : "0 8px 24px rgba(10,10,12,0.10)",
+    "--pop": "none",
   });
 }
 

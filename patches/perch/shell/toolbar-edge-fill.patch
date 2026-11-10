@@ -1,0 +1,95 @@
+# Perch: the rows between the tab strip and the toolbar are filled with the toolbar's colour, so the frame never shows there as a line.
+diff --git a/chrome/browser/ui/views/frame/browser_root_view.cc b/chrome/browser/ui/views/frame/browser_root_view.cc
+index 6bedb648f1..7639114f74 100644
+--- a/chrome/browser/ui/views/frame/browser_root_view.cc
++++ b/chrome/browser/ui/views/frame/browser_root_view.cc
+@@ -422,8 +422,10 @@ void BrowserRootView::PaintChildren(const views::PaintInfo& paint_info) {
+   // offset from the widget by a few DIPs, which is troublesome for computing a
+   // subpixel offset when using fractional scale factors.  So we're forced to
+   // put this drawing in the BrowserRootView.
+-  if (!browser_view_->ShouldDrawTabStrokes() ||
+-      !browser_view_->IsToolbarVisible() ||
++  // Perch: no stroke is drawn there. The rows are filled with the toolbar's
++  // colour instead, so the window frame never shows between the tab strip
++  // and the toolbar and the active tab runs straight into the toolbar.
++  if (!browser_view_->IsToolbarVisible() ||
+       !browser_view_->ShouldDrawTabStrip() || browser_view_->IsFullscreen()) {
+     return;
+   }
+@@ -452,69 +454,15 @@ void BrowserRootView::PaintChildren(const views::PaintInfo& paint_info) {
+   const int x = std::round(browser_bounds.x() * scale);
+   const int width = std::round(browser_bounds.width() * scale);
+ 
+-  TabStripModel* model = browser_view_->browser()->GetTabStripModel();
+-  std::vector<tabs::TabInterface*> active_tabs = model->GetForegroundTabs();
+-  for (tabs::TabInterface* active_tab : active_tabs) {
+-    views::View* tab_view = browser_view_->tab_strip_view()->GetTabAnchorView(
+-        active_tab->GetHandle());
+-
+-    if (tab_view && tab_view->GetVisible()) {
+-      gfx::RectF bounds(tab_view->GetMirroredBounds());
+-
+-      // The root of the views tree that hosts tabstrip is BrowserRootView.
+-      // Except in Mac Immersive Fullscreen where the tabstrip is hosted in
+-      // `overlay_widget` or `tab_overlay_widget`, each have their own root
+-      // view.
+-      ConvertRectToTarget(tab_view->parent(),
+-                          tab_strip_view->GetWidget()->GetRootView(), &bounds);
+-
+-      // If `tab_strip_view` paints to its own layer, there is no need to clip
+-      // under the active tab.
+-      if (tab_strip_view->layer()) {
+-        bounds.set_y(bounds.bottom());
+-        bounds.set_height(0);
+-      }
+-
+-      // Extend the bounds to cover the curve at the end of the toolbar.
+-      bounds.set_height(
+-          bounds.height() +
+-          GetLayoutConstant(LayoutConstant::kToolbarCornerRadius));
+-      canvas->ClipRect(bounds, SkClipOp::kDifference);
+-    }
+-  }
+-
+   canvas->UndoDeviceScaleFactor();
+-
+-  const auto* widget = GetWidget();
+-  CHECK(widget, base::NotFatalUntil::M162);
+-
+-  const SkColor toolbar_top_separator_color =
+-      widget->GetColorProvider()->GetColor(
+-          GetWidget()->ShouldPaintAsActive()
+-              ? kColorToolbarTopSeparatorFrameActive
+-              : kColorToolbarTopSeparatorFrameInactive);
+-
+   cc::PaintFlags flags;
+-  flags.setColor(toolbar_top_separator_color);
+-  flags.setAntiAlias(true);
+-
+-  // Outset the rectangle and corner radius by half the stroke width
+-  // to draw an outer stroke.
+-  const float stroke_width = scale;
+-  const float stroke_outset = stroke_width / 2;
+-  const float corner_radius =
+-      GetLayoutConstant(LayoutConstant::kToolbarCornerRadius) * scale +
+-      stroke_outset;
+-  flags.setStyle(cc::PaintFlags::kStroke_Style);
+-  flags.setStrokeWidth(stroke_width);
+-
+-  // Only draw the top half of the rounded rect.
+-  canvas->ClipRect(gfx::RectF(x, 0, width, bottom + corner_radius),
+-                   SkClipOp::kIntersect);
+-
+-  gfx::RectF rect(x, bottom, width, 2 * corner_radius);
+-  rect.Outset(stroke_outset);
+-  canvas->DrawRoundRect(rect, corner_radius, flags);
++  flags.setColor(GetColorProvider()->GetColor(kColorToolbar));
++  constexpr int kRowsIntoToolbar = 2;
++  const float height =
++      (GetLayoutConstant(LayoutConstant::kTabstripToolbarOverlap) +
++       kRowsIntoToolbar) *
++      scale;
++  canvas->DrawRect(gfx::RectF(x, bottom, width, height), flags);
+ }
+ 
+ BrowserRootView::DropTarget* BrowserRootView::GetDropTarget(

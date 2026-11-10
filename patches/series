@@ -105,3 +105,5 @@ perch/shell/pinned-tray.patch
 perch/shell/address-host-title.patch
 perch/shell/ask-perch-fill.patch
 perch/shell/ledger-shapes.patch
+perch/shell/toolbar-edge-fill.patch
+perch/shell/ask-perch-open.patch

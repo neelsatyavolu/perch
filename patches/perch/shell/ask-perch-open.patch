@@ -1,0 +1,41 @@
+# Perch: Ask Perch hides while the chat is open, and its words sit in the middle of the pill.
+diff --git a/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.cc b/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.cc
+index 84ae4d5a9d..9876b871d7 100644
+--- a/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.cc
++++ b/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.cc
+@@ -165,12 +165,21 @@ void PinnedActionToolbarButton::SetIconVisibility(bool is_visible) {
+ }
+ 
+ void PinnedActionToolbarButton::AddHighlight() {
++  // Perch: while the chat is open its own header stands in for Ask Perch.
++  if (action_id_ == kActionSidePanelShowPerch) {
++    SetVisible(false);
++    GetViewAccessibility().SetCheckedState(ax::mojom::CheckedState::kTrue);
++    return;
++  }
+   anchor_higlight_ = AddAnchorHighlight();
+   GetViewAccessibility().SetCheckedState(ax::mojom::CheckedState::kTrue);
+   UpdateStatusIndicator();
+ }
+ 
+ void PinnedActionToolbarButton::ResetHighlight() {
++  if (action_id_ == kActionSidePanelShowPerch) {
++    SetVisible(true);
++  }
+   anchor_higlight_.reset();
+   GetViewAccessibility().SetCheckedState(ax::mojom::CheckedState::kFalse);
+   UpdateStatusIndicator();
+@@ -232,8 +241,12 @@ void PinnedActionToolbarButton::Layout(PassKey) {
+   LayoutSuperclass<ToolbarButton>(this);
+   // Perch: Ask Perch's words sit in the middle of its pill.
+   if (action_id_ == kActionSidePanelShowPerch) {
++    // The label keeps room after its text for a status mark; the same room
++    // before it puts the words in the middle.
+     label()->SetHorizontalAlignment(gfx::ALIGN_CENTER);
+-    label()->SetBoundsRect(GetLocalBounds());
++    gfx::Rect words = GetLocalBounds();
++    words.Inset(gfx::Insets::TLBR(0, label()->GetInsets().right(), 0, 0));
++    label()->SetBoundsRect(words);
+   }
+   gfx::Rect status_rect(kStatusIndicatorWidth, kStatusIndicatorHeight);
+   const gfx::Rect image_container_bounds =

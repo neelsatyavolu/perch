@@ -193,8 +193,9 @@ PerchSidePanelController::PerchSidePanelController(
     : browser_(browser),
       registry_(&registry),
       window_id_(base::NumberToString(browser->GetSessionID().id())) {
+  // The chat runs up beside the toolbar, not just beside the page.
   auto perch_entry = std::make_unique<SidePanelEntry>(
-      PerchKey(),
+      SidePanelType::kToolbar, PerchKey(),
       base::BindRepeating(&PerchSidePanelController::CreateView,
                           base::Unretained(this)),
       base::BindRepeating([] { return kDefaultWidth; }));

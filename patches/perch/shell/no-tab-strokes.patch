@@ -1,0 +1,41 @@
+# Perch: no outline on the active tab and no line under the strip; the tab and toolbar are one piece.
+diff --git a/chrome/browser/ui/views/frame/browser_view.cc b/chrome/browser/ui/views/frame/browser_view.cc
+index 25f95bb428..6ba43e300d 100644
+--- a/chrome/browser/ui/views/frame/browser_view.cc
++++ b/chrome/browser/ui/views/frame/browser_view.cc
+@@ -1407,32 +1407,9 @@ bool BrowserView::ShouldDrawTabStrokes() const {
+     return false;
+   }
+ 
+-  bool using_system_theme = false;
+-  if (GetProfile()) {
+-    auto* theme_service = ThemeServiceFactory::GetForProfile(GetProfile());
+-    using_system_theme =
+-        theme_service->IsSystemThemeDistinctFromDefaultTheme() &&
+-        theme_service->UsingSystemTheme();
+-  }
+-
+-  // Perch: its own themes keep the active tab close to the strip on purpose,
+-  // so they get the hairline outline too when the two are hard to tell apart.
+-  (void)using_system_theme;
+-
+-  // The tabstrip normally avoids strokes and relies on the active tab
+-  // contrasting sufficiently with the frame background.  When there isn't
+-  // enough contrast, fall back to a stroke.  Always compute the contrast ratio
+-  // against the active frame color, to avoid toggling the stroke on and off as
+-  // the window activation state changes.
+-  constexpr float kMinimumContrastRatioForOutlines = 1.3f;
+-  const SkColor background_color = TabStyle::Get()->GetTabBackgroundColor(
+-      TabStyle::TabSelectionState::kActive, /*hovered=*/false,
+-      /*frame_active=*/true, GetColorProvider());
+-  const SkColor frame_color =
+-      GetFrameView()->GetFrameColor(BrowserFrameActiveState::kActive);
+-  const float contrast_ratio =
+-      color_utils::GetContrastRatio(background_color, frame_color);
+-  return contrast_ratio < kMinimumContrastRatioForOutlines;
++  // Perch: the active tab and the toolbar are one piece in the toolbar's
++  // colour, so nothing is outlined and no line runs under the strip.
++  return false;
+ #endif  // !BUILDFLAG(IS_CHROMEOS)
+ }
+ 

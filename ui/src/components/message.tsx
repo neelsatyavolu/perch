@@ -2,7 +2,7 @@
 
 import type { VNode } from "preact";
 import { memo } from "./memo";
-import { useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { ArtifactMeta, ChatMessage } from "../api/types";
 import { Icon } from "./icon";
 import { Markdown } from "./markdown";
@@ -101,18 +101,45 @@ export const Message = memo(function Message({ message, artifact, onBranch }: Me
   );
 });
 
-/** The run in progress: streamed text and the live step line with the perch dot. */
-export function LiveRun({ text, steps, waiting }: { text: string; steps: string[]; waiting: boolean }) {
+const LIVE_STEPS = 6;
+
+function elapsed(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
+}
+
+/**
+ * The run in progress: how long it has worked, what the agent has said so far, and its steps as a
+ * list with the current one marked. Older steps fold away once the list gets long.
+ */
+export function LiveRun({ text, steps, waiting, since }: { text: string; steps: string[]; waiting: boolean; since?: string }) {
+  const start = useRef(since ? Date.parse(since) || Date.now() : Date.now());
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const tick = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(tick);
+  }, []);
+  const earlier = steps.slice(0, Math.max(0, steps.length - LIVE_STEPS));
+  const shown = steps.slice(earlier.length);
   return (
     <div class="reply live">
-      {/* While an approval card is up it is the only status, so the last step joins the list. */}
-      <Steps steps={waiting ? steps : steps.slice(0, -1)} />
-      {text && <Markdown text={text} />}
+      {/* While an approval card is up it is the only status. */}
       {!waiting && (
         <div class="work" role="status">
           <span class="dot live" aria-hidden="true" />
-          <span>{steps.at(-1) ?? "Working"}</span>
+          <span>Working for {elapsed(now - start.current)}</span>
         </div>
+      )}
+      {text && <Markdown text={text} />}
+      <Steps steps={earlier} />
+      {shown.length > 0 && (
+        <ul class="steplist now">
+          {shown.map((s, i) => (
+            <li key={earlier.length + i} class={!waiting && i === shown.length - 1 ? "current" : undefined}>
+              {s}
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

@@ -60,11 +60,27 @@ export function sidebarModels(): ModelInfo[] {
   return MODELS.filter((m) => have.has(m.agent)).map(({ agent: _agent, ...info }) => info);
 }
 
-/** A short line for the chat's step list, like "Open example.com" or "Click". */
+const STEP_NAMES: Record<string, string> = {
+  snapshot: "Read the page",
+  screenshot: "Look at the page",
+  repl: "Run a script on the page",
+  tabs: "List open tabs",
+  switch_tab: "Switch tabs",
+  back: "Go back",
+  scroll: "Scroll",
+};
+
+const quoted = (value: unknown, max = 40) => (typeof value === "string" && value.trim() ? ` "${value.trim().length > max ? `${value.trim().slice(0, max)}…` : value.trim()}"` : "");
+
+/** A short line for the chat's step list, like "Open example.com" or "Press Enter". What is typed is never shown. */
 export function stepLabel(tool: string, args: unknown): string {
   const a = (args && typeof args === "object" ? args : {}) as Record<string, unknown>;
   const name = tool.replace(/_/g, " ");
   const verb = name.charAt(0).toUpperCase() + name.slice(1);
+  if (STEP_NAMES[tool]) return STEP_NAMES[tool];
+  if (tool === "press" && typeof a.key === "string") return `Press ${a.key}`;
+  if (tool === "wait_for") return a.text ? `Wait for${quoted(a.text)}` : "Wait";
+  if (tool === "select") return `Choose${quoted(a.value)}`;
   if (typeof a.url === "string") {
     try {
       return `${tool === "navigate" || tool === "open_tab" ? "Open" : verb} ${new URL(a.url.includes("://") ? a.url : `https://${a.url}`).host}`;
@@ -76,8 +92,13 @@ export function stepLabel(tool: string, args: unknown): string {
   return verb;
 }
 
+/** What the chat shows while the agent works: each tool call as a step, and what the agent says between them. */
 function toStep(event: AsideEvent): StepEvent | null {
   if (event.type === "tool_execution_start") return { type: "step", label: stepLabel(event.toolName, event.args) };
+  if (event.type === "message_end" && event.message.role === "assistant") {
+    const said = event.message.content.map((c) => c.text).join("\n").trim();
+    if (said) return { type: "text", delta: `${said}\n\n` };
+  }
   return null;
 }
 

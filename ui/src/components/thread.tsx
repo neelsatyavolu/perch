@@ -69,7 +69,7 @@ export function Thread({ view, onDecide, onOpenArtifact, onBranch, selectedArtif
       {messages.map((m) => (
         <Message key={m.id} message={m} artifact={artifact} onBranch={onBranch} />
       ))}
-      {run && <LiveRun text={run.text} steps={run.steps} waiting={Boolean(run.approval)} />}
+      {run && <LiveRun key={run.runId} text={run.text} steps={run.steps} waiting={Boolean(run.approval)} since={run.startedAt} />}
       {run?.approval && <ApprovalCard key={run.approval.id} card={run.approval} onDecide={(ok) => onDecide(run.approval!.id, ok)} />}
       {error && (
         <div class="note error" role="alert">

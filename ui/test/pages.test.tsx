@@ -99,7 +99,8 @@ test("a run streams into the sidebar, the approval card replaces the working lin
   const message = { id: "u1", role: "user" as const, text: "Reply to Maya", time: new Date().toISOString() };
   await act(async () => client.emit({ type: "run.started", chatId: side.id, runId: "r1", message }));
   await act(async () => client.emit({ type: "run.step", chatId: side.id, runId: "r1", label: "Opened mail.example" }));
-  expect(el.querySelector(".work")!.textContent).toBe("Opened mail.example");
+  expect(el.querySelector(".work")!.textContent).toBe("Working for 0s");
+  expect(el.querySelector(".steplist.now li.current")!.textContent).toBe("Opened mail.example");
   expect(el.querySelector(".side-h .dot.live")).not.toBeNull();
   expect(el.querySelector(".side-h .state")!.textContent).toBe("Working");
   expect(el.querySelector('[aria-label="Stop task"]')).not.toBeNull();

@@ -99,3 +99,5 @@ perch/shell/native-hosts-from-chrome.patch
 perch/agent/chat-pages-loopback.patch
 perch/shell/bubble-glass.patch
 perch/shell/toolbar-ends.patch
+perch/shell/no-tab-strokes.patch
+perch/shell/ask-perch-pill.patch

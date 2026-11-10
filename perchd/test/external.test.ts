@@ -38,6 +38,13 @@ test("Codex JSON items become Aside-style events (shapes recorded from codex-cli
   ]);
   expect(codexLineToEvents({ type: "item.completed", item: { type: "agent_message", text: "Done." } })).toEqual([{ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "Done." }] } }]);
   expect(codexLineToEvents({ type: "turn.completed" })).toEqual([]);
+  // With a started set, the step is reported when the call starts and only its result when it ends.
+  const started = new Set<string>();
+  expect(codexLineToEvents({ type: "item.started", item: { id: "item_2", type: "mcp_tool_call", server: "perch", tool: "navigate", arguments: { url: "https://x.org" } } }, started)).toEqual([
+    { type: "tool_execution_start", toolName: "navigate", args: { url: "https://x.org" } },
+  ]);
+  expect(codexLineToEvents(call, started)).toEqual([{ type: "message_end", message: { role: "toolResult", content: [{ type: "text", text: "Page: X" }] } }]);
+  expect(codexLineToEvents({ type: "item.started", item: { id: "item_2", type: "mcp_tool_call", tool: "navigate" } })).toEqual([]);
 });
 
 test("the Codex command sets the model and, when given, the reasoning effort", () => {

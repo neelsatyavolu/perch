@@ -38,7 +38,10 @@ test("sidebar steps read as short actions", () => {
   expect(stepLabel("navigate", { url: "example.com" })).toBe("Open example.com");
   expect(stepLabel("click", { ref: "e12" })).toBe("Click");
   expect(stepLabel("type", { ref: "e3", text: "secret words" })).toBe("Type");
-  expect(stepLabel("wait_for", {})).toBe("Wait for");
+  expect(stepLabel("wait_for", {})).toBe("Wait");
+  expect(stepLabel("wait_for", { text: "Results" })).toBe('Wait for "Results"');
+  expect(stepLabel("press", { key: "Enter" })).toBe("Press Enter");
+  expect(stepLabel("snapshot", {})).toBe("Read the page");
 });
 
 test("Codex gets the sidebar's MCP server with its session in the environment", () => {

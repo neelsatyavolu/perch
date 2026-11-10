@@ -211,15 +211,19 @@ test("system theme follows macOS appearance and Increase Contrast", () => {
   expect(resolveTheme("dusk", media(false, true))).toBe("dusk");
 });
 
-test("a run waiting for approval still counts its last step; a working run shows it on the live line", () => {
-  const waiting = mount(<LiveRun text="" steps={["Read the message", "Checked the calendar"]} waiting />);
-  expect(waiting.querySelector(".steps")?.textContent).toContain("2 steps · Checked the calendar");
-  expect(waiting.querySelector(".work")).toBeNull();
+test("a working run shows its clock, what the agent said and its steps with the current one marked; approval hides the clock", () => {
+  const working = mount(<LiveRun text="Looking for chinos." steps={["Open shop.example", "Read the page"]} waiting={false} since={new Date(Date.now() - 65_000).toISOString()} />);
+  expect(working.querySelector(".work")?.textContent).toBe("Working for 1m 5s");
+  expect(working.textContent).toContain("Looking for chinos.");
+  expect([...working.querySelectorAll(".steplist.now li")].map((li) => li.textContent)).toEqual(["Open shop.example", "Read the page"]);
+  expect(working.querySelector(".steplist.now li.current")?.textContent).toBe("Read the page");
   render(null, root);
   root.remove();
-  const working = mount(<LiveRun text="" steps={["Read the message", "Checked the calendar"]} waiting={false} />);
-  expect(working.querySelector(".steps")?.textContent).toContain("1 step · Read the message");
-  expect(working.querySelector(".work")?.textContent).toContain("Checked the calendar");
+  const waiting = mount(<LiveRun text="" steps={["a", "b", "c", "d", "e", "f", "g", "h"]} waiting />);
+  expect(waiting.querySelector(".work")).toBeNull();
+  expect(waiting.querySelector(".steps")?.textContent).toContain("2 steps · b");
+  expect(waiting.querySelectorAll(".steplist.now li").length).toBe(6);
+  expect(waiting.querySelector("li.current")).toBeNull();
 });
 
 test("the model picker draws each provider's own mark, and none for providers without one", () => {

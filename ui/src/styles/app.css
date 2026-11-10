@@ -87,7 +87,9 @@ svg.pmark { flex: none; }
 .steps svg.i { transition: transform var(--t-hover) var(--ease); }
 .steps[aria-expanded="true"] svg.i { transform: rotate(90deg); }
 .steplist { display: grid; gap: 4px; margin: 6px 0 0; padding: 0 0 0 22px; list-style: none; color: var(--mute); font-size: 13px; }
-.work { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--hair); border-radius: var(--r-panel); background: var(--card); color: var(--ink); font-size: 13px; }
+.work { display: flex; align-items: center; gap: 8px; color: var(--mute); font-size: 13px; font-variant-numeric: tabular-nums; }
+.steplist.now { margin: 0; padding: 0 0 0 14px; border-left: 1px solid var(--hair-strong); gap: 6px; }
+.steplist.now li.current { color: var(--ink); }
 
 /* Markdown */
 .md { display: flex; flex-direction: column; gap: 10px; overflow-wrap: anywhere; }

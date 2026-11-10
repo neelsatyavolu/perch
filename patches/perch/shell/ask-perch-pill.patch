@@ -1,0 +1,53 @@
+# Perch: Ask Perch is a plain filled pill with no icon and room on both sides.
+diff --git a/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.cc b/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.cc
+index 67855d075e..d438651a42 100644
+--- a/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.cc
++++ b/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.cc
+@@ -99,6 +99,10 @@ PinnedActionToolbarButton::PinnedActionToolbarButton(
+       gfx::Insets::TLBR(
+           0, 0, 0,
+           GetLayoutConstant(LayoutConstant::kToolbarIconDefaultMargin)));
++  // Perch: room on both sides of the Ask Perch pill.
++  if (action_id == kActionSidePanelShowPerch) {
++    SetProperty(views::kMarginsKey, gfx::Insets::TLBR(0, 6, 0, 8));
++  }
+   set_drag_controller(container_.get());
+   GetViewAccessibility().SetDescription(
+       std::u16string(), ax::mojom::DescriptionFrom::kAttributeExplicitlyEmpty);
+@@ -248,7 +252,22 @@ void PinnedActionToolbarButton::OnMouseReleased(const ui::MouseEvent& event) {
+   skip_execution_ = false;
+ }
+ 
++bool PinnedActionToolbarButton::ShouldPaintBorder() const {
++  // Perch: Ask Perch is a plain filled pill.
++  return action_id_ != kActionSidePanelShowPerch;
++}
++
++int PinnedActionToolbarButton::GetRoundedCornerRadius() const {
++  return action_id_ == kActionSidePanelShowPerch
++             ? height() / 2
++             : ToolbarButton::GetRoundedCornerRadius();
++}
++
+ void PinnedActionToolbarButton::UpdateIcon() {
++  // Perch: Ask Perch is its words alone.
++  if (action_id_ == kActionSidePanelShowPerch) {
++    return;
++  }
+   const std::optional<VectorIcons>& icons = GetVectorIcons();
+   // If the button is a cached permanent button the color provider will not be
+   // available.
+diff --git a/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.h b/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.h
+index 1e36dc7c98..399ef78720 100644
+--- a/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.h
++++ b/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.h
+@@ -68,6 +68,9 @@ class PinnedActionToolbarButton : public ToolbarButton {
+   void SetEngagedIndicatorStyle(ActionItemEngagedIndicatorStyle style);
+   void SetActionEngaged(bool action_engaged);
+   void UpdateIcon() override;
++  // Perch: the Ask Perch button's shape.
++  bool ShouldPaintBorder() const override;
++  int GetRoundedCornerRadius() const override;
+   bool ShouldShowEphemerallyInToolbar();
+   bool IsIconVisible() { return is_icon_visible_; }
+   bool IsPinned() { return pinned_; }

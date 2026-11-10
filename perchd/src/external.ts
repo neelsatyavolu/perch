@@ -199,28 +199,38 @@ export async function runClaudeCode(opts: RunOptions): Promise<ExternalResult> {
   return { answer, events, exitCode, timedOut: stop.timedOut, stderr };
 }
 
-/** One `codex exec --json` line to zero or more Aside-format events. */
-export function codexLineToEvents(line: any): AsideEvent[] {
-  if (line?.type !== "item.completed" || !line.item) return [];
+function codexArgs_(item: any): unknown {
+  const args: unknown = item.arguments ?? item.args ?? {};
+  if (typeof args !== "string") return args;
+  try {
+    return JSON.parse(args);
+  } catch {
+    return args; // keep the string
+  }
+}
+
+/**
+ * One `codex exec --json` line to zero or more Aside-format events. With `started`, a tool call is
+ * reported when Codex starts it (so a chat shows the step while it runs) and only its result when
+ * it completes; without it, both come at completion.
+ */
+export function codexLineToEvents(line: any, started?: Set<string>): AsideEvent[] {
+  if (!line?.item) return [];
+  const isTool = typeof line.item.type === "string" && line.item.type.includes("mcp");
+  if (line.type === "item.started" && started && isTool && typeof line.item.id === "string") {
+    started.add(line.item.id);
+    return [{ type: "tool_execution_start", toolName: String(line.item.tool ?? line.item.name ?? "unknown").replace(/^mcp__perch__/, ""), args: codexArgs_(line.item) }];
+  }
+  if (line.type !== "item.completed") return [];
   const item = line.item;
   if (item.type === "agent_message" && typeof item.text === "string" && item.text.trim()) {
     return [{ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: item.text }] } }];
   }
   if (typeof item.type === "string" && item.type.includes("mcp")) {
     const name = String(item.tool ?? item.name ?? "unknown").replace(/^mcp__perch__/, "");
-    let args: unknown = item.arguments ?? item.args ?? {};
-    if (typeof args === "string") {
-      try {
-        args = JSON.parse(args);
-      } catch {
-        /* keep the string */
-      }
-    }
     const result = text(item.result?.content ?? item.result ?? item.output ?? item.error ?? "");
-    return [
-      { type: "tool_execution_start", toolName: name, args },
-      { type: "message_end", message: { role: "toolResult", content: [{ type: "text", text: result.slice(0, TOOL_RESULT_LIMIT) }] } },
-    ];
+    const done: AsideEvent = { type: "message_end", message: { role: "toolResult", content: [{ type: "text", text: result.slice(0, TOOL_RESULT_LIMIT) }] } };
+    return started?.delete(item.id) ? [done] : [{ type: "tool_execution_start", toolName: name, args: codexArgs_(item) }, done];
   }
   return [];
 }
@@ -287,6 +297,7 @@ export async function runCodex(opts: RunOptions): Promise<ExternalResult> {
   let answer = "";
   const reader = child.stdout.getReader();
   const decoder = new TextDecoder();
+  const started = new Set<string>();
   let buffer = "";
   for (;;) {
     const { value, done } = await reader.read();
@@ -303,7 +314,7 @@ export async function runCodex(opts: RunOptions): Promise<ExternalResult> {
         continue;
       }
       if (process.env.PERCH_DEBUG_CODEX) process.stderr.write(`${raw.slice(0, 400)}\n`);
-      for (const event of codexLineToEvents(line)) {
+      for (const event of codexLineToEvents(line, started)) {
         if (event.type === "message_end" && event.message.role === "assistant") answer = event.message.content[0]?.text ?? answer;
         events.push(event);
         opts.onEvent?.(event);

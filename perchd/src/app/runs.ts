@@ -48,7 +48,7 @@ export class AppError extends Error {
 }
 
 type Pending = { card: ApprovalCard; resolve: (approved: boolean) => void; done?: Promise<void> };
-type Run = { runId: string; chatId: string; controller: AbortController; text: string; steps: string[]; pending: Pending | null; done: Promise<void> };
+type Run = { runId: string; chatId: string; controller: AbortController; text: string; steps: string[]; pending: Pending | null; done: Promise<void>; startedAt: string };
 
 const MAX_MESSAGE = 50_000;
 
@@ -67,7 +67,7 @@ export class RunManager {
 
   snapshot(chatId: string): RunSnapshot | null {
     const run = this.runs.get(chatId);
-    if (run) return { runId: run.runId, chatId, text: run.text, steps: run.steps, approval: run.pending?.card ?? null };
+    if (run) return { runId: run.runId, chatId, text: run.text, steps: run.steps, approval: run.pending?.card ?? null, startedAt: run.startedAt };
     const held = this.held.get(chatId);
     return held ? { runId: held.card.runId, chatId, text: "", steps: [], approval: held.card } : null;
   }
@@ -141,7 +141,7 @@ export class RunManager {
     };
     const tab = context?.targetId ? context : undefined;
     const task = buildTask({ history: chat.messages, text, scope: chat.settings.scope, tab: context, tabs: this.deps.tabs(), inTab: Boolean(tab), mentions, files });
-    const run: Run = { runId: crypto.randomUUID(), chatId, controller: new AbortController(), text: "", steps: [], pending: null, done: Promise.resolve() };
+    const run: Run = { runId: crypto.randomUUID(), chatId, controller: new AbortController(), text: "", steps: [], pending: null, done: Promise.resolve(), startedAt: new Date().toISOString() };
     this.runs.set(chatId, run);
     try {
       const updated = await this.deps.chats.update(chatId, (c) => ({

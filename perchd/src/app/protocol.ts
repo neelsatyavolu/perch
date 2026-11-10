@@ -125,4 +125,5 @@ export type AppEvent =
   | { type: "pages.event"; event: string; data: unknown };
 
 /** A run in progress, for a page that opens while it runs. */
-export type RunSnapshot = { runId: string; chatId: string; text: string; steps: string[]; approval: ApprovalCard | null };
+/** `startedAt`: when the run began, for the chat's "Working for…" clock. */
+export type RunSnapshot = { runId: string; chatId: string; text: string; steps: string[]; approval: ApprovalCard | null; startedAt?: string };

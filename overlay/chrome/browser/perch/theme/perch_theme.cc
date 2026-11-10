@@ -141,6 +141,10 @@ void AddPerchMixer(ui::ColorProvider* provider,
   }
   m[kColorLocationBarBackgroundHovered] = {Over(t->hair, t->canvas)};
   m[kColorLocationBarBorder] = {SK_ColorTRANSPARENT};
+  // The site controls icon is a plain icon, with no chip behind it.
+  m[kColorOmniboxIconBackground] = {SK_ColorTRANSPARENT};
+  // The Ask Perch pill.
+  m[kColorToolbarButtonBackgroundHighlightedDefault] = {t->raised};
   // Text and icons.
   for (ui::ColorId id : std::initializer_list<ui::ColorId>{kColorTabForegroundActiveFrameActive,
         kColorTabForegroundActiveFrameInactive, kColorOmniboxText,

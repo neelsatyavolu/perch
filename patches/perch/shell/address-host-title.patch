@@ -1,0 +1,220 @@
+# Perch: the unfocused address bar reads host | page title, the whole address returns on focus, and the site icon sits with the controls at the far end.
+diff --git a/chrome/browser/ui/toolbar/chrome_location_bar_model_delegate.cc b/chrome/browser/ui/toolbar/chrome_location_bar_model_delegate.cc
+index aefa685c02..0464e7fca3 100644
+--- a/chrome/browser/ui/toolbar/chrome_location_bar_model_delegate.cc
++++ b/chrome/browser/ui/toolbar/chrome_location_bar_model_delegate.cc
+@@ -82,6 +82,13 @@ bool ChromeLocationBarModelDelegate::GetURL(GURL* url) const {
+   return true;
+ }
+ 
++// Perch: a web page's address reads as its host until the bar is focused,
++// when the whole address comes back for editing and copying.
++bool ChromeLocationBarModelDelegate::ShouldTrimDisplayUrlAfterHostName() const {
++  GURL url;
++  return GetURL(&url) && url.SchemeIsHTTPOrHTTPS();
++}
++
+ bool ChromeLocationBarModelDelegate::ShouldPreventElision() {
+   Profile* const profile = GetProfile();
+   if (profile &&
+diff --git a/chrome/browser/ui/toolbar/chrome_location_bar_model_delegate.h b/chrome/browser/ui/toolbar/chrome_location_bar_model_delegate.h
+index b4d971dbff..5de9d896e6 100644
+--- a/chrome/browser/ui/toolbar/chrome_location_bar_model_delegate.h
++++ b/chrome/browser/ui/toolbar/chrome_location_bar_model_delegate.h
+@@ -37,6 +37,8 @@ class ChromeLocationBarModelDelegate : public LocationBarModelDelegate {
+       const std::u16string& formatted_url) const override;
+   bool GetURL(GURL* url) const override;
+   bool ShouldPreventElision() override;
++  // Perch: a web page's address reads as its host until the bar is focused.
++  bool ShouldTrimDisplayUrlAfterHostName() const override;
+   bool ShouldDisplayURL() const override;
+   security_state::SecurityLevel GetSecurityLevel() const override;
+   net::CertStatus GetCertStatus() const override;
+diff --git a/chrome/browser/ui/views/location_bar/location_bar_view.cc b/chrome/browser/ui/views/location_bar/location_bar_view.cc
+index 6894ec7053..14ce1f3adc 100644
+--- a/chrome/browser/ui/views/location_bar/location_bar_view.cc
++++ b/chrome/browser/ui/views/location_bar/location_bar_view.cc
+@@ -207,6 +207,22 @@ using views::View;
+ 
+ // LocationBarView -----------------------------------------------------------
+ 
++// Perch: relays a tab's title changes to the bar that shows the title.
++class LocationBarView::PerchTitleWatcher : public content::WebContentsObserver {
++ public:
++  explicit PerchTitleWatcher(LocationBarView* bar) : bar_(bar) {}
++  void Watch(content::WebContents* contents) { Observe(contents); }
++  void TitleWasSet(content::NavigationEntry* entry) override {
++    bar_->InvalidateLayout();
++  }
++  void PrimaryPageChanged(content::Page& page) override {
++    bar_->InvalidateLayout();
++  }
++
++ private:
++  const raw_ptr<LocationBarView> bar_;
++};
++
+ LocationBarView::LocationBarView(BrowserWindowInterface* browser,
+                                  Profile* profile,
+                                  CommandUpdater* command_updater,
+@@ -334,6 +350,21 @@ void LocationBarView::Init() {
+   location_icon_view->set_drag_controller(this);
+   location_icon_view_ = AddChildView(std::move(location_icon_view));
+ 
++  // Perch: the page's title, after the host, while the bar isn't focused.
++  auto perch_title = std::make_unique<views::Label>();
++  perch_title->SetHorizontalAlignment(gfx::ALIGN_LEFT);
++  perch_title->SetAutoColorReadabilityEnabled(false);
++  perch_title->SetEnabledColor(kColorOmniboxTextDimmed);
++  perch_title->SetElideBehavior(gfx::ELIDE_TAIL);
++  perch_title->SetCanProcessEventsWithinSubtree(false);
++  perch_title->SetBorder(views::CreatePaddedBorder(
++      views::CreateSolidSidedBorder(gfx::Insets::TLBR(0, 1, 0, 0),
++                                    ui::kColorSeparator),
++      gfx::Insets::TLBR(0, 12, 0, 0)));
++  perch_title->SetVisible(false);
++  perch_title_ = perch_title.get();
++  perch_title_watcher_ = std::make_unique<PerchTitleWatcher>(this);
++
+   // Initialize the Omnibox view. browser_ can be nullptr on ChromeOS in the
+   // case of simple_web_view_dialog. Or it can be nulltpr on ChromeOS and on
+   // other desktop platforms in the case of presentation_receiver_window_view.
+@@ -349,6 +380,7 @@ void LocationBarView::Init() {
+       /*location_bar_view=*/this, font_list);
+ 
+   omnibox_view_ = AddChildView(std::move(omnibox_view));
++  AddChildView(std::move(perch_title));  // Perch: drawn over the address.
+   omnibox_view_->Init();
+ 
+   if (CanHostWebUIOmnibox(browser_, is_popup_mode_)) {
+@@ -822,6 +854,7 @@ void LocationBarView::Layout(PassKey) {
+     text_left += -9; /*text_indent_keyword_mode*/
+   }
+ 
++  bool perch_icon_trailing = false;
+   LocationBarLayout leading_decorations(LocationBarLayout::Position::kLeftEdge,
+                                         text_left);
+   LocationBarLayout trailing_decorations(
+@@ -865,10 +898,10 @@ void LocationBarView::Layout(PassKey) {
+         vertical_padding, location_height, false, kLeadingDecorationMaxFraction,
+         /*intra_item_padding=*/0, icon_left, location_icon_view_);
+   } else if (!ShouldChipOverrideLocationIcon()) {
++    // Perch: the plain site icon sits with the other controls at the far end
++    // (added below), so the address starts the bar.
+     location_icon_view_->SetVisible(true);
+-    leading_decorations.AddDecoration(vertical_padding, location_height, false,
+-                                      0, /*intra_item_padding=*/0, icon_left,
+-                                      location_icon_view_);
++    perch_icon_trailing = true;
+   } else {
+     location_icon_view_->SetVisible(false);
+   }
+@@ -923,6 +956,10 @@ void LocationBarView::Layout(PassKey) {
+ 
+   add_trailing_decoration(clear_all_button_, /*intra_item_padding=*/0,
+                           /*edge_padding=*/trailing_decorations_edge_padding);
++  if (perch_icon_trailing) {
++    add_trailing_decoration(location_icon_view_, /*intra_item_padding=*/0,
++                            /*edge_padding=*/trailing_decorations_edge_padding);
++  }
+ 
+   // Perform layout.
+   int entry_width = width();
+@@ -971,8 +1008,10 @@ void LocationBarView::Layout(PassKey) {
+     //  in an incorrect scroll until the next update. Look into doing (3) before
+     //  (2) to more robustly handle these edge cases.
+     omnibox_view_->SetBoundsRect(location_bounds);
++    LayoutPerchTitle(location_bounds);
+ 
+   } else {
++    perch_title_->SetVisible(false);
+     // A helper to allocate the remaining location bar width preferring calls in
+     // the order they're made; e.g. if there's 100px remaining, and
+     // `reserve_width()` is invoked with '70' and '70', the first caller will
+@@ -1049,8 +1088,38 @@ bool LocationBarView::HasSecurityStateChanged() {
+   return location_icon_view_->HasSecurityStateChanged();
+ }
+ 
++// Perch: lays the page title out after the host, with a rule between them,
++// while the bar isn't focused and shows a web page's address.
++void LocationBarView::LayoutPerchTitle(const gfx::Rect& location_bounds) {
++  content::WebContents* contents = GetWebContents();
++  const bool web_page =
++      contents && contents->GetLastCommittedURL().SchemeIsHTTPOrHTTPS() &&
++      contents->GetVisibleURL() == contents->GetLastCommittedURL();
++  const std::u16string title =
++      web_page ? contents->GetTitle() : std::u16string();
++  constexpr int kGap = 12;
++  constexpr int kMinWidth = 48;
++  const int x =
++      location_bounds.x() + omnibox_view_->GetUnelidedTextWidth() + kGap;
++  const int room = location_bounds.right() - x;
++  const bool show = !title.empty() && !omnibox_view_->HasFocus() &&
++                    !omnibox_view_->GetText().empty() && room >= kMinWidth;
++  perch_title_->SetVisible(show);
++  if (!show) {
++    return;
++  }
++  perch_title_->SetText(title);
++  perch_title_->SetFontList(omnibox_view_->GetFontList());
++  const int height = perch_title_->GetPreferredSize().height();
++  perch_title_->SetBounds(
++      x, location_bounds.y() + (location_bounds.height() - height) / 2,
++      std::min(room, perch_title_->GetPreferredSize().width()), height);
++}
++
+ void LocationBarView::Update(WebContents* contents) {
+   TRACE_EVENT("omnibox", "LocationBarView::Update");
++  perch_title_watcher_->Watch(GetWebContents());
++  InvalidateLayout();
+ 
+   RefreshContentSettingViews();
+   RefreshPageActionIconViews();
+@@ -2140,6 +2209,7 @@ void LocationBarView::OnOmniboxFocused() {
+   // the omnibox is intentional, snapping is better than transitioning here.
+   hover_animation_.Reset();
+   RefreshBackground();
++  InvalidateLayout();  // Perch: the title leaves while the bar is focused.
+ 
+   // The AI mode page action should only be visible when the omnibox
+   // is focused, so if there is a change in focus, refresh the icon.
+@@ -2166,6 +2236,7 @@ void LocationBarView::OnOmniboxBlurred() {
+   RefreshAiModePageAction();
+ 
+   location_icon_view_->Update(false, false);
++  InvalidateLayout();  // Perch: the title comes back after the host.
+ }
+ 
+ bool LocationBarView::IsFullWebUiOmniboxReady() const {
+diff --git a/chrome/browser/ui/views/location_bar/location_bar_view.h b/chrome/browser/ui/views/location_bar/location_bar_view.h
+index 856d9d7c66..64ee529233 100644
+--- a/chrome/browser/ui/views/location_bar/location_bar_view.h
++++ b/chrome/browser/ui/views/location_bar/location_bar_view.h
+@@ -574,6 +574,12 @@ class LocationBarView
+ 
+   // An icon to the left of the edit field: the HTTPS lock, blank page icon,
+   // search icon, EV HTTPS bubble, etc.
++  // Perch: the page title shown after the host, and what keeps it current.
++  class PerchTitleWatcher;
++  void LayoutPerchTitle(const gfx::Rect& location_bounds);
++  raw_ptr<views::Label> perch_title_ = nullptr;
++  std::unique_ptr<PerchTitleWatcher> perch_title_watcher_;
++
+   raw_ptr<LocationIconView> location_icon_view_ = nullptr;
+ 
+   // Views to show inline autocompletion when an IME is active.  In this case,
+diff --git a/chrome/browser/ui/views/omnibox/omnibox_view_views.cc b/chrome/browser/ui/views/omnibox/omnibox_view_views.cc
+index 50f31aac18..d03cbecec5 100644
+--- a/chrome/browser/ui/views/omnibox/omnibox_view_views.cc
++++ b/chrome/browser/ui/views/omnibox/omnibox_view_views.cc
+@@ -1852,6 +1852,10 @@ void OmniboxViewViews::OnFocus() {
+ 
+   StopEliding();
+ 
++  // Perch: the unfocused bar shows only the host, so any focus brings the
++  // whole address back.
++  controller()->edit_model()->Unelide();
++
+   if (location_bar_view_) {
+     location_bar_view_->OnOmniboxFocused();
+   }

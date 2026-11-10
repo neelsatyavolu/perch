@@ -1,0 +1,87 @@
+# Perch: Ask Perch keeps its own fill, never elides and never moves to the overflow menu.
+diff --git a/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.cc b/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.cc
+index d438651a42..735a773272 100644
+--- a/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.cc
++++ b/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.cc
+@@ -2,6 +2,9 @@
+ // Use of this source code is governed by a BSD-style license that can be
+ // found in the LICENSE file.
+ 
++#include "cc/paint/paint_flags.h"
++#include "ui/color/color_provider.h"
++#include "ui/gfx/geometry/rect_f.h"
+ #include "chrome/browser/ui/actions/chrome_action_id.h"
+ #include "chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.h"
+ 
+@@ -91,7 +94,8 @@ PinnedActionToolbarButton::PinnedActionToolbarButton(
+   SetHorizontalAlignment(gfx::ALIGN_CENTER);
+   // Perch: the chat button says what it does.
+   if (action_id == kActionSidePanelShowPerch) {
+-    SetHighlight(u"Ask Perch", std::nullopt);
++    SetText(u"Ask Perch");
++    SetLayoutInsetDelta(gfx::Insets::VH(0, 6));
+   }
+   // Pinned action toolbar buttons have right margin and no left margin.
+   SetProperty(
+@@ -102,6 +106,7 @@ PinnedActionToolbarButton::PinnedActionToolbarButton(
+   // Perch: room on both sides of the Ask Perch pill.
+   if (action_id == kActionSidePanelShowPerch) {
+     SetProperty(views::kMarginsKey, gfx::Insets::TLBR(0, 6, 0, 8));
++    UpdateFlexPriority();
+   }
+   set_drag_controller(container_.get());
+   GetViewAccessibility().SetDescription(
+@@ -252,6 +257,22 @@ void PinnedActionToolbarButton::OnMouseReleased(const ui::MouseEvent& event) {
+   skip_execution_ = false;
+ }
+ 
++// Perch: the Ask Perch pill's resting fill.
++void PinnedActionToolbarButton::OnPaintBackground(gfx::Canvas* canvas) {
++  const ui::ColorProvider* colors = GetColorProvider();
++  if (action_id_ == kActionSidePanelShowPerch && colors) {
++    gfx::Rect pill = GetLocalBounds();
++    pill.ClampToCenteredSize(gfx::Size(
++        width(), GetLayoutConstant(LayoutConstant::kToolbarButtonHeight)));
++    cc::PaintFlags flags;
++    flags.setAntiAlias(true);
++    flags.setColor(
++        colors->GetColor(kColorToolbarButtonBackgroundHighlightedDefault));
++    canvas->DrawRoundRect(gfx::RectF(pill), pill.height() / 2.0f, flags);
++  }
++  ToolbarButton::OnPaintBackground(canvas);
++}
++
+ bool PinnedActionToolbarButton::ShouldPaintBorder() const {
+   // Perch: Ask Perch is a plain filled pill.
+   return action_id_ != kActionSidePanelShowPerch;
+@@ -259,7 +280,7 @@ bool PinnedActionToolbarButton::ShouldPaintBorder() const {
+ 
+ int PinnedActionToolbarButton::GetRoundedCornerRadius() const {
+   return action_id_ == kActionSidePanelShowPerch
+-             ? height() / 2
++             ? GetLayoutConstant(LayoutConstant::kToolbarButtonHeight) / 2
+              : ToolbarButton::GetRoundedCornerRadius();
+ }
+ 
+@@ -356,7 +377,8 @@ void PinnedActionToolbarButton::OnAnchorCountChanged(size_t anchor_count) {
+ void PinnedActionToolbarButton::UpdateFlexPriority() {
+   PinnedToolbarActionFlexPriority priority =
+       PinnedToolbarActionFlexPriority::kLow;
+-  if (has_anchor_) {
++  // Perch: Ask Perch never moves into the overflow menu.
++  if (has_anchor_ || action_id_ == kActionSidePanelShowPerch) {
+     priority = PinnedToolbarActionFlexPriority::kHigh;
+   } else if (action_engaged_) {
+     priority = PinnedToolbarActionFlexPriority::kMedium;
+diff --git a/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.h b/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.h
+index 399ef78720..3a192b1e1b 100644
+--- a/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.h
++++ b/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.h
+@@ -70,6 +70,7 @@ class PinnedActionToolbarButton : public ToolbarButton {
+   void UpdateIcon() override;
+   // Perch: the Ask Perch button's shape.
+   bool ShouldPaintBorder() const override;
++  void OnPaintBackground(gfx::Canvas* canvas) override;
+   int GetRoundedCornerRadius() const override;
+   bool ShouldShowEphemerallyInToolbar();
+   bool IsIconVisible() { return is_icon_visible_; }

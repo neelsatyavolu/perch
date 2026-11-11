@@ -1,0 +1,14 @@
+# Perch: send a Google Chrome client hint so DRM sites accept this build.
+diff --git a/components/embedder_support/user_agent_utils.cc b/components/embedder_support/user_agent_utils.cc
+index 833293873f..cb89e8be5b 100644
+--- a/components/embedder_support/user_agent_utils.cc
++++ b/components/embedder_support/user_agent_utils.cc
+@@ -522,6 +522,8 @@ blink::UserAgentBrandList GenerateBrandVersionList(
+ 
+   blink::UserAgentBrandList brand_version_list = {std::move(greasey_bv),
+                                                   std::move(chromium_bv)};
++  // Perch: DRM sites such as Netflix require a Google Chrome client hint.
++  brand_version_list.emplace_back("Google Chrome", version);
+   if (brand) {
+     brand_version_list.emplace_back(brand.value(), version);
+   }

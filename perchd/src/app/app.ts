@@ -35,6 +35,8 @@ export type AppOptions = {
   onStatus?: RunDeps["onStatus"];
   /** Names a chat after its first reply (RunDeps.nameChat). */
   nameChat?: RunDeps["nameChat"];
+  /** False keeps scheduled messages from being sent (tests). */
+  scheduler?: boolean;
   /** The user's tab text for a message (RunDeps.pageText). */
   pageText?: RunDeps["pageText"];
   /** Artifacts on `perch-artifact://`, when the browser that runs perchd serves that scheme. */
@@ -151,6 +153,8 @@ export async function startApp(opts: AppOptions): Promise<App> {
     ...(opts.nameChat ? { nameChat: opts.nameChat } : {}),
     ...(opts.pageText ? { pageText: opts.pageText } : {}),
   });
+  // Scheduled messages (scheduled.ts) are only sent by the app the browser runs, not by test apps.
+  if (opts.scheduler !== false) runs.scheduler.start();
   let defaults: ChatSettings = { ...DEFAULT_SETTINGS, model: opts.models[0]?.id ?? "", ...opts.defaults };
   const info = (): AppInfo => ({ models: opts.models, defaults, artifactOrigin: artifactServer.origin });
   const pages = opts.pages?.({
@@ -189,6 +193,7 @@ export async function startApp(opts: AppOptions): Promise<App> {
     windows,
     pages,
     async stop() {
+      runs.scheduler.stop();
       for (const chat of chats.list()) runs.cancel(chat.id);
       await runs.idle();
       server.stop();

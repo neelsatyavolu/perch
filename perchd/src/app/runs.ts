@@ -4,13 +4,15 @@
  * chat's task continues while its tab is in the background, spec 5.3).
  */
 
+import { Scheduler } from "./scheduled";
+import type { Mode } from "../agent/permissions";
 import { provisionalTitle, takeTitleLine } from "./chat-title";
 import type { StepEvent } from "../agent/loop";
 import type { ApprovalRequest } from "../agent/session";
 import { describeApproval } from "./approval-card";
 import { parseArtifactBlocks, type ArtifactRecord, type ArtifactStore } from "./artifacts";
 import type { ChatStore } from "./chats";
-import type { AppEvent, ApprovalCard, ArtifactMeta, Chat, ChatMessage, ChatSettings, ChatStatus, ChatSummary, RunSnapshot, TabInfo } from "./protocol";
+import type { AppEvent, ApprovalCard, ArtifactMeta, Chat, ChatMessage, ChatSettings, ChatStatus, ChatSummary, RunSnapshot, ScheduledMessage, TabInfo } from "./protocol";
 import { buildTask } from "./transcript";
 
 export type RunnerInput = {
@@ -19,6 +21,8 @@ export type RunnerInput = {
   ask?: string;
   /** Files the user attached to this message, by name and path on this Mac. */
   files?: { name: string; path: string }[];
+  /** Schedules a message for this chat (scheduled.ts); the agent's schedule_message tool. */
+  schedule?: (at: Date, text: string, preapproved: boolean) => Promise<ScheduledMessage>;
   settings: ChatSettings;
   approve: (req: ApprovalRequest) => Promise<boolean>;
   signal: AbortSignal;
@@ -48,7 +52,8 @@ export type RunDeps = {
 };
 
 /** What a message brings beyond its text: attached files (resolved to paths) and @ tabs. */
-export type SendExtras = { files?: { id: string; name: string; path: string }[]; mentions?: TabInfo[] };
+/** `mode` runs this message under another mode (a scheduled message the user pre-approved); `scheduled` marks it. */
+export type SendExtras = { files?: { id: string; name: string; path: string }[]; mentions?: TabInfo[]; mode?: Mode; scheduled?: boolean };
 
 export class AppError extends Error {
   constructor(message: string, readonly status = 400) {
@@ -75,7 +80,23 @@ export class RunManager {
   /** Cards for work that runs outside a chat's own run: an outside agent's action, a new client. */
   private held = new Map<string, Pending>();
 
-  constructor(private readonly deps: RunDeps) {}
+  readonly scheduler: Scheduler;
+
+  constructor(private readonly deps: RunDeps) {
+    this.scheduler = new Scheduler({
+      chats: deps.chats,
+      send: async (chatId, item) => {
+        if (this.runs.has(chatId)) return false;
+        await this.send(chatId, item.text, undefined, { scheduled: true, ...(item.preapproved ? { mode: "skip" as const } : {}) });
+        return true;
+      },
+      missed: async (chatId, note) => {
+        await this.deps.chats.update(chatId, (c) => ({ ...c, messages: [...c.messages, note] }));
+        this.deps.emit({ type: "run.finished", chatId, runId: `missed-${note.id}`, message: note });
+        this.announce(chatId);
+      },
+    });
+  }
 
   status(chatId: string): ChatStatus {
     const run = this.runs.get(chatId);
@@ -156,6 +177,7 @@ export class RunManager {
       ...(context ? { context: withoutTarget(context) } : {}),
       ...(files.length ? { attachments: files.map((f) => ({ id: f.id, name: f.name })) } : {}),
       ...(mentions.length ? { mentions } : {}),
+      ...(extras.scheduled ? { scheduled: true as const } : {}),
     };
     const tab = context?.targetId ? context : undefined;
     const holdBack = HOLD_BACK.test(text);
@@ -180,7 +202,8 @@ export class RunManager {
       throw error;
     }
     // Skip confirmation would let the submit through unasked, so a held-back run asks (and declines it).
-    const settings = holdBack && chat.settings.mode === "skip" ? { ...chat.settings, mode: "guard" as const } : chat.settings;
+    const chosen = extras.mode ? { ...chat.settings, mode: extras.mode } : chat.settings;
+    const settings = holdBack && chosen.mode === "skip" ? { ...chosen, mode: "guard" as const } : chosen;
     run.done = this.drive(run, task, settings, tab, text, files.map((f) => ({ name: f.name, path: f.path })));
     return { runId: run.runId, message };
   }
@@ -255,7 +278,8 @@ export class RunManager {
     let error: string | undefined;
     try {
       const incognito = this.deps.chats.get(run.chatId)?.incognito === true;
-      const events = this.deps.runner({ task, ...(ask ? { ask } : {}), ...(files.length ? { files } : {}), settings, approve: this.approve(run), signal: run.controller.signal, chatId: run.chatId, ...(tab ? { tab } : {}), ...(incognito ? { incognito } : {}) });
+      const schedule = (at: Date, text: string, preapproved: boolean) => this.scheduler.add(run.chatId, at, text, preapproved);
+      const events = this.deps.runner({ task, ...(ask ? { ask } : {}), ...(files.length ? { files } : {}), schedule, settings, approve: this.approve(run), signal: run.controller.signal, chatId: run.chatId, ...(tab ? { tab } : {}), ...(incognito ? { incognito } : {}) });
       for await (const event of events) {
         if (event.type === "text") {
           run.text += event.delta;

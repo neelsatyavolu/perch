@@ -75,9 +75,62 @@ export function attachmentExtraTools(files: readonly { name: string; path: strin
   };
 }
 
-/** The extras for one sidebar run: skills always, memory unless the chat is private, and this message's attachments. */
-export function sidebarExtras(catalog: SkillCatalog | undefined, memory: MemoryAccess | undefined, files: readonly { name: string; path: string }[] = []): SidebarExtras | undefined {
-  const parts = [catalog ? skillExtraTools(catalog) : undefined, memory ? memoryExtraTools(memory) : undefined, attachmentExtraTools(files)].filter((p): p is ExtraTools => Boolean(p));
+export const SCHEDULE_MESSAGE = "schedule_message";
+
+/** "Do this at 12am": the chat sends itself the message at that time. One the user approves up front runs without asking before sends and publishing. */
+export function scheduleExtraTools(schedule: (at: Date, text: string, preapproved: boolean) => Promise<{ at: string }>, now: () => Date = () => new Date()): ExtraTools {
+  const when = (call: ToolCall) => new Date(String(call.args.at));
+  return {
+    specs: () => [
+      {
+        name: SCHEDULE_MESSAGE,
+        description:
+          "Do something later: at the given time this chat receives the message as if the user sent it, and you carry it out then. Use it when the user asks for a task at a time (\"publish at 12am\"). Set preapprove when the task's final step (send, post, publish) should run unattended; the user approves that now.",
+        parameters: {
+          type: "object",
+          properties: {
+            at: { type: "string", description: "Local date and time, like 2026-11-11T00:00" },
+            text: { type: "string", description: "The task to do then, written as the user's request" },
+            preapprove: { type: "boolean", description: "Let the scheduled task send, post or publish without asking (payments still ask)" },
+          },
+          required: ["at", "text"],
+          additionalProperties: false,
+        },
+      },
+    ],
+    prompt: () => {
+      const d = now();
+      return `It is now ${d.toLocaleString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" })} (${Intl.DateTimeFormat().resolvedOptions().timeZone}). For a task at a later time, use ${SCHEDULE_MESSAGE}.`;
+    },
+    handles: (name) => name === SCHEDULE_MESSAGE,
+    check: (call) => {
+      if (typeof call.args.text !== "string" || !call.args.text.trim()) return "text is required";
+      if (typeof call.args.at !== "string" || !Number.isFinite(when(call).getTime())) return "at must be a date and time like 2026-11-11T00:00";
+      return null;
+    },
+    describe: (call) => {
+      const at = when(call).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+      const unattended = call.args.preapprove === true ? ", and let it send, post or publish without asking (payments still ask)" : "";
+      return { kind: "change", site: "schedule", summary: `At ${at}, do: "${String(call.args.text)}"${unattended}`, detail: "schedule", label: `Scheduled for ${at}` };
+    },
+    async run(call) {
+      const item = await schedule(when(call), String(call.args.text), call.args.preapprove === true);
+      return { content: `Scheduled for ${new Date(item.at).toLocaleString()}. This chat will carry it out then; Perch must be running.` };
+    },
+  };
+}
+
+/** The extras for one sidebar run: skills always, memory unless the chat is private, this message's attachments, and scheduling. */
+export function sidebarExtras(
+  catalog: SkillCatalog | undefined,
+  memory: MemoryAccess | undefined,
+  files: readonly { name: string; path: string }[] = [],
+  schedule?: (at: Date, text: string, preapproved: boolean) => Promise<{ at: string }>,
+): SidebarExtras | undefined {
+  const parts = [catalog ? skillExtraTools(catalog) : undefined, memory ? memoryExtraTools(memory) : undefined, attachmentExtraTools(files), schedule ? scheduleExtraTools(schedule) : undefined].filter(
+    (p): p is ExtraTools => Boolean(p),
+  );
   if (!parts.length) return undefined;
-  return { ...combineExtraTools(...parts), mustAsk: (call) => Boolean(memory?.handles(call.name) && memory.mustAsk(call)) };
+  // A memory save that must ask, and any pre-approved schedule, ask whatever the chat's mode.
+  return { ...combineExtraTools(...parts), mustAsk: (call) => Boolean(memory?.handles(call.name) && memory.mustAsk(call)) || (call.name === SCHEDULE_MESSAGE && call.args.preapprove === true) };
 }

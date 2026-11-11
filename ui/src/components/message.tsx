@@ -60,6 +60,7 @@ export const Message = memo(function Message({ message, artifact, onBranch }: Me
   if (message.role === "user") {
     return (
       <div class="me" data-id={message.id}>
+        {message.scheduled && <span class="me-sched">Sent on schedule</span>}
         {message.text}
         {message.attachments?.length ? (
           <span class="me-files">{message.attachments.map((f) => <span class="chip file" key={f.id}><span class="chip-t">{f.name}</span></span>)}</span>

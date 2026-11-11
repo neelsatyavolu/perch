@@ -156,6 +156,7 @@ button.artifact-card:hover { background: var(--hover); }
 .ib.send:hover:not(:disabled) { background: var(--btn-bg); color: var(--btn-fg); opacity: 0.86; }
 .under { display: flex; align-items: center; gap: 4px; padding: 0 12px 12px; color: var(--mute); font-size: 12px; min-width: 0; }
 .composer { position: relative; }
+.me-sched { display: block; font: 12px var(--mono); color: var(--mute); margin-bottom: 4px; }
 .me-files { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .composer .menu.mentions { left: 0; right: 0; max-width: none; }
 .files { display: flex; flex-wrap: wrap; gap: 4px; }

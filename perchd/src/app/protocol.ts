@@ -40,6 +40,8 @@ export type ChatMessage = {
   /** Tabs the user named with @. */
   mentions?: TabInfo[];
   steps?: string[];
+  /** A message the chat sent itself at a scheduled time (scheduled.ts), not typed just now. */
+  scheduled?: true;
   artifacts?: string[];
   error?: string;
   stopped?: boolean;
@@ -62,7 +64,12 @@ export type Chat = {
    * written to disk, and is deleted when the last private window closes.
    */
   incognito?: true;
+  /** Messages the chat sends itself later (scheduled.ts). */
+  scheduled?: ScheduledMessage[];
 };
+
+/** `preapproved`: the user approved it up front, so its run doesn't ask before sends, posts and publishing. */
+export type ScheduledMessage = { id: string; at: string; text: string; preapproved?: true };
 
 export type ChatSummary = {
   id: string;

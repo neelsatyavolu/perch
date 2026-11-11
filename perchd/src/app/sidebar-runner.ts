@@ -155,7 +155,7 @@ export function sidebarRunner(opts: SidebarRunnerOptions): Runner {
     const token = randomBytes(32).toString("base64url");
     const mode = capMode(input.settings.mode, policy);
     const catalog = await opts.skills?.().catch(() => undefined);
-    const extras = sidebarExtras(catalog, memory, input.files);
+    const extras = sidebarExtras(catalog, memory, input.files, input.incognito ? undefined : input.schedule);
     const skillList = extras?.prompt() ?? "";
     opts.runs.add(session, {
       ...(extras ? { extras } : {}),

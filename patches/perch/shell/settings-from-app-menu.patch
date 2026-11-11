@@ -1,0 +1,27 @@
+diff --git a/chrome/browser/ui/chrome_pages.cc b/chrome/browser/ui/chrome_pages.cc
+index 9bc0bdcaff..3a349a1176 100644
+--- a/chrome/browser/ui/chrome_pages.cc
++++ b/chrome/browser/ui/chrome_pages.cc
+@@ -4,6 +4,9 @@
+ 
+ #include "chrome/browser/ui/chrome_pages.h"
+ 
++#include "chrome/browser/perch/perch_command_ids.h"
++#include "chrome/browser/perch/perch_commands.h"
++
+ #include <stddef.h>
+ 
+ #include <memory>
+@@ -461,6 +464,12 @@ bool IsTrustedPopupWindowWithScheme(const BrowserWindowInterface* browser,
+ }
+ 
+ void ShowSettings(BrowserWindowInterface* browser) {
++  // Perch: Settings opens Perch's settings, including from the app menu and
++  // ⌘, (which reach here through AppController, not IDC_OPTIONS). Chromium's
++  // sub-pages stay at chrome://settings.
++  if (perch::ExecutePerchCommand(browser, IDC_PERCH_OPEN_SETTINGS)) {
++    return;
++  }
+   ShowSettingsSubPage(browser, std::string());
+ }
+ 

@@ -46,6 +46,7 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/translate/chrome_translate_client.h"
 #include "components/translate/core/browser/translate_manager.h"
+#include "chrome/browser/perch/agent/finish_sound.h"
 #include "chrome/browser/ui/browser_commands.h"
 #include "ui/shell_dialogs/selected_file_info.h"
 #include "ui/shell_dialogs/select_file_policy.h"
@@ -214,6 +215,15 @@ class Snapshotter {
       }
     } else if (state == "panel") {
       SidePanelUI::From(browser_)->Show(SidePanelEntryId::kPerch);
+    } else if (state == "finish-sound") {
+      // Writes the finish chime next to the snapshots, for checking the file.
+      base::ThreadPool::PostTask(
+          FROM_HERE, {base::MayBlock()},
+          base::BindOnce(
+              [](base::FilePath path) {
+                base::WriteFile(path, FinishSoundWav());
+              },
+              dir_.AppendASCII("finish-sound.wav")));
     } else if (state.starts_with("pin:")) {
       // Pins the tab at the index after "pin:".
       int index = 0;

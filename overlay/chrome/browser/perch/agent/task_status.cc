@@ -3,6 +3,8 @@
 
 #include "chrome/browser/perch/agent/task_status.h"
 
+#include "chrome/browser/perch/agent/finish_sound.h"
+
 #include "base/command_line.h"
 
 #include <map>
@@ -151,6 +153,8 @@ void SetTaskStatus(const std::string& chat_id,
   std::vector<std::string> changed = chat.targets;
   changed.insert(changed.end(), target_ids.begin(), target_ids.end());
   const bool was_waiting = chat.state == TaskState::kWaiting;
+  // A chat that was working and is now done plays the finish chime once.
+  const bool finished = chat.state != TaskState::kIdle && state == TaskState::kIdle;
   chat.state = state;
   chat.targets = state == TaskState::kIdle ? std::vector<std::string>()
                                            : target_ids;
@@ -163,6 +167,9 @@ void SetTaskStatus(const std::string& chat_id,
   }
   if (state == TaskState::kIdle) {
     Chats().erase(chat_id);
+  }
+  if (finished) {
+    PlayFinishSound();
   }
   Redraw(changed);
   if (AnyWaiting() != waiting_before) {

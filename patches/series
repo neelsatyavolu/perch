@@ -111,3 +111,4 @@ perch/shell/fullscreen-in-window.patch
 perch/shell/no-side-panel-shadow.patch
 perch/shell/pinned-icons.patch
 perch/shell/square-corner-by-panel.patch
+perch/agent/finish-sound-sources.patch

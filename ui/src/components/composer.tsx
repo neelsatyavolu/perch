@@ -209,7 +209,11 @@ export function Composer(p: ComposerProps) {
         )}
         {p.tab && (
           <span class="chip" title={p.tab.url}>
-            <span class="fav">{(host(p.tab.url) || "?").charAt(0).toUpperCase()}</span>
+            {p.tab.favicon ? (
+              <img class="fav" src={p.tab.favicon} alt="" />
+            ) : (
+              <span class="fav">{(host(p.tab.url) || "?").charAt(0).toUpperCase()}</span>
+            )}
             <span class="chip-t">{p.tab.title || "Untitled"}</span>
             <span class="d">{host(p.tab.url)}</span>
           </span>

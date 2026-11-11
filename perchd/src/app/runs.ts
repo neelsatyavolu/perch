@@ -4,6 +4,7 @@
  * chat's task continues while its tab is in the background, spec 5.3).
  */
 
+import { provisionalTitle } from "./chat-title";
 import type { StepEvent } from "../agent/loop";
 import type { ApprovalRequest } from "../agent/session";
 import { describeApproval } from "./approval-card";
@@ -36,6 +37,8 @@ export type RunDeps = {
   tabs: () => TabInfo[];
   /** Every status change of a chat, with its card while one waits: the browser's perch dot and notices. */
   onStatus?: (chatId: string, status: ChatStatus, card: ApprovalCard | null) => void;
+  /** Names a chat from its first message and reply (chat-title.ts); null or a throw keeps the first-message title. */
+  nameChat?: (ask: string, reply: string) => Promise<string | null>;
 };
 
 /** What a message brings beyond its text: attached files (resolved to paths) and @ tabs. */
@@ -53,6 +56,7 @@ type Run = { runId: string; chatId: string; controller: AbortController; text: s
 const MAX_MESSAGE = 50_000;
 
 export class RunManager {
+  private readonly naming = new Set<Promise<void>>();
   private runs = new Map<string, Run>();
   /** Cards for work that runs outside a chat's own run: an outside agent's action, a new client. */
   private held = new Map<string, Pending>();
@@ -146,7 +150,7 @@ export class RunManager {
     try {
       const updated = await this.deps.chats.update(chatId, (c) => ({
         ...c,
-        title: c.title === "New chat" && c.messages.length === 0 ? titleFrom(text) : c.title,
+        title: c.title === "New chat" && c.messages.length === 0 ? provisionalTitle(text) : c.title,
         draft: "",
         messages: [...c.messages, message],
       }));
@@ -273,8 +277,37 @@ export class RunManager {
       ...(ids.length ? { artifacts: ids } : {}),
       ...(stopped ? { stopped: true } : error ? { error } : {}),
     };
-    await this.deps.chats.update(run.chatId, (c) => ({ ...c, messages: [...c.messages, message] }));
+    const updated = await this.deps.chats.update(run.chatId, (c) => ({ ...c, messages: [...c.messages, message] }));
     this.deps.emit({ type: "run.finished", chatId: run.chatId, runId: run.runId, message });
+    if (!stopped && !error && text.trim()) this.nameAfterFirstReply(updated, text);
+  }
+
+  /**
+   * After the first reply, the fast model names the chat. The first-message title stays when the
+   * user renamed the chat meanwhile, the chat is private, or the model can't help.
+   */
+  private nameAfterFirstReply(chat: Chat, reply: string): void {
+    const ask = chat.messages[0];
+    if (!this.deps.nameChat || chat.incognito || chat.messages.length !== 2 || ask?.role !== "user") return;
+    const provisional = provisionalTitle(ask.text);
+    if (chat.title !== provisional) return;
+    const naming = this.deps
+      .nameChat(ask.text, reply)
+      .then(async (title) => {
+        if (!title || title === provisional) return;
+        const current = this.deps.chats.get(chat.id);
+        if (!current || current.title !== provisional) return;
+        await this.deps.chats.update(chat.id, (c) => (c.title === provisional ? { ...c, title } : c));
+        this.announce(chat.id);
+      })
+      .catch(() => undefined);
+    this.naming.add(naming);
+    void naming.finally(() => this.naming.delete(naming));
+  }
+
+  /** Resolves once chats being named have their names, for tests and shutdown. */
+  async named(): Promise<void> {
+    await Promise.all([...this.naming]);
   }
 
   /** Tells every page that a chat is gone. */
@@ -289,11 +322,6 @@ export class RunManager {
     const chat = this.deps.chats.get(chatId);
     if (chat) this.deps.emit({ type: "chat.updated", chat: this.summary(chat) });
   }
-}
-
-function titleFrom(text: string): string {
-  const line = text.replace(/\s+/g, " ").trim();
-  return line.length <= 60 ? line : `${line.slice(0, 59).trimEnd()}…`;
 }
 
 /** A tab as kept in chat history: the browser's target id is only good for this run. */

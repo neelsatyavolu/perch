@@ -7,6 +7,10 @@ export const emptyView: ChatView = Object.freeze({ chat: null, run: null, artifa
 
 export function applyToView(view: ChatView, event: AppEvent): ChatView {
   const chat = view.chat;
+  // A rename (the chat's generated title, or the user's) reaches the open chat's header too.
+  if (event.type === "chat.updated") {
+    return chat && event.chat.id === chat.id && event.chat.title !== chat.title ? { ...view, chat: { ...chat, title: event.chat.title } } : view;
+  }
   if (!chat || !("chatId" in event) || event.chatId !== chat.id) return view;
   switch (event.type) {
     case "run.started":

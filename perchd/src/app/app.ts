@@ -33,6 +33,8 @@ export type AppOptions = {
   pages?: (core: PagesCore) => PagesApi;
   /** Every chat status change (RunDeps.onStatus): the browser's perch dot. */
   onStatus?: RunDeps["onStatus"];
+  /** Names a chat after its first reply (RunDeps.nameChat). */
+  nameChat?: RunDeps["nameChat"];
   /** Artifacts on `perch-artifact://`, when the browser that runs perchd serves that scheme. */
   artifactScheme?: boolean;
 };
@@ -144,6 +146,7 @@ export async function startApp(opts: AppOptions): Promise<App> {
     artifactUrl: artifactServer.urlFor,
     tabs: () => windows.tabs(),
     ...(opts.onStatus ? { onStatus: opts.onStatus } : {}),
+    ...(opts.nameChat ? { nameChat: opts.nameChat } : {}),
   });
   let defaults: ChatSettings = { ...DEFAULT_SETTINGS, model: opts.models[0]?.id ?? "", ...opts.defaults };
   const info = (): AppInfo => ({ models: opts.models, defaults, artifactOrigin: artifactServer.origin });

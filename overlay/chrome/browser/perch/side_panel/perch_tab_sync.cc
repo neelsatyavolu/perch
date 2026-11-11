@@ -7,7 +7,9 @@
 #include <utility>
 
 #include "base/functional/bind.h"
+#include "base/base64.h"
 #include "base/json/json_writer.h"
+#include "base/memory/ref_counted_memory.h"
 #include "base/logging.h"
 #include "base/no_destructor.h"
 #include "base/strings/escape.h"
@@ -21,7 +23,9 @@
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "components/favicon/content/content_favicon_driver.h"
 #include "components/sessions/content/session_tab_helper.h"
+#include "ui/gfx/image/image.h"
 #include "components/tabs/public/tab_interface.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/devtools_agent_host.h"
@@ -141,6 +145,19 @@ base::DictValue TabInfo(const std::string& window_id,
     // Private tabs get private chats, which end with the last of them.
     if (contents->GetBrowserContext()->IsOffTheRecord()) {
       info.Set("incognito", true);
+    }
+    // The site's icon, for the chat's tab chip: a small PNG as a data URL.
+    if (auto* driver =
+            favicon::ContentFaviconDriver::FromWebContents(contents)) {
+      const gfx::Image icon = driver->GetFavicon();
+      if (driver->FaviconIsValid() && !icon.IsEmpty()) {
+        scoped_refptr<base::RefCountedMemory> png = icon.As1xPNGBytes();
+        constexpr size_t kMaxIconBytes = 16 * 1024;
+        if (png && png->size() > 0 && png->size() <= kMaxIconBytes) {
+          info.Set("favicon", "data:image/png;base64," +
+                                  base::Base64Encode(base::span(*png)));
+        }
+      }
     }
   }
   return info;

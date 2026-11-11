@@ -101,8 +101,12 @@ export function tabInfo(value: unknown, name = "tab"): TabInfo {
     url: text(o.url ?? "", `${name}.url`, 8000),
     ...(o.targetId === undefined ? {} : { targetId: id(o.targetId, `${name}.targetId`) }),
     ...(o.incognito === true ? { incognito: true } : {}),
+    ...(typeof o.favicon === "string" && FAVICON.test(o.favicon) && o.favicon.length <= 24_000 ? { favicon: o.favicon } : {}),
   };
 }
+
+/** Only a base64 PNG data URL is kept as a tab's icon; anything else is dropped. */
+const FAVICON = /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/;
 
 export function settingsPatch(value: unknown, models: string[]): Partial<ChatSettings> {
   const o = object(value, '"settings"');

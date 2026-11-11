@@ -221,3 +221,78 @@ test("idleFor waits for one chat's run and not for another chat that is waiting 
   runs.cancel(waiting.id);
   await runs.idle();
 });
+
+test("after the first reply the fast model names the chat, and pages hear the new name", async () => {
+  const asked: string[][] = [];
+  const runs = new RunManager({
+    chats,
+    artifacts,
+    runner: async function* (): AsyncIterable<StepEvent> {
+      yield { type: "final", text: "The Uniqlo pair is $39.90." };
+    },
+    emit: (e) => events.push(e),
+    artifactUrl: (id, v) => `http://art/${id}/${v}`,
+    tabs: () => [],
+    nameChat: async (ask, reply) => {
+      asked.push([ask, reply]);
+      return "Find cheap chinos";
+    },
+  });
+  const chat = await chats.create({ settings: { mode: "ask", model: "fake", effort: "high" } });
+  await runs.send(chat.id, "find me a good pair of cheap chino pants");
+  await runs.idle();
+  await runs.named();
+  expect(asked).toEqual([["find me a good pair of cheap chino pants", "The Uniqlo pair is $39.90."]]);
+  expect(chats.get(chat.id)!.title).toBe("Find cheap chinos");
+  expect(of("chat.updated").at(-1)!.chat.title).toBe("Find cheap chinos");
+  // The second reply doesn't rename it.
+  await runs.send(chat.id, "and in navy?");
+  await runs.idle();
+  await runs.named();
+  expect(asked.length).toBe(1);
+});
+
+test("a chat keeps its first-message title when naming fails or the user renamed it first", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  const runs = new RunManager({
+    chats,
+    artifacts,
+    runner: async function* (): AsyncIterable<StepEvent> {
+      yield { type: "final", text: "Done." };
+    },
+    emit: (e) => events.push(e),
+    artifactUrl: (id, v) => `http://art/${id}/${v}`,
+    tabs: () => [],
+    nameChat: async () => {
+      await gate;
+      return "Model title";
+    },
+  });
+  const renamed = await chats.create({ settings: { mode: "ask", model: "fake", effort: "high" } });
+  await runs.send(renamed.id, "book a table");
+  await runs.idle();
+  await chats.update(renamed.id, (c) => ({ ...c, title: "Dinner plans" }));
+  release();
+  await runs.named();
+  expect(chats.get(renamed.id)!.title).toBe("Dinner plans");
+
+  const failing = new RunManager({
+    chats,
+    artifacts,
+    runner: async function* (): AsyncIterable<StepEvent> {
+      yield { type: "final", text: "Done." };
+    },
+    emit: () => {},
+    artifactUrl: (id, v) => `http://art/${id}/${v}`,
+    tabs: () => [],
+    nameChat: async () => {
+      throw new Error("no fast model signed in");
+    },
+  });
+  const plain = await chats.create({ settings: { mode: "ask", model: "fake", effort: "high" } });
+  await failing.send(plain.id, "what is on this page");
+  await failing.idle();
+  await failing.named();
+  expect(chats.get(plain.id)!.title).toBe("what is on this page");
+});

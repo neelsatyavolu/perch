@@ -5,6 +5,7 @@
  * connect in the background, and the model registry opens on first use.
  */
 
+import { titleChat } from "../chat-title";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { AuditLog, type AuditSink } from "../../agent/audit";
@@ -88,6 +89,8 @@ export type PageServices = {
   sidebarAudit: string;
   /** Memory for a sidebar chat. */
   chatMemory: () => Promise<Awaited<ReturnType<PerchData["chatMemory"]>>>;
+  /** Names a chat after its first reply with the profile's fast model (`startApp({ nameChat })`). */
+  nameChat: (ask: string, reply: string) => Promise<string | null>;
   /** Hands over the app's chats and windows, for building the memory profile. */
   attach(app: { chats: ChatStore; windows: Windows; runs?: RunManager }): void;
   stop(): Promise<void>;
@@ -153,6 +156,7 @@ export function openPageServices(opts: PageServicesOptions): PageServices {
   return {
     sidebarAudit: opts.audit.path,
     chatMemory: async () => (await data).chatMemory(),
+    nameChat: async (ask, reply) => titleChat(modelOf(await (await models()).modelFor("fast")), ask, reply, AbortSignal.timeout(20_000)),
     attach(a) {
       app = a;
     },

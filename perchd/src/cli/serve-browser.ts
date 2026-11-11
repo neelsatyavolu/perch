@@ -116,6 +116,7 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
     browserToken: settings.browserToken,
     pages: services.pages,
     onStatus: link.onStatus,
+    nameChat: services.nameChat,
     artifactScheme: browser.features.has("perch-artifact"),
   });
   services.attach(app);

@@ -19,6 +19,8 @@ export type TabInfo = {
   targetId?: string;
   /** A private (incognito) window's tab, as the browser reports it (spec 5.8). */
   incognito?: boolean;
+  /** The site's icon as a `data:image/png;base64,` URL, from the browser. */
+  favicon?: string;
 };
 /** The tab a side chat belongs to. */
 export type TabRef = { id: string; windowId: string };

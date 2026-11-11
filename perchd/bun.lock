@@ -5,7 +5,9 @@
     "": {
       "name": "perchd",
       "dependencies": {
+        "@jitl/quickjs-singlefile-mjs-release-sync": "0.31.0",
         "@neelsatyavolu/shared-ai-auth": "github:neelsatyavolu/shared-ai-auth#7290ee3",
+        "quickjs-emscripten-core": "0.31.0",
         "smol-toml": "1.9.1",
       },
       "devDependencies": {
@@ -15,6 +17,10 @@
     },
   },
   "packages": {
+    "@jitl/quickjs-ffi-types": ["@jitl/quickjs-ffi-types@0.31.0", "", {}, "sha512-1yrgvXlmXH2oNj3eFTrkwacGJbmM0crwipA3ohCrjv52gBeDaD7PsTvFYinlAnqU8iPME3LGP437yk05a2oejw=="],
+
+    "@jitl/quickjs-singlefile-mjs-release-sync": ["@jitl/quickjs-singlefile-mjs-release-sync@0.31.0", "", { "dependencies": { "@jitl/quickjs-ffi-types": "0.31.0" } }, "sha512-VyN48sbNnlhvH/17xoy3Ck15Y9ChFg/e9hcLP/yFdwrGy/x2s1Hnbg0orL3OYiQYKRSpdecrB09rwEPUdDt8BA=="],
+
     "@neelsatyavolu/shared-ai-auth": ["@neelsatyavolu/shared-ai-auth@github:neelsatyavolu/shared-ai-auth#7290ee3", {}, "neelsatyavolu-shared-ai-auth-7290ee3", "sha512-4oFdS7ZerrCn1jBFF5WfLMukxJcCkAtb3UZyZ6LG+ZHsVA+uF5rEIgX5fybI5KbGyDT9bGKkG736M1aC9BdanQ=="],
 
     "@types/bun": ["@types/bun@1.3.10", "", { "dependencies": { "bun-types": "1.3.10" } }, "sha512-0+rlrUrOrTSskibryHbvQkDOWRJwJZqZlxrUs1u4oOoTln8+WIXBPmAuCF35SWB2z4Zl3E84Nl/D0P7803nigQ=="],
@@ -22,6 +28,8 @@
     "@types/node": ["@types/node@26.6.6", "", { "dependencies": { "undici-types": "~8.9.0" } }, "sha512-MzQj+8Kx3XI40OmUAE6Qoh58ZMNstNNMwn2nfd3qWsfe7nDNSqJNzes4njhz6AHwrSHOffSLwXU6yb474Q4aog=="],
 
     "bun-types": ["bun-types@1.3.10", "", { "dependencies": { "@types/node": "*" } }, "sha512-tcpfCCl6XWo6nCVnpcVrxQ+9AYN1iqMIzgrSKYMB/fjLtV2eyAVEg7AxQJuCq/26R6HpKWykQXuSOq/21RYcbg=="],
+
+    "quickjs-emscripten-core": ["quickjs-emscripten-core@0.31.0", "", { "dependencies": { "@jitl/quickjs-ffi-types": "0.31.0" } }, "sha512-oQz8p0SiKDBc1TC7ZBK2fr0GoSHZKA0jZIeXxsnCyCs4y32FStzCW4d1h6E1sE0uHDMbGITbk2zhNaytaoJwXQ=="],
 
     "smol-toml": ["smol-toml@1.9.1", "", {}, "sha512-j7WyPdf0CJoutMzMoPLF/bVXHtKZIT9Rb4eGeEbWw8X2t5oirjPgpL+OpaENZrILYaXqYwnVH+qgUwVbl+pUJQ=="],
 

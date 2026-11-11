@@ -18,13 +18,15 @@ test("Claude Code stream lines become Aside-style events", () => {
   expect(claudeLineToEvents({ type: "system", subtype: "init" })).toEqual([]);
 });
 
-test("the Claude Code command only allows Perch's browser tools", () => {
+test("the Claude Code command only allows Perch's browser tools and web search", () => {
   const args = claudeArgs({ model: "sonnet", mcpConfig: "/tmp/mcp.json", systemPrompt: "SYS", task: "Find X" });
   expect(args.slice(0, 2)).toEqual(["-p", "Find X"]);
   expect(args).toContain("--strict-mcp-config");
-  expect(args[args.indexOf("--allowedTools") + 1]).toBe("mcp__perch__*");
+  expect(args[args.indexOf("--allowedTools") + 1]).toBe("mcp__perch__*,WebSearch,WebFetch");
   const disallowed = args[args.indexOf("--disallowedTools") + 1]!;
-  for (const tool of ["Bash", "WebFetch", "WebSearch", "Read", "Write", "Task"]) expect(disallowed).toContain(tool);
+  for (const tool of ["Bash", "Read", "Write", "Task"]) expect(disallowed).toContain(tool);
+  for (const tool of ["WebFetch", "WebSearch"]) expect(disallowed).not.toContain(tool);
+  expect(args).not.toContain("--effort");
   expect(args[args.indexOf("--output-format") + 1]).toBe("stream-json");
   expect(args[args.indexOf("--system-prompt") + 1]).toBe("SYS");
 });
@@ -64,4 +66,9 @@ test("other Codex MCP servers are found so they can be switched off", () => {
   const dir = mkdtempSync(join(tmpdir(), "codex-cfg-"));
   writeFileSync(join(dir, "config.toml"), '[mcp_servers.parallel]\ncommand = "x"\n[mcp_servers.parallel.env]\nA = "1"\n[mcp_servers.firecrawl]\n[mcp_servers.perch]\n');
   expect(otherCodexServers(join(dir, "config.toml"))).toEqual(["parallel", "firecrawl"]);
+});
+test("the Claude Code command passes the chat's reasoning effort and refuses unknown ones", () => {
+  const args = claudeArgs({ model: "sonnet", mcpConfig: "/tmp/mcp.json", systemPrompt: "SYS", task: "Find X", effort: "medium" });
+  expect(args[args.indexOf("--effort") + 1]).toBe("medium");
+  expect(() => claudeArgs({ model: "sonnet", mcpConfig: "/tmp/mcp.json", systemPrompt: "SYS", task: "Find X", effort: "max; rm" })).toThrow(/unknown reasoning effort/);
 });

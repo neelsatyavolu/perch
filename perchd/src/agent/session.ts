@@ -4,6 +4,7 @@
  */
 
 import { appTool } from "../apps/index";
+import { runScript, SCRIPT } from "./script";
 import type { ToolCall } from "../models/types";
 import type { AuditWriter } from "./audit";
 import { FILL_TOOLS, fillKind, fillSummary } from "./fill-tools";
@@ -75,6 +76,10 @@ export async function finishCall(ctx: ToolContext, opts: CallPolicy, prepared: E
 /** prepareCall, the approval if needed, and finishCall in one step: for clients without a UI loop. */
 export async function callTool(ctx: ToolContext, opts: CallPolicy, call: ToolCall): Promise<ToolResult> {
   if (call.name === BATCH) return callBatch(ctx, opts, call);
+  if (call.name === SCRIPT) {
+    const problem = checkCall(call);
+    return problem ? { content: problem, isError: true } : runScript(String(call.args.code), (step) => callTool(ctx, opts, step), call.id);
+  }
   const prepared = await prepareCall(ctx, opts, call);
   if (prepared.kind === "answer") return prepared.result;
   const approved = prepared.decision === "ask" ? await opts.approve(prepared.request) : null;

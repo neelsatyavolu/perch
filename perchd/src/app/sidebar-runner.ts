@@ -44,8 +44,8 @@ type Agent = "codex" | "claude-code";
 const MODELS: (ModelInfo & { agent: Agent })[] = [
   { agent: "codex", id: "codex:gpt-6.1-sol", label: "GPT-6.1 Sol", provider: "Codex", efforts: ["low", "medium", "high"] },
   { agent: "codex", id: "codex:default", label: "Codex default", provider: "Codex", efforts: ["low", "medium", "high"] },
-  { agent: "claude-code", id: "claude-code:claude-sonnet-5-5", label: "Claude Sonnet 5.5", provider: "Claude Code", efforts: ["medium"] },
-  { agent: "claude-code", id: "claude-code:claude-opus-5-5", label: "Claude Opus 5.5", provider: "Claude Code", efforts: ["medium"] },
+  { agent: "claude-code", id: "claude-code:claude-sonnet-5-5", label: "Claude Sonnet 5.5", provider: "Claude Code", efforts: ["low", "medium", "high"] },
+  { agent: "claude-code", id: "claude-code:claude-opus-5-5", label: "Claude Opus 5.5", provider: "Claude Code", efforts: ["low", "medium", "high"] },
 ];
 
 function installed(agent: Agent): boolean {
@@ -188,7 +188,7 @@ export function sidebarRunner(opts: SidebarRunnerOptions): Runner {
     const done = run({
       task: [input.task, known, skillList].filter(Boolean).join("\n\n"),
       model: model && model !== "default" ? model : undefined,
-      effort: agent === "codex" ? input.settings.effort : undefined,
+      effort: input.settings.effort,
       mode,
       timeoutMs: opts.timeoutMs ?? 20 * 60_000,
       auditPath: opts.auditPath,

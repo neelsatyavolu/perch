@@ -38,6 +38,18 @@ export const TOOL_SPECS: ToolSpec[] = [
     { actions: { type: "array", description: "Up to 10 of: click, type, select, press, scroll, hover, drag, type_text, wait_for", items: { type: "object", properties: { name: { type: "string" }, args: { type: "object" } }, required: ["name"] } } },
     ["actions"],
   ),
+  spec(
+    "script",
+    "Run JavaScript that calls browser tools in a row, with loops and checks, to save turns: search several queries and read each, open results and pull their prices. Each action is approved as usual.",
+    {
+      code: {
+        type: "string",
+        description:
+          "Body of an async function; use await, and return or log() only what you need. Functions: navigate(url), snapshot({full}), click(ref), type(ref, text, {submit}), select(ref, value), press(key), scroll(dy), hover(ref), wait_for({text, seconds}), back(), tabs(), open_tab(url), switch_tab(id), js(code) (runs code in the page, returns its JSON result), sleep(s), log(...). Each returns what the tool of that name returns; a failed call throws. No network, fetch or DOM here: use js() for the page.",
+      },
+    },
+    ["code"],
+  ),
   spec("tabs", "List open tabs with their ids. The current agent tab is marked with *.", {}),
   spec("open_tab", "Open a URL in a new agent tab and make it current.", { url: { type: "string" } }, ["url"]),
   spec("switch_tab", "Make another tab current, by id from tabs.", { id: { type: "string" } }, ["id"]),

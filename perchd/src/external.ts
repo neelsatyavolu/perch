@@ -19,7 +19,7 @@ export type ExternalResult = { answer: string; events: AsideEvent[]; exitCode: n
 const TOOL_RESULT_LIMIT = 20_000;
 const BLOCKED_TOOLS = [
   "Bash", "BashOutput", "KillShell", "Edit", "MultiEdit", "Write", "Read", "Glob", "Grep", "LS", "NotebookEdit",
-  "WebFetch", "WebSearch", "Task", "Agent", "TodoWrite", "Skill", "SlashCommand", "ExitPlanMode",
+  "Task", "Agent", "TodoWrite", "Skill", "SlashCommand", "ExitPlanMode",
 ];
 
 function text(content: unknown): string {
@@ -49,10 +49,12 @@ export function claudeLineToEvents(line: any): AsideEvent[] {
   return [];
 }
 
-export function claudeArgs(opts: { model: string; mcpConfig: string; systemPrompt: string; task: string }): string[] {
+export function claudeArgs(opts: { model: string; mcpConfig: string; systemPrompt: string; task: string; effort?: string }): string[] {
+  if (opts.effort !== undefined && !EFFORT.test(opts.effort)) throw new Error(`unknown reasoning effort "${opts.effort}"`);
   return [
     "-p", opts.task,
     "--model", opts.model,
+    ...(opts.effort ? ["--effort", opts.effort] : []),
     "--output-format", "stream-json",
     "--verbose",
     "--mcp-config", opts.mcpConfig,
@@ -60,7 +62,8 @@ export function claudeArgs(opts: { model: string; mcpConfig: string; systemPromp
     "--system-prompt", opts.systemPrompt,
     // The user's own hooks (stop hooks, audits) are for their coding sessions, not browser tasks.
     "--settings", JSON.stringify({ disableAllHooks: true }),
-    "--allowedTools", "mcp__perch__*",
+    // Web search and fetch answer quick lookups without opening a tab, as in Aside.
+    "--allowedTools", "mcp__perch__*,WebSearch,WebFetch",
     "--disallowedTools", BLOCKED_TOOLS.join(","),
   ];
 }
@@ -78,7 +81,7 @@ const MCP_ENTRY = join(import.meta.dir, "mcp.ts");
 export type RunOptions = {
   task: string;
   model?: string;
-  /** Reasoning effort for Codex ("low", "medium", "high"); Claude Code uses its own default. */
+  /** Reasoning effort ("low", "medium", "high"), for Codex and Claude Code alike. */
   effort?: string;
   timeoutMs: number;
   auditPath: string;
@@ -152,13 +155,14 @@ export async function runClaudeCode(opts: RunOptions): Promise<ExternalResult> {
   const mode = opts.mode ?? "guard";
   const server = mcpServer(opts, "claude-code", work);
   writeFileSync(mcpConfig, JSON.stringify({ mcpServers: { perch: server } }), { mode: 0o600 });
-  const prompt = `${systemPrompt({ mode, now: new Date(), finish: "reply" })}\n\nYour tools are Perch's browser tools (mcp__perch__*). Do the task in the browser. When you finish, reply with the answer or the result in your final message, including the specific facts the task asks for.`;
-  const child = Bun.spawn([claudeBinary(), ...claudeArgs({ model: opts.model ?? "claude-sonnet-5-5", mcpConfig, systemPrompt: prompt, task: opts.task })], {
+  const prompt = `${systemPrompt({ mode, now: new Date(), finish: "reply", webSearch: true })}\n\nYour tools are Perch's browser tools (mcp__perch__*), plus WebSearch and WebFetch for quick public lookups. Use the browser for the user's own sites, signed-in pages and anything you act on. When you finish, reply with the answer or the result in your final message, including the specific facts the task asks for.`;
+  const child = Bun.spawn([claudeBinary(), ...claudeArgs({ model: opts.model ?? "claude-sonnet-5-5", mcpConfig, systemPrompt: prompt, task: opts.task, effort: opts.effort })], {
     cwd: work,
     stdout: "pipe",
     stderr: "pipe",
     stdin: "ignore",
-    env: { ...process.env, CLAUDE_CODE_ENTRYPOINT: "perch-exec" },
+    // ENABLE_TOOL_SEARCH=false: Perch's tools are loaded up front, not found by a search turn first.
+    env: { ...process.env, CLAUDE_CODE_ENTRYPOINT: "perch-exec", ENABLE_TOOL_SEARCH: "false" },
   });
   const stop = stopper(child, opts);
   const events: AsideEvent[] = [];
@@ -181,6 +185,7 @@ export async function runClaudeCode(opts: RunOptions): Promise<ExternalResult> {
       } catch {
         continue;
       }
+      if (process.env.PERCH_DEBUG_CODEX) process.stderr.write(`${Date.now()} ${raw.slice(0, 400)}\n`);
       if (line.type === "result" && typeof line.result === "string") {
         answer = line.result;
         // The answer is in; do not wait on the CLI's own shutdown (hooks, MCP teardown).
@@ -274,10 +279,9 @@ export function codexArgs(opts: { mcpArgs: string[]; prompt: string; model?: str
     "-c", "mcp_servers.perch.tool_timeout_sec=120",
     // Perch applies its own approval rules to every call; Codex's prompt would only block them.
     "-c", 'mcp_servers.perch.default_tools_approval_mode="approve"',
-    // Only the browser: the user's other MCP servers and Codex's web search are off for the task.
+    // Only Perch's tools and Codex's own web search: the user's other MCP servers are off for the task.
     ...opts.otherServers.flatMap((name) => ["-c", `mcp_servers.${name}.enabled=false`]),
-    "-c", 'web_search="disabled"',
-    "-c", "tools.web_search=false",
+    "-c", 'web_search="live"',
     ...(opts.model ? ["-m", opts.model] : []),
     ...(opts.effort ? ["-c", `model_reasoning_effort="${opts.effort}"`] : []),
     opts.prompt,
@@ -289,7 +293,7 @@ export async function runCodex(opts: RunOptions): Promise<ExternalResult> {
   const work = mkdtempSync(join(tmpdir(), "perch-exec-"));
   const mode = opts.mode ?? "guard";
   const server = mcpServer(opts, "codex", work);
-  const prompt = `${systemPrompt({ mode, now: new Date(), finish: "reply" })}\n\nYour tools for this task are Perch's browser tools from the "perch" MCP server. Do not run shell commands or read files. Do the task in the browser, then reply with the answer, including the specific facts the task asks for.\n\nTask:\n${opts.task}`;
+  const prompt = `${systemPrompt({ mode, now: new Date(), finish: "reply", webSearch: true })}\n\nYour tools for this task are Perch's browser tools from the "perch" MCP server. Do not run shell commands or read files. Use web search for quick public lookups and the browser for the user's own sites, signed-in pages and anything you act on, then reply with the answer, including the specific facts the task asks for.\n\nTask:\n${opts.task}`;
   const args = codexArgs({ mcpArgs: server.args, command: server.command, env: server.env, prompt, model: opts.model, effort: opts.effort, otherServers: otherCodexServers() });
   const child = Bun.spawn([codexBinary(), ...args], { cwd: work, stdout: "pipe", stderr: "pipe", stdin: "ignore" });
   const stop = stopper(child, opts);
@@ -313,7 +317,7 @@ export async function runCodex(opts: RunOptions): Promise<ExternalResult> {
       } catch {
         continue;
       }
-      if (process.env.PERCH_DEBUG_CODEX) process.stderr.write(`${raw.slice(0, 400)}\n`);
+      if (process.env.PERCH_DEBUG_CODEX) process.stderr.write(`${Date.now()} ${raw.slice(0, 400)}\n`);
       for (const event of codexLineToEvents(line, started)) {
         if (event.type === "message_end" && event.message.role === "assistant") answer = event.message.content[0]?.text ?? answer;
         events.push(event);

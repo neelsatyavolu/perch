@@ -11,7 +11,8 @@ import type { Mode, SiteRule } from "./permissions";
 import { finalTurn } from "./finish";
 import { Progress } from "./progress";
 import { systemPrompt } from "./prompt";
-import { finishCall, label, prepareCall, type ApprovalRequest } from "./session";
+import { BATCH, callTool, finishCall, label, prepareCall, type ApprovalRequest } from "./session";
+import { SCRIPT } from "./script";
 import { newToolContext, TOOL_SPECS, type ToolContext } from "./tools";
 
 export type { ApprovalRequest } from "./session";
@@ -170,6 +171,12 @@ async function* act(ctx: ToolContext, task: TaskOptions, call: ToolCall, progres
     return reply(result.content, result.image);
   }
   if (opts.memory?.handles(call.name)) return reply((yield* memoryCall(opts.memory, opts, call)).content);
+  // Batches and scripts run each action through callTool, which asks for approval as it goes.
+  if (call.name === BATCH || call.name === SCRIPT) {
+    const result = await callTool(ctx, opts, call);
+    if (!result.isError) yield { type: "step", label: call.name === SCRIPT ? "Run a script" : "Run several actions" };
+    return reply(result.content, result.image);
+  }
   const prepared = await prepareCall(ctx, opts, call);
   if (prepared.kind === "answer") return reply(prepared.result.content);
   let approved: boolean | null = null;

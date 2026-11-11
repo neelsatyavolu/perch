@@ -174,3 +174,12 @@ test("the audit log appends JSON lines a fresh reader can parse, readable only b
   expect(statSync(path).mode & 0o777).toBe(0o600);
   rmSync(dir, { recursive: true, force: true });
 });
+
+test("typing at the focus is a change, a PDF is a change, and listing downloads is a read", async () => {
+  const { classify } = await import("../src/agent/permissions");
+  const c = (name: string, args: Record<string, unknown> = {}) => ({ id: "c", name, args });
+  expect(classify(c("type_text", { text: "42" }))).toBe("change");
+  expect(classify(c("type_text", { text: "42" }), undefined, { payment: true })).toBe("payment");
+  expect(classify(c("save_pdf"))).toBe("change");
+  expect(classify(c("downloads"))).toBe("read");
+});

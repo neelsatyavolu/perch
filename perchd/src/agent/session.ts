@@ -140,6 +140,9 @@ export function label(call: ToolCall, target: Target | undefined, site: string):
     case "snapshot": return `Read ${site}`;
     case "screenshot": return `Looked at ${site}`;
     case "click_at": return `Clicked at ${call.args.x}, ${call.args.y}`;
+    case "type_text": return "Typed text";
+    case "save_pdf": return `Saved ${site} as a PDF`;
+    case "downloads": return "Checked downloads";
     case "repl": return `Ran a script on ${site}`;
     case "wait_for": return `Waited for "${call.args.text}"`;
     case "tabs": return "Listed tabs";

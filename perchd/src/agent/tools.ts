@@ -1,8 +1,8 @@
 /** Runs the model's tool calls against the browser. Errors come back as text; nothing throws. */
 
 import { FILL_TOOLS, runFillTool, type FillSites } from "./fill-tools";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import type { Browser } from "../browser/browser";
 import { PageTimeoutError, STOPPED_RESPONDING, Tab } from "../browser/tab";
@@ -310,6 +310,7 @@ async function dispatch(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
     writeFileSync(path, String(a.content));
     return { content: `saved ${path} (${String(a.content).length} characters)` };
   }
+  if (call.name === "downloads") return { content: recentDownloads() };
   if (call.name === "switch_tab") return switchTab(ctx, String(a.id));
   if (call.name === "open_tab") {
     ctx.tab = await ctx.browser.newTab();
@@ -367,6 +368,17 @@ async function dispatch(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
       const r = await clickAt(tab, a.x / ctx.shotScale, a.y / ctx.shotScale);
       return withPage(ctx, tab, r.ok ? { ok: true, note: `clicked at ${a.x}, ${a.y} in the screenshot` } : r, "click_at");
     }
+    case "type_text": {
+      await tab.send("Input.insertText", { text: String(a.text) });
+      return withPage(ctx, tab, { ok: true, note: `typed ${String(a.text).length} characters at the focus` }, "type_text");
+    }
+    case "save_pdf": {
+      const { data } = await tab.send<{ data: string }>("Page.printToPDF", { printBackground: true, preferCSSPageSize: true });
+      const title = String(a.name ?? "") || (await tab.evaluate<string>("document.title").catch(() => "")) || "page";
+      const path = freePath(downloadsDir(), `${title.replace(/[\/:*?"<>|\u0000-\u001f]+/g, " ").trim().slice(0, 80) || "page"}.pdf`);
+      writeFileSync(path, Buffer.from(data, "base64"));
+      return { content: `saved ${path}` };
+    }
     case "repl": {
       const r = await repl(tab, a.code);
       if (r.error) return { content: r.error, isError: true };
@@ -375,6 +387,47 @@ async function dispatch(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
     }
   }
   return { content: `unknown tool "${call.name}"`, isError: true };
+}
+
+/** The user's Downloads folder (PERCH_DOWNLOADS_DIR in tests). */
+const downloadsDir = () => process.env.PERCH_DOWNLOADS_DIR || join(homedir(), "Downloads");
+const RECENT_MS = 3_600_000;
+
+/** A path in `dir` for `name` that doesn't overwrite anything: "Report.pdf", then "Report 2.pdf". */
+export function freePath(dir: string, name: string): string {
+  const dot = name.lastIndexOf(".");
+  const [stem, ext] = dot > 0 ? [name.slice(0, dot), name.slice(dot)] : [name, ""];
+  for (let n = 1; ; n++) {
+    const path = join(dir, n === 1 ? name : `${stem} ${n}${ext}`);
+    if (!existsSync(path)) return path;
+  }
+}
+
+/** Files in Downloads changed in the last hour, newest first; partial downloads are marked. */
+export function recentDownloads(dir = downloadsDir(), now = Date.now()): string {
+  let names: string[];
+  try {
+    names = readdirSync(dir);
+  } catch {
+    return "The Downloads folder can't be read.";
+  }
+  const recent = names
+    .filter((n) => !n.startsWith("."))
+    .map((n) => {
+      try {
+        const st = statSync(join(dir, n));
+        return st.isFile() ? { n, at: st.mtimeMs, size: st.size } : null;
+      } catch {
+        return null;
+      }
+    })
+    .filter((f): f is { n: string; at: number; size: number } => f !== null && now - f.at < RECENT_MS)
+    .sort((a, b) => b.at - a.at)
+    .slice(0, 20);
+  if (!recent.length) return "Nothing was downloaded in the last hour.";
+  return recent
+    .map((f) => `- ${join(dir, f.n)} (${f.size < 1024 ? `${f.size} B` : `${Math.round(f.size / 1024)} KB`}, ${Math.round((now - f.at) / 60_000)} min ago)${f.n.endsWith(".crdownload") ? " still downloading" : ""}`)
+    .join("\n");
 }
 
 async function listTabs(ctx: ToolContext): Promise<string> {

@@ -10,7 +10,7 @@ const call = (name: string, args: Record<string, unknown> = {}) => ({ id: "c", n
 
 test("every tool spec is a strict JSON Schema object", () => {
   const names = TOOL_SPECS.map((s) => s.name);
-  expect(names).toEqual(["navigate", "snapshot", "click", "type", "select", "press", "scroll", "drag", "hover", "upload", "write_file", "wait_for", "back", "screenshot", "click_at", "repl", "tabs", "open_tab", "switch_tab", "done", "sign_in", "fill_card", "fill_code"]);
+  expect(names).toEqual(["navigate", "snapshot", "click", "type", "select", "press", "scroll", "drag", "hover", "upload", "write_file", "wait_for", "back", "screenshot", "click_at", "repl", "type_text", "save_pdf", "downloads", "tabs", "open_tab", "switch_tab", "done", "sign_in", "fill_card", "fill_code"]);
   for (const spec of TOOL_SPECS) {
     const p = spec.parameters as { type: string; properties: Record<string, unknown>; required?: string[]; additionalProperties: boolean };
     expect(p.type).toBe("object");
@@ -117,4 +117,31 @@ test("the REPL says plainly that it has no network", async () => {
     expect(r.content).toContain("navigate");
   }
   await ctx.close();
+});
+
+test("type_text types at the focus, save_pdf writes a PDF to Downloads, downloads lists it", async () => {
+  const { mkdtempSync, readFileSync, rmSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { tmpdir } = await import("node:os");
+  const dir = mkdtempSync(join(tmpdir(), "perch-dl-"));
+  const before = process.env.PERCH_DOWNLOADS_DIR;
+  process.env.PERCH_DOWNLOADS_DIR = dir;
+  const ctx = await newToolContext(env.browser);
+  try {
+    await runTool(ctx, call("navigate", { url: env.site.url("/canvas-editor.html") }));
+    expect((await runTool(ctx, call("type_text", { text: "=SUM(A1:A3)" }))).isError).toBeFalsy();
+    expect(await ctx.tab!.evaluate<string>("document.getElementById('cell').textContent")).toBe("=SUM(A1:A3)");
+    const saved = await runTool(ctx, call("save_pdf", { name: "Cast bios" }));
+    expect(saved.content).toBe(`saved ${join(dir, "Cast bios.pdf")}`);
+    expect(readFileSync(join(dir, "Cast bios.pdf")).subarray(0, 5).toString()).toBe("%PDF-");
+    expect((await runTool(ctx, call("save_pdf", { name: "Cast bios" }))).content).toBe(`saved ${join(dir, "Cast bios 2.pdf")}`);
+    const listed = (await runTool(ctx, call("downloads"))).content;
+    expect(listed).toContain(join(dir, "Cast bios 2.pdf"));
+    expect(listed.indexOf("Cast bios 2.pdf")).toBeLessThan(listed.indexOf("Cast bios.pdf"));
+  } finally {
+    await ctx.close();
+    if (before === undefined) delete process.env.PERCH_DOWNLOADS_DIR;
+    else process.env.PERCH_DOWNLOADS_DIR = before;
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

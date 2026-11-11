@@ -70,6 +70,14 @@ const STEP_NAMES: Record<string, string> = {
   switch_tab: "Switch tabs",
   back: "Go back",
   scroll: "Scroll",
+  type_text: "Type",
+  save_pdf: "Save the page as a PDF",
+  downloads: "Check downloads",
+  load_skill: "Read a skill",
+  memory_search: "Search memory",
+  memory_save: "Save to memory",
+  read_attachment: "Read an attachment",
+  schedule_message: "Schedule a message",
 };
 
 const quoted = (value: unknown, max = 40) => (typeof value === "string" && value.trim() ? ` "${value.trim().length > max ? `${value.trim().slice(0, max)}…` : value.trim()}"` : "");

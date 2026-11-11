@@ -1,6 +1,7 @@
 /** The new tab page and Welcome: layout, recent chats, setup suggestions and onboarding. */
 
-import type { ChatEffort, ChatSummary, Composer, NtpSection, OnboardingStep, PermissionMode, Suggestion } from "../../../../ui-pages/src/api";
+import { EFFORTS, fitEffort } from "../effort";
+import type { ChatSummary, Composer, NtpSection, OnboardingStep, PermissionMode, Suggestion } from "../../../../ui-pages/src/api";
 import { aboveCap, capMode } from "../../policy/policy";
 import { managed, policyOf } from "./common";
 import type { Chat } from "../protocol";
@@ -9,7 +10,6 @@ import type { Methods } from "./common";
 import type { PagesDeps } from "./deps";
 
 const SECTIONS: readonly NtpSection[] = ["recent", "suggested"];
-const EFFORTS: readonly ChatEffort[] = ["low", "medium", "high"];
 const MODES: readonly PermissionMode[] = ["ask", "guard", "skip"];
 const STEPS: readonly OnboardingStep[] = ["appearance", "models", "import", "memory"];
 const MAX_CHATS = 200;
@@ -57,7 +57,8 @@ export function ntpPages(deps: PagesDeps): Methods<
     const info = deps.chatInfo?.();
     const models = info?.models ?? [];
     const model = models.some((m) => m.id === s.chatModel) ? s.chatModel! : info?.defaults.model ?? models[0]?.id ?? "";
-    return { models, model, effort: s.chatEffort ?? info?.defaults.effort ?? "medium", mode: capMode(s.mode, policyOf(deps)) };
+    const wanted = s.chatEffort ?? info?.defaults.effort ?? "medium";
+    return { models, model, effort: fitEffort(models.find((m) => m.id === model)?.efforts, wanted), mode: capMode(s.mode, policyOf(deps)) };
   }
   async function setup(): Promise<Setup> {
     const { imported } = await deps.state.get();

@@ -7,6 +7,7 @@ import type { SiteRule } from "../agent/permissions";
 import type { Browser } from "../browser/browser";
 import type { Model } from "../models/types";
 import type { PolicyView } from "../policy/policy";
+import { loopEffort } from "./effort";
 import type { Runner } from "./runs";
 
 export type LoopRunnerOptions = {
@@ -32,7 +33,7 @@ export function loopRunner(opts: LoopRunnerOptions): Runner {
       browser: await opts.browser(),
       task: input.task,
       mode: input.settings.mode,
-      effort: input.settings.effort,
+      effort: loopEffort(input.settings.effort),
       approve: input.approve,
       audit: input.incognito ? withoutPageText(opts.audit) : opts.audit,
       client: "sidebar",

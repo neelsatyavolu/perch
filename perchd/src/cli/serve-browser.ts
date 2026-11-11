@@ -37,6 +37,7 @@ import type { Tab } from "../browser/tab";
 import { MacKeychain } from "../daemon/keychain";
 import { perchPaths } from "../daemon/paths";
 import { parseBrowserSettings as parseSettingsObject, readKeyChannel, type BrowserSettings } from "../secure/key-channel";
+import { loopEffort } from "../app/effort";
 import { browserSecrets } from "./browser-keys";
 import type { CliIO } from "./io";
 
@@ -170,7 +171,7 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
         browser,
         task: input.task,
         mode,
-        effort: input.settings.effort,
+        effort: loopEffort(input.settings.effort),
         approve: input.approve,
         audit: input.incognito ? withoutPageText(audit) : audit,
         client: "sidebar",

@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@jitl/quickjs-singlefile-mjs-release-sync": "0.31.0",
-    "@neelsatyavolu/shared-ai-auth": "github:neelsatyavolu/shared-ai-auth#699b583",
+    "@neelsatyavolu/shared-ai-auth": "github:neelsatyavolu/shared-ai-auth#9c1a29f",
     "quickjs-emscripten-core": "0.31.0",
     "smol-toml": "1.9.1"
   }

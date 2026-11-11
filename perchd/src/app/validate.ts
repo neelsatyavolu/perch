@@ -1,6 +1,7 @@
 /** Input checks at the API boundary. Each returns the clean value or throws an AppError (400). */
 
 import { ARTIFACT_KINDS } from "./artifacts";
+import { EFFORTS } from "./effort";
 import type { ArtifactKind, ChatSettings, Effort, Mode, Scope, TabInfo, TabRef } from "./protocol";
 import { AppError } from "./runs";
 
@@ -113,7 +114,7 @@ export function settingsPatch(value: unknown, models: string[]): Partial<ChatSet
   onlyKeys(o, ["mode", "model", "effort", "scope"]);
   const out: Partial<ChatSettings> = {};
   if (o.mode !== undefined) out.mode = oneOf<Mode>(o.mode, "mode", ["ask", "guard", "skip"]);
-  if (o.effort !== undefined) out.effort = oneOf<Effort>(o.effort, "effort", ["low", "medium", "high"]);
+  if (o.effort !== undefined) out.effort = oneOf<Effort>(o.effort, "effort", EFFORTS);
   if (o.scope !== undefined) out.scope = oneOf<Scope>(o.scope, "scope", ["current", "all", "agent"]);
   if (o.model !== undefined) out.model = oneOf(o.model, "model", models);
   return out;

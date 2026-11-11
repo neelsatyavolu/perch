@@ -136,6 +136,17 @@ test("a chat runs end to end: stream, reply, artifact, export", async () => {
   ws.close();
 });
 
+test("a run gets the nearest effort its model takes, and the chat keeps the one chosen", async () => {
+  const { ws, events } = await socket();
+  const chat = (await (await api("/api/chats", { method: "POST", json: { settings: { model: "other", effort: "ultra" } } })).json()) as Chat;
+  expect(chat.settings.effort).toBe("ultra");
+  const before = inputs.length;
+  await api(`/api/chats/${chat.id}/messages`, { method: "POST", json: { text: "Quick one" } });
+  await until(() => events.find((e) => e.type === "run.finished"));
+  expect(inputs[before]!.settings.effort).toBe("medium");
+  ws.close();
+});
+
 test("an approval goes through the API, and a stale one is refused", async () => {
   const { ws, events } = await socket();
   const chat = (await (await api("/api/chats", { method: "POST", json: {} })).json()) as Chat;

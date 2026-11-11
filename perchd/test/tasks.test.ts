@@ -77,11 +77,20 @@ test("a client sees only its own tasks, and ids can be shortened", async () => {
   expect(() => tasks.get("codex", mine.id)).toThrow(/No task/);
 });
 
+test("a task's effort is fitted to its model when it runs", async () => {
+  const { runner, seen } = echo();
+  const { runs, tasks } = setup(runner);
+  const started = await tasks.start({ client: "cli", clientMode: "guard", task: "x", model: "codex:gpt-6.1-sol", effort: "ultra" });
+  await runs.idle();
+  expect(started.id).toBeTruthy();
+  expect(seen[0]!.settings.effort).toBe("ultra");
+});
+
 test("a task cannot run in a freer mode than its client", async () => {
   const { tasks } = setup(echo().runner);
   await expect(tasks.start({ client: "cli", clientMode: "guard", task: "Pay it", mode: "full-access" })).rejects.toThrow(/at most guard/);
   await expect(tasks.start({ client: "cli", clientMode: "guard", task: "x", model: "nope" })).rejects.toThrow(/Unknown model/);
-  await expect(tasks.start({ client: "cli", clientMode: "guard", task: "x", effort: "max" })).rejects.toThrow(/Effort/);
+  await expect(tasks.start({ client: "cli", clientMode: "guard", task: "x", effort: "huge" })).rejects.toThrow(/Effort/);
 });
 
 test("resume continues the same chat with its history; it refuses while running", async () => {

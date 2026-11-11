@@ -10,6 +10,7 @@ import { ArtifactStore } from "./artifacts";
 import { ChatStore, DEFAULT_SETTINGS } from "./chats";
 import type { PagesApi } from "./pages-api";
 import type { AppEvent, AppInfo, ChatSettings, ModelInfo, TabInfo, WindowState } from "./protocol";
+import { fitEffort } from "./effort";
 import { RunManager, type RunDeps, type Runner } from "./runs";
 import { startServer, type Listen, type Server } from "./server";
 import type { Vault } from "./vault";
@@ -148,7 +149,8 @@ export async function startApp(opts: AppOptions): Promise<App> {
   const runs = new RunManager({
     chats,
     artifacts,
-    runner: opts.runner,
+    // A chat keeps its effort when it changes model; each run gets the nearest one the model takes.
+    runner: (input) => opts.runner({ ...input, settings: { ...input.settings, effort: fitEffort(models().find((m) => m.id === input.settings.model)?.efforts, input.settings.effort) } }),
     emit: (event) => publish(event),
     artifactUrl: artifactServer.urlFor,
     tabs: () => windows.tabs(),

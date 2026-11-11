@@ -8,6 +8,7 @@
 import { raisesMode } from "../daemon/clients";
 import type { App } from "./app";
 import { AppError } from "./runs";
+import { EFFORTS } from "./effort";
 import type { Chat, ChatSettings, Effort, Mode, ModelInfo } from "./protocol";
 
 export type TaskStatus = "running" | "waiting" | "done" | "failed" | "stopped";
@@ -32,7 +33,6 @@ export type TaskView = {
 
 export type StartTask = { client: string; clientMode: Mode; task: string; model?: string; effort?: string; mode?: string };
 
-const EFFORTS: readonly Effort[] = ["low", "medium", "high"];
 const MODES: readonly Mode[] = ["ask", "guard", "skip"];
 /** Queued follow-ups, per chat, run one after another once the chat is idle. */
 const MAX_QUEUED = 10;

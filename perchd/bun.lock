@@ -6,7 +6,7 @@
       "name": "perchd",
       "dependencies": {
         "@jitl/quickjs-singlefile-mjs-release-sync": "0.31.0",
-        "@neelsatyavolu/shared-ai-auth": "github:neelsatyavolu/shared-ai-auth#699b583",
+        "@neelsatyavolu/shared-ai-auth": "github:neelsatyavolu/shared-ai-auth#9c1a29f",
         "quickjs-emscripten-core": "0.31.0",
         "smol-toml": "1.9.1",
       },
@@ -21,7 +21,7 @@
 
     "@jitl/quickjs-singlefile-mjs-release-sync": ["@jitl/quickjs-singlefile-mjs-release-sync@0.31.0", "", { "dependencies": { "@jitl/quickjs-ffi-types": "0.31.0" } }, "sha512-VyN48sbNnlhvH/17xoy3Ck15Y9ChFg/e9hcLP/yFdwrGy/x2s1Hnbg0orL3OYiQYKRSpdecrB09rwEPUdDt8BA=="],
 
-    "@neelsatyavolu/shared-ai-auth": ["@neelsatyavolu/shared-ai-auth@github:neelsatyavolu/shared-ai-auth#699b583", {}, "neelsatyavolu-shared-ai-auth-699b583", "sha512-1ChAHLK73lcWsOwmsWv+rIulQ9Q19ONZ6nMtCFkLcIVSxBmLueh4izgDbzDOflPfrChAdqYrtMrA+V3uUonQMQ=="],
+    "@neelsatyavolu/shared-ai-auth": ["@neelsatyavolu/shared-ai-auth@github:neelsatyavolu/shared-ai-auth#9c1a29f", {}, "neelsatyavolu-shared-ai-auth-9c1a29f", "sha512-rD7wVYlWgcxI1P/mKoANOmPZq1cHfSYp4ncYVWqxaf4poXjdpatXpQ1rXxwB6Xe6FY0Y0DvgChc/fsua8EYFiw=="],
 
     "@types/bun": ["@types/bun@1.3.10", "", { "dependencies": { "bun-types": "1.3.10" } }, "sha512-0+rlrUrOrTSskibryHbvQkDOWRJwJZqZlxrUs1u4oOoTln8+WIXBPmAuCF35SWB2z4Zl3E84Nl/D0P7803nigQ=="],
 

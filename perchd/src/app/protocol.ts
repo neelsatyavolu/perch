@@ -4,7 +4,8 @@
  */
 
 export type Mode = "ask" | "guard" | "skip";
-export type Effort = "low" | "medium" | "high";
+/** Reasoning effort, lowest first; each model lists the ones it takes (ultra is Codex only). */
+export type Effort = "low" | "medium" | "high" | "xhigh" | "max" | "ultra";
 /** Which tabs the agent may use: the tab the chat is in, every open tab, or only its own new tabs. */
 export type Scope = "current" | "all" | "agent";
 export type ChatStatus = "idle" | "running" | "waiting";

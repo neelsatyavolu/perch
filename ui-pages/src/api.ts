@@ -103,7 +103,7 @@ export type SearchEngine = "brave" | "google";
 export type Query = { readonly text: string; readonly mode: "search" | "ask"; readonly engine: SearchEngine };
 /** A model a new chat can use, as the chat composer lists it. */
 export type ComposerModel = { readonly id: string; readonly label: string; readonly provider: string; readonly efforts: readonly ChatEffort[] };
-export type ChatEffort = "low" | "medium" | "high";
+export type ChatEffort = "low" | "medium" | "high" | "xhigh" | "max" | "ultra";
 /** What a task asked from the new tab page starts with: its model, effort and permission mode. */
 export type Composer = { readonly models: readonly ComposerModel[]; readonly model: string; readonly effort: ChatEffort; readonly mode: PermissionMode };
 

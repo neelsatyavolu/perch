@@ -20,7 +20,7 @@ perch https://github.com/notifications                      # just open a page
 - Only the answer goes to stdout. The session id, steps and approval waits go to stderr.
 - Each task is a Perch chat the user can open. Approvals for sends, posts, purchases and deletes appear as cards in Perch; the task waits there ("Waiting for you in Perch: …"). Tell the user when that happens.
 - `--timeout` stops waiting, not the task. Exit codes: 0 done, 1 failed or timed out, 3 Perch not running, 64 bad usage, 130 Ctrl-C (which stops the task).
-- Models: `perch models`. `-m` takes an id (`codex:gpt-6.1-sol`), `provider/model` (`openai/gpt-6.1-sol`, `anthropic/claude-opus-5-5`) or a bare name. Default model and effort come from Perch's settings.
+- Models: `perch models`. `-m` takes an id (`codex:gpt-6.1-sol`), `provider/model` (`openai/gpt-6.1-sol`, `anthropic/claude-opus-5-5`) or a bare name. `perch models` also lists the efforts each model takes (Codex goes up to `ultra`, Claude to `max`); an effort a model lacks runs as the nearest one below. Default model and effort come from Perch's settings.
 - Give an update to the user about every minute while a long task runs.
 
 ### Following up

@@ -14,6 +14,7 @@ import type { MemoryAccess } from "../memory/agent";
 import { CHAT_SESSION_PREFIX, SIDEBAR_CLIENT, type SidebarRun } from "../daemon/server";
 import { claudeBinary, codexBinary, runClaudeCode, runCodex, type AsideEvent, type McpServer } from "../external";
 import { AGENT_OFF, agentAllowed, allowsModel, capMode, MODEL_NOT_ALLOWED, type Policy, type PolicyView } from "../policy/policy";
+import { catalogEfforts } from "./effort";
 import type { ModelInfo } from "./protocol";
 import { bundledModels, type ModelCatalog } from "@neelsatyavolu/shared-ai-auth";
 import type { Runner, RunnerInput } from "./runs";
@@ -43,7 +44,6 @@ export class SidebarRuns {
 
 type Agent = "codex" | "claude-code";
 
-const EFFORTS: ModelInfo["efforts"] = ["low", "medium", "high"];
 
 function installed(agent: Agent): boolean {
   try {
@@ -60,9 +60,12 @@ function installed(agent: Agent): boolean {
  */
 export function sidebarModels(catalog: ModelCatalog = bundledModels, signedIn: readonly ("claude" | "grok")[] = [], has: (agent: Agent) => boolean = installed): ModelInfo[] {
   const claude = catalog.claude ?? bundledModels.claude ?? [];
-  const list = (prefix: string, provider: string, models: readonly { id: string; label: string }[]) => models.map((m) => ({ id: `${prefix}:${m.id}`, label: m.label, provider, efforts: EFFORTS }));
+  const list = (prefix: string, provider: string, models: readonly { id: string; label: string; efforts?: string[] }[]) =>
+    models.map((m) => ({ id: `${prefix}:${m.id}`, label: m.label, provider, efforts: catalogEfforts(m.efforts) }));
+  // Codex's own default model takes what its first catalog model takes.
+  const codexDefault = { id: "codex:default", label: "Codex default", provider: "Codex", efforts: catalogEfforts(catalog.codex[0]?.efforts) };
   return [
-    ...(has("codex") ? [...list("codex", "Codex", catalog.codex), { id: "codex:default", label: "Codex default", provider: "Codex", efforts: EFFORTS }] : []),
+    ...(has("codex") ? [...list("codex", "Codex", catalog.codex), codexDefault] : []),
     ...(signedIn.includes("claude") ? list("claude", "Claude", claude) : []),
     ...(has("claude-code") ? list("claude-code", "Claude Code", claude) : []),
     ...(signedIn.includes("grok") ? list("grok", "Grok", catalog.grok) : []),

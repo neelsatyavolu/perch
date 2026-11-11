@@ -99,7 +99,7 @@ export const taskCommands: Record<string, Command> = {
   async exec(argv, io) {
     const a = parseArgs(argv, { flags: EXEC_FLAGS, options: EXEC_OPTIONS });
     const task = a.positionals.join(" ").trim();
-    if (!task) throw new UsageError('usage: perch exec [-m model] [--effort low|medium|high] [--permission ask|guard|full-access] [--timeout 5m] [--json] "<task>"');
+    if (!task) throw new UsageError('usage: perch exec [-m model] [--effort low|medium|high|xhigh|max|ultra] [--permission ask|guard|full-access] [--timeout 5m] [--json] "<task>"');
     const provider = a.options.get("-p") ?? a.options.get("--provider");
     const named = a.options.get("-m") ?? a.options.get("--model");
     const model = named && provider && !named.includes("/") ? `${provider}/${named}` : named;

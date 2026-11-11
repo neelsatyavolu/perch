@@ -19,7 +19,7 @@ const USAGE = `usage: perch [options] "<task>"      run a task in Perch (same as
        perch <command> [args]          perch <command> --help for its options
 
 Tasks (each is a Perch chat you can open, resume and steer):
-  perch exec [-m model] [--effort low|medium|high] [--permission ask|guard|full-access]
+  perch exec [-m model] [--effort low|medium|high|xhigh|max|ultra] [--permission ask|guard|full-access]
              [--timeout 5m] [--json] "<task>"
                                    only the answer goes to stdout; steps go to stderr
   perch session list | inspect <id> | resume <id> ["<follow-up>"] | steer <id> "<msg>"

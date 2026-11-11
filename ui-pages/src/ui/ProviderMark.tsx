@@ -34,3 +34,19 @@ export function ProviderMark({ id }: { readonly id: ProviderId }) {
     </span>
   );
 }
+
+/** perchd names a chat model's provider in words ("Codex", "Claude Code", "Grok"); match on those. */
+const WORDS: readonly (readonly [RegExp, string])[] = [
+  [/claude/i, CLAUDE], [/anthropic/i, ANTHROPIC], [/openai|chatgpt|codex|\bgpt\b/i, OPENAI], [/grok|xai/i, XAI], [/gemini/i, GEMINI], [/openrouter/i, OPENROUTER],
+];
+
+/** The mark for a provider named in words, inline at text size, or nothing when it has none. */
+export function ProviderGlyph({ provider, size = 14 }: { readonly provider: string; readonly size?: number }) {
+  const d = WORDS.find(([re]) => re.test(provider))?.[1];
+  if (!d) return null;
+  return (
+    <svg class="pmark" width={size} height={size} viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" aria-hidden="true">
+      <path d={d} />
+    </svg>
+  );
+}

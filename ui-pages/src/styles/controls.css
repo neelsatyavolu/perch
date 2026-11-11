@@ -164,3 +164,28 @@ dialog.dlg::backdrop { background: rgba(0, 0, 0, 0.5); }
 .sw[aria-checked="true"] .sw-box { outline: 2px solid var(--ink); outline-offset: 2px; }
 .sw:focus-visible { outline: none; }
 .sw:focus-visible .sw-box { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* The model picker (ui/ModelMenu.tsx): a quiet pill, then a glass popup with search on top,
+   providers that open their models, and Settings last. Popups are glass, as in DESIGN.md. */
+.mm-wrap { position: relative; display: inline-flex; }
+.mm-pill { height: 28px; display: inline-flex; align-items: center; gap: 6px; padding: 0 6px 0 8px; border: 0; border-radius: 4px; background: none; color: var(--mute); font: inherit; font-size: 12px; white-space: nowrap; cursor: pointer; }
+.mm-pill:hover, .mm-pill[aria-expanded="true"] { color: var(--ink); background: var(--raised); }
+.mm-pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.mm-pill .pmark { color: var(--ink); }
+.mm { position: absolute; top: calc(100% + 6px); right: 0; z-index: 20; width: 260px; max-width: calc(100vw - 32px); display: flex; flex-direction: column; overflow: hidden; text-align: left;
+  background: color-mix(in srgb, var(--raised) 72%, transparent); -webkit-backdrop-filter: blur(28px) saturate(1.5); backdrop-filter: blur(28px) saturate(1.5);
+  border: 1px solid var(--hair-strong); border-radius: 6px; color: var(--body); font-size: 13px; animation: mm-in 120ms var(--ease); }
+@keyframes mm-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.mm-search { display: flex; align-items: center; gap: 8px; height: 36px; flex: none; padding: 0 12px; color: var(--mute); border-bottom: 1px solid var(--hair-strong); }
+.mm-search input { flex: 1; min-width: 0; height: 100%; border: 0; background: none; outline: none; color: var(--ink); font: inherit; }
+.mm-search input::placeholder { color: var(--mute); }
+.mm ul { margin: 0; padding: 4px; list-style: none; overflow-y: auto; max-height: 320px; }
+.mm li[role="option"] { min-height: 30px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 8px; border-radius: 4px; cursor: pointer; }
+.mm li.active { background: var(--hover); color: var(--ink); }
+.mm li[aria-selected="true"], .mm li[data-kind="provider"], .mm li[data-kind="back"] { color: var(--ink); }
+.mm li > svg { flex: none; color: var(--mute); }
+.mm li[aria-selected="true"] > svg { color: var(--ink); }
+.mm .mm-l { min-width: 0; display: inline-flex; align-items: center; gap: 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.mm .mm-hint { color: var(--mute); font-size: 12px; }
+.mm li.mm-sep { height: 1px; margin: 4px; background: var(--hair-strong); }
+.mm li.mm-empty { color: var(--mute); cursor: default; }

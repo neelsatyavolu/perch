@@ -11,6 +11,7 @@ import type {
 import { DEFAULT_APPEARANCE } from "../theme/apply";
 import { ACCENT_NAMES, THEME_NAMES } from "../theme/tokens";
 import { IMPORT_KINDS, countOf, sleepRuleText } from "../lib/labels";
+import { fitEffort } from "../lib/effort";
 import { redactTarget } from "../lib/redact";
 import {
   type Check, checkApiKey, checkCommand, checkDohUrl, checkEndpointUrl, checkMcpUrl, checkSecretName, checkSitePattern, checkSkillLocation,
@@ -320,7 +321,9 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     },
     async setComposer(patch) {
       if (patch.model !== undefined && !state.composer.models.some((m) => m.id === patch.model)) throw new Error("That model isn't available");
-      set({ composer: { ...state.composer, ...patch } });
+      const next = { ...state.composer, ...patch };
+      const efforts = next.models.find((m) => m.id === next.model)?.efforts ?? [];
+      set({ composer: { ...next, effort: fitEffort(efforts, next.effort) } });
       return state.composer;
     },
     async listProviders() {

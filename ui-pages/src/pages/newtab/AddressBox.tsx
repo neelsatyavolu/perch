@@ -2,6 +2,8 @@ import { useState } from "preact/hooks";
 import type { ChatEffort, Composer as ComposerState, PermissionMode, Query, SearchEngine } from "../../api";
 import { useAction, useApi, useLoad } from "../../ui/frame";
 import { Icon, Search } from "../../ui/icons";
+import { EFFORT_NAMES, ModelMenu } from "../../ui/ModelMenu";
+import { ProviderGlyph } from "../../ui/ProviderMark";
 import { Segmented } from "../../ui/Segmented";
 
 type Mode = Query["mode"];
@@ -71,7 +73,6 @@ export function AddressBox({ onSubmit }: { readonly onSubmit: (q: Query) => void
 }
 
 const MODE_NAMES: Readonly<Record<PermissionMode, string>> = { ask: "Ask before actions", guard: "Ask before sends", skip: "Skip confirmation" };
-const EFFORT_NAMES: Readonly<Record<ChatEffort, string>> = { low: "Low", medium: "Medium", high: "High" };
 
 /**
  * What a task asked here starts with, as in a chat's composer: the permission mode on the left,
@@ -85,11 +86,12 @@ function useComposer() {
     const next = await act(() => api.setComposer(patch));
     if (next) state.set(next);
   };
-  return { c: state.data, save };
+  const openSettings = () => void act(() => api.openPage("settings", "models"));
+  return { c: state.data, save, openSettings };
 }
 
 function Composer({ side, composer }: { readonly side: "mode" | "model"; readonly composer: ReturnType<typeof useComposer> }) {
-  const { c, save } = composer;
+  const { c, save, openSettings } = composer;
   if (!c) return <span class={`composer-${side}`} />;
   if (side === "mode") {
     return (
@@ -101,17 +103,14 @@ function Composer({ side, composer }: { readonly side: "mode" | "model"; readonl
     );
   }
   if (!c.models.length) return <span class="composer-model" />;
-  const providers = [...new Set(c.models.map((m) => m.provider))];
-  const efforts = c.models.find((m) => m.id === c.model)?.efforts ?? [];
+  const model = c.models.find((m) => m.id === c.model);
+  const efforts = model?.efforts ?? [];
   return (
     <span class="composer-model">
-      <select class="picker quiet" aria-label="Model for the task" value={c.model} onChange={(e) => void save({ model: e.currentTarget.value })}>
-        {providers.map((p) => (
-          <optgroup key={p} label={p}>
-            {c.models.filter((m) => m.provider === p).map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-          </optgroup>
-        ))}
-      </select>
+      <ModelMenu models={c.models} selected={c.model} onPick={(m) => void save({ model: m.id })} onSettings={openSettings}>
+        {model && <ProviderGlyph provider={model.provider} size={12} />}
+        <span class="mm-t">{model?.label ?? "Pick a model"}</span>
+      </ModelMenu>
       {efforts.length > 0 && (
         <select class="picker quiet" aria-label="Effort" value={c.effort} onChange={(e) => void save({ effort: e.currentTarget.value as ChatEffort })}>
           {efforts.map((x) => <option key={x} value={x}>{EFFORT_NAMES[x]}</option>)}

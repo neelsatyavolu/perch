@@ -6,6 +6,7 @@ import { ApprovalCard } from "../src/components/approval";
 import { clampWidth, parseCsv, PANE } from "../src/components/artifact-pane";
 import { ChatList } from "../src/components/chat-list";
 import { Composer, PLACEHOLDER } from "../src/components/composer";
+import { fitEffort, matchModels } from "../src/components/model-menu";
 import { PerchDot } from "../src/components/icon";
 import { memo } from "../src/components/memo";
 import { LiveRun, Message, Steps } from "../src/components/message";
@@ -155,9 +156,43 @@ test("mode, effort and model pickers change the chat's settings", () => {
   click([...el.querySelectorAll('[role="option"]')].find((o) => o.textContent!.startsWith("Medium"))!);
   expect(calls.settings.at(-1)).toEqual({ effort: "medium" });
   click(el.querySelector('[aria-label="Model"]'));
+  // The picker opens on the providers; a provider opens its models.
+  expect([...el.querySelectorAll(".mm [role='option']")].map((o) => o.textContent)).toEqual(["ChatGPT", "Claude Code"]);
+  click([...el.querySelectorAll(".mm [role='option']")].find((o) => o.textContent === "Claude Code")!);
   click([...el.querySelectorAll('[role="option"]')].find((o) => o.textContent!.startsWith("Claude Opus 5.5"))!);
   // Opus has no "high" effort here, so the effort falls back to one it has.
   expect(calls.settings.at(-1)).toEqual({ model: "opus", effort: "medium" });
+});
+
+test("the model picker searches across providers and works from the keyboard", () => {
+  const { el, calls } = composer();
+  click(el.querySelector('[aria-label="Model"]'));
+  const search = el.querySelector<HTMLInputElement>(".mm input")!;
+  expect(document.activeElement).toBe(search);
+  search.value = "opus";
+  act(() => void search.dispatchEvent(new Event("input", { bubbles: true })));
+  expect([...el.querySelectorAll(".mm [role='option'] .opt-label")].map((o) => o.textContent)).toEqual(["Claude Opus 5.5"]);
+  act(() => void search.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+  expect(calls.settings.at(-1)).toEqual({ model: "opus", effort: "medium" });
+  expect(el.querySelector(".mm")).toBeNull();
+  click(el.querySelector('[aria-label="Model"]'));
+  const key = (k: string) => act(() => void el.querySelector(".mm input")!.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true })));
+  key("ArrowDown");
+  key("ArrowRight");
+  expect(el.querySelector(".mm-head")!.textContent).toBe("Claude Code");
+  key("Escape");
+  expect(el.querySelector(".mm-head")).toBeNull();
+  key("Escape");
+  expect(el.querySelector(".mm")).toBeNull();
+});
+
+test("efforts follow the model: the picker lists the model's own, and a switch keeps the nearest", () => {
+  const { el } = composer({ models: [{ id: "a", label: "GPT-6 Astra", provider: "Codex", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"] }], settings: { ...settings, model: "a" } });
+  click(el.querySelector('[aria-label="Effort"]'));
+  expect([...el.querySelectorAll('[role="option"] .opt-label')].map((o) => o.textContent)).toEqual(["Low", "Medium", "High", "Extra high", "Max", "Ultra"]);
+  expect(fitEffort(["low", "medium", "high", "xhigh", "max"], "ultra")).toBe("max");
+  expect(fitEffort(["medium"], "low")).toBe("medium");
+  expect(matchModels(models, "claude code").map((m) => m.id)).toEqual(["opus"]);
 });
 
 test("the picker menu works from the keyboard and closes on Escape", () => {

@@ -11,9 +11,13 @@ const DEFAULTS: ChatSettings = { mode: "guard", model: "claude-code:claude-opus-
 
 const INFO: AppInfo = {
   models: [
-    { id: "claude-code:claude-opus-5-5", label: "Claude Opus 5.5", provider: "Claude Code", efforts: ["medium"] },
-    { id: "chatgpt:gpt-6.1-sol", label: "GPT-6.1 Sol", provider: "ChatGPT", efforts: ["low", "medium", "high"] },
-    { id: "grok:grok-5", label: "Grok 5", provider: "Grok", efforts: ["low", "medium", "high"] },
+    { id: "codex:gpt-6-astra", label: "GPT-6 Astra", provider: "Codex", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"] },
+    { id: "codex:gpt-6.1-sol", label: "GPT-6.1 Sol", provider: "Codex", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"] },
+    { id: "codex:gpt-6-luna", label: "GPT-6 Luna", provider: "Codex", efforts: ["low", "medium", "high", "xhigh", "max"] },
+    { id: "claude-code:claude-fable-5-2", label: "Claude Fable 5.2", provider: "Claude Code", efforts: ["low", "medium", "high", "xhigh", "max"] },
+    { id: "claude-code:claude-opus-5-5", label: "Claude Opus 5.5", provider: "Claude Code", efforts: ["low", "medium", "high", "xhigh", "max"] },
+    { id: "claude-code:claude-haiku-5-5", label: "Claude Haiku 5.5", provider: "Claude Code", efforts: ["low", "medium", "high"] },
+    { id: "grok:grok-4.7", label: "Grok 4.7", provider: "Grok", efforts: ["low", "medium", "high"] },
   ],
   defaults: DEFAULTS,
   artifactOrigin: "http://127.0.0.1:1",

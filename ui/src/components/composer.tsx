@@ -11,6 +11,7 @@ import type { AttachedFile } from "../host/protocol";
 import { Icon } from "./icon";
 import { applyMention, keptMentions, matchTabs, mentionLabel, mentionQuery } from "./mentions";
 import { Menu, type Choice } from "./menu";
+import { EFFORT_LABEL, fitEffort, ModelMenu } from "./model-menu";
 import { ProviderMark } from "./provider-mark";
 
 /** What a message carries besides its text. */
@@ -23,7 +24,6 @@ const MODES: Choice<Mode>[] = [
   { value: "guard", label: "Guard", hint: "Asks before it sends, buys or deletes" },
   { value: "skip", label: "Skip confirmation", hint: "Runs without asking; payments still ask" },
 ];
-const EFFORT_LABEL: Record<Effort, string> = { low: "Low", medium: "Medium", high: "High" };
 
 type ComposerProps = {
   draft: string;
@@ -164,7 +164,6 @@ export function Composer(p: ComposerProps) {
   const canAttach = Boolean(p.host?.chooseFiles);
   const canDictate = Boolean(p.host?.startDictation);
   const model = p.models.find((m) => m.id === p.settings.model);
-  const modelChoices: Choice<string>[] = p.models.map((m) => ({ value: m.id, label: m.label, hint: m.provider, icon: <ProviderMark provider={m.provider} /> }));
   const effortChoices: Choice<Effort>[] = (model?.efforts ?? []).map((e) => ({ value: e, label: EFFORT_LABEL[e] }));
   const modelLabel = model ? model.label : p.models.length ? "Pick a model" : "No model signed in";
   // The round button: stop while a task runs, the microphone while there is nothing to send, send
@@ -245,19 +244,17 @@ export function Composer(p: ComposerProps) {
           </Menu>
           {note && <span class="cnote" role="status">{note}</span>}
           <div class="grow" />
-          <Menu
-            label="Model"
-            align="end"
-            choices={modelChoices}
-            selected={[p.settings.model]}
-            onPick={(c) => {
-              const next = p.models.find((m) => m.id === c.value);
-              p.onSettings({ model: c.value, ...(next && !next.efforts.includes(p.settings.effort) ? { effort: next.efforts[0] ?? "medium" } : {}) });
+          <ModelMenu
+            models={p.models}
+            selected={p.settings.model}
+            onPick={(next) => {
+              const effort = fitEffort(next.efforts, p.settings.effort);
+              p.onSettings({ model: next.id, ...(effort !== p.settings.effort ? { effort } : {}) });
             }}
           >
             {model && <ProviderMark provider={model.provider} size={12} />}
             {modelLabel}
-          </Menu>
+          </ModelMenu>
           {effortChoices.length > 0 && (
             <Menu label="Effort" align="end" choices={effortChoices} selected={[p.settings.effort]} onPick={(c) => p.onSettings({ effort: c.value })}>
               {EFFORT_LABEL[p.settings.effort]}

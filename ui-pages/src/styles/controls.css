@@ -75,11 +75,11 @@ textarea.field { height: auto; min-height: 88px; padding: 8px 10px; resize: vert
 
 /* Cards and rows (Settings, Memory, Routines, Import). */
 .group { display: grid; gap: 8px; }
-.group > .lbl { color: var(--mute); font-size: 12px; padding-left: 4px; }
+.group > .lbl { color: var(--mute); font-size: 12px; line-height: 16px; margin: 0; }
 .card { border: 1px solid var(--hair-strong); border-radius: 6px; background: var(--canvas); overflow: hidden; }
 .srow {
   display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center;
-  min-height: 56px; padding: 8px 12px 8px 16px; border-bottom: 1px solid var(--hair);
+  min-height: 56px; padding: 8px 16px; border-bottom: 1px solid var(--hair);
 }
 .srow:last-child { border-bottom: 0; }
 .srow.noicon { grid-template-columns: 1fr auto; }
@@ -98,6 +98,9 @@ textarea.field { height: auto; min-height: 88px; padding: 8px 10px; resize: vert
 }
 .more-row:first-child { border-top: 0; }
 .more-row:hover { color: var(--ink); }
+/* In a card whose rows start with a 28px tile, the icon centres on the tiles and the words start with the names. */
+.card:has(.tile) .more-row { gap: 12px; }
+.card:has(.tile) .more-row > svg { margin: 0 6px; }
 .status { display: inline-flex; align-items: center; gap: 6px; color: var(--mute); font-size: 12px; white-space: nowrap; }
 .status .dotc { width: 6px; height: 6px; border-radius: 50%; background: var(--mute); }
 .status.ok .dotc { background: var(--ok); }
@@ -150,7 +153,7 @@ dialog.dlg::backdrop { background: rgba(0, 0, 0, 0.5); }
 
 /* Theme and accent swatches (Settings, Welcome). */
 .swatches { display: flex; flex-wrap: wrap; gap: 12px; }
-.sw { display: grid; justify-items: center; gap: 6px; background: none; border: 0; padding: 0; cursor: pointer; color: var(--mute); font-size: 12px; }
+.sw { width: 56px; display: grid; justify-items: center; gap: 6px; background: none; border: 0; padding: 0; cursor: pointer; color: var(--mute); font-size: 12px; }
 .sw-box { width: 44px; height: 32px; border-radius: 4px; border: 1px solid var(--hair-strong); display: grid; place-items: center; }
 .sw-box i { width: 14px; height: 14px; border-radius: 4px; display: block; }
 .sw[aria-checked="true"] { color: var(--ink); }

@@ -21,7 +21,8 @@ html:has(.wl-stage), body:has(.wl-stage) { background: var(--card); }
 .wl-body { margin-top: 16px; }
 .wl-grid { display: grid; gap: 20px; }
 .wl-actions { display: flex; align-items: center; gap: 8px; margin-top: 20px; }
-.wl-actions .btn.primary { height: 36px; padding: 0 18px; font-size: 14px; }
+.wl-actions .btn { height: 36px; font-size: 14px; }
+.wl-actions .btn.primary { padding: 0 16px; }
 .wl-back { margin-left: auto; }
 
 .wl-hero { justify-items: center; text-align: center; align-content: center; gap: 22px; padding-top: 0; padding-bottom: 14vh; }

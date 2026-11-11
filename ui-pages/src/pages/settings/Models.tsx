@@ -104,7 +104,7 @@ function TaskModels({ models }: { readonly models: readonly Model[] }) {
               </select>
               {t.role !== "image" && (
                 <>
-                  <select class="picker sm" aria-label={`${label} effort`} value={t.effort} onChange={(e) => save(t.role, { effort: (e.currentTarget as HTMLSelectElement).value as Effort })}>
+                  <select class="picker" aria-label={`${label} effort`} value={t.effort} onChange={(e) => save(t.role, { effort: (e.currentTarget as HTMLSelectElement).value as Effort })}>
                     {EFFORTS.map((x) => <option key={x} value={x}>{EFFORT_LABELS[x]}</option>)}
                   </select>
                   <span class="status">Fast</span>

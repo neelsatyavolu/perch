@@ -14,10 +14,11 @@ class Profile;
 namespace perch {
 
 // Settings › Performance (ui-pages api.ts MemorySaverSettings):
-// {timeoutMinutes, rules: [{kind, pattern}]}. timeoutMinutes 0 is off.
+// {timeoutMinutes, sleepPinned, rules: [{kind, pattern}]}. timeoutMinutes 0 is
+// off.
 base::DictValue GetMemorySaverSettings(Profile* profile);
 
-// Applies {timeoutMinutes?, rules?}; a field left out stays. The error is a
+// Applies {timeoutMinutes?, sleepPinned?, rules?}; a field left out stays. The error is a
 // sentence for the page.
 base::expected<base::DictValue, std::string> SetMemorySaverSettings(
     Profile* profile,

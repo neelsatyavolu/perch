@@ -28,6 +28,9 @@ inline constexpr char kOnboardingFinished[] = "perch.onboarding_finished";
 
 // Never-sleep rules, [{"kind", "pattern"}] as in Lulltab (memory_saver/).
 inline constexpr char kMemorySaverRules[] = "perch.memory_saver.rules";
+// Local State: pinned tabs may sleep too (Chromium never sleeps them).
+inline constexpr char kMemorySaverSleepPinned[] =
+    "perch.memory_saver.sleep_pinned";
 
 // Spaces (spaces/): [{id, name, tabs: [{url, title, pinned, active}]}], and
 // the id of the one the window shows.

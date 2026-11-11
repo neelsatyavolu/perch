@@ -115,3 +115,4 @@ perch/agent/finish-sound-sources.patch
 perch/shell/menu-anchor-fallback.patch
 perch/shell/settings-from-app-menu.patch
 perch/shell/bubble-theme-null-widget.patch
+perch/shell/sleep-pinned-tabs.patch

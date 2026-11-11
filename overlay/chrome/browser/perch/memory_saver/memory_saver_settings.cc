@@ -30,6 +30,7 @@ constexpr int kMaxTimeoutMinutes = 24 * 60;
 base::DictValue GetMemorySaverSettings(Profile* profile) {
   return base::DictValue()
       .Set("timeoutMinutes", GetSleepTimeoutMinutes())
+      .Set("sleepPinned", SleepsPinnedTabs())
       .Set("rules", RulesToList(GetSleepRules(profile)));
 }
 
@@ -44,6 +45,10 @@ base::expected<base::DictValue, std::string> SetMemorySaverSettings(
                   timeout->GetInt() > kMaxTimeoutMinutes)) {
     return base::unexpected("Choose a time between 0 minutes and a day");
   }
+  const base::Value* sleep_pinned = patch.Find("sleepPinned");
+  if (sleep_pinned && !sleep_pinned->is_bool()) {
+    return base::unexpected("Send sleepPinned as true or false");
+  }
   const base::Value* rules = patch.Find("rules");
   if (rules && !rules->is_list()) {
     return base::unexpected("Send the rules as a list");
@@ -57,6 +62,9 @@ base::expected<base::DictValue, std::string> SetMemorySaverSettings(
   }
   if (timeout) {
     SetSleepTimeoutMinutes(timeout->GetInt());
+  }
+  if (sleep_pinned) {
+    SetSleepsPinnedTabs(sleep_pinned->GetBool());
   }
   return GetMemorySaverSettings(profile);
 }

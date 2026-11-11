@@ -1,0 +1,25 @@
+diff --git a/chrome/browser/performance_manager/policies/discard_eligibility_policy.cc b/chrome/browser/performance_manager/policies/discard_eligibility_policy.cc
+index 412eb34e03..d4d69786ba 100644
+--- a/chrome/browser/performance_manager/policies/discard_eligibility_policy.cc
++++ b/chrome/browser/performance_manager/policies/discard_eligibility_policy.cc
+@@ -167,8 +167,9 @@ bool DiscardEligibilityPolicy::IsDiscardAllowed(
+   const auto* live_state_data =
+       PageLiveStateDecorator::Data::FromPageNode(page_node);
+   if (live_state_data) {
++    // Perch: pinned tabs may sleep when the user turned that on.
+     if (!live_state_data->IsAutoDiscardable() ||
+-        live_state_data->IsPinnedTab()) {
++        (live_state_data->IsPinnedTab() && !perch::SleepsPinnedTabs())) {
+       return false;
+     }
+   }
+@@ -417,7 +418,8 @@ DiscardEligibilityPolicy::CanDiscardWithCustomRecentVisibilityWindow(
+                                    CanDiscardResult::kProtected);
+     }
+     // Pinning a tab is a strong signal the user wants to keep it.
+-    if (live_state_data->IsPinnedTab()) {
++    // Perch: unless the user lets pinned tabs sleep too.
++    if (live_state_data->IsPinnedTab() && !perch::SleepsPinnedTabs()) {
+       add_reason_and_update_result(CannotDiscardReason::kPinnedTab,
+                                    CanDiscardResult::kProtected);
+     }

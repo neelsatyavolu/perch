@@ -154,6 +154,17 @@ int GetSleepTimeoutMinutes() {
       tuning_prefs::kMemorySaverModeTimeBeforeDiscardInMinutes);
 }
 
+bool SleepsPinnedTabs() {
+  const PrefService* local_state = g_browser_process->local_state();
+  return local_state && local_state->GetBoolean(prefs::kMemorySaverSleepPinned);
+}
+
+void SetSleepsPinnedTabs(bool sleeps) {
+  if (PrefService* local_state = g_browser_process->local_state()) {
+    local_state->SetBoolean(prefs::kMemorySaverSleepPinned, sleeps);
+  }
+}
+
 bool IsMemorySaverManaged() {
   return ForcedBuiltIn("memorySaver").has_value();
 }

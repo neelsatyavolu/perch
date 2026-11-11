@@ -37,6 +37,10 @@ void SetSleepRules(Profile* profile, const std::vector<SleepRule>& rules);
 // Minutes a background tab waits before it sleeps; 0 when memory saver is off.
 int GetSleepTimeoutMinutes();
 void SetSleepTimeoutMinutes(int minutes);
+// Whether pinned tabs may sleep too. Chromium's discard check asks this; tabs
+// playing sound or in picture-in-picture never sleep either way.
+bool SleepsPinnedTabs();
+void SetSleepsPinnedTabs(bool sleeps);
 // The BuiltInExtensions policy sets the memory saver; its setting is locked.
 bool IsMemorySaverManaged();
 

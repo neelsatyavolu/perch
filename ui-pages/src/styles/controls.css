@@ -101,6 +101,10 @@ textarea.field { height: auto; min-height: 88px; padding: 8px 10px; resize: vert
 /* In a card whose rows start with a 28px tile, the icon centres on the tiles and the words start with the names. */
 .card:has(.tile) .more-row { gap: 12px; }
 .card:has(.tile) .more-row > svg { margin: 0 6px; }
+/* A pasted sign-in code under its provider's row (Claude shows one instead of calling back). */
+.paste-code { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 8px; padding: 0 16px 12px 56px; }
+.paste-code label { grid-column: 1 / -1; color: var(--mute); font-size: 12px; }
+.paste-code .input { min-width: 0; font-family: var(--mono, ui-monospace, monospace); }
 .status { display: inline-flex; align-items: center; gap: 6px; color: var(--mute); font-size: 12px; white-space: nowrap; }
 .status .dotc { width: 6px; height: 6px; border-radius: 50%; background: var(--mute); }
 .status.ok .dotc { background: var(--ok); }

@@ -1,3 +1,4 @@
+import { Fragment } from "preact";
 import { useState } from "preact/hooks";
 import type { Effort, Model, Provider, TaskModel, TaskRole } from "../../api";
 import { EFFORTS, EFFORT_LABELS, ROLES } from "../../lib/labels";
@@ -22,6 +23,8 @@ function Providers({ onModelsChanged }: { readonly onModelsChanged: () => void }
   const providers = useLoad((a) => a.listProviders());
   const { locked } = useManaged();
   const [connecting, setConnecting] = useState<Provider | null>(null);
+  /** A sign-in whose page shows a code to paste back (Claude), and what has been pasted so far. */
+  const [awaiting, setAwaiting] = useState<{ id: Provider["id"]; code: string } | null>(null);
   const [showMore, setShowMore] = useState(false);
   const list = providers.data ?? [];
   const replace = (p: Provider) => {
@@ -35,7 +38,19 @@ function Providers({ onModelsChanged }: { readonly onModelsChanged: () => void }
       return p.state === "connected" ? (
         <button type="button" class="btn" aria-label={`Sign out of ${p.name}`} onClick={async () => { const r = await act(() => api.signOut(p.id), `Signed out of ${p.name}`); if (r) replace(r); }}>Sign out</button>
       ) : (
-        <button type="button" class="btn" aria-label={`Sign in to ${p.name}`} onClick={async () => { const r = await act(() => api.signIn(p.id), `Signed in to ${p.name}`); if (r) replace(r); }}>Sign in</button>
+        <button
+          type="button"
+          class="btn"
+          aria-label={`Sign in to ${p.name}`}
+          onClick={async () => {
+            const r = await act(() => api.signIn(p.id), "");
+            if (!r) return;
+            if (r.awaitingCode) setAwaiting({ id: p.id, code: "" });
+            else replace(r);
+          }}
+        >
+          Sign in
+        </button>
       );
     }
     if (p.state === "connected") {
@@ -53,10 +68,29 @@ function Providers({ onModelsChanged }: { readonly onModelsChanged: () => void }
       <div class="card">
         {providers.error && <p class="empty">{providers.error}</p>}
         {visible.map((p) => (
-          <Row key={p.id} title={p.name} detail={p.detail} icon={<ProviderMark id={p.id} />}>
-            <ProviderStatus p={p} />
-            {action(p)}
-          </Row>
+          <Fragment key={p.id}>
+            <Row title={p.name} detail={p.detail} icon={<ProviderMark id={p.id} />}>
+              <ProviderStatus p={p} />
+              {action(p)}
+            </Row>
+            {awaiting?.id === p.id && (
+              <form
+                class="paste-code"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  const r = await act(() => api.finishSignIn(p.id, awaiting.code.trim()), `Signed in to ${p.name}`);
+                  if (!r) return;
+                  setAwaiting(null);
+                  replace(r);
+                }}
+              >
+                <label for={`code-${p.id}`}>Paste the code {p.name} shows after you approve</label>
+                <input id={`code-${p.id}`} class="input" autoFocus spellcheck={false} autoComplete="off" value={awaiting.code} onInput={(e) => setAwaiting({ id: p.id, code: e.currentTarget.value })} />
+                <button type="submit" class="btn primary" disabled={!awaiting.code.trim()}>Continue</button>
+                <button type="button" class="btn" onClick={() => setAwaiting(null)}>Cancel</button>
+              </form>
+            )}
+          </Fragment>
         ))}
         {!showMore && (
           <button type="button" class="more-row" onClick={() => setShowMore(true)}>
@@ -64,7 +98,7 @@ function Providers({ onModelsChanged }: { readonly onModelsChanged: () => void }
           </button>
         )}
       </div>
-      <p class="note">Claude runs through Claude Code on this Mac, which keeps its own sign-in. Perch never reads its tokens.</p>
+      <p class="note">Claude signs in with your Pro or Max plan and Perch calls it directly. Claude Code instead runs whole tasks with its own sign-in on this Mac; Perch never reads its tokens.</p>
       {locked("providers") && <p class="note">Your organization chooses which providers and models you can use.</p>}
       <ConnectDialog
         provider={connecting}

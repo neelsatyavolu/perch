@@ -7,8 +7,7 @@
 import type {
   AboutInfo, Appearance, BuiltInExtension, ChatSummary, CommandBarResult, DetectedBrowser, DraftFact, FileChoice, FileKind, JobId, JobProgress, McpImportCandidate, McpServer,
   MemoryDoc, MemorySaverSettings, SyncStatus, MemorySettings, NtpLayout, Onboarding, PerchApi, PermissionMode, Permissions, PolicyProblem, PrivacySettings, Provider, Routine, RoutineInput,
-  RoutineProposal, SecurityInfo, SiteData, SleepRule, Skill, SystemAccess, TaskModel,
-} from "../api";
+  RoutineProposal, SecurityInfo, SiteData, SleepRule, Skill, SystemAccess, TaskModel, Composer } from "../api";
 import { DEFAULT_APPEARANCE } from "../theme/apply";
 import { ACCENT_NAMES, THEME_NAMES } from "../theme/tokens";
 import { IMPORT_KINDS, countOf, sleepRuleText } from "../lib/labels";
@@ -26,6 +25,7 @@ type State = {
   setupDone: readonly string[];
   dismissed: readonly string[];
   providers: readonly Provider[];
+  composer: Composer;
   taskModels: readonly TaskModel[];
   servers: readonly McpServer[];
   skills: readonly Skill[];
@@ -156,6 +156,7 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     setupDone: [],
     dismissed: [],
     providers: seed.PROVIDERS,
+    composer: seed.COMPOSER,
     taskModels: seed.TASK_MODELS,
     servers: seed.MCP_SERVERS,
     skills: seed.SKILLS,
@@ -314,13 +315,27 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
       return choice;
     },
 
+    async getComposer() {
+      return state.composer;
+    },
+    async setComposer(patch) {
+      if (patch.model !== undefined && !state.composer.models.some((m) => m.id === patch.model)) throw new Error("That model isn't available");
+      set({ composer: { ...state.composer, ...patch } });
+      return state.composer;
+    },
     async listProviders() {
       return state.providers;
     },
     async signIn(id) {
       const p = provider(id);
       if (p.kind !== "subscription") throw new Error(`${p.name} connects with a key or an endpoint`);
+      if (id === "claude") return { ...p, awaitingCode: true };
       return replaceProvider({ ...p, state: "connected", account: id === "claude-code" ? "Claude Code 2.4" : "neel@example.com", message: undefined });
+    },
+    async finishSignIn(id, code) {
+      const p = provider(id);
+      if (!code.includes("#")) throw new Error("Paste the whole code the Claude page shows, including the part after #.");
+      return replaceProvider({ ...p, state: "connected", account: "Claude Max", message: undefined });
     },
     async signOut(id) {
       const { account: _account, ...rest } = provider(id);

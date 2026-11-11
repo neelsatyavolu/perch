@@ -60,8 +60,12 @@ test("open, tabs, snapshot, click and screenshot work in the terminal's own sess
   expect(shot.out.trim()).toBe(`Saved ${file}`);
   expect([...readFileSync(file).subarray(0, 2)]).toEqual([0xff, 0xd8]);
 
-  const repl = await perch("repl", "document.title");
-  expect(repl.out.trim()).toBe('"Mailroom"');
+  const evaluated = await perch("eval", "document.title");
+  expect(evaluated.out.trim()).toBe('"Mailroom"');
+  // The REPL keeps its variables from one command to the next.
+  await perch("repl", "const n1 = 40");
+  const repl = await perch("repl", "log(n1 + 2, typeof listBrowserTabs)");
+  expect(repl.out.trim()).toBe("42 function");
 
   const status = JSON.parse((await perch("status", "--json")).out);
   expect(status).toMatchObject({ client: "cli", mode: "guard", session: "default", label: "Terminal · perch" });

@@ -78,10 +78,24 @@ export const browserCommands: Record<string, (argv: string[], io: CliIO) => Prom
     const a = parseArgs(argv, { options: SESSION });
     return tool(io, a.options.get("--session"), "back", {});
   },
-  async repl(argv, io) {
+  /** JavaScript in the page itself, with its JSON result (what `perch repl` did before it became a session). */
+  async eval(argv, io) {
     const a = parseArgs(argv, { options: SESSION });
-    const code = one(a.positionals, 'perch repl "<javascript>"').join(" ");
+    const code = one(a.positionals, 'perch eval "<javascript run in the page>"').join(" ");
     return tool(io, a.options.get("--session"), "repl", { code });
+  },
+  async repl(argv, io) {
+    const a = parseArgs(argv, { flags: ["--reset"], options: SESSION });
+    const session = a.options.get("--session");
+    if (a.flags.has("--reset")) {
+      const r = await withDaemon(io, session, (c) => c.request<{ reset: boolean }>("repl.reset"));
+      io.stdout(r.reset ? "Cleared this session's REPL.\n" : "This session has no REPL yet.\n");
+      return 0;
+    }
+    const given = a.positionals.join(" ").trim();
+    if (given) return replRun(io, session, given);
+    if (!process.stdin.isTTY) return replRun(io, session, await Bun.stdin.text());
+    return replLoop(io, session);
   },
   async screenshot(argv, io) {
     const a = parseArgs(argv, { options: [...SESSION, "-o", "--output"] });
@@ -160,3 +174,80 @@ export const sessionCommands: Record<string, (argv: string[], io: CliIO) => Prom
     return 0;
   },
 };
+
+/** One REPL run: its output on stdout, an error on stderr. */
+async function replRun(io: CliIO, session: string | undefined, code: string): Promise<number> {
+  if (!code.trim()) throw new UsageError('usage: perch repl "<javascript>"   (or run perch repl alone for a prompt)');
+  const result = await withDaemon(io, session, (c) => c.request<ToolResult>("repl.run", { code }));
+  (result.isError ? io.stderr : io.stdout)(`${result.content}\n`);
+  return result.isError ? 1 : 0;
+}
+
+/**
+ * The interactive prompt: each entry runs when its brackets close. Variables stay between entries
+ * (and between commands, for half an hour). .reset clears them; .exit or Ctrl-D leaves.
+ */
+async function replLoop(io: CliIO, session: string | undefined): Promise<number> {
+  const { createInterface } = await import("node:readline/promises");
+  const rl = createInterface({ input: process.stdin, output: process.stderr });
+  io.stderr("Perch REPL: await openTab(url), snapshot(page), page.locator(ref).click(), log(...). .help for more, .exit to leave.\n");
+  let buffer = "";
+  try {
+    for (;;) {
+      let line: string;
+      try {
+        line = await rl.question(buffer ? "... " : "perch> ");
+      } catch {
+        break;
+      }
+      if (!buffer && line.trim() === ".exit") break;
+      if (!buffer && line.trim() === ".help") {
+        io.stderr(`${REPL_HELP}\n`);
+        continue;
+      }
+      if (!buffer && line.trim() === ".reset") {
+        await withDaemon(io, session, (c) => c.request("repl.reset"));
+        io.stderr("Cleared.\n");
+        continue;
+      }
+      buffer += `${line}\n`;
+      if (!balanced(buffer)) continue;
+      const code = buffer;
+      buffer = "";
+      if (!code.trim()) continue;
+      await replRun(io, session, code).catch((e: Error) => io.stderr(`${e.message}\n`));
+    }
+  } finally {
+    rl.close();
+  }
+  return 0;
+}
+
+const REPL_HELP = `  page                     the tab you work in (after openTab or attachBrowserTab)
+  await openTab(url)       open a page in a new tab of yours; returns it and sets page
+  await listBrowserTabs()  every tab: { targetId, title, url, owner, current }
+  await attachBrowserTab(id)   work in a tab from the list
+  await snapshot(page)     { tree, diff }: the page as text with refs like e12, and what changed
+  page.locator("e12").click() / .fill(text) / .press(key) / .selectOption(v) / .hover()
+  await page.goto(url) · page.goBack() · page.evaluate(fn, arg) · page.title() · page.url()
+  page.keyboard.press(key) · page.keyboard.type(text)
+  sleep(seconds) · log(...) · console.log(...)
+  Variables stay between runs; declaring a name again replaces it.`;
+
+/** Whether brackets and quotes in the entry are closed, so it can run. */
+function balanced(code: string): boolean {
+  let depth = 0;
+  let quote: string | null = null;
+  for (let i = 0; i < code.length; i++) {
+    const c = code[i]!;
+    if (quote) {
+      if (c === "\\") i++;
+      else if (c === quote) quote = null;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === "`") quote = c;
+    else if (c === "(" || c === "[" || c === "{") depth++;
+    else if (c === ")" || c === "]" || c === "}") depth--;
+  }
+  return depth <= 0 && quote === null;
+}

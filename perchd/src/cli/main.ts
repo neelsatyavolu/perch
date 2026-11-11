@@ -31,7 +31,10 @@ Browser (in this terminal's own tab group, or PERCH_SESSION's; --session <name> 
   perch snapshot [--full]          read the current tab; elements have refs like e12
   perch click <ref> | type <ref> <text> [--submit] | select <ref> <option> | press <key>
   perch screenshot [-o file.jpg]   save what the tab shows
-  perch repl "<js>"                run JavaScript in the page and print its JSON result
+  perch repl ["<js>"] [--reset]   a JavaScript session over your tabs, like aside repl:
+                                   await openTab(url), snapshot(page), page.locator(ref).click();
+                                   variables stay between runs. No code opens a prompt
+  perch eval "<js>"                run JavaScript in the page and print its JSON result
   perch script "<js>"              run several browser steps in one go: await navigate(url),
                                    snapshot(), click(ref), type(ref, text), js(code), log(...)
 

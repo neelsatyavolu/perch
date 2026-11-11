@@ -1,12 +1,16 @@
 /** The new tab page and Welcome: layout, recent chats, setup suggestions and onboarding. */
 
-import type { ChatSummary, NtpSection, OnboardingStep, Suggestion } from "../../../../ui-pages/src/api";
+import type { ChatEffort, ChatSummary, Composer, NtpSection, OnboardingStep, PermissionMode, Suggestion } from "../../../../ui-pages/src/api";
+import { aboveCap, capMode } from "../../policy/policy";
+import { managed, policyOf } from "./common";
 import type { Chat } from "../protocol";
 import * as v from "../validate";
 import type { Methods } from "./common";
 import type { PagesDeps } from "./deps";
 
 const SECTIONS: readonly NtpSection[] = ["recent", "suggested"];
+const EFFORTS: readonly ChatEffort[] = ["low", "medium", "high"];
+const MODES: readonly PermissionMode[] = ["ask", "guard", "skip"];
 const STEPS: readonly OnboardingStep[] = ["appearance", "models", "import", "memory"];
 const MAX_CHATS = 200;
 const SHOWN_SUGGESTIONS = 3;
@@ -45,8 +49,16 @@ function layoutPatch(value: unknown) {
 
 export function ntpPages(deps: PagesDeps): Methods<
   | "getNtpLayout" | "setNtpLayout" | "listChats" | "searchChats" | "listSuggestions" | "dismissSuggestion"
-  | "getOnboarding" | "completeOnboardingStep" | "finishOnboarding"
+  | "getOnboarding" | "completeOnboardingStep" | "finishOnboarding" | "getComposer" | "setComposer"
 > {
+  /** The composer under the new tab page's Ask box: the app's models and what the next task starts with. */
+  async function composer(): Promise<Composer> {
+    const s = await deps.state.get();
+    const info = deps.chatInfo?.();
+    const models = info?.models ?? [];
+    const model = models.some((m) => m.id === s.chatModel) ? s.chatModel! : info?.defaults.model ?? models[0]?.id ?? "";
+    return { models, model, effort: s.chatEffort ?? info?.defaults.effort ?? "medium", mode: capMode(s.mode, policyOf(deps)) };
+  }
   async function setup(): Promise<Setup> {
     const { imported } = await deps.state.get();
     const data = await deps.data().catch(() => null);
@@ -54,6 +66,19 @@ export function ntpPages(deps: PagesDeps): Methods<
   }
 
   return {
+    getComposer: () => composer(),
+    async setComposer([patch]) {
+      const o = v.object(patch, '"patch"');
+      v.onlyKeys(o, ["model", "effort", "mode"]);
+      const models = deps.chatInfo?.().models ?? [];
+      const model = o.model === undefined ? undefined : v.oneOf(o.model, "model", models.map((m) => m.id));
+      const effort = o.effort === undefined ? undefined : v.oneOf(o.effort, "effort", EFFORTS);
+      const mode = o.mode === undefined ? undefined : v.oneOf(o.mode, "mode", MODES);
+      if (mode && aboveCap(mode, policyOf(deps))) managed();
+      await deps.state.update((s) => ({ ...s, ...(model ? { chatModel: model } : {}), ...(effort ? { chatEffort: effort } : {}), ...(mode ? { mode } : {}) }));
+      deps.setDefaults?.({ ...(model ? { model } : {}), ...(effort ? { effort } : {}), ...(mode ? { mode } : {}) });
+      return composer();
+    },
     async getNtpLayout() {
       return (await deps.state.get()).layout;
     },

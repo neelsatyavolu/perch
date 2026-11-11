@@ -2,12 +2,12 @@
 
 import type {
   AboutInfo, AuditEntry, ChatSummary, CommandBarResult, DetectedBrowser, DraftFact, DreamLog, McpImportCandidate, McpServer, MemoryDoc, MemorySettings, Model,
-  MemorySaverSettings, Permissions, PrivacySettings, Provider, Routine, RoutineProposal, SetupSource, SiteData, Skill, Suggestion, SyncStatus, TabMemory, TaskModel,
-} from "../api";
+  MemorySaverSettings, Permissions, PrivacySettings, Provider, Routine, RoutineProposal, SetupSource, SiteData, Skill, Suggestion, SyncStatus, TabMemory, TaskModel, Composer } from "../api";
 
 export const SEED_NOW = "2026-11-05T09:46:00.000Z";
 
 export const PROVIDERS: readonly Provider[] = [
+  { id: "claude", name: "Claude", kind: "subscription", detail: "Sign in with your Claude Pro or Max plan.", state: "signed-out" },
   { id: "claude-code", name: "Claude", kind: "subscription", detail: "Subscription, through Claude Code on this Mac", state: "connected", account: "Claude Code 2.4" },
   { id: "chatgpt", name: "ChatGPT", kind: "subscription", detail: "Subscription, signs in through OpenAI", state: "connected", account: "neel@example.com" },
   { id: "grok", name: "Grok", kind: "subscription", detail: "Subscription, signs in through xAI", state: "signed-out" },
@@ -266,3 +266,17 @@ export const SYNC_OFF: SyncStatus = { on: false, lastSync: null, lastError: null
 
 /** A recovery key as the browser shows it: 32 bytes in Crockford base32, 52 characters in groups of five. */
 export const RECOVERY_KEY = "7KQ2D-M9XHT-4WB3N-PZ6RC-V8JFA-1GHK5-N0QRS-T3VWX-YZ8AB-CDEF4-G7";
+
+/** The new tab page's composer: the models a task can use and what the next one starts with. */
+export const COMPOSER: Composer = {
+  models: [
+    { id: "claude:claude-sonnet-5-5", label: "Claude Sonnet 5.5", provider: "Claude", efforts: ["low", "medium", "high"] },
+    { id: "claude:claude-opus-5-5", label: "Claude Opus 5.5", provider: "Claude", efforts: ["low", "medium", "high"] },
+    { id: "claude:claude-fable-5-2", label: "Claude Fable 5.2", provider: "Claude", efforts: ["low", "medium", "high"] },
+    { id: "codex:gpt-6.1-sol", label: "GPT-6.1 Sol", provider: "Codex", efforts: ["low", "medium", "high"] },
+    { id: "codex:gpt-6-luna", label: "GPT-6 Luna", provider: "Codex", efforts: ["low", "medium", "high"] },
+  ],
+  model: "claude:claude-sonnet-5-5",
+  effort: "medium",
+  mode: "guard",
+};

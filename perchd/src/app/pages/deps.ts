@@ -1,6 +1,6 @@
 /** What the pages API is built from: the app's stores and the modules each page delegates to. */
 
-import type { PermissionMode } from "../../../../ui-pages/src/api";
+import type { ChatEffort, ComposerModel, PermissionMode } from "../../../../ui-pages/src/api";
 import type { AuditLog } from "../../agent/audit";
 import type { CdpConnection } from "../../cdp/connection";
 import type { Keychain as SettingsKeychain } from "../../config/keychain";
@@ -28,7 +28,9 @@ export type PagesDeps = {
   jobs: Jobs;
   state: PagesState;
   /** Changes what new chats start with; the default permission mode lives in the pages' settings. */
-  setDefaults?: (patch: { mode: PermissionMode }) => void;
+  setDefaults?: (patch: { mode?: PermissionMode; model?: string; effort?: ChatEffort }) => void;
+  /** The chat models and what a new chat starts with (the app's info). */
+  chatInfo?: () => { models: readonly ComposerModel[]; defaults: { model: string; effort: ChatEffort; mode: PermissionMode } };
   models: {
     registry: () => Promise<ModelRegistry>;
     /** Where the registry keeps API keys; read only to show a key's last four characters. */

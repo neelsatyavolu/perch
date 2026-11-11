@@ -17,11 +17,12 @@ import type { PagesDeps } from "./deps";
 
 const ENDPOINTS: readonly ProviderId[] = ["custom", "lmstudio", "ollama"];
 const KEY_PROVIDERS = ["anthropic", "openai", "xai", "gemini", "openrouter"] as const;
-const PAGE_IDS: readonly PageProvider[] = ["claude-code", "chatgpt", "grok", "anthropic", "openai", "xai", "gemini", "openrouter", "local"];
+const PAGE_IDS: readonly PageProvider[] = ["claude", "claude-code", "chatgpt", "grok", "anthropic", "openai", "xai", "gemini", "openrouter", "local"];
 const SIGN_IN_POLL_MS = 1000;
 const SIGN_IN_TIMEOUT_MS = 5 * 60_000;
 
 const DETAIL: Record<PageProvider, string> = {
+  claude: "Sign in with your Claude Pro or Max plan.",
   "claude-code": "Uses the Claude Code you signed in to on this Mac.",
   chatgpt: "Sign in with your ChatGPT plan.",
   grok: "Sign in with your Grok plan.",
@@ -33,7 +34,7 @@ const DETAIL: Record<PageProvider, string> = {
   local: "LM Studio, Ollama, or any OpenAI-compatible server.",
 };
 const NAMES: Record<PageProvider, string> = {
-  "claude-code": "Claude Code", chatgpt: "ChatGPT", grok: "Grok", anthropic: "Anthropic", openai: "OpenAI",
+  claude: "Claude", "claude-code": "Claude Code", chatgpt: "ChatGPT", grok: "Grok", anthropic: "Anthropic", openai: "OpenAI",
   xai: "xAI", gemini: "Google Gemini", openrouter: "OpenRouter", local: "Local or custom endpoint",
 };
 
@@ -69,7 +70,7 @@ export function providerAllowed(id: ProviderId, policy: Policy): boolean {
 
 const pageAllowed = (page: PageProvider, policy: Policy): boolean => (page === "local" ? ENDPOINTS : [fromPage(page)]).some((id) => providerAllowed(id, policy));
 
-export function modelsPages(deps: PagesDeps): Methods<"listProviders" | "signIn" | "signOut" | "connectProvider" | "listModels" | "getTaskModels" | "setTaskModel"> {
+export function modelsPages(deps: PagesDeps): Methods<"listProviders" | "signIn" | "finishSignIn" | "signOut" | "connectProvider" | "listModels" | "getTaskModels" | "setTaskModel"> {
   const registry = () => deps.models.registry();
   const requireProvider = (page: PageProvider) => {
     if (!pageAllowed(page, policyOf(deps))) managed("Your organization doesn't allow this provider.");
@@ -141,11 +142,25 @@ export function modelsPages(deps: PagesDeps): Methods<"listProviders" | "signIn"
       const id = fromPage(page);
       const r = await registry();
       if (id === "claude-code") await registryCall(() => r.connectClaudeCode());
-      else if (id === "codex" || id === "grok") {
+      else if (id === "claude") {
+        // Claude's page shows a code instead of calling back; the person pastes it into finishSignIn.
+        const { url } = await registryCall(() => r.startSignIn(id));
+        await deps.models.openUrl(url);
+        return { ...(await provider(page)), awaitingCode: true };
+      } else if (id === "codex" || id === "grok") {
         const { url } = await registryCall(() => r.startSignIn(id));
         await deps.models.openUrl(url);
         await waitForSignIn(r, id);
       } else throw new AppError(`${NAMES[page]} connects with a key or an endpoint`);
+      return provider(page);
+    },
+    async finishSignIn([raw, code]) {
+      const page = v.oneOf(raw, "id", PAGE_IDS);
+      requireProvider(page);
+      const id = fromPage(page);
+      if (id !== "claude" && id !== "grok" && id !== "codex") throw new AppError(`${NAMES[page]} doesn't sign in with a code`);
+      const r = await registry();
+      await registryCall(() => r.finishSignIn(id, v.text(code, "code", 4096)));
       return provider(page);
     },
     async signOut([raw]) {

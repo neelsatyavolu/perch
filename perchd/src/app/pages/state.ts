@@ -6,7 +6,7 @@
 
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { NtpLayout, Onboarding, PermissionMode, SiteRule } from "../../../../ui-pages/src/api";
+import type { ChatEffort, NtpLayout, Onboarding, PermissionMode, SiteRule } from "../../../../ui-pages/src/api";
 import { ensurePrivateDir, KeyedQueue, writePrivate } from "../files";
 import type { Vault } from "../vault";
 
@@ -18,6 +18,9 @@ export type PagesSettings = {
   readonly siteRules: readonly SiteRule[];
   /** Set after an import brought something in, so the import suggestion goes away. */
   readonly imported: boolean;
+  /** The model and effort a task asked from the new tab page starts with; unset follows the first model. */
+  readonly chatModel?: string;
+  readonly chatEffort?: ChatEffort;
 };
 
 export const DEFAULT_PAGES_SETTINGS: PagesSettings = {

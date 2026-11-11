@@ -181,7 +181,7 @@ beforeAll(async () => {
     runner: async function* () {
       yield { type: "final", text: "Done." };
     },
-    models: [{ id: "fake", label: "Fake", provider: "test", efforts: ["medium"] }],
+    models: [{ id: "fake", label: "Fake", provider: "test", efforts: ["medium"] }, { id: "fake-2", label: "Fake 2", provider: "test", efforts: ["low", "medium", "high"] }],
     allowedOrigins: ["chrome://perch-settings"],
     token: TOKEN,
     browserToken: BROWSER_TOKEN,
@@ -190,6 +190,7 @@ beforeAll(async () => {
         chats: core.chats,
         runs: core.runs,
         setDefaults: core.setDefaults,
+        chatInfo: core.info,
         jobs: new Jobs(core.emit),
         state: new PagesState(join(dir, "pages"), vault),
         models: { registry: async () => registry, keychain: modelKeychain, openUrl: async (url) => void opened.push(url), signInTimeoutMs: 50 },
@@ -263,9 +264,26 @@ test("onboarding", async () => {
   expect((await raw("finishOnboarding", [1])).status).toBe(400);
 });
 
+test("the new tab composer picks the model, effort and mode the next chat starts with", async () => {
+  const first = await api.getComposer();
+  expect(first.models.map((m) => m.id)).toEqual(["fake", "fake-2"]);
+  const next = await api.setComposer({ model: "fake-2", effort: "high", mode: "ask" });
+  expect(next).toMatchObject({ model: "fake-2", effort: "high", mode: "ask" });
+  expect(app.info().defaults).toMatchObject({ model: "fake-2", effort: "high", mode: "ask" });
+  await expect(api.setComposer({ model: "nope" })).rejects.toThrow();
+  await api.setComposer({ model: "fake", effort: "medium", mode: "guard" });
+});
+
+test("Claude signs in by opening its page and taking the pasted code", async () => {
+  const shown = await api.signIn("claude");
+  expect(shown.awaitingCode).toBe(true);
+  expect(new URL(opened.at(-1)!).hostname).toBe("claude.com");
+  await expect(api.finishSignIn("claude", "no-state-here")).rejects.toThrow("after #");
+});
+
 test("models: keys go in and only a hint comes out; roles and models", async () => {
   const before = await api.listProviders();
-  expect(before.map((p) => p.id)).toEqual(["claude-code", "chatgpt", "grok", "anthropic", "openai", "xai", "gemini", "openrouter", "local"]);
+  expect(before.map((p) => p.id)).toEqual(["claude", "claude-code", "chatgpt", "grok", "anthropic", "openai", "xai", "gemini", "openrouter", "local"]);
   expect(before.find((p) => p.id === "anthropic")).toMatchObject({ kind: "api-key", state: "signed-out" });
 
   expect((await fails(api.connectProvider({ kind: "api-key", provider: "anthropic", key: "short" }))).status).toBe(400);

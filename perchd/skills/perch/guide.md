@@ -48,8 +48,9 @@ perch navigate <url> · perch back · perch tabs
 perch snapshot [--full]             # the page as text; elements have refs like e12
 perch click e12 · perch type e7 "text" [--submit] · perch select e9 "Large" · perch press Enter
 perch screenshot -o shot.jpg
-perch repl "document.title"         # JavaScript in the page; JSON back
+perch eval "document.title"         # JavaScript in the page; JSON back
 perch script '<js>'                 # several steps in one go, see below
+perch repl '<js>'                   # a JavaScript session that keeps its variables, see below
 ```
 
 - Read with `snapshot`, act by ref, and check the page that comes back before the next step. A new snapshot replaces old refs.
@@ -67,6 +68,18 @@ for (const q of ["usb c cable 2m", "usb c cable 3m"]) {
   log(q, await js(`[...document.querySelectorAll("[data-component-type=s-search-result]")].slice(0,3).map(r => r.innerText.split("\\n")[0])`));
 }'
 ```
+
+### `perch repl`
+
+A JavaScript session over your tabs in the shape of `aside repl`, with a Playwright-style `page`. Top-level `const`, `let`, functions and classes stay from one run to the next (for half an hour); declaring a name again replaces it. `perch repl` alone opens a prompt; `perch repl --reset` clears the variables.
+
+```sh
+perch repl 'const p1 = await openTab("https://news.ycombinator.com"); const s1 = await snapshot(p1); log(s1.tree)'
+perch repl 'await p1.locator("e31").click(); const s2 = await snapshot(p1); log(s2.diff)'
+perch repl 'log(await p1.evaluate(() => [...document.querySelectorAll(".titleline a")].slice(0, 5).map(a => a.textContent)))'
+```
+
+Globals: `page`, `tabs`, `openTab(url)`, `listBrowserTabs()` (`{ targetId, title, url, owner, current }`), `attachBrowserTab(targetId)`, `getTabByTargetId(id)`, `snapshot(page, { full })` (returns `{ tree, diff }`), `sleep(seconds)`, `log`/`console.log`, plus the `perch script` functions. A page has `goto`, `goBack`, `reload`, `url`, `title`, `content`, `evaluate(fn, arg)`, `locator(ref)` (`click`, `fill`, `type`, `press`, `selectOption`, `hover`, `check`), `keyboard.press`/`type`, `mouse.wheel` and `waitForTimeout(ms)`. `page.evaluate` reads a copy of the page and cannot change it; act with locators. There are no screenshots here (use `perch screenshot`), and tabs close when the session ends.
 
 ### MCP
 

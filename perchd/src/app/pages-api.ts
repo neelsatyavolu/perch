@@ -40,8 +40,8 @@ export const PERCHD_METHODS: readonly PerchdMethod[] = API_METHODS.filter((m): m
 
 /** How many arguments each method takes at most; the rest take none. */
 const ARITY: Partial<Record<PerchdMethod, number>> = {
-  setNtpLayout: 1, listChats: 1, searchChats: 1, dismissSuggestion: 1,
-  signIn: 1, signOut: 1, connectProvider: 1, setTaskModel: 2,
+  setNtpLayout: 1, listChats: 1, searchChats: 1, dismissSuggestion: 1, setComposer: 1,
+  signIn: 1, finishSignIn: 2, signOut: 1, connectProvider: 1, setTaskModel: 2,
   importMcpServers: 1, addMcpServer: 1, updateMcpServer: 2, removeMcpServer: 1, addSkill: 1, setSkillEnabled: 2, removeSkill: 1,
   setPermissionMode: 1, addSiteRule: 1, removeSiteRule: 1, setClientMode: 2, listAuditLog: 1, exportAuditLog: 1,
   setMemorySettings: 1, readMemoryPage: 1, writeMemoryPage: 2, deleteMemoryPage: 1, listDreamLogs: 1,
@@ -72,7 +72,10 @@ export function createPagesApi(deps: PagesDeps): PagesApi {
     getJob: async ([id]) => deps.jobs.get(v.text(id, "id", 100)),
   } satisfies Methods<PerchdMethod>;
   const known = new Set<string>(PERCHD_METHODS);
-  void deps.state.get().then((s) => deps.setDefaults?.({ mode: capMode(s.mode, policyOf(deps)) }), () => undefined);
+  void deps.state.get().then(
+    (s) => deps.setDefaults?.({ mode: capMode(s.mode, policyOf(deps)), ...(s.chatModel ? { model: s.chatModel } : {}), ...(s.chatEffort ? { effort: s.chatEffort } : {}) }),
+    () => undefined,
+  );
 
   return {
     async call(method, args) {

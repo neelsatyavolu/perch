@@ -1,5 +1,6 @@
 import { useState } from "preact/hooks";
-import type { Query, SearchEngine } from "../../api";
+import type { ChatEffort, Composer as ComposerState, PermissionMode, Query, SearchEngine } from "../../api";
+import { useAction, useApi, useLoad } from "../../ui/frame";
 import { Icon, Search } from "../../ui/icons";
 import { Segmented } from "../../ui/Segmented";
 
@@ -14,6 +15,7 @@ export function AddressBox({ onSubmit }: { readonly onSubmit: (q: Query) => void
   const [text, setText] = useState("");
   const [mode, setMode] = useState<Mode>("search");
   const [engine, setEngine] = useState<SearchEngine>("brave");
+  const composer = useComposer();
 
   const submit = (asMode: Mode) => {
     const clean = text.trim();
@@ -57,9 +59,64 @@ export function AddressBox({ onSubmit }: { readonly onSubmit: (q: Query) => void
         />
         <Segmented class="mode" label="Search or ask" value={mode} onChange={setMode} options={[{ value: "search", label: "Search" }, { value: "ask", label: "Ask" }]} />
       </div>
-      <p class="hints" id="addr-hints">
-        <kbd class="key">Tab</kbd> <span>Google</span> <span aria-hidden="true">·</span> <kbd class="key" aria-label="Command Return">⌘↵</kbd> <span>Ask</span>
-      </p>
+      <div class="composer">
+        <Composer side="mode" composer={composer} />
+        <p class="hints" id="addr-hints">
+          <kbd class="key">Tab</kbd> <span>Google</span> <span aria-hidden="true">·</span> <kbd class="key" aria-label="Command Return">⌘↵</kbd> <span>Ask</span>
+        </p>
+        <Composer side="model" composer={composer} />
+      </div>
     </div>
+  );
+}
+
+const MODE_NAMES: Readonly<Record<PermissionMode, string>> = { ask: "Ask before actions", guard: "Ask before sends", skip: "Skip confirmation" };
+const EFFORT_NAMES: Readonly<Record<ChatEffort, string>> = { low: "Low", medium: "Medium", high: "High" };
+
+/**
+ * What a task asked here starts with, as in a chat's composer: the permission mode on the left,
+ * the model and its effort on the right. Each choice is kept for the next task.
+ */
+function useComposer() {
+  const api = useApi();
+  const act = useAction();
+  const state = useLoad((a) => a.getComposer());
+  const save = async (patch: Partial<Pick<ComposerState, "model" | "effort" | "mode">>) => {
+    const next = await act(() => api.setComposer(patch));
+    if (next) state.set(next);
+  };
+  return { c: state.data, save };
+}
+
+function Composer({ side, composer }: { readonly side: "mode" | "model"; readonly composer: ReturnType<typeof useComposer> }) {
+  const { c, save } = composer;
+  if (!c) return <span class={`composer-${side}`} />;
+  if (side === "mode") {
+    return (
+      <span class="composer-mode">
+        <select class="picker quiet" aria-label="Permission for the task" value={c.mode} onChange={(e) => void save({ mode: e.currentTarget.value as PermissionMode })}>
+          {(Object.keys(MODE_NAMES) as PermissionMode[]).map((m) => <option key={m} value={m}>{MODE_NAMES[m]}</option>)}
+        </select>
+      </span>
+    );
+  }
+  if (!c.models.length) return <span class="composer-model" />;
+  const providers = [...new Set(c.models.map((m) => m.provider))];
+  const efforts = c.models.find((m) => m.id === c.model)?.efforts ?? [];
+  return (
+    <span class="composer-model">
+      <select class="picker quiet" aria-label="Model for the task" value={c.model} onChange={(e) => void save({ model: e.currentTarget.value })}>
+        {providers.map((p) => (
+          <optgroup key={p} label={p}>
+            {c.models.filter((m) => m.provider === p).map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+          </optgroup>
+        ))}
+      </select>
+      {efforts.length > 0 && (
+        <select class="picker quiet" aria-label="Effort" value={c.effort} onChange={(e) => void save({ effort: e.currentTarget.value as ChatEffort })}>
+          {efforts.map((x) => <option key={x} value={x}>{EFFORT_NAMES[x]}</option>)}
+        </select>
+      )}
+    </span>
   );
 }

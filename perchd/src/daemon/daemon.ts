@@ -21,6 +21,7 @@ import { MemoryKeychain, type Keychain } from "./keychain";
 import type { PerchPaths } from "./paths";
 import { SESSION_ID, type OnEnd } from "./protocol";
 import type { Tasks } from "../app/tasks";
+import { ReplSessions } from "../agent/repl";
 import type { MemoryApi } from "../memory/api";
 import type { SkillCatalog } from "../skills/catalog";
 import { startServer, type Connection, type Handler, type ServerOptions, type SidebarRun } from "./server";
@@ -148,7 +149,16 @@ export async function startDaemon(opts: DaemonOptions): Promise<Daemon> {
     return api;
   };
 
+  const repls = new ReplSessions();
+
   const methods: Record<string, Handler> = {
+    // `perch repl`: a persistent JavaScript session over this client's tabs (src/agent/repl.ts).
+    "repl.run": async (conn, params) => {
+      const code = str(params, "code");
+      if (code === undefined) throw new Error("code is required.");
+      return repls.run(conn.session.key, code, (call) => manager.call(conn.session, call, conn.policy()));
+    },
+    "repl.reset": async (conn) => ({ reset: repls.reset(conn.session.key) }),
     status: async (conn) => ({
       version: VERSION,
       pid: process.pid,
@@ -263,6 +273,7 @@ export async function startDaemon(opts: DaemonOptions): Promise<Daemon> {
     registry,
     async stop() {
       stopWatching?.();
+      repls.close();
       server.stop();
       await manager.closeAll();
       const b = browser;

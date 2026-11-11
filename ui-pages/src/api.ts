@@ -101,10 +101,15 @@ export type Suggestion = {
 };
 export type SearchEngine = "brave" | "google";
 export type Query = { readonly text: string; readonly mode: "search" | "ask"; readonly engine: SearchEngine };
+/** A model a new chat can use, as the chat composer lists it. */
+export type ComposerModel = { readonly id: string; readonly label: string; readonly provider: string; readonly efforts: readonly ChatEffort[] };
+export type ChatEffort = "low" | "medium" | "high";
+/** What a task asked from the new tab page starts with: its model, effort and permission mode. */
+export type Composer = { readonly models: readonly ComposerModel[]; readonly model: string; readonly effort: ChatEffort; readonly mode: PermissionMode };
 
 /* ---------- Models (spec 7.3) ---------- */
 
-export type ProviderId = "claude-code" | "chatgpt" | "grok" | "anthropic" | "openai" | "xai" | "gemini" | "openrouter" | "local";
+export type ProviderId = "claude" | "claude-code" | "chatgpt" | "grok" | "anthropic" | "openai" | "xai" | "gemini" | "openrouter" | "local";
 export type ProviderState = "connected" | "signed-out" | "not-installed" | "error";
 export type Provider = {
   readonly id: ProviderId;
@@ -115,6 +120,8 @@ export type Provider = {
   /** Account or key hint shown after sign-in, e.g. "neel@…" or "key ending 4f2a". Never the key. */
   readonly account?: string;
   readonly message?: string;
+  /** The provider's sign-in page is open and shows a code to paste back with finishSignIn (Claude). */
+  readonly awaitingCode?: boolean;
 };
 export type ConnectInput =
   | { readonly kind: "api-key"; readonly provider: Exclude<ProviderId, "claude-code" | "chatgpt" | "grok" | "local">; readonly key: string }
@@ -398,6 +405,9 @@ export interface PerchApi {
   dismissSuggestion(id: string): Promise<void>;
   /** Search opens results in this tab; Ask starts a chat with the text. */
   submitQuery(query: Query): Promise<void>;
+  /** The model, effort and permission mode the next task starts with, and the models to pick from. */
+  getComposer(): Promise<Composer>;
+  setComposer(patch: Partial<Pick<Composer, "model" | "effort" | "mode">>): Promise<Composer>;
   openChat(id: string): Promise<void>;
   newChat(): Promise<void>;
   /**
@@ -413,6 +423,8 @@ export interface PerchApi {
   listProviders(): Promise<readonly Provider[]>;
   /** Starts the provider's own sign-in (OAuth window, or Claude Code check) and resolves with the result. */
   signIn(id: ProviderId): Promise<Provider>;
+  /** Completes a sign-in whose page showed a code (Provider.awaitingCode). */
+  finishSignIn(id: ProviderId, code: string): Promise<Provider>;
   signOut(id: ProviderId): Promise<Provider>;
   /** The key goes to the Keychain; the returned provider carries only a hint. */
   connectProvider(input: ConnectInput): Promise<Provider>;
@@ -574,9 +586,9 @@ export interface PerchApi {
 /** Method names, for the RPC adapter and the transport's allow-list. */
 export const API_METHODS = [
   "getAppearance", "setAppearance",
-  "getNtpLayout", "setNtpLayout", "listChats", "searchChats", "listSuggestions", "dismissSuggestion", "submitQuery", "openChat", "newChat", "openPage",
+  "getNtpLayout", "setNtpLayout", "listChats", "searchChats", "listSuggestions", "dismissSuggestion", "submitQuery", "getComposer", "setComposer", "openChat", "newChat", "openPage",
   "chooseFile",
-  "listProviders", "signIn", "signOut", "connectProvider", "listModels", "getTaskModels", "setTaskModel",
+  "listProviders", "signIn", "finishSignIn", "signOut", "connectProvider", "listModels", "getTaskModels", "setTaskModel",
   "listMcpServers", "scanMcpImports", "importMcpServers", "addMcpServer", "updateMcpServer", "removeMcpServer",
   "listSkills", "addSkill", "setSkillEnabled", "removeSkill",
   "getPermissions", "setPermissionMode", "addSiteRule", "removeSiteRule", "setClientMode", "listAuditLog", "exportAuditLog", "getPolicy",

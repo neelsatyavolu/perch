@@ -1,5 +1,10 @@
-/** The Anthropic Messages API, for people who use a Claude API key (spec 7.3). */
+/**
+ * The Anthropic Messages API, for a Claude API key (spec 7.3) or a Claude Pro or Max sign-in. A
+ * sign-in's requests are shaped by shared-ai-auth's claudeRequest, which the subscription backend
+ * requires.
+ */
 
+import { CLAUDE_CODE_VERSION, claudeRequest, claudeRequiredVersion } from "@neelsatyavolu/shared-ai-auth";
 import { openStream, redactSecrets, sseJson, upstreamMessage } from "./http";
 import { ModelError, parseArgs, type Message, type Model, type TurnEvent, type TurnRequest } from "./types";
 
@@ -35,14 +40,21 @@ export function toAnthropicMessages(messages: Message[]): { role: "user" | "assi
   return out;
 }
 
-export function anthropicModel(opts: { model: string; apiKey: () => Promise<string>; url?: string; fast?: boolean }, fetchImpl: typeof fetch = fetch): Model {
+/** `oauth` (a Claude sign-in's access token) takes the place of `apiKey`. */
+export function anthropicModel(
+  opts: { model: string; apiKey?: () => Promise<string>; oauth?: () => Promise<string>; url?: string; fast?: boolean },
+  fetchImpl: typeof fetch = fetch,
+): Model {
   // Once the API rejects the effort or fast setting for this model (older models have none), stop sending it.
   let effortRejected = false;
   let fastRejected = false;
+  // The Claude Code version a sign-in's requests advertise; raised once when a model needs a newer one.
+  let version = CLAUDE_CODE_VERSION;
+  const signedIn = Boolean(opts.oauth);
   return {
-    id: `anthropic:${opts.model}`,
+    id: `${signedIn ? "claude" : "anthropic"}:${opts.model}`,
     async *turn(req: TurnRequest, signal: AbortSignal): AsyncIterable<TurnEvent> {
-      const key = await opts.apiKey();
+      const key = await (opts.oauth ?? opts.apiKey ?? (() => Promise.reject(new ModelError("No Claude key or sign-in."))))();
       // The Claude API takes low through max; "none" (a Responses API value) has no Claude equivalent.
       let effort = effortRejected || req.effort === "none" ? undefined : req.effort;
       let fast = Boolean(opts.fast) && !fastRejected;
@@ -59,8 +71,12 @@ export function anthropicModel(opts: { model: string; apiKey: () => Promise<stri
         cache_control: { type: "ephemeral" },
         stream: true,
       });
-      const stream = await openStream(
-        () => ({
+      const request = () => {
+        if (signedIn) {
+          const shaped = claudeRequest(body(), { accessToken: key, version, betas: fast ? [FAST_BETA] : [], url: opts.url ?? ANTHROPIC_URL, entrypoint: "perch" });
+          return { url: shaped.url, init: { method: "POST", headers: { ...shaped.headers, accept: "text/event-stream" }, body: JSON.stringify(shaped.body) } };
+        }
+        return {
           url: opts.url ?? ANTHROPIC_URL,
           init: {
             method: "POST",
@@ -73,12 +89,21 @@ export function anthropicModel(opts: { model: string; apiKey: () => Promise<stri
             },
             body: JSON.stringify(body()),
           },
-        }),
+        };
+      };
+      const stream = await openStream(
+        request,
         {
           fetch: fetchImpl,
           signal,
-          describe: (status, text) => upstreamMessage(status, text, "Check the Claude API key in Perch's settings."),
+          describe: (status, text) => upstreamMessage(status, text, signedIn ? "Sign in to Claude again in Settings → Models." : "Check the Claude API key in Perch's settings."),
           adjust: (text) => {
+            // The subscription backend gates new models on the advertised Claude Code version.
+            const needed = signedIn ? claudeRequiredVersion(text) : null;
+            if (needed && needed !== version) {
+              version = needed;
+              return true;
+            }
             if (fast && /speed|fast/i.test(text)) {
               fast = false;
               fastRejected = true;

@@ -22,7 +22,15 @@ import { startPolicyWatcher } from "../policy/watch";
 import { Vault } from "../app/vault";
 import { startDaemon, type Daemon, type Outside } from "../daemon/daemon";
 import { Tasks } from "../app/tasks";
-import { SIDEBAR_CLIENT } from "../daemon/server";
+import { CHAT_KEEP_MS, SIDEBAR_CLIENT } from "../daemon/server";
+import { runTask } from "../agent/loop";
+import { withoutPageText } from "../agent/audit-seal";
+import type { OwnLoop } from "../app/sidebar-runner";
+import { bundledModels, loadModels, type ModelCatalog } from "@neelsatyavolu/shared-ai-auth";
+
+/** How often the chat models pick up a new sign-in, and how long a fetched catalog is kept. */
+const SIGN_IN_CHECK_MS = 60_000;
+const CATALOG_TTL_MS = 10 * 60_000;
 import { BrowserLink } from "../app/browser-link";
 import { PerchDomain } from "../browser/perch-domain";
 import type { Tab } from "../browser/tab";
@@ -73,6 +81,9 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
   let agentTabs: (chatId: string) => string[] = () => [];
   // Tasks, memory and skills for outside clients, once the app is up.
   let outside: Outside | undefined;
+  let ownLoop: OwnLoop = async function* () {
+    yield { type: "error", message: "Perch is still starting. Try again in a moment." };
+  };
   let driving: (chatId: string) => Tab | null = () => null;
   const link = new BrowserLink({ perch: new PerchDomain(conn), agentTabs: (chatId) => agentTabs(chatId), driving: (chatId) => driving(chatId), onError: io.stderr });
   const start = (env: Record<string, string | undefined>) =>
@@ -110,11 +121,25 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
     policyProblems,
     ...(secrets ? { secrets: { settings: secrets.config(), mcp: secrets.secure(), memory: secrets.memory(), importer: secrets.importer() } } : {}),
   });
+  // The chat models follow shared-ai-auth's catalog and the sign-ins in Settings → Models.
+  let catalog: ModelCatalog = bundledModels;
+  let chatModels = allowedSidebarModels(sidebarModels(catalog), policy.current());
+  let catalogAt = 0;
+  const refreshModels = async () => {
+    if (Date.now() - catalogAt > CATALOG_TTL_MS) {
+      catalog = await loadModels().catch(() => catalog);
+      catalogAt = Date.now();
+    }
+    const signedIn = await services.signedIn().catch(() => []);
+    chatModels = allowedSidebarModels(sidebarModels(catalog, signedIn), policy.current());
+  };
+  void refreshModels();
+  const modelTimer = setInterval(() => void refreshModels(), SIGN_IN_CHECK_MS);
   const app = await startApp({
     dataDir: join(base, "app"),
     vault,
-    runner: sidebarRunner({ runs, perch: perchCommand(), home, auditPath: services.sidebarAudit, memory: services.chatMemory, skills: services.skills, policy }),
-    models: allowedSidebarModels(sidebarModels(), policy.current()),
+    runner: sidebarRunner({ runs, perch: perchCommand(), home, auditPath: services.sidebarAudit, memory: services.chatMemory, skills: services.skills, policy, ownLoop: (run) => ownLoop(run) }),
+    models: () => chatModels,
     allowedOrigins: settings.origins,
     listen: { port: settings.port },
     token: settings.token,
@@ -129,6 +154,37 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
     artifactScheme: browser.features.has("perch-artifact"),
   });
   services.attach(app);
+  // A chat on a model Perch calls itself works in the chat's daemon session, like a CLI agent.
+  ownLoop = async function* ({ input, provider, model, session, mode, memory, extras }) {
+    const chosen = await services.chatModel(provider, model);
+    if (typeof chosen === "string") {
+      yield { type: "error", message: chosen };
+      return;
+    }
+    const agent = daemon.manager.open({ client: SIDEBAR_CLIENT, session, agent: "Perch", title: "Sidebar", persistent: true, onEnd: "close" });
+    if (input.tab?.targetId) await daemon.manager.borrow(agent, input.tab.targetId).catch(() => undefined);
+    const lent = await daemon.manager.lend(agent);
+    try {
+      yield* runTask({
+        model: chosen,
+        browser,
+        task: input.task,
+        mode,
+        effort: input.settings.effort,
+        approve: input.approve,
+        audit: input.incognito ? withoutPageText(audit) : audit,
+        client: "sidebar",
+        signal: input.signal,
+        policy,
+        ...(memory ? { memory } : {}),
+        ...(extras ? { extraTools: extras } : {}),
+        tabs: { ctx: lent.ctx, afterCall: lent.sync },
+      });
+    } finally {
+      await daemon.manager.giveBack(agent);
+      daemon.manager.scheduleEnd(agent, input.incognito ? 0 : CHAT_KEEP_MS);
+    }
+  };
   outside = { tasks: new Tasks(app), memory: services.memoryApi, skills: services.skills };
   agentTabs = (chatId) => runs.sessionsFor(chatId).flatMap((s) => daemon.manager.get(SIDEBAR_CLIENT, s)?.tabIds() ?? []);
   driving = (chatId) => runs.sessionsFor(chatId).map((s) => daemon.manager.get(SIDEBAR_CLIENT, s)?.ctx?.tab ?? null).find((t) => t && !t.closed) ?? null;
@@ -137,6 +193,7 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
   await Promise.race([closed, conn.closed]);
   io.stderr("perchd: the browser went away; stopping\n");
   link.stop();
+  clearInterval(modelTimer);
   await app.stop();
   await services.stop();
   await daemon.stop();

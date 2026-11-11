@@ -20,7 +20,8 @@ import type { Effort, Model } from "./types";
 
 const LIST_TTL_MS = 10 * 60_000;
 const PROBE_TTL_MS = 60_000;
-const CLAUDE_MODELS = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"];
+/** Claude Code's models when the shared catalog has no claude list (an old cached copy). */
+const CLAUDE_MODELS = ["claude-fable-5-2", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"];
 
 export type ProviderState = "connected" | "signed-out" | "expired" | "not-installed" | "not-set-up";
 export type ProviderStatus = {
@@ -54,7 +55,7 @@ export type RegistryOptions = {
 };
 
 const CONNECT: Record<ProviderAuth, ProviderStatus["connect"]> = { oauth: "sign-in", cli: "install", key: "key", endpoint: "endpoint" };
-const isSubscription = (id: ProviderId): id is SubscriptionId => id === "codex" || id === "grok";
+const isSubscription = (id: ProviderId): id is SubscriptionId => id === "codex" || id === "grok" || id === "claude";
 
 function checkProvider(id: unknown): ProviderId {
   if (!isProviderId(id)) throw new ProviderError("Unknown provider.");
@@ -132,7 +133,11 @@ export function createModelRegistry(opts: RegistryOptions) {
   }
 
   async function freshModels(id: ProviderId, credential?: string | null): Promise<ModelInfo[]> {
-    if (id === "claude-code") return CLAUDE_MODELS.map((m) => describeModel(id, m));
+    // Claude Code runs the same models a Claude sign-in offers: shared-ai-auth's claude list.
+    if (id === "claude-code") {
+      const entries = (await catalog()).claude ?? [];
+      return entries.length ? entries.map((m) => ({ ...describeModel(id, m.id), label: m.label })) : CLAUDE_MODELS.map((m) => describeModel(id, m));
+    }
     if (isSubscription(id)) {
       const entries = (await catalog())[id] ?? [];
       return withImageModels(id, entries.map((m) => ({ ...describeModel(id, m.id), label: m.label })));

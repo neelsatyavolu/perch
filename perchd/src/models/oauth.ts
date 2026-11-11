@@ -1,7 +1,8 @@
 /**
- * ChatGPT and Grok sign-in through `@neelsatyavolu/shared-ai-auth` (spec 7.3), the same flow
- * Flint uses: PKCE, a localhost callback (or the pasted address or code), tokens in the Keychain,
- * refresh shortly before expiry. Tokens never appear in errors, logs or settings files.
+ * ChatGPT, Grok and Claude (Pro or Max) sign-in through `@neelsatyavolu/shared-ai-auth` (spec
+ * 7.3), the same flow Flint uses: PKCE, a localhost callback (or the pasted address or code),
+ * tokens in the Keychain, refresh shortly before expiry. Claude has no localhost callback: its page
+ * shows `code#state` to paste. Tokens never appear in errors, logs or settings files.
  */
 
 import { authorizeUrl, exchangeCode, generatePkce, parseCallback, refreshTokens, type PKCE, type Tokens } from "@neelsatyavolu/shared-ai-auth";
@@ -10,13 +11,13 @@ import { startLoopback, type LoopbackHandle, type LoopbackStarter } from "./loop
 import { PROVIDERS, ProviderError, secretName } from "./providers";
 import type { ResponsesTokens } from "./responses";
 
-export type SubscriptionId = "codex" | "grok";
+export type SubscriptionId = "codex" | "grok" | "claude";
 export type SignInStatus = "signed-in" | "signed-out" | "expired";
 
 const PENDING_TTL_MS = 10 * 60_000;
 const REFRESH_AHEAD_MS = 30_000;
 /** Ports and paths fixed by each CLI's OAuth registration (see shared-ai-auth's redirect URIs). */
-const CALLBACK: Record<SubscriptionId, { port: number; path: string }> = {
+const CALLBACK: Partial<Record<SubscriptionId, { port: number; path: string }>> = {
   codex: { port: 1455, path: "/auth/callback" },
   grok: { port: 56121, path: "/callback" },
 };
@@ -81,11 +82,11 @@ export function createSubscriptionAuth(opts: SubscriptionAuthOptions) {
     handle?.close();
   }
 
-  async function complete(p: SubscriptionId, code: string, verifier: string): Promise<void> {
+  async function complete(p: SubscriptionId, code: string, verifier: string, state?: string): Promise<void> {
     const since = generation(p);
     let tokens: Tokens;
     try {
-      tokens = await exchangeCode(p, code, verifier, fetchOpt);
+      tokens = await exchangeCode(p, code, verifier, { ...fetchOpt, ...(state ? { state } : {}) });
     } catch {
       throw new ProviderError(`Perch could not finish signing in to ${label(p)}. Start again from Settings → Models.`, "auth");
     }
@@ -100,8 +101,9 @@ export function createSubscriptionAuth(opts: SubscriptionAuthOptions) {
   const isExpired = (p: SubscriptionId, t: Tokens) => expired.get(p) === t.refreshToken;
 
   function listen(p: SubscriptionId): boolean {
-    if (!starter) return false;
-    const { port, path } = CALLBACK[p];
+    const callback = CALLBACK[p];
+    if (!starter || !callback) return false;
+    const { port, path } = callback;
     const handle = starter({
       port: opts.ports?.[p] ?? port,
       path,
@@ -111,7 +113,7 @@ export function createSubscriptionAuth(opts: SubscriptionAuthOptions) {
         const cb = parseCallback(url.search);
         if (!attempt || cb.state !== attempt.pkce.state) return { ok: false, ignore: true };
         if (cb.error || !cb.code) return { ok: false };
-        await complete(p, cb.code, attempt.pkce.verifier);
+        await complete(p, cb.code, attempt.pkce.verifier, cb.state);
         return { ok: true };
       },
       onClose: () => {
@@ -140,7 +142,9 @@ export function createSubscriptionAuth(opts: SubscriptionAuthOptions) {
     if (!cb.code) throw new ProviderError("Paste the whole address from the browser, or the code the page shows.");
     // A bare code carries no state; it binds to the attempt Perch started.
     if (cb.state !== null && cb.state !== attempt.pkce.state) throw new ProviderError("That address belongs to a different sign-in. Start again from Settings → Models.");
-    await complete(p, cb.code, attempt.pkce.verifier);
+    // Claude's token endpoint needs the state too, so its whole `code#state` must be pasted.
+    if (p === "claude" && cb.state === null) throw new ProviderError("Paste the whole code the Claude page shows, including the part after #.");
+    await complete(p, cb.code, attempt.pkce.verifier, cb.state ?? undefined);
     stopListener(p);
   }
 

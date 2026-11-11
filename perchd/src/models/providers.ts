@@ -33,6 +33,7 @@ const GROK = { default: "grok-4.7", deep: "grok-4.7", standard: "grok-4.7", fast
 
 export const PROVIDERS: Readonly<Record<ProviderId, ProviderDef>> = Object.freeze({
   codex: { id: "codex", label: "ChatGPT", kind: "subscription", auth: "oauth", chat: "responses", images: "codex", baseUrl: "https://chatgpt.com/backend-api/codex", defaults: GPT },
+  claude: { id: "claude", label: "Claude", kind: "subscription", auth: "oauth", chat: "anthropic", baseUrl: "https://api.anthropic.com/v1", defaults: { ...CLAUDE, visual: "claude-sonnet-5-5" } },
   "claude-code": { id: "claude-code", label: "Claude Code", kind: "subscription", auth: "cli", chat: "runner", baseUrl: "", defaults: CLAUDE },
   grok: { id: "grok", label: "Grok", kind: "subscription", auth: "oauth", chat: "responses", images: "xai", baseUrl: "https://api.x.ai/v1", defaults: GROK },
   anthropic: { id: "anthropic", label: "Anthropic", kind: "api", auth: "key", chat: "anthropic", baseUrl: "https://api.anthropic.com/v1", defaults: { ...CLAUDE, visual: "claude-sonnet-5-5" } },

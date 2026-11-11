@@ -44,6 +44,11 @@ export type TaskOptions = {
   memory?: MemoryAccess;
   /** Company policy (spec 12.2), read again before every action so a change applies mid-chat. */
   policy?: PolicyView;
+  /**
+   * Work in these tabs (a chat's session, which keeps them between turns) instead of a fresh set
+   * the task closes at the end. `afterCall` runs after each browser action, to group new tabs.
+   */
+  tabs?: { ctx: ToolContext; afterCall?: () => Promise<void> };
 };
 
 const DEFAULT_MAX_STEPS = 40;
@@ -63,7 +68,7 @@ export async function* runTask(opts: TaskOptions): AsyncIterable<StepEvent> {
     yield { type: "error", message: AGENT_OFF };
     return;
   }
-  const ctx = await newToolContext(opts.browser);
+  const ctx = opts.tabs?.ctx ?? (await newToolContext(opts.browser));
   const messages: Message[] = [{ role: "user", text: opts.task }];
   const signal = opts.signal ?? new AbortController().signal;
   const extraPrompt = opts.extraTools?.prompt() ?? "";
@@ -113,6 +118,7 @@ export async function* runTask(opts: TaskOptions): AsyncIterable<StepEvent> {
           return;
         }
         const outcome = yield* act(ctx, opts, call, progress);
+        await opts.tabs?.afterCall?.().catch(() => undefined);
         if (signal.aborted) {
           yield { type: "error", message: "Cancelled." };
           return;
@@ -145,7 +151,7 @@ export async function* runTask(opts: TaskOptions): AsyncIterable<StepEvent> {
     const limit = why === "time" ? "the time limit" : `${maxSteps} steps`;
     yield { type: "error", message: `Stopped after ${limit} without finishing. Ask again with more detail, or raise the limit.` };
   } finally {
-    await ctx.close();
+    if (!opts.tabs) await ctx.close();
     opts.memory?.chatEnded(messages);
   }
 }

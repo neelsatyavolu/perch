@@ -6,7 +6,7 @@
  */
 
 import type { SkillCatalog } from "../skills/catalog";
-import { sidebarExtras } from "./sidebar-extras";
+import { sidebarExtras, type SidebarExtras } from "./sidebar-extras";
 import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import type { StepEvent } from "../agent/loop";
@@ -15,7 +15,9 @@ import { CHAT_SESSION_PREFIX, SIDEBAR_CLIENT, type SidebarRun } from "../daemon/
 import { claudeBinary, codexBinary, runClaudeCode, runCodex, type AsideEvent, type McpServer } from "../external";
 import { AGENT_OFF, agentAllowed, allowsModel, capMode, MODEL_NOT_ALLOWED, type Policy, type PolicyView } from "../policy/policy";
 import type { ModelInfo } from "./protocol";
-import type { Runner } from "./runs";
+import { bundledModels, type ModelCatalog } from "@neelsatyavolu/shared-ai-auth";
+import type { Runner, RunnerInput } from "./runs";
+import type { Mode } from "../agent/permissions";
 
 /** The sidebar runs in progress, by their daemon session id. */
 export class SidebarRuns {
@@ -41,14 +43,7 @@ export class SidebarRuns {
 
 type Agent = "codex" | "claude-code";
 
-const MODELS: (ModelInfo & { agent: Agent })[] = [
-  { agent: "codex", id: "codex:gpt-6.1-sol", label: "GPT-6.1 Sol", provider: "Codex", efforts: ["low", "medium", "high"] },
-  { agent: "codex", id: "codex:gpt-6-luna", label: "GPT-6 Luna", provider: "Codex", efforts: ["low", "medium", "high"] },
-  { agent: "codex", id: "codex:default", label: "Codex default", provider: "Codex", efforts: ["low", "medium", "high"] },
-  { agent: "claude-code", id: "claude-code:claude-sonnet-5-5", label: "Claude Sonnet 5.5", provider: "Claude Code", efforts: ["low", "medium", "high"] },
-  { agent: "claude-code", id: "claude-code:claude-opus-5-5", label: "Claude Opus 5.5", provider: "Claude Code", efforts: ["low", "medium", "high"] },
-  { agent: "claude-code", id: "claude-code:claude-haiku-5-5", label: "Claude Haiku 5.5", provider: "Claude Code", efforts: ["low", "medium", "high"] },
-];
+const EFFORTS: ModelInfo["efforts"] = ["low", "medium", "high"];
 
 function installed(agent: Agent): boolean {
   try {
@@ -58,10 +53,20 @@ function installed(agent: Agent): boolean {
   }
 }
 
-/** The models of the outside agents installed on this Mac. */
-export function sidebarModels(): ModelInfo[] {
-  const have = new Set((["codex", "claude-code"] as Agent[]).filter(installed));
-  return MODELS.filter((m) => have.has(m.agent)).map(({ agent: _agent, ...info }) => info);
+/**
+ * The chat models, from shared-ai-auth's catalog: Codex and Claude Code when installed (they run
+ * whole tasks), and the Claude and Grok sign-ins Perch calls itself. `signedIn` names the
+ * subscriptions signed in now.
+ */
+export function sidebarModels(catalog: ModelCatalog = bundledModels, signedIn: readonly ("claude" | "grok")[] = [], has: (agent: Agent) => boolean = installed): ModelInfo[] {
+  const claude = catalog.claude ?? bundledModels.claude ?? [];
+  const list = (prefix: string, provider: string, models: readonly { id: string; label: string }[]) => models.map((m) => ({ id: `${prefix}:${m.id}`, label: m.label, provider, efforts: EFFORTS }));
+  return [
+    ...(has("codex") ? [...list("codex", "Codex", catalog.codex), { id: "codex:default", label: "Codex default", provider: "Codex", efforts: EFFORTS }] : []),
+    ...(signedIn.includes("claude") ? list("claude", "Claude", claude) : []),
+    ...(has("claude-code") ? list("claude-code", "Claude Code", claude) : []),
+    ...(signedIn.includes("grok") ? list("grok", "Grok", catalog.grok) : []),
+  ];
 }
 
 const STEP_NAMES: Record<string, string> = {
@@ -129,7 +134,23 @@ export type SidebarRunnerOptions = {
   skills?: () => Promise<SkillCatalog | undefined>;
   /** Company policy: the agent on or off, allowed models, and the mode cap. */
   policy?: PolicyView;
+  /**
+   * Perch's own agent loop, for a model Perch calls directly (a Claude sign-in, an API key)
+   * rather than through a CLI. It works in the chat's daemon session, so tabs group and stay the same.
+   */
+  ownLoop?: OwnLoop;
 };
+
+export type OwnLoop = (run: {
+  input: RunnerInput;
+  provider: string;
+  model: string;
+  /** The chat's daemon session id, as a CLI agent's would be. */
+  session: string;
+  mode: Mode;
+  memory?: MemoryAccess;
+  extras?: SidebarExtras;
+}) => AsyncIterable<StepEvent>;
 
 /** Why a chat on this model cannot start under the company policy, or null when it can. */
 export function sidebarRefusal(agent: string, model: string, policy: Policy): string | null {
@@ -150,7 +171,11 @@ export function sidebarRunner(opts: SidebarRunnerOptions): Runner {
     const [agent, ...rest] = input.settings.model.split(":");
     const model = rest.join(":");
     if (agent !== "codex" && agent !== "claude-code") {
-      yield { type: "error", message: "Pick Codex or Claude Code as the model for this chat." };
+      if (!opts.ownLoop || !agent || !model) {
+        yield { type: "error", message: "Pick a model for this chat in its model menu." };
+        return;
+      }
+      yield* runOwnLoop(opts, opts.ownLoop, input, agent, model);
       return;
     }
     const policy = opts.policy?.current() ?? {};
@@ -233,4 +258,26 @@ export function sidebarRunner(opts: SidebarRunnerOptions): Runner {
       opts.runs.delete(session);
     }
   };
+}
+
+/** A chat on a model Perch calls itself: the same session, memory, skills and policy as a CLI agent gets. */
+async function* runOwnLoop(opts: SidebarRunnerOptions, ownLoop: OwnLoop, input: RunnerInput, provider: string, model: string): AsyncIterable<StepEvent> {
+  const policy = opts.policy?.current() ?? {};
+  const refused = sidebarRefusal(provider, model, policy);
+  if (refused) {
+    yield { type: "error", message: refused };
+    return;
+  }
+  const memory = input.incognito ? undefined : await opts.memory?.().catch(() => undefined);
+  const catalog = await opts.skills?.().catch(() => undefined);
+  const extras = sidebarExtras(catalog, memory, input.files, input.incognito ? undefined : input.schedule);
+  const session = input.chatId && !input.incognito ? `${CHAT_SESSION_PREFIX}${input.chatId}` : `sidebar-${randomBytes(12).toString("hex")}`;
+  const mode = capMode(input.settings.mode, policy);
+  // Registered like a CLI agent's run, so the perch dot and the live thumbnail find its tabs.
+  opts.runs.add(session, { token: randomBytes(32).toString("base64url"), mode, approve: input.approve, ...(input.chatId ? { chatId: input.chatId } : {}), ...(input.incognito ? { private: true } : {}) });
+  try {
+    yield* ownLoop({ input, provider, model, session, mode, ...(memory ? { memory } : {}), ...(extras ? { extras } : {}) });
+  } finally {
+    opts.runs.delete(session);
+  }
 }

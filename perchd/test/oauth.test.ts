@@ -203,3 +203,18 @@ test("an expired sign-in clears when new tokens appear in the Keychain", async (
   expect(await auth.status("grok")).toBe("signed-in");
   expect((await auth.tokens("grok")).accessToken).toBe("acc-new");
 });
+
+test("Claude sign-in: no localhost listener, the whole code#state is pasted, JSON token request", async () => {
+  server = tokenServer([{ access_token: "sk-ant-oat01-acc", refresh_token: "sk-ant-ort01-ref", expires_in: 28800 }]);
+  const { auth } = setup();
+  const start = await auth.startSignIn("claude");
+  const url = new URL(start.url);
+  expect(url.hostname).toBe("claude.com");
+  expect(start.needsPaste).toBe(true);
+  const state = url.searchParams.get("state")!;
+  await expect(auth.finishSignIn("claude", "just-the-code")).rejects.toThrow("including the part after #");
+  await auth.finishSignIn("claude", `the-code#${state}`);
+  expect(await auth.tokens("claude")).toEqual({ accessToken: "sk-ant-oat01-acc" });
+  const sent = server.seen.find((s) => s.path === "/v1/oauth/token")!;
+  expect(sent.body).toMatchObject({ grant_type: "authorization_code", code: "the-code", state });
+});

@@ -46,6 +46,8 @@ export function buildChatModel(provider: ProviderId, model: string, deps: Adapte
   switch (provider) {
     case "anthropic":
       return anthropicModel({ model, apiKey: requireKey(deps, def.label), url: `${base}/messages`, ...(extra.fast ? { fast: true } : {}) }, deps.fetch);
+    case "claude":
+      return anthropicModel({ model, oauth: async () => (await deps.oauthTokens()).accessToken, url: `${base}/messages`, ...(extra.fast ? { fast: true } : {}) }, deps.fetch);
     case "codex":
     case "grok":
       return responsesModel({ provider, model, getToken: deps.oauthTokens, url: `${base}/responses` }, deps.fetch);

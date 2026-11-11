@@ -18,7 +18,8 @@ export type AppOptions = {
   dataDir: string;
   vault: Vault;
   runner: Runner;
-  models: ModelInfo[];
+  /** The chat models; a function when the list changes while Perch runs (a sign-in, a catalog refresh). */
+  models: ModelInfo[] | (() => ModelInfo[]);
   defaults?: Partial<ChatSettings>;
   /** Origins of Perch's pages, such as chrome://perch-chat. */
   allowedOrigins: string[];
@@ -49,6 +50,8 @@ export type PagesCore = {
   runs: RunManager;
   emit: (event: string, data: unknown) => void;
   setDefaults: (patch: Partial<ChatSettings>) => void;
+  /** The chat models and the settings a new chat starts with. */
+  info: () => AppInfo;
 };
 
 export type App = {
@@ -155,8 +158,9 @@ export async function startApp(opts: AppOptions): Promise<App> {
   });
   // Scheduled messages (scheduled.ts) are only sent by the app the browser runs, not by test apps.
   if (opts.scheduler !== false) runs.scheduler.start();
-  let defaults: ChatSettings = { ...DEFAULT_SETTINGS, model: opts.models[0]?.id ?? "", ...opts.defaults };
-  const info = (): AppInfo => ({ models: opts.models, defaults, artifactOrigin: artifactServer.origin });
+  const models = typeof opts.models === "function" ? opts.models : () => opts.models as ModelInfo[];
+  let defaults: ChatSettings = { ...DEFAULT_SETTINGS, model: models()[0]?.id ?? "", ...opts.defaults };
+  const info = (): AppInfo => ({ models: models(), defaults, artifactOrigin: artifactServer.origin });
   const pages = opts.pages?.({
     chats,
     runs,
@@ -164,6 +168,7 @@ export async function startApp(opts: AppOptions): Promise<App> {
     setDefaults: (patch) => {
       defaults = { ...defaults, ...patch };
     },
+    info: () => info(),
   }) ?? null;
   const files = new FileRegistry();
   const token = opts.token ?? Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url");
@@ -174,7 +179,10 @@ export async function startApp(opts: AppOptions): Promise<App> {
     listen: opts.listen ?? { port: 0 },
     uiDir: opts.uiDir,
     ctx: {
-      chats, artifacts, runs, windows, info, artifactServer, pages, files, models: opts.models.map((m) => m.id),
+      chats, artifacts, runs, windows, info, artifactServer, pages, files,
+      get models() {
+        return models().map((m) => m.id);
+      },
       get defaults() {
         return defaults;
       },

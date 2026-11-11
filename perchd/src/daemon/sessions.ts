@@ -236,6 +236,27 @@ export class SessionManager {
     this.writeFile();
   }
 
+  /**
+   * Lends a session's tabs to Perch's own agent loop (a chat on a model it calls directly): the
+   * context to work in, and `sync`, which groups tabs it opened and records them.
+   */
+  async lend(session: AgentSession): Promise<{ ctx: ToolContext; sync: () => Promise<void> }> {
+    const ctx = await this.context(session);
+    if (session.asleep) await this.wake(session);
+    const grouped = new Set(session.tabIds());
+    return {
+      ctx,
+      sync: async () => {
+        session.lastUsed = Date.now();
+        const added = session.tabIds().filter((id) => !grouped.has(id));
+        if (!added.length) return;
+        added.forEach((id) => grouped.add(id));
+        await this.group(session, added);
+        this.writeFile();
+      },
+    };
+  }
+
   private async context(session: AgentSession): Promise<ToolContext> {
     session.ctx ??= await newToolContext(await this.opts.browser());
     return session.ctx;

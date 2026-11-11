@@ -105,7 +105,7 @@ async function text(model: Model): Promise<string> {
 test("nothing is connected at first, and each provider says what it needs", async () => {
   const { registry } = await setup();
   const list = await registry.listProviders();
-  expect(list.map((p) => p.id)).toEqual(["codex", "claude-code", "grok", "anthropic", "openai", "xai", "gemini", "openrouter", "custom", "lmstudio", "ollama"]);
+  expect(list.map((p) => p.id)).toEqual(["codex", "claude", "claude-code", "grok", "anthropic", "openai", "xai", "gemini", "openrouter", "custom", "lmstudio", "ollama"]);
   expect(list.every((p) => !p.connected)).toBe(true);
   expect(list.find((p) => p.id === "codex")).toMatchObject({ kind: "subscription", state: "signed-out", connect: "sign-in" });
   expect(list.find((p) => p.id === "claude-code")).toMatchObject({ state: "not-installed", connect: "install" });

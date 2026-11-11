@@ -1,7 +1,7 @@
 /** The names Settings → Models works with: providers, task roles and effort levels (spec 7.3). */
 
 export const PROVIDER_IDS = [
-  "codex", "claude-code", "grok",
+  "codex", "claude", "claude-code", "grok",
   "anthropic", "openai", "xai", "gemini", "openrouter",
   "custom", "lmstudio", "ollama",
 ] as const;

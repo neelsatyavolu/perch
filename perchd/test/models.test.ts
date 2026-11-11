@@ -229,3 +229,24 @@ test("the fake model plays its script and records requests", async () => {
   expect(model.requests).toHaveLength(1);
   await expect(collect(model)).rejects.toThrow("the fake model's script ran out");
 });
+
+test("a Claude sign-in sends its requests the way the subscription backend needs, and follows its version gate", async () => {
+  const seen: { url: string; init: RequestInit }[] = [];
+  const model = anthropicModel(
+    { model: "claude-fable-5-2", oauth: async () => "sk-ant-oat01-TOKEN" },
+    fakeFetch([{ status: 400, body: '{"type":"error","error":{"type":"invalid_request_error","message":"Claude Code 2.1.322 does not support this model; version 2.1.400 or newer is required."}}' }, { status: 200, body: ANTHROPIC_STREAM }], seen),
+  );
+  const events = [];
+  for await (const e of model.turn({ system: "You are Perch.", messages: [{ role: "user", text: "Find the cheapest SSD" }], tools: [] }, new AbortController().signal)) events.push(e);
+  expect(events.at(-1)?.type).toBe("done");
+  expect(seen).toHaveLength(2);
+  const headers = seen[1]!.init.headers as Record<string, string>;
+  expect(headers.authorization).toBe("Bearer sk-ant-oat01-TOKEN");
+  expect(headers["x-api-key"]).toBeUndefined();
+  expect(headers["anthropic-beta"]).toContain("oauth-2025-04-20");
+  expect(headers["user-agent"]).toBe("claude-cli/2.1.400 (external, perch)");
+  const body = JSON.parse(String(seen[1]!.init.body));
+  expect(body.system[0].text).toStartWith("x-anthropic-billing-header: cc_version=2.1.400.");
+  expect(body.system[1].text).toBe("You are Perch.");
+  expect(model.id).toBe("claude:claude-fable-5-2");
+});

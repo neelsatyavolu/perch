@@ -95,6 +95,10 @@ export type PageServices = {
   memoryApi: () => Promise<MemoryApi | undefined>;
   /** The profile's skills (built-in and the user's own), read fresh for each sidebar run. */
   skills: () => Promise<SkillCatalog>;
+  /** The subscriptions Perch can call itself that are signed in now. */
+  signedIn: () => Promise<("claude" | "grok")[]>;
+  /** A chat model Perch calls directly (`claude:claude-opus-5-5`), or why it can't be used now. */
+  chatModel: (provider: string, model: string) => Promise<Model | string>;
   /** Names a chat after its first reply with the profile's fast model (`startApp({ nameChat })`). */
   nameChat: (ask: string, reply: string) => Promise<string | null>;
   /** Hands over the app's chats and windows, for building the memory profile. */
@@ -164,6 +168,21 @@ export function openPageServices(opts: PageServicesOptions): PageServices {
     chatMemory: async () => (await data).chatMemory(),
     memoryApi: async () => ((await (await data).chatMemory()) ? (await data).memoryApi : undefined),
     skills: () => SkillCatalog.load({ store: new SkillStore(join(base, "skills"), secrets) }),
+    signedIn: async () => {
+      const list = await (await models()).listProviders();
+      return list.filter((p) => p.connected && (p.id === "claude" || p.id === "grok")).map((p) => p.id as "claude" | "grok");
+    },
+    chatModel: async (provider, model) => {
+      if (!isProviderId(provider)) return `Perch has no model provider "${provider}".`;
+      const policy = opts.policy?.current() ?? {};
+      if (!providerAllowed(provider, policy) || !allowsModel(provider, model, policy)) return MODEL_NOT_ALLOWED;
+      try {
+        const handle = await (await models()).modelFor({ provider, model });
+        return handle.kind === "model" ? handle.model : "This model runs as its own agent; pick it from the Claude Code or Codex list.";
+      } catch (error) {
+        return error instanceof Error ? error.message : String(error);
+      }
+    },
     nameChat: async (ask, reply) => titleChat(modelOf(await (await models()).modelFor("fast")), ask, reply, AbortSignal.timeout(20_000)),
     attach(a) {
       app = a;
@@ -173,6 +192,7 @@ export function openPageServices(opts: PageServicesOptions): PageServices {
         chats: core.chats,
         runs: core.runs,
         setDefaults: core.setDefaults,
+        chatInfo: core.info,
         jobs: new Jobs(core.emit),
         state: new PagesState(base, opts.vault),
         models: { registry: models, keychain: settingsKeychain, openUrl },

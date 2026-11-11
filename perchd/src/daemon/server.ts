@@ -25,7 +25,7 @@ export const SIDEBAR_CLIENT = "perch-sidebar";
 /** A chat's agent session (sidebar-runner.ts): its tabs stay between turns. */
 export const CHAT_SESSION_PREFIX = "chat-";
 /** How long a chat's tabs stay open after a turn, for the user to look at and for a follow-up to reuse. */
-const CHAT_KEEP_MS = 30 * 60_000;
+export const CHAT_KEEP_MS = 30 * 60_000;
 
 /**
  * A task the user started in Perch's sidebar and handed to an outside agent (Codex, Claude Code).

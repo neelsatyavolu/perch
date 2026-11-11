@@ -136,7 +136,7 @@ button.artifact-card:hover { background: var(--hover); }
 /* Composer: real controls, 24px pills on the elevated fill */
 .composer-block { flex: none; }
 /* One quiet box: no outline, the pickers inside it as plain text until hovered. */
-.composer { margin: 0 12px 12px; border-radius: 6px; background: var(--raised); padding: 12px 10px 8px 12px; display: grid; gap: 8px; }
+.composer { margin: 0 12px 12px; border-radius: 6px; background: var(--raised); padding: 12px 12px 8px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
 .composer .chip { background: var(--hover); }
 .composer .pill { background: none; color: var(--mute); padding: 0 6px; }
 .composer .pill:hover, .composer .pill[aria-expanded="true"] { background: var(--hover); color: var(--ink); }
@@ -184,8 +184,8 @@ button.artifact-card:hover { background: var(--hover); }
 
 /* Full-page chat */
 .full { height: 100%; display: flex; min-height: 0; background: var(--canvas); }
-.chats { width: 200px; flex: none; border-right: 1px solid var(--hair); padding: 12px 8px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; background: var(--canvas); }
-.chats .lbl { color: var(--mute); font-size: 12px; padding: 8px 10px 4px; margin: 0; }
+.chats { width: 200px; flex: none; border-right: 1px solid var(--hair); padding: 4px 8px 12px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; background: var(--canvas); }
+.chats .lbl { color: var(--mute); font-size: 12px; line-height: 16px; padding: 12px 10px 4px; margin: 0; }
 .row { height: 32px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 10px; border-radius: var(--r-control); color: var(--body); background: none; border: 0;
   font-size: 13px; text-align: left; width: 100%; transition: background var(--t-hover) var(--ease); }
 .row-t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

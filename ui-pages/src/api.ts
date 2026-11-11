@@ -261,7 +261,7 @@ export type PrivacySettings = {
 };
 export type PrivacyPatch = Partial<Omit<PrivacySettings, "backgroundConnections" | "blockerExceptions">>;
 /** An extension Perch ships built in: it can be turned off but not removed (spec 5.6, 5.7, 5.9). */
-export type BuiltInName = "perch" | "backrow" | "lulltab" | "caveatly";
+export type BuiltInName = "perch" | "backrow" | "caveatly";
 export type BuiltInExtension = { readonly name: BuiltInName; readonly enabled: boolean };
 /** `lastUsed` is left out when the browser doesn't know it. */
 export type SiteData = { readonly host: string; readonly bytes: number; readonly cookies: number; readonly lastUsed?: Iso };

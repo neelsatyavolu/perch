@@ -1,0 +1,60 @@
+# Perch: the toolbar meets a side panel that runs up beside it with a square corner, not a curve that shows the frame.
+diff --git a/chrome/browser/ui/views/frame/layout/browser_view_tabbed_layout_impl.cc b/chrome/browser/ui/views/frame/layout/browser_view_tabbed_layout_impl.cc
+index ceed92f66d..224deb83f3 100644
+--- a/chrome/browser/ui/views/frame/layout/browser_view_tabbed_layout_impl.cc
++++ b/chrome/browser/ui/views/frame/layout/browser_view_tabbed_layout_impl.cc
+@@ -275,6 +275,13 @@ BrowserViewTabbedLayoutImpl::BrowserViewTabbedLayoutImpl(
+ 
+ BrowserViewTabbedLayoutImpl::~BrowserViewTabbedLayoutImpl() = default;
+ 
++// Perch: whether a side panel is open and runs up beside the toolbar rather
++// than starting below it.
++bool BrowserViewTabbedLayoutImpl::PerchSidePanelBesideToolbar() const {
++  return layout_data_->horizontal_layout.has_side_panel() &&
++         !layout_data_->horizontal_layout.force_top_container_to_top;
++}
++
+ BrowserViewTabbedLayoutImpl::SeparatorInfo
+ BrowserViewTabbedLayoutImpl::CalculateSeparatorInfo() const {
+   SeparatorInfo info;
+@@ -1861,9 +1868,12 @@ void BrowserViewTabbedLayoutImpl::DoPostLayoutVisualAdjustments(
+           views().horizontal_tab_strip_region_view->GetBoundsInScreen();
+       if (toolbar_bounds.y() <= tabstrip_bounds.bottom()) {
+         // Trailing curve is always shown for normal horizontal tabstrip when
+-        // the two are vertically adjacent.
+-        toolbar_corners[CornerOrientation::kTopTrailing].type =
+-            CustomCornersBackground::CornerType::kRoundedWithBackground;
++        // the two are vertically adjacent. Perch: not when a side panel runs
++        // up beside the toolbar; the toolbar meets the panel square.
++        if (!PerchSidePanelBesideToolbar()) {
++          toolbar_corners[CornerOrientation::kTopTrailing].type =
++              CustomCornersBackground::CornerType::kRoundedWithBackground;
++        }
+ 
+         // If there is anything on the leading side or the first tab is not
+         // selected, then the corner radius is shown, otherwise we hide the
+@@ -2005,8 +2015,10 @@ void BrowserViewTabbedLayoutImpl::DoPostLayoutVisualAdjustments(
+           main_background_corners[CornerOrientation::kTopLeading].type =
+               CustomCornersBackground::CornerType::kRoundedWithBackground;
+         }
+-        main_background_corners[CornerOrientation::kTopTrailing].type =
+-            CustomCornersBackground::CornerType::kRoundedWithBackground;
++        if (!PerchSidePanelBesideToolbar()) {
++          main_background_corners[CornerOrientation::kTopTrailing].type =
++              CustomCornersBackground::CornerType::kRoundedWithBackground;
++        }
+       }
+     }
+ 
+diff --git a/chrome/browser/ui/views/frame/layout/browser_view_tabbed_layout_impl.h b/chrome/browser/ui/views/frame/layout/browser_view_tabbed_layout_impl.h
+index 462a89218b..594d46b1aa 100644
+--- a/chrome/browser/ui/views/frame/layout/browser_view_tabbed_layout_impl.h
++++ b/chrome/browser/ui/views/frame/layout/browser_view_tabbed_layout_impl.h
+@@ -92,6 +92,7 @@ class BrowserViewTabbedLayoutImpl : public BrowserViewLayoutImpl {
+   VerticalTabStripAnimation CalculateVerticalTabStripAnimation();
+   int GetCollapsedVerticalTabStripRelativeTop() const;
+   SeparatorInfo CalculateSeparatorInfo() const;
++  bool PerchSidePanelBesideToolbar() const;
+   SidePanelContentAnimation CalculateSidePanelContentAnimation() const;
+ 
+   std::unique_ptr<TransientLayoutData> layout_data_;

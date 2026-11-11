@@ -214,6 +214,13 @@ class Snapshotter {
       }
     } else if (state == "panel") {
       SidePanelUI::From(browser_)->Show(SidePanelEntryId::kPerch);
+    } else if (state.starts_with("pin:")) {
+      // Pins the tab at the index after "pin:".
+      int index = 0;
+      if (base::StringToInt(state.substr(4), &index) &&
+          browser_->GetTabStripModel()->ContainsIndex(index)) {
+        browser_->GetTabStripModel()->SetTabPinned(index, true);
+      }
     } else if (state == "fullscreen") {
       // The browser's own full screen (View > Enter Full Screen).
       chrome::ToggleFullscreenMode(browser_);

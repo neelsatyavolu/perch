@@ -1,0 +1,82 @@
+# Perch: pinned tabs are bare icons in the pinned tray; the active one and one under the pointer get a soft inset fill, and the tray is centred on the tabs.
+diff --git a/chrome/browser/ui/views/tabs/common/horizontal_tab_style_views.cc b/chrome/browser/ui/views/tabs/common/horizontal_tab_style_views.cc
+index 5e840f99bb..7241946c83 100644
+--- a/chrome/browser/ui/views/tabs/common/horizontal_tab_style_views.cc
++++ b/chrome/browser/ui/views/tabs/common/horizontal_tab_style_views.cc
+@@ -753,10 +753,46 @@ TabStyle::TabSelectionState HorizontalTabStyleViews::GetSelectionState() const {
+   return TabStyle::TabSelectionState::kInactive;
+ }
+ 
++// Perch: a pinned tab is a bare icon in the pinned tray (TabContainer paints
++// the tray). The active one, and one under the pointer, get a soft rounded
++// fill inset in the tray rather than a tab shape joined to the toolbar.
++void HorizontalTabStyleViews::PaintPinnedTabBackground(gfx::Canvas* canvas,
++                                                       bool hovered) const {
++  const views::View* view = delegate_->GetView();
++  const ui::ColorProvider* colors = view->GetColorProvider();
++  if (!colors) {
++    return;
++  }
++  const float alpha =
++      delegate_->IsActive()
++          ? 0x1F
++          : (hovered ? 0x14 * static_cast<float>(GetHoverAnimationValue())
++                     : 0.0f);
++  if (alpha <= 0) {
++    return;
++  }
++  const float side = tab_style()->GetBottomCornerRadius() + 1.5f;
++  gfx::RectF fill(view->GetLocalBounds());
++  fill.Inset(gfx::InsetsF::TLBR(
++      GetLayoutConstant(LayoutConstant::kTabStripPadding) + 3.5f, side,
++      GetLayoutConstant(LayoutConstant::kTabstripToolbarOverlap) + 3.5f,
++      side));
++  cc::PaintFlags flags;
++  flags.setAntiAlias(true);
++  flags.setColor(SkColorSetA(
++      colors->GetColor(kColorTabForegroundActiveFrameActive),
++      base::ClampRound<uint8_t>(alpha)));
++  canvas->DrawRoundRect(fill, 4, flags);
++}
++
+ void HorizontalTabStyleViews::PaintTabBackground(
+     gfx::Canvas* canvas,
+     bool hovered,
+     std::optional<int> fill_id) const {
++  if (delegate_->IsPinned()) {
++    PaintPinnedTabBackground(canvas, hovered);
++    return;
++  }
+   std::optional<SkColor> group_color = delegate_->GetGroupColor();
+ 
+   PaintTabBackgroundFill(canvas, hovered, fill_id);
+diff --git a/chrome/browser/ui/views/tabs/common/horizontal_tab_style_views.h b/chrome/browser/ui/views/tabs/common/horizontal_tab_style_views.h
+index 7c4998c649..11aba43468 100644
+--- a/chrome/browser/ui/views/tabs/common/horizontal_tab_style_views.h
++++ b/chrome/browser/ui/views/tabs/common/horizontal_tab_style_views.h
+@@ -106,6 +106,7 @@ class HorizontalTabStyleViews : public TabStyleViews {
+   float GetHoverOpacity() const;
+ 
+   // Painting helper functions:
++  void PaintPinnedTabBackground(gfx::Canvas* canvas, bool hovered) const;
+   void PaintTabBackground(gfx::Canvas* canvas,
+                           bool hovered,
+                           std::optional<int> fill_id) const;
+diff --git a/chrome/browser/ui/views/tabs/tab_container.cc b/chrome/browser/ui/views/tabs/tab_container.cc
+index feb447872b..10b980b080 100644
+--- a/chrome/browser/ui/views/tabs/tab_container.cc
++++ b/chrome/browser/ui/views/tabs/tab_container.cc
+@@ -914,8 +914,12 @@ void TabContainer::OnPaint(gfx::Canvas* canvas) {
+   if (tray.IsEmpty() || !colors) {
+     return;
+   }
++  // The tray wraps the tabs' visible body: below the strip's top padding and
++  // above the rows the toolbar covers, so the icons sit in its middle.
+   gfx::RectF edge(tray);
+-  edge.Inset(gfx::InsetsF::TLBR(5.5f, 4.5f, 5.5f, 4.5f));
++  edge.Inset(gfx::InsetsF::TLBR(
++      GetLayoutConstant(LayoutConstant::kTabStripPadding) + 1.5f, 4.5f,
++      GetLayoutConstant(LayoutConstant::kTabstripToolbarOverlap) + 1.5f, 4.5f));
+   const SkColor ink = colors->GetColor(kColorTabForegroundActiveFrameActive);
+   constexpr float kRadius = 6;
+   cc::PaintFlags flags;

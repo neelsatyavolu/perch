@@ -4,7 +4,7 @@ import { act } from "preact/test-utils";
 import type { ApprovalCard as Card, ChatMessage, ChatSettings, ModelInfo } from "../src/api/types";
 import { ApprovalCard } from "../src/components/approval";
 import { clampWidth, parseCsv, PANE } from "../src/components/artifact-pane";
-import { ChatList } from "../src/components/chat-list";
+import { ago, ChatList } from "../src/components/chat-list";
 import { Composer, PLACEHOLDER } from "../src/components/composer";
 import { fitEffort, matchModels } from "../src/components/model-menu";
 import { PerchDot } from "../src/components/icon";
@@ -214,21 +214,43 @@ test("attach and dictate are visible but say why they are off", () => {
   expect(attach.title).toContain("Perch build");
 });
 
-test("the chat list groups by day and marks the selected and running chats", () => {
+test("the chat list puts pinned chats first, marks unread, failed, selected and running chats, and filters", () => {
   const now = new Date("2026-11-05T12:00:00").getTime();
   const chats = [
     { id: "a", title: "Subscriptions from receipts", updatedAt: new Date("2026-11-05T09:00:00").toISOString(), tab: null, status: "running" as const, preview: "" },
-    { id: "b", title: "Compare SFO to HND fares", updatedAt: new Date("2026-11-03T09:00:00").toISOString(), tab: null, status: "idle" as const, preview: "" },
-    { id: "c", title: "Old", updatedAt: new Date("2026-10-01T09:00:00").toISOString(), tab: null, status: "waiting" as const, preview: "" },
+    { id: "b", title: "Compare SFO to HND fares", updatedAt: new Date("2026-11-03T09:00:00").toISOString(), tab: null, status: "idle" as const, preview: "Cheapest is ANA", unread: true as const },
+    { id: "c", title: "Old", updatedAt: new Date("2026-10-01T09:00:00").toISOString(), tab: null, status: "waiting" as const, preview: "", pinned: true as const },
+    { id: "d", title: "Broken", updatedAt: new Date("2026-10-02T09:00:00").toISOString(), tab: null, status: "idle" as const, preview: "", failed: true as const },
   ];
   const picked: string[] = [];
-  const el = mount(<ChatList chats={chats} selected="a" now={now} onSelect={(id) => picked.push(id)} onNew={() => {}} />);
-  expect([...el.querySelectorAll(".lbl")].map((l) => l.textContent)).toEqual(["Today", "This week", "Earlier"]);
+  let settings = 0;
+  const el = mount(<ChatList chats={chats} selected="a" now={now} onSelect={(id) => picked.push(id)} onNew={() => {}} onSettings={() => settings++} />);
+  expect([...el.querySelectorAll(".lbl")].map((l) => l.textContent)).toEqual(["Chats"]);
+  const rows = () => [...el.querySelectorAll(".row:not(.act)")];
+  expect(rows().map((r) => r.querySelector(".row-t")!.textContent)).toEqual(["Old", "Subscriptions from receipts", "Compare SFO to HND fares", "Broken"]);
+  expect(rows()[0]!.getAttribute("aria-label")).toBe("Old, Pinned, Needs your approval");
   expect(el.querySelector(".row.sel")!.textContent).toContain("Subscriptions from receipts");
   expect(el.querySelector(".row.sel .dot.live")).not.toBeNull();
-  expect(el.textContent).toContain("Needs your approval");
-  click([...el.querySelectorAll(".row")].find((r) => r.textContent!.includes("Compare"))!);
+  expect(rows()[2]!.querySelector(".mark.new")).not.toBeNull();
+  expect(rows()[3]!.querySelector(".mark.err")).not.toBeNull();
+  click([...el.querySelectorAll(".row.act")].find((r) => r.textContent!.includes("Settings"))!);
+  expect(settings).toBe(1);
+  click(rows().find((r) => r.textContent!.includes("Compare"))!);
   expect(picked).toEqual(["b"]);
+  const search = el.querySelector('input[type="search"]') as HTMLInputElement;
+  act(() => {
+    search.value = "ana";
+    search.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(rows().map((r) => r.querySelector(".row-t")!.textContent)).toEqual(["Compare SFO to HND fares"]);
+});
+
+test("chat times read as Aside's do", () => {
+  const now = new Date("2026-11-05T12:00:00Z").getTime();
+  expect(ago("2026-11-05T11:59:30Z", now)).toBe("just now");
+  expect(ago("2026-11-05T11:55:00Z", now)).toBe("5 minutes ago");
+  expect(ago("2026-11-05T09:00:00Z", now)).toBe("3 hours ago");
+  expect(ago("2026-11-04T11:00:00Z", now)).toBe("1 day ago");
 });
 
 test("the artifact pane keeps its width in range and reads CSV", () => {

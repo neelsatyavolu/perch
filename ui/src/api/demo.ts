@@ -87,7 +87,7 @@ export function createDemoClient(windowId: string): Client {
     return chat;
   };
   const summary = (c: Chat): ChatSummary => ({
-    id: c.id, title: c.title, updatedAt: c.updatedAt, tab: c.tab, status: run?.chatId === c.id ? (run.approval ? "waiting" : "running") : "idle", preview: c.messages.at(-1)?.text ?? "",
+    id: c.id, title: c.title, updatedAt: c.updatedAt, tab: c.tab, status: run?.chatId === c.id ? (run.approval ? "waiting" : "running") : "idle", preview: c.messages.at(-1)?.text ?? "", ...(c.pinned ? { pinned: true as const } : {}),
   });
   const payload = (chat: Chat | undefined): ChatPayload => ({ chat: chat ?? null, run: chat && run?.chatId === chat.id ? run : null, artifacts: [] });
   const newChat = (over: Partial<Chat> = {}): Chat =>
@@ -115,8 +115,9 @@ export function createDemoClient(windowId: string): Client {
     createChat: (init = {}) => ok(newChat({ ...(init.title ? { title: init.title } : {}), settings: { ...DEFAULTS, ...init.settings } })),
     chat: (id) => ok(payload(chats.find((c) => c.id === id))),
     patchChat: (id, patch) => attempt(() => {
-      const chat = find(id);
-      return put({ ...chat, ...patch, settings: { ...chat.settings, ...patch.settings } });
+      const { pinned: wasPinned, ...chat } = find(id);
+      const { pinned, read: _read, ...rest } = patch;
+      return put({ ...chat, ...rest, ...((pinned ?? wasPinned) ? { pinned: true as const } : {}), settings: { ...chat.settings, ...patch.settings } });
     }),
     deleteChat: (id) => attempt(() => {
       find(id);

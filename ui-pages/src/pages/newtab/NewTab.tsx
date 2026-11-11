@@ -11,6 +11,21 @@ import "./newtab.css";
 
 type Data = { chats: readonly ChatSummary[]; routines: readonly Routine[]; suggestions: readonly Suggestion[] };
 const SECTION_NAMES: Readonly<Record<NtpSection, string>> = { recent: "recent", suggested: "suggested" };
+/** Matches newtab.css: below this width the rail becomes a drawer over the page. */
+const NARROW = "(max-width: 760px)";
+
+function useMedia(query: string): boolean {
+  const mq = typeof matchMedia === "function" ? matchMedia(query) : null;
+  const [matches, setMatches] = useState(() => mq?.matches ?? false);
+  useEffect(() => {
+    if (!mq) return;
+    const onChange = () => setMatches(mq.matches);
+    onChange();
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [query]);
+  return matches;
+}
 
 /** The new tab page (spec 5.5, DESIGN.md "New tab page"). No greeting headline. */
 export function NewTab() {
@@ -21,6 +36,19 @@ export function NewTab() {
   const [data, setData] = useState<Data | null>(null);
   /** The refresh started by the tab coming back, so focus and visibilitychange run it once. */
   const showing = useRef<Promise<unknown> | null>(null);
+  // At narrow widths the rail is a drawer that starts closed; the saved setting is for wide windows.
+  const narrow = useMedia(NARROW);
+  const [drawer, setDrawer] = useState(false);
+
+  useEffect(() => {
+    if (!narrow) setDrawer(false);
+  }, [narrow]);
+  useEffect(() => {
+    if (!drawer) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setDrawer(false);
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [drawer]);
 
   const refresh = () =>
     Promise.all([api.listChats(200), api.listRoutines(), api.listSuggestions()]).then(
@@ -52,21 +80,26 @@ export function NewTab() {
   };
   const hide = (s: NtpSection) => update({ hidden: [...layout.hidden.filter((h) => h !== s), s] });
   const show = (s: NtpSection) => update({ hidden: layout.hidden.filter((h) => h !== s) });
+  const railOpen = narrow ? drawer : layout.railOpen;
+  const toggleRail = () => (narrow ? setDrawer(!drawer) : update({ railOpen: !layout.railOpen }));
 
   return (
     <div class="ntp-wrap">
-      {layout.railOpen && <ChatRail chats={data?.chats ?? null} />}
+      {railOpen && narrow && <div class="rail-scrim" aria-hidden="true" onClick={() => setDrawer(false)} />}
+      {railOpen && <ChatRail chats={data?.chats ?? null} drawer={narrow} />}
       <main class="ntp-main">
-        <button
-          type="button"
-          class="ib rail-toggle"
-          aria-label={layout.railOpen ? "Hide chats" : "Show chats"}
-          aria-expanded={layout.railOpen ? "true" : "false"}
-          aria-controls="chat-rail"
-          onClick={() => update({ railOpen: !layout.railOpen })}
-        >
-          <Icon of={layout.railOpen ? PanelLeftClose : PanelLeft} />
-        </button>
+        <div class="ntp-bar">
+          <button
+            type="button"
+            class="ib rail-toggle"
+            aria-label={railOpen ? "Hide chats" : "Show chats"}
+            aria-expanded={railOpen ? "true" : "false"}
+            aria-controls="chat-rail"
+            onClick={toggleRail}
+          >
+            <Icon of={railOpen ? PanelLeftClose : PanelLeft} />
+          </button>
+        </div>
         <div class="ntp">
           <h1 class="sr-only">New tab</h1>
           <PerchMark />

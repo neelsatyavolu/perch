@@ -24,6 +24,9 @@ type Props = { client: Client; windowId: string; fallbackTab?: TabInfo | null; h
 const SCROLL_SAVE_MS = 500;
 export const SIDEBAR_EMPTY = "Ask Perch about this page, or give it a task on any site you are signed in to.";
 
+/** The header's status words; in a narrow side chat only the dot shows, with these as its tooltip. */
+const STATE_WORDS = { idle: "", running: "Working", waiting: "Waiting for you" } as const;
+
 export function Sidebar({ client, windowId, fallbackTab = null, host }: Props) {
   const chat = useChat(client);
   const [info, setInfo] = useState<AppInfo | null>(null);
@@ -147,8 +150,8 @@ export function Sidebar({ client, windowId, fallbackTab = null, host }: Props) {
       {/* The panel's only header: the browser draws none above it, so close lives here too. */}
       <header class="side-h">
         <h1 class="title">{loaded ? view.chat?.title ?? "New chat" : ""}</h1>
-        <PerchDot status={status} />
-        {status !== "idle" && <span class="state">{status === "running" ? "Working" : "Waiting for you"}</span>}
+        <PerchDot status={status} title={STATE_WORDS[status]} />
+        {status !== "idle" && <span class="state">{STATE_WORDS[status]}</span>}
         <Menu label="Recent chats" align="end" choices={others.map((c) => ({ value: c.id, label: c.title, hint: c.tab ? "In another tab" : undefined }))} selected={[]} empty="No other chats yet" onPick={(c) => void chat.run(() => attach(c.value))}>
           <Icon name="history" />
         </Menu>

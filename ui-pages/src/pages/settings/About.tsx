@@ -38,14 +38,14 @@ export function About() {
     <div class="sec">
       <Group label="Version">
         <div class="card">
-          <Row id="version" title={`Perch ${a.version}`} detail={`${a.channel === "beta" ? "Beta" : "Stable"} channel`} icon={<PerchMark size={28} />}>
+          <Row id="version" title={`Perch ${a.version}`} detail={`${a.channel === "beta" ? "Beta" : "Stable"} channel`} icon={<span class="tile" aria-hidden="true"><PerchMark size={32} tile={false} /></span>}>
             <span class="status" role="status">{statusWords(status, a.lastChecked)}</span>
             {status?.state === "available" || status?.state === "ready" ? (
               <button type="button" class="btn primary" onClick={async () => setStatus((await act(() => api.installUpdate())) ?? status)}>
                 {status.state === "ready" ? "Restart Perch" : "Install update"}
               </button>
             ) : (
-              <button type="button" class="btn" disabled={status?.state === "checking"} onClick={check}>Check for updates</button>
+              <button type="button" class="btn sm" disabled={status?.state === "checking"} onClick={check}>Check for updates</button>
             )}
           </Row>
           <Row id="auto-update" title="Update automatically" detail={locked("auto-update") ? MANAGED_NOTE : "Checks once a day on GitHub and installs signed updates when you restart"}>

@@ -78,7 +78,7 @@ export function SkillsMcp() {
           {servers.error && <p class="empty">{servers.error}</p>}
           {servers.data && list.length === 0 && <p class="empty">No MCP servers yet. Import the ones you use in other apps, or add one.</p>}
           {list.map((s) => (
-            <Row key={s.id} title={s.name} detail={describe(s)} icon={<span class="tile" aria-hidden="true">{s.name.charAt(0)}</span>}>
+            <Row key={s.id} title={s.name} detail={describe(s)} icon={<span class="tile" aria-hidden="true">{s.name.charAt(0).toUpperCase()}</span>}>
               <button type="button" class="ib" aria-label={`${s.name} options`} onClick={() => setSelected(s)}><Icon of={MoreHorizontal} /></button>
               <Switch label={`Use ${s.name}`} checked={s.enabled} onChange={async (enabled) => {
                 const next = await act(() => api.updateMcpServer(s.id, { enabled }));

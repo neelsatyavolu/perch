@@ -13,13 +13,13 @@ import { BackupGroup } from "./Backup";
 const DOH: Readonly<Record<DohProvider, string>> = { cloudflare: "Cloudflare", quad9: "Quad9", mullvad: "Mullvad", custom: "Custom" };
 
 type Toggle = { id: string; key: keyof PrivacyPatch; title: string; detail: string };
-const TOGGLES: readonly Toggle[] = [
-  { id: "content-blocker", key: "contentBlocker", title: "Block ads and trackers", detail: "EasyList and EasyPrivacy rules. Turn it off for one site from the address bar." },
+const BLOCK_ADS: Toggle = { id: "content-blocker", key: "contentBlocker", title: "Block ads and trackers", detail: "EasyList and EasyPrivacy rules. Turn it off for one site from the address bar." };
+const AD_TOGGLES: readonly Toggle[] = [
   { id: "cookie-banners", key: "cookieBanners", title: "Reject cookie banners", detail: "Clicks reject for you where the site offers it" },
   { id: "tracking-params", key: "trackingParams", title: "Remove tracking parameters", detail: "Strips utm_, fbclid, gclid and similar from links you open and copy" },
-  { id: "https-only", key: "httpsOnly", title: "HTTPS-only", detail: "Asks before opening a site that only offers an unencrypted connection" },
   { id: "fingerprinting", key: "fingerprinting", title: "Block ad-targeting APIs", detail: "Turns off Topics, Protected Audience and ad measurement, which let sites target ads without cookies" },
 ];
+const HTTPS_ONLY: Toggle = { id: "https-only", key: "httpsOnly", title: "HTTPS-only", detail: "Asks before opening a site that only offers an unencrypted connection" };
 
 function SiteDataCard() {
   const api = useApi();
@@ -92,26 +92,35 @@ export function Privacy() {
   };
   const resolver: DohProvider = pendingCustom ? "custom" : p.dohProvider;
 
+  const toggle = (t: Toggle) => (
+    <Row key={t.id} id={t.id} title={t.title} detail={t.detail}>
+      <Switch label={t.title} describedBy={`${t.id}-d`} checked={Boolean(p[t.key])} onChange={(v) => patch({ [t.key]: v })} />
+    </Row>
+  );
+
   return (
     <div class="sec">
-      <Group label="Protection">
+      <Group label="Ads and tracking">
         <div class="card">
-          {TOGGLES.map((t) => (
-            <Row key={t.id} id={t.id} title={t.title} detail={t.detail}>
-              <Switch label={t.title} describedBy={`${t.id}-d`} checked={Boolean(p[t.key])} onChange={(v) => patch({ [t.key]: v })} />
-            </Row>
-          ))}
+          {toggle(BLOCK_ADS)}
           {p.blockerExceptions.map((host) => (
             <Row key={host} sub title={<span class="mono">{host}</span>} detail="Ads and trackers allowed on this site">
               <button type="button" class="ib" aria-label={`Block ads on ${host} again`} onClick={() => apply(() => api.removeBlockerException(host))}><Icon of={X} /></button>
             </Row>
           ))}
+          {AD_TOGGLES.map(toggle)}
           <Row id="third-party-cookies" title="Block third-party cookies" detail="Sites can't follow you across other sites with cookies">
             <Switch label="Block third-party cookies" describedBy="third-party-cookies-d" checked={p.thirdPartyCookies === "block"} onChange={(v) => patch({ thirdPartyCookies: v ? "block" : "allow" })} />
           </Row>
+        </div>
+      </Group>
+
+      <Group label="Connections">
+        <div class="card">
+          {toggle(HTTPS_ONLY)}
           <Row id="doh" title="Encrypted DNS" detail="Looks up site addresses over HTTPS, and falls back to your network's DNS if the resolver is unreachable">
             {p.dnsOverHttps && (
-              <select class="picker sm" aria-label="DNS resolver" value={resolver} onChange={(e) => pickResolver((e.currentTarget as HTMLSelectElement).value as DohProvider)}>
+              <select class="picker" aria-label="DNS resolver" value={resolver} onChange={(e) => pickResolver((e.currentTarget as HTMLSelectElement).value as DohProvider)}>
                 {(Object.keys(DOH) as DohProvider[]).map((d) => <option key={d} value={d}>{DOH[d]}</option>)}
               </select>
             )}

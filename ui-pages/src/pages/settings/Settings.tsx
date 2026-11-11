@@ -1,6 +1,9 @@
 import type { ComponentType } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
-import { Icon, Search } from "../../ui/icons";
+import type { LucideIcon } from "lucide-preact";
+import {
+  ArrowDownToLine, Box, Brain, ChevronRight, Gauge, Icon, Info, Lock, Palette, Plug, Puzzle, RefreshCw, Repeat, Search, ShieldCheck,
+} from "../../ui/icons";
 import { About } from "./About";
 import { BuiltIn } from "./BuiltIn";
 import { Appearance } from "./Appearance";
@@ -9,7 +12,7 @@ import { Models } from "./Models";
 import { Performance } from "./Performance";
 import { Permissions } from "./Permissions";
 import { Privacy } from "./Privacy";
-import { SECTIONS, type SectionId, isSection, searchSettings, sectionLabel } from "./sections";
+import { NAV_GROUPS, type SectionId, isSection, searchSettings, sectionLabel } from "./sections";
 import { SkillsMcp } from "./SkillsMcp";
 import { Sync } from "./Sync";
 import "./settings.css";
@@ -17,6 +20,11 @@ import "./settings.css";
 const PAGES: Readonly<Record<SectionId, ComponentType>> = {
   appearance: Appearance, models: Models, skills: SkillsMcp, permissions: Permissions, privacy: Privacy, performance: Performance, sync: Sync, builtin: BuiltIn,
   memory: MemorySection, routines: RoutinesSection, import: ImportSection, about: About,
+};
+
+const NAV_ICONS: Readonly<Record<SectionId, LucideIcon>> = {
+  appearance: Palette, privacy: Lock, sync: RefreshCw, import: ArrowDownToLine, models: Box, skills: Plug, permissions: ShieldCheck,
+  memory: Brain, routines: Repeat, performance: Gauge, builtin: Puzzle, about: Info,
 };
 
 const fromHash = (): SectionId => {
@@ -69,12 +77,14 @@ export function Settings() {
   };
 
   const results = searchSettings(query);
+  /** While searching, the section of the top result keeps a faint mark in the nav. */
+  const hinted = query.trim() ? results[0]?.section : undefined;
   const Page = PAGES[section];
   return (
     <div class="settings">
       <nav class="snav" aria-label="Settings">
         <div class="snav-search">
-          <Icon of={Search} size={14} />
+          <Icon of={Search} />
           <input
             type="search"
             aria-label="Search settings"
@@ -84,46 +94,60 @@ export function Settings() {
             onKeyDown={(e) => e.key === "Escape" && setQuery("")}
           />
         </div>
-        {SECTIONS.map((s) => (
-          <a
-            key={s.id}
-            href={`#${s.id}`}
-            class="row"
-            aria-current={!query && s.id === section ? "page" : undefined}
-            onClick={(e) => {
-              e.preventDefault();
-              go(s.id);
-            }}
-          >
-            {s.label}
-          </a>
+        {NAV_GROUPS.map((g) => (
+          <div class="snav-group" key={g.label || "more"}>
+            {g.label && <div class="snav-lbl" aria-hidden="true">{g.label}</div>}
+            <ul aria-label={g.label || "More"}>
+              {g.ids.map((id) => (
+                <li key={id}>
+                  <a
+                    href={`#${id}`}
+                    class={id === hinted ? "row hint" : "row"}
+                    aria-current={!query && id === section ? "page" : undefined}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      go(id);
+                    }}
+                  >
+                    <Icon of={NAV_ICONS[id]} />
+                    <span>{sectionLabel(id)}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
         ))}
       </nav>
-      <main class="spage">
-        {query.trim() ? (
-          <>
-            <h1 tabIndex={-1}>Search results</h1>
-            {results.length ? (
-              <ul class="card results" aria-label="Results">
-                {results.map((r) => (
-                  <li key={r.anchor}>
-                    <button type="button" class="result" onClick={() => go(r.section, r.anchor)}>
-                      <span class="n">{r.title}</span>
-                      <span class="cap">{sectionLabel(r.section)}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p class="mute">No settings match “{query.trim()}”</p>
-            )}
-          </>
-        ) : (
-          <>
-            <h1 ref={heading} tabIndex={-1}>{sectionLabel(section)}</h1>
-            <Page key={section} />
-          </>
-        )}
+      <main class="spage-panel">
+        <div class="spage">
+          {query.trim() ? (
+            <>
+              <h1 tabIndex={-1}>Search results</h1>
+              {results.length ? (
+                <ul class="card results" aria-label="Results">
+                  {results.map((r) => (
+                    <li key={r.anchor}>
+                      <button type="button" class="result" onClick={() => go(r.section, r.anchor)}>
+                        <span class="rt">
+                          <span class="n">{r.title}</span>
+                          <span class="cap">{sectionLabel(r.section)}</span>
+                        </span>
+                        <Icon of={ChevronRight} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p class="mute">No settings match “{query.trim()}”</p>
+              )}
+            </>
+          ) : (
+            <>
+              <h1 ref={heading} tabIndex={-1}>{sectionLabel(section)}</h1>
+              <Page key={section} />
+            </>
+          )}
+        </div>
       </main>
     </div>
   );

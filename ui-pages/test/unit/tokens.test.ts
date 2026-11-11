@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { ACCENTS, ACCENT_NAMES, THEMES, THEME_NAMES, accentFor, contrastRatio, tokenVars } from "../../src/theme/tokens";
+import { ACCENTS, ACCENT_NAMES, THEMES, THEME_NAMES, accentFor, contrastRatio, mix, surfaceSteps, tokenVars } from "../../src/theme/tokens";
 
 describe("theme tokens (DESIGN.md)", () => {
   test("five themes and five accents, Ink and Blue first", () => {
@@ -32,6 +32,15 @@ describe("theme tokens (DESIGN.md)", () => {
         expect(contrastRatio(t.mute, bg)).toBeGreaterThanOrEqual(4.5);
       }
     });
+    test(`${theme}: sidebar and row steps keep text and focus rings readable`, () => {
+      const s = surfaceSteps(theme);
+      for (const bg of [s.side, s.fill]) {
+        expect(contrastRatio(t.ink, bg)).toBeGreaterThanOrEqual(4.5);
+        expect(contrastRatio(t.mute, bg)).toBeGreaterThanOrEqual(4.5);
+        for (const accent of ACCENT_NAMES) expect(contrastRatio(accentFor(accent, theme), bg)).toBeGreaterThanOrEqual(3);
+      }
+      expect(contrastRatio(t.ink, s.navOn)).toBeGreaterThanOrEqual(4.5);
+    });
     test(`${theme}: primary button text meets AA`, () => {
       expect(contrastRatio(t.btnFg, t.btnBg)).toBeGreaterThanOrEqual(4.5);
     });
@@ -49,6 +58,16 @@ describe("theme tokens (DESIGN.md)", () => {
     for (const key of ["--card", "--raised", "--ink", "--body", "--mute", "--hair", "--hair-strong", "--btn-bg", "--btn-fg", "--ok", "--warn", "--pop"]) {
       expect(dark[key]).toBeTruthy();
     }
+  });
+
+  test("surface steps: sidebar lifts off the canvas and rows lift off the card", () => {
+    expect(mix("#FFFFFF", 50, "#000000")).toBe("#808080");
+    const ink = surfaceSteps("ink");
+    expect(ink.side).toBe("#1C1C1A");
+    expect(ink.fill).toBe("#212120");
+    expect(surfaceSteps("paper")).toEqual({ side: "#EFECE4", fill: "#FFFFFF", fillHover: "#F6F6F6", navOn: "#DBD9D2" });
+    expect(tokenVars("dusk", "blue")["--nav-on"]).toBe(surfaceSteps("dusk").navOn);
+    for (const key of ["--side", "--fill", "--fill-hover", "--nav-on"]) expect(tokenVars("contrast", "mono")[key]).toBeTruthy();
   });
 
   test("contrastRatio composites translucent text over its background", () => {

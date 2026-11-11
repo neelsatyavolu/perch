@@ -8,7 +8,7 @@ import { MANAGED_NOTE } from "../../lib/managed";
 import { useAction, useApi, useLoad } from "../../ui/frame";
 import { useManaged } from "../../ui/useManaged";
 import { Dialog } from "../../ui/Dialog";
-import { Group, Row } from "../../ui/Row";
+import { Group, LinkRow, Row } from "../../ui/Row";
 import { Switch } from "../../ui/Switch";
 import { DreamLogDialog } from "./DreamLogDialog";
 
@@ -46,12 +46,10 @@ export function MemorySection() {
       </Group>
       <Group label="Manage">
         <div class="card">
-          <Row title="Memory page" detail="Browse, edit and delete anything Perch remembers">
-            <button type="button" class="btn" onClick={() => act(() => api.openPage("memory"))}>Open memory</button>
-          </Row>
-          <Row title="Set up your memory" detail="Build a profile from the sources you pick, then review it">
-            <button type="button" class="btn" onClick={() => act(() => api.openPage("memory", "setup"))}>Set up</button>
-          </Row>
+          <LinkRow title="Open Memory" detail="Browse, edit and delete anything Perch remembers" onClick={() => act(() => api.openPage("memory"))} />
+          <LinkRow title="Set up your memory" detail="Build a profile from the sources you pick, then review it" onClick={() => act(() => api.openPage("memory", "setup"))} />
+        </div>
+        <div class="card">
           <Row id="memory-wipe" title="Delete all memory" detail="Removes every memory page on this Mac. This can't be undone.">
             <button type="button" class="btn danger" onClick={() => setWiping(true)}>Delete all</button>
           </Row>
@@ -80,7 +78,7 @@ export function RoutinesSection() {
   const list = routines.data ?? [];
   return (
     <div class="sec">
-      <Group label="Routines" id="routines-list">
+      <Group label="Routines" id="routines-list" bare>
         <div class="card">
           {routines.data && list.length === 0 && <p class="empty">No routines yet.</p>}
           {list.map((r) => (
@@ -91,7 +89,9 @@ export function RoutinesSection() {
               }} />
             </Row>
           ))}
-          <button type="button" class="more-row" onClick={() => act(() => api.openPage("routines"))}>Open Routines to add, edit or find routines</button>
+        </div>
+        <div class="card">
+          <LinkRow title="Open Routines" detail="Add, edit or find routines to automate" onClick={() => act(() => api.openPage("routines"))} />
         </div>
         <p class="note">Routines run with your default permission mode and appear in the activity log under Permissions.</p>
       </Group>

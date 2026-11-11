@@ -1,12 +1,12 @@
 /** The conversation: messages, the run in progress, and the approval card as the only status while it is up. */
 
-import type { VNode } from "preact";
+import { Fragment, type VNode } from "preact";
 import { useCallback, useLayoutEffect, useRef } from "preact/hooks";
 import type { ArtifactMeta, ChatMessage } from "../api/types";
 import type { ChatView } from "../state/chat";
 import { ApprovalCard } from "./approval";
 import { PerchMark } from "./icon";
-import { ArtifactCard, LiveRun, Message } from "./message";
+import { ArtifactCard, LiveRun, Message, dayLabel, newDay } from "./message";
 
 type ThreadProps = {
   view: ChatView;
@@ -62,12 +62,15 @@ export function Thread({ view, onDecide, onOpenArtifact, onBranch, selectedArtif
     >
       {messages.length === 0 && !run && empty ? (
         <div class="empty">
-          <PerchMark size={48} />
+          <PerchMark size={32} bare />
           {typeof empty === "string" ? <p>{empty}</p> : empty}
         </div>
       ) : null}
-      {messages.map((m) => (
-        <Message key={m.id} message={m} artifact={artifact} onBranch={onBranch} />
+      {messages.map((m, i) => (
+        <Fragment key={m.id}>
+          {newDay(m.time, messages[i - 1]?.time) && dayLabel(m.time) && <p class="day">{dayLabel(m.time)}</p>}
+          <Message message={m} artifact={artifact} onBranch={onBranch} />
+        </Fragment>
       ))}
       {run && <LiveRun key={run.runId} text={run.text} steps={run.steps} waiting={Boolean(run.approval)} since={run.startedAt} />}
       {run?.approval && <ApprovalCard key={run.approval.id} card={run.approval} onDecide={(ok) => onDecide(run.approval!.id, ok)} />}

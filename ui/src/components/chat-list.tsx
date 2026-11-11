@@ -46,7 +46,7 @@ export function ChatList({ chats, selected, onSelect, onNew, onSettings, now = D
     <nav class="chats" aria-label="Chats" onMouseLeave={() => setHover(null)}>
       <label class="chats-search">
         <Icon name="search" />
-        <input type="search" placeholder="Search.." aria-label="Search chats" value={query} onInput={(e) => setQuery(e.currentTarget.value)} />
+        <input type="search" placeholder="Search chats" aria-label="Search chats" value={query} onInput={(e) => setQuery(e.currentTarget.value)} />
       </label>
       <button type="button" class="row act" onClick={onNew}>
         <Icon name="pen" />

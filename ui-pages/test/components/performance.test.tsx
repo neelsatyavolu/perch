@@ -21,9 +21,20 @@ describe("Performance", () => {
     await waitFor(async () => expect((await r.api.getMemorySaver()).timeoutMinutes).toBe(0));
   });
 
-  test("lists rules in their typed form with what they cover", async () => {
+  test("sleep pinned tabs is off by default and saves when turned on", async () => {
     const r = renderWithApi(<Settings />);
-    expect(await r.findByText("=mail.example.com")).toBeTruthy();
+    const sw = await r.findByRole("switch", { name: "Sleep pinned tabs" });
+    expect(sw.getAttribute("aria-checked")).toBe("false");
+    expect(r.getByText("Pinned tabs can sleep like any other tab")).toBeTruthy();
+    expect(r.getByText(/in picture-in-picture, sharing your screen/)).toBeTruthy();
+    fireEvent.click(sw);
+    await waitFor(async () => expect((await r.api.getMemorySaver()).sleepPinned).toBe(true));
+    expect((await r.api.getMemorySaver()).timeoutMinutes).toBe(15);
+  });
+
+  test("lists rules by host, with what they cover", async () => {
+    const r = renderWithApi(<Settings />);
+    expect(await r.findByText("mail.example.com")).toBeTruthy();
     expect(r.getByText("Only this host")).toBeTruthy();
     expect(r.getByText("music.example.com")).toBeTruthy();
     expect(r.getByText("This site and its subdomains")).toBeTruthy();
@@ -49,7 +60,7 @@ describe("Performance", () => {
   test("removes a rule", async () => {
     const r = renderWithApi(<Settings />);
     fireEvent.click(await r.findByRole("button", { name: "Remove =mail.example.com" }));
-    await waitFor(() => expect(r.queryByText("=mail.example.com")).toBeNull());
+    await waitFor(() => expect(r.queryByText("mail.example.com")).toBeNull());
     expect((await r.api.getMemorySaver()).rules).toEqual([{ kind: "domain", pattern: "music.example.com" }]);
   });
 
@@ -63,8 +74,8 @@ describe("Performance", () => {
       "perch/ui-pages at main96.3 MB",
       "Quarterly plan - Example DocsAsleep",
       "Morning headlinesAsleep",
-      "Total520.5 MB",
     ]);
+    expect(document.querySelector("#tab-memory .tab-total")?.textContent).toBe("Total 520.5 MB");
   });
 
   test("Refresh loads the list again", async () => {
@@ -83,6 +94,7 @@ describe("Performance", () => {
     await waitFor(() => expect(pick.disabled).toBe(true));
     expect(r.getAllByText("Managed by your organization").length).toBe(2);
     expect(((r.getByRole("button", { name: "Add" })) as HTMLButtonElement).disabled).toBe(true);
+    expect(((r.getByRole("switch", { name: "Sleep pinned tabs" })) as HTMLButtonElement).disabled).toBe(true);
     expect(((r.getByRole("button", { name: "Remove =mail.example.com" })) as HTMLButtonElement).disabled).toBe(true);
     await expect(r.api.setMemorySaver({ timeoutMinutes: 5 })).rejects.toThrow("Managed by your organization");
   });

@@ -41,10 +41,10 @@ export function ApprovalCard({ card, onDecide }: { card: Card; onDecide: (approv
         </dl>
       ) : null}
       <div class="act">
-        <button type="button" class={card.danger ? "btn primary danger" : "btn primary"} disabled={busy} onClick={() => void decide(true)}>
+        <button type="button" class={card.danger ? "btn small primary danger" : "btn small primary"} disabled={busy} onClick={() => void decide(true)}>
           {card.confirm}
         </button>
-        <button type="button" class="btn" disabled={busy} onClick={() => void decide(false)}>
+        <button type="button" class="btn small outline" disabled={busy} onClick={() => void decide(false)}>
           Don't allow
         </button>
       </div>

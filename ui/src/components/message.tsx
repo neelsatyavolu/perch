@@ -43,9 +43,35 @@ export function ArtifactCard({ meta, onOpen, selected }: { meta: ArtifactMeta; o
   );
 }
 
+/** The time in the user's own clock style, such as "2:09 AM" or "02:09". */
 export function time(iso: string): string {
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "" : `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+  return Number.isNaN(d.getTime()) ? "" : d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+
+/** The divider above a day's first message: "Today 9:41 AM", "Yesterday 10:52 PM", "Nov 9 8:05 AM" (with the year when it is not this one). */
+export function dayLabel(iso: string, now = Date.now()): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const today = new Date(now);
+  const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+  const day =
+    dayKey(d) === dayKey(today)
+      ? "Today"
+      : dayKey(d) === dayKey(yesterday)
+        ? "Yesterday"
+        : d.toLocaleDateString(undefined, { month: "short", day: "numeric", ...(d.getFullYear() === today.getFullYear() ? {} : { year: "numeric" }) });
+  return `${day} ${time(iso)}`;
+}
+
+/** True when `iso` falls on a different calendar day from `prev` (or there is no `prev`). */
+export function newDay(iso: string, prev?: string): boolean {
+  if (!prev) return true;
+  const a = new Date(iso);
+  const b = new Date(prev);
+  return Number.isNaN(a.getTime()) || Number.isNaN(b.getTime()) ? false : dayKey(a) !== dayKey(b);
 }
 
 type MessageProps = {
@@ -111,7 +137,8 @@ function elapsed(ms: number): string {
 
 /**
  * The run in progress: how long it has worked, what the agent has said so far, and its steps as a
- * list with the current one marked. Older steps fold away once the list gets long.
+ * list with the current one marked. Older steps fold away once the list gets long. While an approval
+ * waits, every step folds into one line so the card is what the eye lands on.
  */
 export function LiveRun({ text, steps, waiting, since }: { text: string; steps: string[]; waiting: boolean; since?: string }) {
   const start = useRef(since ? Date.parse(since) || Date.now() : Date.now());
@@ -134,11 +161,11 @@ export function LiveRun({ text, steps, waiting, since }: { text: string; steps: 
         </div>
       )}
       {shownText && <Markdown text={shownText} />}
-      <Steps steps={earlier} />
-      {shown.length > 0 && (
+      {waiting ? <Steps steps={steps} /> : <Steps steps={earlier} />}
+      {!waiting && shown.length > 0 && (
         <ul class="steplist now">
           {shown.map((s, i) => (
-            <li key={earlier.length + i} class={!waiting && i === shown.length - 1 ? "current" : undefined}>
+            <li key={earlier.length + i} class={i === shown.length - 1 ? "current" : undefined}>
               {s}
             </li>
           ))}

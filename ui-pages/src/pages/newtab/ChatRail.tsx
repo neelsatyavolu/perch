@@ -27,8 +27,9 @@ const label = (c: ChatSummary) =>
  * Settings, then every chat under "Chats", pinned ones first. A blue dot marks a reply not seen
  * yet, a red mark one that failed; hovering a row shows its last message and when.
  * `chats` is null while they load, when the list shows nothing rather than "No chats yet".
+ * `drawer` draws it over the page, for windows too narrow to give it a column.
  */
-export function ChatRail({ chats, now = Date.now() }: { readonly chats: readonly ChatSummary[] | null; readonly now?: number }) {
+export function ChatRail({ chats, now = Date.now(), drawer = false }: { readonly chats: readonly ChatSummary[] | null; readonly now?: number; readonly drawer?: boolean }) {
   const api = useApi();
   const act = useAction();
   const [query, setQuery] = useState("");
@@ -49,7 +50,7 @@ export function ChatRail({ chats, now = Date.now() }: { readonly chats: readonly
 
   const list = pinnedFirst(results ?? chats ?? []);
   return (
-    <nav class="rail" id="chat-rail" aria-label="Chats" onMouseLeave={() => setTip(null)}>
+    <nav class={drawer ? "rail drawer" : "rail"} id="chat-rail" aria-label="Chats" onMouseLeave={() => setTip(null)}>
       <label class="rail-search">
         <Icon of={Search} />
         <input

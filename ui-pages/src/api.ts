@@ -271,8 +271,8 @@ export type SiteData = { readonly host: string; readonly bytes: number; readonly
 /** Lulltab's never-sleep forms: `example.com`, `=host`, `*.example.com`, a path prefix, or one page. */
 export type SleepRuleKind = "domain" | "host" | "wildcard" | "prefix" | "url";
 export type SleepRule = { readonly kind: SleepRuleKind; readonly pattern: string };
-/** timeoutMinutes 0 means memory saver is off. */
-export type MemorySaverSettings = { readonly timeoutMinutes: number; readonly rules: readonly SleepRule[] };
+/** timeoutMinutes 0 means memory saver is off. sleepPinned lets pinned tabs sleep too (off when left out). */
+export type MemorySaverSettings = { readonly timeoutMinutes: number; readonly rules: readonly SleepRule[]; readonly sleepPinned?: boolean };
 /** A loaded tab's memory; a sleeping tab reports bytes 0. */
 export type TabMemory = { readonly title: string; readonly url: string; readonly bytes: number; readonly asleep: boolean };
 
@@ -485,7 +485,7 @@ export interface PerchApi {
   // Performance
   getMemorySaver(): Promise<MemorySaverSettings>;
   /** Any field left out stays as it is. Rejects with a sentence for a timeout below 0 or above 1440. */
-  setMemorySaver(patch: { readonly timeoutMinutes?: number; readonly rules?: readonly SleepRule[] }): Promise<MemorySaverSettings>;
+  setMemorySaver(patch: { readonly timeoutMinutes?: number; readonly rules?: readonly SleepRule[]; readonly sleepPinned?: boolean }): Promise<MemorySaverSettings>;
   /** Parses what the person typed (Lulltab's forms) and adds it; rejects with a sentence when it can't be read. */
   addSleepRule(input: string): Promise<MemorySaverSettings>;
   listTabMemory(): Promise<readonly TabMemory[]>;

@@ -33,3 +33,15 @@ test("the checked-in token files match DESIGN.md", () => {
 test("a DESIGN.md without the tables fails loudly", () => {
   expect(() => parseDesign("# nothing here\n")).toThrow(/Themes/);
 });
+
+test("every theme gets the side, fill and current-row steps", () => {
+  const css = renderCss(design);
+  const blocks = css.split(":root[data-theme=").slice(1);
+  expect(blocks).toHaveLength(5);
+  for (const b of blocks) for (const v of ["--side:", "--fill:", "--fill-hover:", "--nav-on:", "--nav-ring:"]) expect(b).toContain(v);
+  const contrast = blocks.find((b) => b.startsWith('"contrast"'))!;
+  expect(contrast).toContain("--nav-ring: var(--hair-strong)");
+  const paper = blocks.find((b) => b.startsWith('"paper"'))!;
+  expect(paper).toContain("--side: var(--raised)");
+  expect(css).toContain("--r-control: 8px; --r-panel: 12px; --r-chip: 8px; --r-composer: 16px;");
+});

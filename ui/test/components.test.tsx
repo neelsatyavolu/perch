@@ -9,7 +9,7 @@ import { Composer, PLACEHOLDER } from "../src/components/composer";
 import { fitEffort, matchModels } from "../src/components/model-menu";
 import { PerchDot } from "../src/components/icon";
 import { memo } from "../src/components/memo";
-import { LiveRun, Message, Steps } from "../src/components/message";
+import { dayLabel, LiveRun, Message, newDay, Steps } from "../src/components/message";
 import { providerPath } from "../src/components/provider-mark";
 import { resolveTheme } from "../src/theme/theme";
 
@@ -79,7 +79,7 @@ test("a reply can be copied without artifact markers and branched", async () => 
   expect(writes).toEqual(["Done.\n"]);
   click(el.querySelector('[aria-label="Branch from here"]'));
   expect(branch).toHaveBeenCalledWith(reply);
-  expect(el.querySelector(".meta-row .mono")!.textContent).toMatch(/^\d{1,2}:\d{2}$/);
+  expect(el.querySelector(".meta-row .mono")!.textContent).toMatch(/^\d{1,2}:\d{2}(\s?[AP]M)?$/);
 });
 
 test("stopped and failed replies say so in words", () => {
@@ -278,8 +278,12 @@ test("a working run shows its clock, what the agent said and its steps with the 
   root.remove();
   const waiting = mount(<LiveRun text="" steps={["a", "b", "c", "d", "e", "f", "g", "h"]} waiting />);
   expect(waiting.querySelector(".work")).toBeNull();
-  expect(waiting.querySelector(".steps")?.textContent).toContain("2 steps · b");
-  expect(waiting.querySelectorAll(".steplist.now li").length).toBe(6);
+  // While the approval card is up, all the steps fold into one line with the last step showing.
+  expect(waiting.querySelector(".steps")?.textContent).toBe("8 steps · h");
+  expect(waiting.querySelectorAll(".steps").length).toBe(1);
+  expect(waiting.querySelector(".steplist")).toBeNull();
+  click(waiting.querySelector(".steps"));
+  expect(waiting.querySelectorAll(".steplist li").length).toBe(8);
   expect(waiting.querySelector("li.current")).toBeNull();
 });
 
@@ -316,4 +320,19 @@ test("copying a reply that the clipboard refuses does not claim it was copied", 
   } finally {
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: clipboard });
   }
+});
+
+test("the thread's day divider says Today, Yesterday or the date, with the time", () => {
+  const now = new Date(2026, 10, 11, 12, 0).getTime();
+  // The time follows the user's locale: "9:41 AM" in en-US, "09:41" in en-GB, never a bare 24-hour "9:41".
+  const clock = (d: Date) => d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  expect(dayLabel(new Date(2026, 10, 11, 9, 41).toISOString(), now)).toBe(`Today ${clock(new Date(2026, 10, 11, 9, 41))}`);
+  expect(dayLabel(new Date(2026, 10, 10, 22, 52).toISOString(), now)).toBe(`Yesterday ${clock(new Date(2026, 10, 10, 22, 52))}`);
+  expect(dayLabel(new Date(2026, 10, 3, 8, 5).toISOString(), now)).toMatch(/3.*8:05/);
+  expect(dayLabel(new Date(2026, 10, 11, 2, 9).toISOString(), now)).toMatch(/^Today (02:09|2:09\s?AM)$/);
+  expect(dayLabel(new Date(2025, 0, 2, 8, 5).toISOString(), now)).toContain("2025");
+  expect(dayLabel("not a date", now)).toBe("");
+  expect(newDay(new Date(2026, 10, 11, 9).toISOString())).toBe(true);
+  expect(newDay(new Date(2026, 10, 11, 9).toISOString(), new Date(2026, 10, 11, 1).toISOString())).toBe(false);
+  expect(newDay(new Date(2026, 10, 11, 9).toISOString(), new Date(2026, 10, 10, 23).toISOString())).toBe(true);
 });

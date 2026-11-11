@@ -35,7 +35,8 @@ export async function boot(page: "sidebar" | "chat"): Promise<void> {
   });
   const client = fake ? (await import("./api/demo")).createDemoClient(config.windowId) : createClient(found!.api, found!.token);
   // Framed by Perch's trusted shell, host calls go to it over postMessage; otherwise config.js may set one.
-  const host = window.perchHost ?? createFrameHost(window);
+  // The fake build has no browser, but stubs Settings so the chat list's rows show as they do in Perch.
+  const host = window.perchHost ?? createFrameHost(window) ?? (fake ? { openSettings: () => undefined } : undefined);
   // The browser's Appearance settings win over the config's theme, and follow later changes.
   if (host?.getAppearance && host.onAppearance) {
     host.onAppearance((a) => {

@@ -27,6 +27,27 @@ export type Design = { themes: Theme[]; accents: Accent[]; ok: string; warn: str
 /** Hover fills are not in DESIGN.md's table; these come from the approved preview. */
 const HOVER: Record<string, number> = { ink: 0.08, graphite: 0.06, dusk: 0.05, paper: 0.04, contrast: 0.1 };
 
+/**
+ * The surface steps above the theme table (aside-parity spec 1): a lifted sidebar (`--side`), filled
+ * rows, bubbles and the composer (`--fill`), their hover (`--fill-hover`) and the current list row
+ * (`--nav-on`, with `--nav-ring` drawn round it only on Contrast). Mixes of the theme's own colours,
+ * so every theme and accent keeps working.
+ */
+export function surfaces(t: Theme): string[] {
+  if (t.name === "contrast")
+    return ["  --side: #000000; --fill: #141414; --fill-hover: #1F1F1F;", "  --nav-on: #262626; --nav-ring: var(--hair-strong);"];
+  if (!t.dark)
+    return [
+      "  --side: var(--raised); --fill: #FFFFFF; --fill-hover: color-mix(in srgb, var(--ink) 4%, #FFFFFF);",
+      "  --nav-on: color-mix(in srgb, var(--ink) 9%, var(--side)); --nav-ring: transparent;",
+    ];
+  return [
+    "  --side: color-mix(in srgb, var(--ink) 6%, var(--canvas)); --fill: color-mix(in srgb, var(--ink) 6%, var(--card));",
+    "  --fill-hover: color-mix(in srgb, var(--ink) 10%, var(--card));",
+    "  --nav-on: color-mix(in srgb, var(--ink) 13%, var(--side)); --nav-ring: transparent;",
+  ];
+}
+
 function section(md: string, heading: string): string {
   const start = md.indexOf(`\n## ${heading}\n`);
   if (start < 0) throw new Error(`DESIGN.md has no "## ${heading}" section`);
@@ -109,7 +130,7 @@ export function renderCss(d: Design): string {
     '  --serif: "Newsreader", Georgia, serif;',
     "  --ease: cubic-bezier(0.2, 0, 0, 1);",
     "  --t-hover: 120ms; --t-menu: 180ms; --t-panel: 240ms;",
-    "  --r-control: 4px; --r-panel: 6px; --r-chip: 4px;",
+    "  --r-control: 8px; --r-panel: 12px; --r-chip: 8px; --r-composer: 16px;",
     `  --ok: ${d.ok}; --warn: ${d.warn};`,
     "}",
   ];
@@ -121,6 +142,7 @@ export function renderCss(d: Design): string {
       `  --ink: ${t.ink}; --body: ${t.body}; --mute: ${t.mute};`,
       `  --hair: ${t.hair}; --hair-strong: ${t.hairStrong}; --hover: ${rgba(t.dark ? "#FFFFFF" : "#000000", HOVER[t.name] ?? 0.06)};`,
       `  --btn-bg: ${t.btnBg}; --btn-fg: ${t.btnFg};`,
+      ...surfaces(t),
       `  --danger: ${t.dark ? d.danger.dark : d.danger.light};`,
       "  --pop: none;",
       `  --accent: var(${t.dark ? "--accent-dark" : "--accent-light"});`,

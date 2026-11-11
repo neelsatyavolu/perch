@@ -230,7 +230,7 @@ export function Composer(p: ComposerProps) {
         <div class="crow">
           <button
             type="button"
-            class="ib"
+            class="ib attach"
             aria-label="Attach files"
             title={canAttach ? "Attach files" : "Attaching files works in the Perch build"}
             disabled={!canAttach}
@@ -240,7 +240,8 @@ export function Composer(p: ComposerProps) {
           </button>
           <Menu label="Permission mode" choices={MODES} selected={[p.settings.mode]} onPick={(c) => p.onSettings({ mode: c.value })}>
             <Icon name="shield" size={13} />
-            {MODES.find((m) => m.value === p.settings.mode)?.label}
+            {/* Ask and Guard fold to the shield in a narrow side chat; Skip confirmation always says so. */}
+            <span class={p.settings.mode === "skip" ? undefined : "mode-t"}>{MODES.find((m) => m.value === p.settings.mode)?.label}</span>
           </Menu>
           {note && <span class="cnote" role="status">{note}</span>}
           <div class="grow" />
@@ -257,7 +258,10 @@ export function Composer(p: ComposerProps) {
           </ModelMenu>
           {effortChoices.length > 0 && (
             <Menu label="Effort" align="end" choices={effortChoices} selected={[p.settings.effort]} onPick={(c) => p.onSettings({ effort: c.value })}>
-              {EFFORT_LABEL[p.settings.effort]}
+              <span class="eff-i">
+                <Icon name="gauge" size={13} />
+              </span>
+              <span class="eff-t">{EFFORT_LABEL[p.settings.effort]}</span>
             </Menu>
           )}
           {p.running ? (

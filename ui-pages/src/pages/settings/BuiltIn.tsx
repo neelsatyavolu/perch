@@ -21,7 +21,7 @@ export function BuiltIn() {
   const isLocked = (name: BuiltInName) => name === "backrow" && locked("built-in-backrow");
   return (
     <div class="sec">
-      <Group label="Built in" id="built-in">
+      <Group label="Built in" id="built-in" bare>
         <div class="card">
           {list.data.map((b) => (
             <Row key={b.name} id={`built-in-${b.name}`} title={ABOUT[b.name].title} detail={isLocked(b.name) ? MANAGED_NOTE : ABOUT[b.name].detail}>

@@ -85,8 +85,8 @@ export function Permissions() {
         <div class="card">
           {p.siteRules.length === 0 && <p class="empty">No site rules. The default mode applies everywhere.</p>}
           {p.siteRules.map((r) => (
-            <Row key={r.id} title={<span class="mono">{r.pattern}</span>}>
-              <select class="picker sm" aria-label={`Rule for ${r.pattern}`} value={r.rule} onChange={(e) => {
+            <Row key={r.id} title={<span class="mono">{r.pattern.replace(/^=/, "")}</span>} detail={r.pattern.startsWith("=") ? "Only this host" : undefined}>
+              <select class="picker" aria-label={`Rule for ${r.pattern}`} value={r.rule} onChange={(e) => {
                 const next = (e.currentTarget as HTMLSelectElement).value as SiteRuleKind;
                 apply(() => api.addSiteRule({ pattern: r.pattern, rule: next }));
               }}>
@@ -115,7 +115,7 @@ export function Permissions() {
         <div class="card">
           {p.clientRules.map((c) => (
             <Row key={c.id} title={c.client} detail={c.lastUsed ? `Last used ${relativeTime(c.lastUsed).toLowerCase()}` : "Not used yet"}>
-              <select class="picker sm" aria-label={`Mode for ${c.client}`} value={c.mode} onChange={(e) => {
+              <select class="picker" aria-label={`Mode for ${c.client}`} value={c.mode} onChange={(e) => {
                 const mode = (e.currentTarget as HTMLSelectElement).value as PermissionMode;
                 apply(() => api.setClientMode(c.id, mode));
               }}>

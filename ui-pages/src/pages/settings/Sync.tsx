@@ -139,7 +139,7 @@ export function Sync() {
   if (!s.on) {
     return (
       <div class="sec">
-        <Group label="Sync">
+        <Group label="Sync" bare>
           {pairing ? (
             <Pairing pairing={pairing} onCancel={() => setPairing(null)} onPaired={(next) => { setPairing(null); sync.set(next); }} />
           ) : (
@@ -157,7 +157,7 @@ export function Sync() {
   const summary = s.lastError ?? (s.lastSync ? `Last synced ${relativeTime(s.lastSync).toLowerCase()}` : "Not synced yet");
   return (
     <div class="sec">
-      <Group label="Sync">
+      <Group label="Sync" bare>
         <div class="card">
           <Row id="sync-on" title="Sync is on" detail={isLocked ? MANAGED_NOTE : summary}>
             <button type="button" class="btn" disabled={isLocked} onClick={async () => update(await act(() => api.syncNow(), "Synced"))}>Sync now</button>

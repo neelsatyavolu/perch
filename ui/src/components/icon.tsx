@@ -23,6 +23,7 @@ const PATHS = {
   pin: '<path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>',
   search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
   settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+  gauge: '<path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/>',
   history: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
 } as const;
 
@@ -32,8 +33,15 @@ export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
   return <svg class="i" width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" dangerouslySetInnerHTML={{ __html: PATHS[name] }} />;
 }
 
-/** The Perch mark: a flat single-colour glyph, never a sparkle (spec 6.5). */
-export function PerchMark({ size = 48 }: { size?: number }) {
+/** The Perch mark: a flat single-colour glyph, never a sparkle (spec 6.5). `bare` drops the tile and draws only the perch, `size` wide. */
+export function PerchMark({ size = 48, bare = false }: { size?: number; bare?: boolean }) {
+  if (bare)
+    return (
+      <svg class="mark" width={size} height={Math.round((size * 264) / 480)} viewBox="272 384 480 264" aria-hidden="true">
+        <rect x="272" y="560" width="480" height="88" rx="12" style="fill:var(--mute)" />
+        <circle cx="632" cy="472" r="88" style="fill:var(--accent)" />
+      </svg>
+    );
   return (
     <svg class="mark" width={size} height={size} viewBox="0 0 1024 1024" aria-hidden="true">
       <rect width="1024" height="1024" rx="228" style="fill:var(--raised)" />
@@ -47,7 +55,7 @@ export function PerchMark({ size = 48 }: { size?: number }) {
  * The perch dot (spec 6.1, DESIGN.md): breathes while a task is really running, still while it
  * waits for approval, and absent otherwise. The state is always said in words next to it.
  */
-export function PerchDot({ status }: { status: "idle" | "running" | "waiting" }) {
+export function PerchDot({ status, title }: { status: "idle" | "running" | "waiting"; title?: string }) {
   if (status === "idle") return null;
-  return <span class={status === "running" ? "dot live" : "dot"} data-status={status} aria-hidden="true" />;
+  return <span class={status === "running" ? "dot live" : "dot"} data-status={status} title={title} aria-hidden="true" />;
 }

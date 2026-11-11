@@ -45,29 +45,31 @@ export function AddressBox({ onSubmit }: { readonly onSubmit: (q: Query) => void
   return (
     <div class="addr">
       <div class="box">
-        <Icon of={Search} />
-        {engine === "google" && mode === "search" && <span class="engine-chip">Google</span>}
-        <input
-          type="search"
-          aria-label="Search or ask"
-          aria-describedby="addr-hints"
-          placeholder={mode === "ask" ? "Ask Perch a task" : "Search or ask"}
-          value={text}
-          autoFocus
-          spellcheck={false}
-          autoComplete="off"
-          onInput={(e) => setText((e.currentTarget as HTMLInputElement).value)}
-          onKeyDown={onKeyDown}
-        />
-        <Segmented class="mode" label="Search or ask" value={mode} onChange={setMode} options={[{ value: "search", label: "Search" }, { value: "ask", label: "Ask" }]} />
+        <div class="box-row">
+          <Icon of={Search} />
+          {engine === "google" && mode === "search" && <span class="engine-chip">Google</span>}
+          <input
+            type="search"
+            aria-label="Search or ask"
+            aria-describedby="addr-hints"
+            placeholder={mode === "ask" ? "Ask Perch a task" : "Search or ask"}
+            value={text}
+            autoFocus
+            spellcheck={false}
+            autoComplete="off"
+            onInput={(e) => setText((e.currentTarget as HTMLInputElement).value)}
+            onKeyDown={onKeyDown}
+          />
+          <Segmented class="mode" label="Search or ask" value={mode} onChange={setMode} options={[{ value: "search", label: "Search" }, { value: "ask", label: "Ask" }]} />
+        </div>
+        <div class="box-foot">
+          <Composer side="mode" composer={composer} />
+          <Composer side="model" composer={composer} />
+        </div>
       </div>
-      <div class="composer">
-        <Composer side="mode" composer={composer} />
-        <p class="hints" id="addr-hints">
-          <kbd class="key">Tab</kbd> <span>Google</span> <span aria-hidden="true">·</span> <kbd class="key" aria-label="Command Return">⌘↵</kbd> <span>Ask</span>
-        </p>
-        <Composer side="model" composer={composer} />
-      </div>
+      <p class="hints" id="addr-hints">
+        <kbd class="key">Tab</kbd> <span>Google</span> <span aria-hidden="true">·</span> <kbd class="key" aria-label="Command Return">⌘↵</kbd> <span>Ask</span>
+      </p>
     </div>
   );
 }

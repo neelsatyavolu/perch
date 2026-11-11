@@ -6,6 +6,7 @@ import { errorText, useAction, useApi, useLoad } from "../../ui/frame";
 import { useManaged } from "../../ui/useManaged";
 import { Icon, Trash2 } from "../../ui/icons";
 import { Group, Row } from "../../ui/Row";
+import { Switch } from "../../ui/Switch";
 
 const TIMEOUTS: readonly { minutes: number; label: string }[] = [
   { minutes: 0, label: "Off" },
@@ -32,14 +33,10 @@ function TabMemoryCard() {
             {t.asleep ? <span class="mute">Asleep</span> : <span class="mono">{mb(t.bytes)}</span>}
           </Row>
         ))}
-        {list.length > 0 && (
-          <Row title="Total">
-            <span class="mono">{mb(total)}</span>
-          </Row>
-        )}
       </div>
       <div class="tab-memory-foot">
         <p class="note">{tabs.error ?? "Sleeping tabs use no memory. They reload when you click them."}</p>
+        {list.length > 0 && <span class="tab-total">Total <span class="mono">{mb(total)}</span></span>}
         <button type="button" class="btn" onClick={tabs.reload}>Refresh</button>
       </div>
     </Group>
@@ -83,7 +80,7 @@ export function Performance() {
       <Group label="Memory saver">
         <div class="card">
           <Row id="memory-saver" title="Sleep tabs you aren't using" detail={isLocked ? MANAGED_NOTE : "A tab you haven't looked at for this long stops using memory. It wakes when you click it"}>
-            <select class="picker sm" aria-label="Sleep tabs after" aria-describedby="memory-saver-d" value={String(s.timeoutMinutes)} disabled={isLocked}
+            <select class="picker" aria-label="Sleep tabs after" aria-describedby="memory-saver-d" value={String(s.timeoutMinutes)} disabled={isLocked}
               onChange={(e) => {
                 const minutes = Number((e.currentTarget as HTMLSelectElement).value);
                 const label = TIMEOUTS.find((t) => t.minutes === minutes)?.label ?? "";
@@ -93,8 +90,12 @@ export function Performance() {
               {TIMEOUTS.map((t) => <option key={t.minutes} value={String(t.minutes)}>{t.label}</option>)}
             </select>
           </Row>
+          <Row id="sleep-pinned" title="Sleep pinned tabs" detail="Pinned tabs can sleep like any other tab">
+            <Switch label="Sleep pinned tabs" describedBy="sleep-pinned-d" checked={s.sleepPinned ?? false} disabled={isLocked}
+              onChange={(sleepPinned) => apply(() => api.setMemorySaver({ sleepPinned }), sleepPinned ? "Pinned tabs can sleep" : "Pinned tabs stay awake")} />
+          </Row>
         </div>
-        <p class="note">Tabs playing sound, sharing your screen or holding unsent form text stay awake.</p>
+        <p class="note">Tabs playing sound, in picture-in-picture, sharing your screen or holding unsent form text stay awake.</p>
       </Group>
 
       <Group label="Never sleep these sites" id="never-sleep">
@@ -103,7 +104,7 @@ export function Performance() {
           {s.rules.map((r) => {
             const text = sleepRuleText(r);
             return (
-              <Row key={`${r.kind}:${r.pattern}`} title={<span class="mono">{text}</span>} detail={SLEEP_RULES[r.kind]}>
+              <Row key={`${r.kind}:${r.pattern}`} title={<span class="mono">{r.kind === "host" ? text.replace(/^=/, "") : text}</span>} detail={SLEEP_RULES[r.kind]}>
                 <button type="button" class="ib" aria-label={`Remove ${text}`} disabled={isLocked} onClick={() => remove(r)}>
                   <Icon of={Trash2} />
                 </button>

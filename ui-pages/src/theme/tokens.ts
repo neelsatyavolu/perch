@@ -76,10 +76,35 @@ export function accentFor(accent: AccentName, theme: ThemeName): string {
   return THEMES[theme].dark ? ACCENTS[accent].dark : ACCENTS[accent].light;
 }
 
+/** Mixes `pct` percent of `top` into `base` (both opaque hex), like CSS color-mix in srgb. */
+export function mix(top: string, pct: number, base: string): string {
+  const a = parse(top);
+  const b = parse(base);
+  const ch = (x: number, y: number) => Math.round(x * (pct / 100) + y * (1 - pct / 100)).toString(16).padStart(2, "0");
+  return `#${ch(a.r, b.r)}${ch(a.g, b.g)}${ch(a.b, b.b)}`.toUpperCase();
+}
+
+export type Steps = { readonly side: string; readonly fill: string; readonly fillHover: string; readonly navOn: string };
+
+/**
+ * The three surface steps used by sidebars and grouped rows: a lifted sidebar (side), rows that sit one step
+ * above the card they are on (fill, fill-hover) and the current nav item (nav-on). Derived from the theme.
+ */
+export function surfaceSteps(theme: ThemeName): Steps {
+  const t = THEMES[theme];
+  if (theme === "paper") {
+    return { side: t.raised, fill: "#FFFFFF", fillHover: mix(t.ink, 4, "#FFFFFF"), navOn: mix(t.ink, 9, t.raised) };
+  }
+  if (theme === "contrast") return { side: "#000000", fill: "#141414", fillHover: "#1F1F1F", navOn: "#262626" };
+  const side = mix(t.ink, 6, t.canvas);
+  return { side, fill: mix(t.ink, 6, t.card), fillHover: mix(t.ink, 10, t.card), navOn: mix(t.ink, 13, side) };
+}
+
 /** Every CSS custom property Perch's pages read, for one theme and accent. */
 export function tokenVars(theme: ThemeName, accent: AccentName): Readonly<Record<string, string>> {
   const t = THEMES[theme];
   const a = accentFor(accent, theme);
+  const steps = surfaceSteps(theme);
   return Object.freeze({
     "--canvas": t.canvas,
     "--card": t.card,
@@ -90,6 +115,10 @@ export function tokenVars(theme: ThemeName, accent: AccentName): Readonly<Record
     "--hair": t.hair,
     "--hair-strong": t.hairStrong,
     "--hover": t.hover,
+    "--side": steps.side,
+    "--fill": steps.fill,
+    "--fill-hover": steps.fillHover,
+    "--nav-on": steps.navOn,
     "--btn-bg": t.btnBg,
     "--btn-fg": t.btnFg,
     "--accent": a,

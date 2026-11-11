@@ -71,12 +71,12 @@ export function sleepRuleText(r: SleepRule): string {
 }
 
 export const ROLES: Readonly<Record<TaskRole, { label: string; detail: string }>> = {
-  default: { label: "Default model", detail: "New chats. The last model you use becomes the default" },
-  fast: { label: "Fast", detail: "Side work, summaries, memory extraction and dreaming" },
+  default: { label: "Default model", detail: "New chats. Follows your last pick" },
+  fast: { label: "Fast", detail: "Summaries, memory and other side work" },
   standard: { label: "Standard", detail: "Subagents and memory reorganisation" },
-  deep: { label: "Deep", detail: "Hard reasoning, planning, judging and synthesis" },
-  visual: { label: "Visual", detail: "Screenshots and reading page images" },
-  image: { label: "Image generation", detail: "Making and editing images in chats and artifacts" },
+  deep: { label: "Deep", detail: "Hard reasoning, planning and judging" },
+  visual: { label: "Visual", detail: "Screenshots and page images" },
+  image: { label: "Image generation", detail: "Making and editing images" },
 };
 
 export const EFFORTS: readonly Effort[] = ["off", "low", "medium", "high", "max"];

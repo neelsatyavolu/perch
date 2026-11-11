@@ -573,7 +573,8 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
       const t = patch.timeoutMinutes;
       if (t !== undefined && !(Number.isInteger(t) && t >= 0 && t <= 1440)) throw new Error("Choose a time between 0 minutes and a day");
       const rules = patch.rules?.map((r) => parseSleepRule(sleepRuleText(r)));
-      set({ memorySaver: { timeoutMinutes: t ?? state.memorySaver.timeoutMinutes, rules: rules ?? state.memorySaver.rules } });
+      const sleepPinned = patch.sleepPinned ?? state.memorySaver.sleepPinned ?? false;
+      set({ memorySaver: { timeoutMinutes: t ?? state.memorySaver.timeoutMinutes, rules: rules ?? state.memorySaver.rules, sleepPinned } });
       return state.memorySaver;
     },
     async addSleepRule(input) {

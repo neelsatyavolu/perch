@@ -1,21 +1,32 @@
 /** Settings sections and the search index. A test checks every anchor here exists on its page. */
 
 export const SECTIONS = [
-  { id: "appearance", label: "Appearance" },
-  { id: "models", label: "Models" },
-  { id: "skills", label: "Skills and MCP" },
-  { id: "permissions", label: "Permissions" },
-  { id: "privacy", label: "Privacy and security" },
-  { id: "performance", label: "Performance" },
-  { id: "sync", label: "Sync" },
-  { id: "builtin", label: "Built-in extensions" },
-  { id: "memory", label: "Memory" },
-  { id: "routines", label: "Routines" },
-  { id: "import", label: "Import" },
-  { id: "about", label: "About and updates" },
+  { id: "appearance", label: "Appearance", group: "Personal" },
+  { id: "privacy", label: "Privacy and security", group: "Personal" },
+  { id: "sync", label: "Sync", group: "Personal" },
+  { id: "import", label: "Import", group: "Personal" },
+  { id: "models", label: "Models", group: "Agent" },
+  { id: "skills", label: "Skills and MCP", group: "Agent" },
+  { id: "permissions", label: "Permissions", group: "Agent" },
+  { id: "memory", label: "Memory", group: "Agent" },
+  { id: "routines", label: "Routines", group: "Agent" },
+  { id: "performance", label: "Performance", group: "Browser" },
+  { id: "builtin", label: "Built-in extensions", group: "Browser" },
+  { id: "about", label: "About and updates", group: "" },
 ] as const;
 
 export type SectionId = (typeof SECTIONS)[number]["id"];
+
+/** The nav's categories in order; an empty label is a group with no heading (About sits on its own). */
+export const NAV_GROUPS: readonly { readonly label: string; readonly ids: readonly SectionId[] }[] = SECTIONS.reduce<{ label: string; ids: SectionId[] }[]>(
+  (groups, s) => {
+    const last = groups.at(-1);
+    return last && last.label === s.group
+      ? [...groups.slice(0, -1), { label: last.label, ids: [...last.ids, s.id] }]
+      : [...groups, { label: s.group, ids: [s.id] }];
+  },
+  [],
+);
 
 export const isSection = (s: string): s is SectionId => SECTIONS.some((x) => x.id === s);
 export const sectionLabel = (id: SectionId) => SECTIONS.find((s) => s.id === id)!.label;
@@ -31,6 +42,12 @@ export const SEARCH_INDEX: readonly SearchEntry[] = [
   { section: "appearance", anchor: "density", title: "Density", words: "compact comfortable rows" },
   { section: "models", anchor: "providers", title: "Model providers", words: "sign in claude chatgpt codex grok openai anthropic gemini openrouter ollama lm studio api key" },
   { section: "models", anchor: "task-models", title: "Task models", words: "default fast standard deep visual image generation effort" },
+  { section: "models", anchor: "role-default", title: "Default model", words: "task model new chats effort priority" },
+  { section: "models", anchor: "role-fast", title: "Fast model", words: "task model summaries memory side work effort priority" },
+  { section: "models", anchor: "role-standard", title: "Standard model", words: "task model subagents effort priority" },
+  { section: "models", anchor: "role-deep", title: "Deep model", words: "task model reasoning planning thinking effort priority" },
+  { section: "models", anchor: "role-visual", title: "Visual model", words: "task model screenshots vision images effort priority" },
+  { section: "models", anchor: "role-image", title: "Image generation model", words: "task model images pictures" },
   { section: "skills", anchor: "mcp-servers", title: "MCP servers", words: "tools mcp stdio http sse" },
   { section: "skills", anchor: "mcp-import", title: "Import MCP servers", words: "claude code codex claude desktop cursor grok" },
   { section: "skills", anchor: "skills-list", title: "Skills", words: "skill.md site skills built-in" },
@@ -50,6 +67,7 @@ export const SEARCH_INDEX: readonly SearchEntry[] = [
   { section: "privacy", anchor: "backup-restore", title: "Restore from recovery key", words: "restore backup recovery key new mac migration assistant unlock" },
   { section: "privacy", anchor: "site-data", title: "Site data", words: "cookies storage forget clear" },
   { section: "performance", anchor: "memory-saver", title: "Sleep tabs you aren't using", words: "memory saver lulltab sleep discard idle timeout ram" },
+  { section: "performance", anchor: "sleep-pinned", title: "Sleep pinned tabs", words: "memory saver pinned pin sleep discard" },
   { section: "performance", anchor: "never-sleep", title: "Never sleep these sites", words: "whitelist exceptions keep awake lulltab" },
   { section: "performance", anchor: "tab-memory", title: "Memory by tab", words: "ram usage memory tabs" },
   { section: "sync", anchor: "sync-on", title: "Sync this Mac", words: "sync devices bookmarks history open tabs pair qr code account" },

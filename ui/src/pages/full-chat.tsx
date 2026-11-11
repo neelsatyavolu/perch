@@ -180,11 +180,10 @@ export function FullChat({ client, initialChat = null, initialAsk = null, onNavi
               label="More"
               choices={[
                 { value: "pin", label: summary?.pinned ? "Unpin chat" : "Pin chat" },
-                { value: "export", label: "Export as Markdown" },
                 { value: "delete", label: "Delete chat" },
               ]}
               selected={[]}
-              onPick={(c) => (c.value === "pin" ? void chat.run(togglePin) : c.value === "export" ? void chat.run(exportChat) : setConfirmDelete(true))}
+              onPick={(c) => (c.value === "pin" ? void chat.run(togglePin) : setConfirmDelete(true))}
             >
               <Icon name="more" />
             </Menu>
@@ -192,12 +191,18 @@ export function FullChat({ client, initialChat = null, initialAsk = null, onNavi
           <PerchDot status={status} />
           {status !== "idle" && <span class="state">{status === "running" ? "Working" : "Waiting for your approval"}</span>}
           <span class="grow" />
-          <button type="button" class="btn small" disabled={!view.chat} onClick={() => void chat.run(exportChat)} title="Save this chat as a Markdown file">
-            Share
-          </button>
-          <button type="button" class="ib" aria-label="Artifacts" aria-pressed={Boolean(artifact)} disabled={!view.artifacts.length} onClick={() => setArtifact(artifact ? null : view.artifacts.at(-1) ?? null)}>
-            <Icon name="panel" />
-          </button>
+          {/* Both show only when there is something to act on, as in Aside. */}
+          {view.chat?.messages.length ? (
+            <button type="button" class="btn small quiet" onClick={() => void chat.run(exportChat)} title="Save this chat as a Markdown file">
+              <Icon name="download" />
+              Export
+            </button>
+          ) : null}
+          {view.artifacts.length > 0 && (
+            <button type="button" class="ib" aria-label="Artifacts" title={artifact ? "Hide artifacts" : "Show artifacts"} aria-pressed={Boolean(artifact)} onClick={() => setArtifact(artifact ? null : view.artifacts.at(-1) ?? null)}>
+              <Icon name="panel" />
+            </button>
+          )}
         </header>
         {confirmDelete && (
           <div class="confirm" role="alert">
@@ -205,7 +210,7 @@ export function FullChat({ client, initialChat = null, initialAsk = null, onNavi
             <button type="button" class="btn small danger-text" onClick={() => void chat.run(remove)}>
               Delete chat
             </button>
-            <button type="button" class="btn small" onClick={() => setConfirmDelete(false)}>
+            <button type="button" class="btn small outline" onClick={() => setConfirmDelete(false)}>
               Keep it
             </button>
           </div>

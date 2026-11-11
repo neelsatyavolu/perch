@@ -141,8 +141,8 @@ function TaskModels({ models }: { readonly models: readonly Model[] }) {
                   <select class="picker" aria-label={`${label} effort`} value={t.effort} onChange={(e) => save(t.role, { effort: (e.currentTarget as HTMLSelectElement).value as Effort })}>
                     {EFFORTS.map((x) => <option key={x} value={x}>{EFFORT_LABELS[x]}</option>)}
                   </select>
-                  <span class="status">Fast</span>
-                  <Switch label={`${label} fast mode`} checked={t.fast} onChange={(fast) => save(t.role, { fast })} />
+                  <span class="lbl-sw" aria-hidden="true">Priority</span>
+                  <Switch label={`${label} priority`} checked={t.fast} onChange={(fast) => save(t.role, { fast })} />
                 </>
               )}
             </Row>

@@ -23,14 +23,14 @@ export function Suggested({ items, onHide, onDismissed }: Props) {
   return (
     <section class="ntp-sec" aria-labelledby="sug-h">
       <div class="sec-h">
-        <h2 class="sug-h" id="sug-h">Suggested</h2>
+        <h2 class="sec-t" id="sug-h">Suggested</h2>
         <button type="button" class="btn quiet sm hide-btn" aria-label="Hide suggested" onClick={onHide}>Hide</button>
       </div>
       <div class="cards">
         {items.map((s) => (
           <div key={s.id} class="sug-wrap">
             <button type="button" class="ccard sug" onClick={() => run(s)}>
-              <span class="tile"><Icon of={ICONS[s.icon]} size={14} /></span>
+              <span class="tile"><Icon of={ICONS[s.icon]} size={16} /></span>
               <span class="tt">{s.title}</span>
               <span class="sn">{s.detail}</span>
             </button>

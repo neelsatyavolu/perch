@@ -61,7 +61,7 @@ export function AuditLog() {
                 <tr key={e.id} class={`o-${e.outcome}`}>
                   <td class="mono">{shortDateTime(e.at)}</td>
                   <td>{e.client}</td>
-                  <td><span class="mono">{e.site}</span><span class="tab-t">{e.tab}</span></td>
+                  <td class="where"><span class="mono" title={e.site}>{e.site}</span><span class="tab-t" title={e.tab}>{e.tab}</span></td>
                   <td>{e.action}</td>
                   <td>{AUDIT_OUTCOMES[e.outcome]}</td>
                 </tr>

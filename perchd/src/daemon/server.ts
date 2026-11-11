@@ -4,6 +4,7 @@
  * works in its own session under that client's permission mode.
  */
 
+import type { SidebarExtras } from "../app/sidebar-extras";
 import { timingSafeEqual } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, unlinkSync } from "node:fs";
 import type { Socket, UnixSocketListener } from "bun";
@@ -36,6 +37,8 @@ export type SidebarRun = {
   chatId?: string;
   /** A private chat's run (spec 5.8): its actions are logged without page text. */
   private?: boolean;
+  /** Skills and memory for this run (app/sidebar-extras.ts), offered beside the browser tools. */
+  extras?: SidebarExtras;
 };
 
 function sameToken(a: string, b: string): boolean {

@@ -8,6 +8,7 @@
  * browser closes fd 5 or the CDP connection.
  */
 
+import { pageTextContext, readPageText } from "../app/page-text";
 import { createReadStream } from "node:fs";
 import { join } from "node:path";
 import { Browser } from "../browser/browser";
@@ -108,7 +109,7 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
   const app = await startApp({
     dataDir: join(base, "app"),
     vault,
-    runner: sidebarRunner({ runs, perch: perchCommand(), home, auditPath: services.sidebarAudit, memory: services.chatMemory, policy }),
+    runner: sidebarRunner({ runs, perch: perchCommand(), home, auditPath: services.sidebarAudit, memory: services.chatMemory, skills: services.skills, policy }),
     models: allowedSidebarModels(sidebarModels(), policy.current()),
     allowedOrigins: settings.origins,
     listen: { port: settings.port },
@@ -117,6 +118,10 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
     pages: services.pages,
     onStatus: link.onStatus,
     nameChat: services.nameChat,
+    pageText: async (targetId) => {
+      const page = await readPageText(conn, targetId);
+      return page ? pageTextContext(page) || null : null;
+    },
     artifactScheme: browser.features.has("perch-artifact"),
   });
   services.attach(app);

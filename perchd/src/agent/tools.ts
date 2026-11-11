@@ -20,7 +20,8 @@ import { TOOL_SPECS, validate } from "./tool-specs";
 
 export { TOOL_SPECS };
 
-export type ToolResult = { content: string; image?: string; isError?: boolean; done?: boolean };
+/** `image` is base64; `imageType` its media type when not JPEG (an attached PNG screenshot). */
+export type ToolResult = { content: string; image?: string; imageType?: string; isError?: boolean; done?: boolean };
 export type ToolContext = {
   browser: Browser;
   tab: Tab | null;

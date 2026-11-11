@@ -18,7 +18,7 @@ const INSTRUCTIONS = "Perch is the user's own browser. You work in your own tab 
 
 type Rpc = { jsonrpc: "2.0"; id?: number | string | null; method?: string; params?: any; result?: any; error?: any };
 export type Transport = { lines: AsyncIterable<string>; write(line: string): void };
-type ToolResult = { content: string; image?: string; isError?: boolean };
+type ToolResult = { content: string; image?: string; imageType?: string; isError?: boolean };
 
 /** An MCP client's name ("claude-code", "codex-mcp-client") as a Perch client name. */
 export function clientFromInfo(name: unknown): string {
@@ -74,7 +74,7 @@ export class McpProxy {
           result = { content: `Perch is not available: ${(error as Error).message}`, isError: true };
         }
         const content: object[] = [{ type: "text", text: result.content }];
-        if (result.image) content.push({ type: "image", data: result.image, mimeType: "image/jpeg" });
+        if (result.image) content.push({ type: "image", data: result.image, mimeType: result.imageType ?? "image/jpeg" });
         return { content, isError: Boolean(result.isError) };
       }
       default:

@@ -83,7 +83,7 @@ function mentionContext(tabs: TabInfo[]): string {
 
 function fileContext(files: { name: string; path: string }[]): string {
   if (!files.length) return "";
-  return `The user attached these files from their Mac (read them, or upload them where the task needs it):\n${files.map((f) => `- ${oneLine(f.name)}: ${oneLine(f.path)}`).join("\n")}`;
+  return `The user attached these files from their Mac (read them with read_attachment, or upload them where the task needs it):\n${files.map((f) => `- ${oneLine(f.name)}: ${oneLine(f.path)}`).join("\n")}`;
 }
 
 function oneLine(text: string): string {

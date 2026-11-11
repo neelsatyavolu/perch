@@ -112,3 +112,31 @@ test("inside Perch only the browser reports tabs, and its token does nothing els
   await app.stop();
   dir.cleanup();
 });
+
+test("a sidebar agent gets the run's skills and memory beside the browser tools, under the chat's approvals", async () => {
+  const asked: string[] = [];
+  const ran: string[] = [];
+  const extras = {
+    specs: () => [{ name: "load_skill", description: "Read a skill", parameters: { type: "object", properties: {} } }, { name: "memory_save", description: "Save", parameters: { type: "object", properties: {} } }],
+    prompt: () => "Skills: amazon",
+    handles: (name: string) => name === "load_skill" || name === "memory_save",
+    check: () => null,
+    describe: (call: { name: string }) => ({ kind: call.name === "load_skill" ? ("read" as const) : ("change" as const), site: "skills", summary: `Use ${call.name}`, detail: call.name, label: call.name }),
+    run: async (call: { name: string }) => (ran.push(call.name), { content: `${call.name} ok` }),
+    mustAsk: (call: { name: string; args: Record<string, unknown> }) => call.name === "memory_save" && call.args.category === "user",
+  };
+  runs.add("sidebar-extras", { token: TOKEN, mode: "skip", approve: async (r) => (asked.push(r.summary), false), extras });
+  const client = await connect({ socket: paths.socket, hello: sidebarHello("sidebar-extras", TOKEN) });
+  const tools = await client.request<{ name: string }[]>("tools");
+  expect(tools.map((t) => t.name)).toEqual(expect.arrayContaining(["click", "navigate", "load_skill", "memory_save"]));
+  expect(await client.request<{ content: string }>("call", { name: "load_skill", args: { name: "amazon" } })).toEqual({ content: "load_skill ok" });
+  // Skip mode runs an ordinary save; one that must ask goes to the card, and a decline stops it.
+  expect(await client.request<{ content: string }>("call", { name: "memory_save", args: { category: "places" } })).toEqual({ content: "memory_save ok" });
+  const declined = await client.request<{ isError?: boolean }>("call", { name: "memory_save", args: { category: "user" } });
+  expect(declined.isError).toBe(true);
+  expect(asked).toEqual(["Use memory_save"]);
+  expect(ran).toEqual(["load_skill", "memory_save"]);
+  client.close();
+  runs.delete("sidebar-extras");
+  // Another client never sees them.
+});

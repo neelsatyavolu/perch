@@ -5,6 +5,7 @@
  * connect in the background, and the model registry opens on first use.
  */
 
+import { SkillCatalog } from "../../skills/catalog";
 import { titleChat } from "../chat-title";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -89,6 +90,8 @@ export type PageServices = {
   sidebarAudit: string;
   /** Memory for a sidebar chat. */
   chatMemory: () => Promise<Awaited<ReturnType<PerchData["chatMemory"]>>>;
+  /** The profile's skills (built-in and the user's own), read fresh for each sidebar run. */
+  skills: () => Promise<SkillCatalog>;
   /** Names a chat after its first reply with the profile's fast model (`startApp({ nameChat })`). */
   nameChat: (ask: string, reply: string) => Promise<string | null>;
   /** Hands over the app's chats and windows, for building the memory profile. */
@@ -156,6 +159,7 @@ export function openPageServices(opts: PageServicesOptions): PageServices {
   return {
     sidebarAudit: opts.audit.path,
     chatMemory: async () => (await data).chatMemory(),
+    skills: () => SkillCatalog.load({ store: new SkillStore(join(base, "skills"), secrets) }),
     nameChat: async (ask, reply) => titleChat(modelOf(await (await models()).modelFor("fast")), ask, reply, AbortSignal.timeout(20_000)),
     attach(a) {
       app = a;

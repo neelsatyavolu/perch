@@ -358,3 +358,20 @@ test("the runner gets the user's own message for memory, apart from the assemble
   expect(seen!.ask).toBe("find chinos in my size");
   expect(seen!.task.length).toBeGreaterThan(seen!.ask!.length);
 });
+
+test("a message about the tab in view carries that page's text", async () => {
+  let task = "";
+  const runs = new RunManager({
+    chats, artifacts, emit: () => {}, artifactUrl: (id, v) => `http://art/${id}/${v}`, tabs: () => [],
+    runner: async function* (input): AsyncIterable<StepEvent> {
+      task = input.task;
+      yield { type: "final", text: "It says hello." };
+    },
+    pageText: async (targetId) => (targetId === "T1" ? 'The text of the page the user is looking at:\n"""\nhello world\n"""' : null),
+  });
+  const chat = await chats.create({ settings: { mode: "ask", model: "fake", effort: "high" } });
+  await runs.send(chat.id, "what does this say", { id: "t1", windowId: "w1", title: "Hi", url: "https://hi.example", targetId: "T1" });
+  await runs.idle();
+  expect(task).toContain("hello world");
+  expect(task.indexOf("hello world")).toBeLessThan(task.indexOf("what does this say"));
+});

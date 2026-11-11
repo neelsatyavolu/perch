@@ -17,6 +17,8 @@ export type RunnerInput = {
   task: string;
   /** The user's own message, without the history and instructions `task` adds: what memory is searched and taught with. */
   ask?: string;
+  /** Files the user attached to this message, by name and path on this Mac. */
+  files?: { name: string; path: string }[];
   settings: ChatSettings;
   approve: (req: ApprovalRequest) => Promise<boolean>;
   signal: AbortSignal;
@@ -39,6 +41,8 @@ export type RunDeps = {
   tabs: () => TabInfo[];
   /** Every status change of a chat, with its card while one waits: the browser's perch dot and notices. */
   onStatus?: (chatId: string, status: ChatStatus, card: ApprovalCard | null) => void;
+  /** The readable text of the user's tab (page-text.ts), sent with the message; null when it can't be read. */
+  pageText?: (targetId: string) => Promise<string | null>;
   /** Names a chat from its first message and reply (chat-title.ts); null or a throw keeps the first-message title. */
   nameChat?: (ask: string, reply: string) => Promise<string | null>;
 };
@@ -156,7 +160,9 @@ export class RunManager {
     const tab = context?.targetId ? context : undefined;
     const holdBack = HOLD_BACK.test(text);
     const built = buildTask({ history: chat.messages, text, scope: chat.settings.scope, tab: context, tabs: this.deps.tabs(), inTab: Boolean(tab), mentions, files });
-    const task = holdBack ? `${HOLD_BACK_NOTE}\n\n${built}` : built;
+    const page = tab?.targetId && this.deps.pageText ? await this.deps.pageText(tab.targetId).catch(() => null) : null;
+    const withPage = page ? `${page}\n\n${built}` : built;
+    const task = holdBack ? `${HOLD_BACK_NOTE}\n\n${withPage}` : withPage;
     const run: Run = { runId: crypto.randomUUID(), chatId, controller: new AbortController(), text: "", steps: [], pending: null, done: Promise.resolve(), startedAt: new Date().toISOString(), ...(holdBack ? { holdBack } : {}) };
     this.runs.set(chatId, run);
     try {
@@ -175,7 +181,7 @@ export class RunManager {
     }
     // Skip confirmation would let the submit through unasked, so a held-back run asks (and declines it).
     const settings = holdBack && chat.settings.mode === "skip" ? { ...chat.settings, mode: "guard" as const } : chat.settings;
-    run.done = this.drive(run, task, settings, tab, text);
+    run.done = this.drive(run, task, settings, tab, text, files.map((f) => ({ name: f.name, path: f.path })));
     return { runId: run.runId, message };
   }
 
@@ -244,12 +250,12 @@ export class RunManager {
     };
   }
 
-  private async drive(run: Run, task: string, settings: ChatSettings, tab?: TabInfo, ask?: string): Promise<void> {
+  private async drive(run: Run, task: string, settings: ChatSettings, tab?: TabInfo, ask?: string, files: { name: string; path: string }[] = []): Promise<void> {
     let final: string | undefined;
     let error: string | undefined;
     try {
       const incognito = this.deps.chats.get(run.chatId)?.incognito === true;
-      const events = this.deps.runner({ task, ...(ask ? { ask } : {}), settings, approve: this.approve(run), signal: run.controller.signal, chatId: run.chatId, ...(tab ? { tab } : {}), ...(incognito ? { incognito } : {}) });
+      const events = this.deps.runner({ task, ...(ask ? { ask } : {}), ...(files.length ? { files } : {}), settings, approve: this.approve(run), signal: run.controller.signal, chatId: run.chatId, ...(tab ? { tab } : {}), ...(incognito ? { incognito } : {}) });
       for await (const event of events) {
         if (event.type === "text") {
           run.text += event.delta;

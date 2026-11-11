@@ -5,6 +5,8 @@
  * that carries the chat's permission mode and sends approvals to the sidebar's card.
  */
 
+import type { SkillCatalog } from "../skills/catalog";
+import { sidebarExtras } from "./sidebar-extras";
 import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import type { StepEvent } from "../agent/loop";
@@ -112,6 +114,8 @@ export type SidebarRunnerOptions = {
   timeoutMs?: number;
   /** The profile's memory for this chat: what Perch knows goes in with the task, and facts are learned from the answer. */
   memory?: () => Promise<MemoryAccess | undefined>;
+  /** The profile's skills, offered to the agent through load_skill. */
+  skills?: () => Promise<SkillCatalog | undefined>;
   /** Company policy: the agent on or off, allowed models, and the mode cap. */
   policy?: PolicyView;
 };
@@ -150,7 +154,11 @@ export function sidebarRunner(opts: SidebarRunnerOptions): Runner {
     const session = `sidebar-${randomBytes(12).toString("hex")}`;
     const token = randomBytes(32).toString("base64url");
     const mode = capMode(input.settings.mode, policy);
+    const catalog = await opts.skills?.().catch(() => undefined);
+    const extras = sidebarExtras(catalog, memory, input.files);
+    const skillList = extras?.prompt() ?? "";
     opts.runs.add(session, {
+      ...(extras ? { extras } : {}),
       token, mode, approve: input.approve,
       ...(input.tab?.targetId ? { tab: input.tab.targetId } : {}),
       ...(input.chatId ? { chatId: input.chatId } : {}),
@@ -169,7 +177,7 @@ export function sidebarRunner(opts: SidebarRunnerOptions): Runner {
     };
     const run = agent === "codex" ? runCodex : runClaudeCode;
     const done = run({
-      task: known ? `${input.task}\n\n${known}` : input.task,
+      task: [input.task, known, skillList].filter(Boolean).join("\n\n"),
       model: model && model !== "default" ? model : undefined,
       effort: agent === "codex" ? input.settings.effort : undefined,
       mode,

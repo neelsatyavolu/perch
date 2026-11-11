@@ -3,6 +3,11 @@
  * Inside Perch the browser starts it (plan 3b); until then `perch` starts it on first use.
  */
 
+import type { SidebarExtras } from "../app/sidebar-extras";
+import { needsApproval } from "../agent/permissions";
+import { DECLINED } from "../agent/session";
+import type { ToolCall } from "../models/types";
+import { SIDEBAR_CLIENT } from "./server";
 import { existsSync } from "node:fs";
 import { AuditLog } from "../agent/audit";
 import { PolicyAuditMirror } from "../agent/audit-mirror";
@@ -103,6 +108,21 @@ export async function startDaemon(opts: DaemonOptions): Promise<Daemon> {
     return found;
   };
 
+  /** The sidebar run a connection works for, when it is a Perch sidebar agent. */
+  const sidebarRunOf = (conn: Connection) => (conn.client.name === SIDEBAR_CLIENT ? opts.sidebar?.(conn.session.info.session) : undefined);
+
+  /** A skill or memory call from a sidebar agent, under the chat's mode and approval card. */
+  const extraCall = async (conn: Connection, extras: SidebarExtras, call: ToolCall) => {
+    const problem = extras.check(call);
+    if (problem) return { content: problem, isError: true };
+    const run = sidebarRunOf(conn)!;
+    const described = extras.describe(call);
+    const decision = extras.mustAsk(call) ? "ask" : needsApproval(run.mode, described.kind);
+    if (decision === "block") return { content: "Not allowed here.", isError: true };
+    if (decision === "ask" && !(await run.approve({ call, kind: described.kind, site: described.site, summary: described.summary }))) return { content: DECLINED, isError: true };
+    return extras.run(call, new AbortController().signal);
+  };
+
   const methods: Record<string, Handler> = {
     status: async (conn) => ({
       version: VERSION,
@@ -115,13 +135,15 @@ export async function startDaemon(opts: DaemonOptions): Promise<Daemon> {
       label: conn.session.label,
       sessions: manager.list(),
     }),
-    tools: async () => CLIENT_TOOLS.map((t) => ({ name: t.name, description: t.description, inputSchema: t.parameters })),
+    tools: async (conn) => [...CLIENT_TOOLS, ...(sidebarRunOf(conn)?.extras?.specs() ?? [])].map((t) => ({ name: t.name, description: t.description, inputSchema: t.parameters })),
     call: async (conn, params) => {
       const name = str(params, "name");
       const args = params.args ?? {};
       if (!name) throw new Error("call needs a tool name.");
-      if (!CLIENT_TOOL_NAMES.has(name)) return { content: `Perch has no tool "${name}" for outside agents.`, isError: true };
       if (typeof args !== "object" || args === null || Array.isArray(args)) throw new Error("args must be an object.");
+      const extras = sidebarRunOf(conn)?.extras;
+      if (extras?.handles(name)) return extraCall(conn, extras, { id: `${Date.now()}`, name, args: args as Record<string, unknown> });
+      if (!CLIENT_TOOL_NAMES.has(name)) return { content: `Perch has no tool "${name}" for outside agents.`, isError: true };
       return manager.call(conn.session, { id: `${Date.now()}`, name, args: args as Record<string, unknown> }, conn.policy());
     },
     tabs: async (conn) => manager.tabs(conn.session),

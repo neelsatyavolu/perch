@@ -5,7 +5,7 @@ import type { LucideIcon } from "lucide-preact";
 export {
   ArrowDownToLine, ArrowLeft, Bell, BookOpen, Brain, Calendar, Check, ChevronDown, ChevronRight, Clock, Copy, Download, ExternalLink,
   FileText, Folder, Globe, History, KeyRound, Lock, Mail, MessageSquare, Monitor, MoreHorizontal, Palette, PanelLeft, PanelLeftClose,
-  Pause, Pencil, Play, Plug, Plus, RefreshCw, Repeat, Search, Shield, ShieldCheck, SquarePen, Trash2, Upload, User, X, Zap,
+  Pause, Pencil, Pin, Play, Plug, Plus, RefreshCw, Repeat, Search, Settings, Shield, ShieldCheck, SquarePen, Trash2, Upload, User, X, Zap,
 } from "lucide-preact";
 
 export function Icon({ of: Glyph, size = 16, label }: { readonly of: LucideIcon; readonly size?: number; readonly label?: string }) {

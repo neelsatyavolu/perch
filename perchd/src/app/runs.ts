@@ -143,7 +143,19 @@ export class RunManager {
 
   summary(chat: Chat): ChatSummary {
     const last = chat.messages.at(-1);
-    return { id: chat.id, title: chat.title, updatedAt: chat.updatedAt, tab: chat.tab, status: this.status(chat.id), preview: (last?.text ?? "").replace(/\[\[artifact:[^\]]+\]\]/g, "").replace(/\s+/g, " ").trim().slice(0, 140) };
+    const status = this.status(chat.id);
+    const reply = last?.role === "assistant" ? last : undefined;
+    return {
+      id: chat.id,
+      title: chat.title,
+      updatedAt: chat.updatedAt,
+      tab: chat.tab,
+      status,
+      preview: (last?.text ?? "").replace(/\[\[artifact:[^\]]+\]\]/g, "").replace(/\s+/g, " ").trim().slice(0, 140),
+      ...(chat.pinned ? { pinned: true as const } : {}),
+      ...(reply && status === "idle" && (!chat.readAt || reply.time > chat.readAt) ? { unread: true as const } : {}),
+      ...(reply?.error ? { failed: true as const } : {}),
+    };
   }
 
   artifactMeta(record: ArtifactRecord): ArtifactMeta {

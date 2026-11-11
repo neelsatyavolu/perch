@@ -143,21 +143,32 @@ export const ROUTES: Route[] = [
   route("PATCH", "/api/chats/:id", async (ctx, [id], body) => {
     chatOf(ctx, id!);
     const o = v.object(body);
-    v.onlyKeys(o, ["title", "draft", "scrollTop", "settings"]);
+    v.onlyKeys(o, ["title", "draft", "scrollTop", "settings", "pinned", "read"]);
+    const pinned = o.pinned === undefined ? undefined : v.bool(o.pinned, "pinned");
+    if (o.read !== undefined && o.read !== true) throw new AppError('"read" can only be true');
+    const read = o.read === true;
     const title = v.optionalText(o.title, "title", 200)?.trim();
     const draft = v.optionalText(o.draft, "draft", 50_000);
     const scrollTop = o.scrollTop === undefined ? undefined : v.nonNegativeNumber(o.scrollTop, "scrollTop");
     const settings = o.settings === undefined ? undefined : v.settingsPatch(o.settings, ctx.models);
     if (title === "") throw new AppError("A chat title cannot be empty");
-    const chat = await ctx.chats.update(id!, (c) => ({
-      ...c,
-      ...(title !== undefined ? { title } : {}),
-      ...(draft !== undefined ? { draft } : {}),
-      ...(scrollTop !== undefined ? { scrollTop } : {}),
-      ...(settings ? { settings: { ...c.settings, ...settings } } : {}),
-    }));
+    // Pinning and reading change only the list's marks, so the chat keeps its place.
+    const marksOnly = title === undefined && draft === undefined && scrollTop === undefined && !settings;
+    const updated = await ctx.chats.update(
+      id!,
+      ({ pinned: wasPinned, ...c }) => ({
+        ...c,
+        ...((pinned ?? wasPinned) ? { pinned: true as const } : {}),
+        ...(title !== undefined ? { title } : {}),
+        ...(draft !== undefined ? { draft } : {}),
+        ...(scrollTop !== undefined ? { scrollTop } : {}),
+        ...(settings ? { settings: { ...c.settings, ...settings } } : {}),
+        ...(read ? { readAt: new Date().toISOString() } : {}),
+      }),
+      { touch: !marksOnly },
+    );
     // Drafts and scroll positions change often and only matter to the page that sent them.
-    return title !== undefined || settings ? announced(ctx, chat) : chat;
+    return title !== undefined || settings || pinned !== undefined || read ? announced(ctx, updated) : updated;
   }),
   route("DELETE", "/api/chats/:id", async (ctx, [id]) => {
     chatOf(ctx, id!);

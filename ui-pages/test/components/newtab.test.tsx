@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { cleanup, fireEvent, waitFor } from "@testing-library/preact";
 import type { PerchApi } from "../../src/api";
 import { createFakeApi } from "../../src/api/fake";
+import { ago, ChatRail } from "../../src/pages/newtab/ChatRail";
 import { NewTab } from "../../src/pages/newtab/NewTab";
 import { renderWithApi } from "./render";
 
@@ -73,6 +74,40 @@ describe("New tab page", () => {
     await waitFor(() => expect(nav[0]).toEqual({ what: "query", detail: { text: "summarise my unread mail", mode: "ask", engine: "brave" } }));
   });
 
+  test("the model picker opens on providers, a provider lists its models, and search spans them all", async () => {
+    const { findByRole, getByRole, queryByRole, nav, api } = renderWithApi(<NewTab />);
+    fireEvent.click(await findByRole("button", { name: "Model for the task" }));
+    const search = getByRole("combobox", { name: "Search models" });
+    expect(document.activeElement).toBe(search);
+    const options = () => [...document.querySelectorAll(".mm [role='option']")].map((o) => o.textContent);
+    expect(options()).toEqual(["Codex", "Claude", "Claude Code", "Grok", "Settings"]);
+    fireEvent.click(getByRole("option", { name: "Codex" }));
+    expect(options()).toEqual(["Codex", "GPT-6 Astra", "GPT-6.1 Sol", "GPT-6 Luna"]);
+    fireEvent.keyDown(search, { key: "Escape" });
+    expect(options()[0]).toBe("Codex");
+    fireEvent.input(search, { target: { value: "opus" } });
+    expect(options()).toEqual(["Claude Opus 5.5Claude", "Claude Opus 5.5Claude Code"]);
+    fireEvent.keyDown(search, { key: "ArrowDown" });
+    fireEvent.keyDown(search, { key: "Enter" });
+    await waitFor(() => expect(queryByRole("dialog", { name: "Choose a model" })).toBeNull());
+    expect((await api.getComposer()).model).toBe("claude-code:claude-opus-5-5");
+    fireEvent.click(getByRole("button", { name: "Model for the task" }));
+    fireEvent.click(getByRole("option", { name: "Settings" }));
+    await waitFor(() => expect(nav.at(-1)).toEqual({ what: "page", detail: { page: "settings", section: "models" } }));
+  });
+
+  test("the effort picker lists exactly the chosen model's efforts and keeps the nearest on a switch", async () => {
+    const { findByRole, getByRole, api } = renderWithApi(<NewTab />);
+    await api.setComposer({ model: "codex:gpt-6-astra", effort: "ultra" });
+    fireEvent.click(await findByRole("button", { name: "Model for the task" }));
+    const effort = (await findByRole("combobox", { name: "Effort" })) as HTMLSelectElement;
+    expect([...effort.options].map((o) => o.text)).toEqual(["Low", "Medium", "High", "Extra high", "Max", "Ultra"]);
+    fireEvent.click(getByRole("option", { name: "Claude" }));
+    fireEvent.click(getByRole("option", { name: /Claude Opus 5\.5/ }));
+    await waitFor(async () => expect((await api.getComposer()).effort).toBe("max"));
+    await waitFor(() => expect([...(getByRole("combobox", { name: "Effort" }) as HTMLSelectElement).options].map((o) => o.text)).toEqual(["Low", "Medium", "High", "Extra high", "Max"]));
+  });
+
   test("recent chats show three cards with state in words; Routines switches the panel", async () => {
     const { findByText, getByRole, getAllByRole, findByText: find } = renderWithApi(<NewTab />);
     expect(await findByText("Waiting for your approval")).toBeTruthy();
@@ -114,13 +149,27 @@ describe("New tab page", () => {
     const { findByRole, getByRole, api, queryByRole } = renderWithApi(<NewTab />);
     const toggle = await findByRole("button", { name: "Hide chats" });
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    fireEvent.click(getByRole("button", { name: "Search chats" }));
     const search = getByRole("searchbox", { name: "Search chats" });
     fireEvent.input(search, { target: { value: "fares" } });
     await waitFor(() => expect(getByRole("button", { name: "Compare SFO to HND fares" })).toBeTruthy());
     await waitFor(() => expect(queryByRole("button", { name: "Summarise Priya's notes" })).toBeNull());
+    expect(getByRole("button", { name: "Settings" })).toBeTruthy();
     fireEvent.click(getByRole("button", { name: "Hide chats" }));
     await waitFor(async () => expect((await api.getNtpLayout()).railOpen).toBe(false));
     expect(getByRole("button", { name: "Show chats" }).getAttribute("aria-expanded")).toBe("false");
+  });
+
+  test("the chat rail lists pinned chats first and marks new and failed replies", () => {
+    const at = "2026-11-05T09:00:00.000Z";
+    const chats = [
+      { id: "a", title: "Plain", snippet: "", updatedAt: "2026-11-05T10:00:00.000Z", status: "idle" as const },
+      { id: "b", title: "Trip", snippet: "", updatedAt: at, status: "idle" as const, pinned: true as const },
+      { id: "c", title: "Fresh", snippet: "Here it is", updatedAt: at, status: "idle" as const, unread: true as const },
+      { id: "d", title: "Broke", snippet: "", updatedAt: at, status: "idle" as const, failed: true as const },
+    ];
+    const { getByRole } = renderWithApi(<ChatRail chats={chats} now={Date.parse("2026-11-05T12:00:00.000Z")} />);
+    const rows = [...getByRole("list").querySelectorAll("button")].map((b) => b.getAttribute("aria-label"));
+    expect(rows).toEqual(["Trip, Pinned", "Plain", "Fresh, New reply", "Broke, Failed"]);
+    expect(ago("2026-11-05T09:00:00.000Z", Date.parse("2026-11-05T12:00:00.000Z"))).toBe("3 hours ago");
   });
 });

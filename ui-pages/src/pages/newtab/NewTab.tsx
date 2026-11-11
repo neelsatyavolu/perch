@@ -23,7 +23,7 @@ export function NewTab() {
   const showing = useRef<Promise<unknown> | null>(null);
 
   const refresh = () =>
-    Promise.all([api.listChats(12), api.listRoutines(), api.listSuggestions()]).then(
+    Promise.all([api.listChats(200), api.listRoutines(), api.listSuggestions()]).then(
       ([chats, routines, suggestions]) => setData({ chats, routines, suggestions }),
       () => undefined,
     );

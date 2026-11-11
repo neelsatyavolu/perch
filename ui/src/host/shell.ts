@@ -7,7 +7,8 @@
  * dropped, and `openTab` takes only web pages and artifacts.
  */
 
-import { FRAME_ORIGINS, HOST_EVENT, HOST_METHODS, HOST_REPLY, HOST_REQUEST, openableUrl, type HostMethod } from "./protocol";
+import { THEMES } from "../theme/names.gen";
+import { chatIdArg, isAppearance, type HostAppearance, FRAME_ORIGINS, HOST_EVENT, HOST_METHODS, HOST_REPLY, HOST_REQUEST, openableUrl, type HostMethod } from "./protocol";
 
 type Send = (message: string, args: unknown[]) => void;
 type Reply = { type: string; id?: string; ok?: boolean; result?: unknown; error?: string; event?: string; data?: unknown };
@@ -38,6 +39,10 @@ export function createRelay(opts: { send: Send; frameOrigin: string; isFrame: (s
         const url = openableUrl(Array.isArray(msg.args) ? msg.args[0] : undefined);
         if (!url) return reply(msg.id, false, "The chat can open web pages and artifacts only");
         args = [url];
+      } else if (method === "openFullChat") {
+        const chat = chatIdArg(Array.isArray(msg.args) ? msg.args[0] : undefined);
+        if (!chat) return reply(msg.id, false, "Unknown chat");
+        args = [chat];
       }
       const callId = `shell-${++next}`;
       calls.set(callId, msg.id);
@@ -52,6 +57,7 @@ export function createRelay(opts: { send: Send; frameOrigin: string; isFrame: (s
     },
     onEvent(name, data) {
       if (name === "perch-dictation") opts.post({ type: HOST_EVENT, event: "dictation", data });
+      else if (name === "perch-appearance") opts.post({ type: HOST_EVENT, event: "appearance", data });
     },
   };
 }
@@ -74,9 +80,25 @@ export function startShell(win: ShellWindow, page: "chat.html" | "sidebar.html")
     post: (msg) => frame.contentWindow?.postMessage(msg, frameOrigin),
   });
   win.addEventListener("message", (e) => relay.onMessage(e.source, e.origin, e.data));
+  // The shell paints the chosen theme's canvas, so no other colour shows around or before the frame.
+  const paint = (a: unknown) => {
+    if (isAppearance(a)) win.document.documentElement.style.background = shellCanvas(a, (q) => win.matchMedia(q).matches);
+  };
   win.cr = {
     ...win.cr,
-    webUIResponse: (id: string, ok: boolean, response: unknown) => relay.onResponse(id, ok, response),
-    webUIListenerCallback: (name: string, data: unknown) => relay.onEvent(name, data),
+    webUIResponse: (id: string, ok: boolean, response: unknown) => (id === APPEARANCE_ID ? ok && paint(response) : relay.onResponse(id, ok, response)),
+    webUIListenerCallback: (name: string, data: unknown) => {
+      if (name === "perch-appearance") paint(data);
+      relay.onEvent(name, data);
+    },
   };
+  send.call(win.chrome, "perchHost", [APPEARANCE_ID, "getAppearance", []]);
+}
+
+const APPEARANCE_ID = "shell-appearance";
+
+/** The canvas colour of the theme an Appearance shows now (see applyAppearance in theme.ts). */
+export function shellCanvas(a: HostAppearance, matches: (query: string) => boolean): string {
+  const id = matches("(prefers-contrast: more)") ? "contrast" : !a.matchSystem ? a.theme : matches("(prefers-color-scheme: dark)") ? a.darkTheme : "paper";
+  return (THEMES.find((t) => t.id === id) ?? THEMES[0]).canvas;
 }

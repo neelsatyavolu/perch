@@ -41,7 +41,7 @@ export function createClient(api: string, token: string, deps: Deps = {}) {
     chats: () => call<ChatSummary[]>("GET", "/api/chats"),
     createChat: (init: { title?: string; settings?: Partial<ChatSettings> } = {}) => call<Chat>("POST", "/api/chats", init),
     chat: (id: string) => call<ChatPayload>("GET", `/api/chats/${encodeURIComponent(id)}`),
-    patchChat: (id: string, patch: { title?: string; draft?: string; scrollTop?: number; settings?: Partial<ChatSettings> }) => call<Chat>("PATCH", `/api/chats/${encodeURIComponent(id)}`, patch),
+    patchChat: (id: string, patch: { title?: string; draft?: string; scrollTop?: number; settings?: Partial<ChatSettings>; pinned?: boolean; read?: true }) => call<Chat>("PATCH", `/api/chats/${encodeURIComponent(id)}`, patch),
     deleteChat: (id: string) => call<{ removed: string }>("DELETE", `/api/chats/${encodeURIComponent(id)}`),
     /** `files` are attachment ids from the browser's file panel; `mentions` are tab ids picked with @. */
     send: (id: string, text: string, context?: TabInfo, extras: { files?: string[]; mentions?: string[] } = {}) =>

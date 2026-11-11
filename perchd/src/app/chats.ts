@@ -86,12 +86,15 @@ export class ChatStore {
     return fresh;
   }
 
-  /** Applies a change to the newest version of a chat. The change must return a new object. */
-  update(id: string, change: (chat: Chat) => Chat): Promise<Chat> {
+  /**
+   * Applies a change to the newest version of a chat. The change must return a new object.
+   * `touch: false` keeps updatedAt, for changes that should not move the chat up the list.
+   */
+  update(id: string, change: (chat: Chat) => Chat, { touch = true }: { touch?: boolean } = {}): Promise<Chat> {
     return this.queue.run(id, async () => {
       const current = this.chats.get(id);
       if (!current) throw new Error(`no chat ${id}`);
-      const next: Chat = { ...change(current), id, createdAt: current.createdAt, updatedAt: new Date().toISOString() };
+      const next: Chat = { ...change(current), id, createdAt: current.createdAt, updatedAt: touch ? new Date().toISOString() : current.updatedAt };
       await this.save(next);
       return next;
     });

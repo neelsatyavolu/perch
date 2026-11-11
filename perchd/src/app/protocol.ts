@@ -69,6 +69,10 @@ export type Chat = {
   origin?: string;
   /** Messages the chat sends itself later (scheduled.ts). */
   scheduled?: ScheduledMessage[];
+  /** Kept at the top of the chat lists. */
+  pinned?: true;
+  /** When the user last had this chat on screen; a reply after it is unread. */
+  readAt?: string;
 };
 
 /** `preapproved`: the user approved it up front, so its run doesn't ask before sends, posts and publishing. */
@@ -81,6 +85,11 @@ export type ChatSummary = {
   tab: TabRef | null;
   status: ChatStatus;
   preview: string;
+  pinned?: true;
+  /** The last reply came after the user last looked at the chat. */
+  unread?: true;
+  /** The last reply was an error. */
+  failed?: true;
 };
 
 export type ArtifactKind = "html" | "markdown" | "code" | "svg" | "csv" | "json" | "image";

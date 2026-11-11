@@ -34,7 +34,7 @@ type Setup = { imported: boolean; memoryPages: number | null; routines: number |
 
 function summary(deps: PagesDeps, chat: Chat): ChatSummary {
   const s = deps.runs.summary(chat);
-  return { id: s.id, title: s.title, snippet: s.preview, updatedAt: s.updatedAt, status: s.status };
+  return { id: s.id, title: s.title, snippet: s.preview, updatedAt: s.updatedAt, status: s.status, ...(s.pinned ? { pinned: true } : {}), ...(s.unread ? { unread: true } : {}), ...(s.failed ? { failed: true } : {}) };
 }
 
 function layoutPatch(value: unknown) {

@@ -6,12 +6,19 @@
  * window at one of the shell origins.
  */
 
-import { HOST_EVENT, HOST_REPLY, HOST_REQUEST, SHELL_ORIGINS, type AttachedFile, type HostMethod } from "./protocol";
+import { HOST_EVENT, HOST_REPLY, HOST_REQUEST, isAppearance, SHELL_ORIGINS, type AttachedFile, type HostAppearance, type HostMethod } from "./protocol";
 
 /** What a page can ask of the browser. Each part is missing when the page has no host for it. */
 export type PageHost = {
   close?: () => void;
   openTab?: (url: string) => void;
+  /** Opens this chat in the full chat page, in a new tab (the side chat closes). */
+  openFullChat?: (chatId: string) => void;
+  /** Opens Perch's settings in a tab. */
+  openSettings?: () => void;
+  /** The browser's Appearance settings, and a way to hear when they change. Returns a cleanup. */
+  getAppearance?: () => Promise<HostAppearance | null>;
+  onAppearance?: (fn: (appearance: HostAppearance) => void) => () => void;
   /** Shows the browser's open panel; resolves to ids for the files the user picked (none when cancelled). */
   chooseFiles?: () => Promise<AttachedFile[]>;
   /** Starts on-device dictation; `onText` gets the words so far, and `final` once speech ends. */
@@ -30,6 +37,7 @@ export function createFrameHost(win: Win): PageHost | undefined {
   const shell = ancestor;
   const pending = new Map<string, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();
   let dictation: ((text: string, final: boolean) => void) | null = null;
+  const appearanceListeners = new Set<(a: HostAppearance) => void>();
   let next = 0;
 
   win.addEventListener("message", (e: MessageEvent) => {
@@ -46,6 +54,8 @@ export function createFrameHost(win: Win): PageHost | undefined {
       const d = (msg.data ?? {}) as { text?: unknown; final?: unknown };
       if (typeof d.text === "string") dictation?.(d.text, d.final === true);
       if (d.final === true) dictation = null;
+    } else if (msg.type === HOST_EVENT && msg.event === "appearance" && isAppearance(msg.data)) {
+      for (const fn of appearanceListeners) fn(msg.data);
     }
   });
 
@@ -63,6 +73,16 @@ export function createFrameHost(win: Win): PageHost | undefined {
   return {
     close: () => void call("close").catch(() => undefined),
     openTab: (url) => void call("openTab", [url]).catch(() => undefined),
+    openFullChat: (chatId) => void call("openFullChat", [chatId]).catch(() => undefined),
+    openSettings: () => void call("openSettings").catch(() => undefined),
+    getAppearance: async () => {
+      const a = await call<unknown>("getAppearance").catch(() => null);
+      return isAppearance(a) ? a : null;
+    },
+    onAppearance: (fn) => {
+      appearanceListeners.add(fn);
+      return () => appearanceListeners.delete(fn);
+    },
     chooseFiles: async () => {
       const files = await call<unknown>("chooseFiles");
       return Array.isArray(files) ? files.filter(isFile) : [];

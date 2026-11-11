@@ -81,6 +81,12 @@ export type ChatSummary = {
   readonly snippet: string;
   readonly updatedAt: Iso;
   readonly status: ChatStatus;
+  /** Kept at the top of the list. */
+  readonly pinned?: true;
+  /** A reply the user hasn't seen yet. */
+  readonly unread?: true;
+  /** The last reply was an error. */
+  readonly failed?: true;
 };
 export type NtpSection = "recent" | "suggested";
 export type NtpLayout = {
@@ -255,7 +261,7 @@ export type PrivacySettings = {
 };
 export type PrivacyPatch = Partial<Omit<PrivacySettings, "backgroundConnections" | "blockerExceptions">>;
 /** An extension Perch ships built in: it can be turned off but not removed (spec 5.6, 5.7, 5.9). */
-export type BuiltInName = "perch" | "backrow" | "caveatly";
+export type BuiltInName = "perch" | "backrow" | "lulltab" | "caveatly";
 export type BuiltInExtension = { readonly name: BuiltInName; readonly enabled: boolean };
 /** `lastUsed` is left out when the browser doesn't know it. */
 export type SiteData = { readonly host: string; readonly bytes: number; readonly cookies: number; readonly lastUsed?: Iso };

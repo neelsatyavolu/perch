@@ -10,6 +10,7 @@
 
 #include "base/memory/weak_ptr.h"
 #include "base/values.h"
+#include "components/prefs/pref_change_registrar.h"
 #include "content/public/browser/web_ui_message_handler.h"
 #include "ui/shell_dialogs/select_file_dialog.h"
 
@@ -42,6 +43,8 @@ class PerchShellHandler : public content::WebUIMessageHandler,
 
   // content::WebUIMessageHandler:
   void RegisterMessages() override;
+  void OnJavascriptAllowed() override;
+  void OnJavascriptDisallowed() override;
 
   // ui::SelectFileDialog::Listener:
   void FileSelected(const ui::SelectedFileInfo& file, int index) override;
@@ -52,6 +55,8 @@ class PerchShellHandler : public content::WebUIMessageHandler,
   void HandleHost(const base::ListValue& args);
   void Reply(const std::string& id, bool ok, base::Value result);
   void ChooseFiles(const std::string& id);
+  // Sends the profile's Appearance to the page ("perch-appearance") when it changes.
+  void OnAppearanceChanged();
   void SendPaths(std::vector<base::FilePath> paths);
   void OnFilesStored(std::unique_ptr<network::SimpleURLLoader> loader,
                      std::optional<std::string> body);
@@ -59,6 +64,7 @@ class PerchShellHandler : public content::WebUIMessageHandler,
   scoped_refptr<ui::SelectFileDialog> dialog_;
   std::unique_ptr<PerchDictation> dictation_;
   std::string pending_files_id_;
+  PrefChangeRegistrar appearance_prefs_;
   base::WeakPtrFactory<PerchShellHandler> weak_factory_{this};
 };
 

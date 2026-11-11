@@ -3,12 +3,16 @@
 
 #include "chrome/browser/perch/webui/perch_shell_handler.h"
 
+#include <algorithm>
 #include <utility>
 
 #include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
+#include "base/strings/string_util.h"
 #include "chrome/browser/perch/agent/perchd_launcher.h"
+#include "chrome/browser/perch/perch_pref_names.h"
+#include "chrome/browser/perch/settings/appearance.h"
 #include "chrome/browser/perch/webui/perch_dictation.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
@@ -16,6 +20,7 @@
 #include "chrome/browser/ui/webui/webui_embedding_context.h"
 #include "chrome/browser/ui/select_file_policy/chrome_select_file_policy.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "components/prefs/pref_service.h"
 #include "components/tabs/public/tab_interface.h"
 #include "content/public/browser/page_navigator.h"
 #include "content/public/browser/storage_partition.h"
@@ -77,6 +82,33 @@ void PerchShellHandler::RegisterMessages() {
                                        base::Unretained(this)));
 }
 
+void PerchShellHandler::OnJavascriptAllowed() {
+  if (!appearance_prefs_.IsEmpty()) {
+    return;
+  }
+  appearance_prefs_.Init(Profile::FromWebUI(web_ui())->GetPrefs());
+  for (const char* name :
+       {prefs::kAppearanceTheme, prefs::kAppearanceAccent,
+        prefs::kAppearanceDarkTheme, prefs::kAppearanceMatchSystem,
+        prefs::kAppearanceDensity}) {
+    appearance_prefs_.Add(
+        name, base::BindRepeating(&PerchShellHandler::OnAppearanceChanged,
+                                  base::Unretained(this)));
+  }
+}
+
+void PerchShellHandler::OnJavascriptDisallowed() {
+  appearance_prefs_.RemoveAll();
+}
+
+void PerchShellHandler::OnAppearanceChanged() {
+  if (IsJavascriptAllowed()) {
+    FireWebUIListener(
+        "perch-appearance",
+        base::Value(GetAppearance(*Profile::FromWebUI(web_ui())->GetPrefs())));
+  }
+}
+
 void PerchShellHandler::Reply(const std::string& id,
                               bool ok,
                               base::Value result) {
@@ -136,6 +168,52 @@ void PerchShellHandler::HandleHost(const base::ListValue& args) {
                                ui::PAGE_TRANSITION_LINK, false),
         {});
     Reply(id, true, base::Value());
+    return;
+  }
+  if (method == "getAppearance") {
+    Reply(id, true,
+          base::Value(GetAppearance(*Profile::FromWebUI(web_ui())->GetPrefs())));
+    return;
+  }
+  if (method == "openSettings") {
+    if (!browser) {
+      Reply(id, false, base::Value(base::DictValue().Set("message", "No window")));
+      return;
+    }
+    browser->OpenURL(
+        content::OpenURLParams(GURL("chrome://perch-settings/"),
+                               content::Referrer(),
+                               WindowOpenDisposition::kNewForegroundTab,
+                               ui::PAGE_TRANSITION_LINK, false),
+        {});
+    Reply(id, true, base::Value());
+    return;
+  }
+  if (method == "openFullChat") {
+    // This chat in the full chat page, in a new tab; the side chat closes.
+    const std::string* chat =
+        call_args && !call_args->empty() ? (*call_args)[0].GetIfString()
+                                         : nullptr;
+    if (!browser || !chat || chat->empty() || chat->size() > 100 ||
+        !std::all_of(chat->begin(), chat->end(), [](char c) {
+          return base::IsAsciiAlphaNumeric(c) || c == '-' || c == '_';
+        })) {
+      Reply(id, false,
+            base::Value(base::DictValue().Set("message", "Unknown chat")));
+      return;
+    }
+    browser->OpenURL(
+        content::OpenURLParams(GURL("chrome://perch-chat/?chat=" + *chat),
+                               content::Referrer(),
+                               WindowOpenDisposition::kNewForegroundTab,
+                               ui::PAGE_TRANSITION_LINK, false),
+        {});
+    Reply(id, true, base::Value());
+    if (!tab) {
+      if (SidePanelUI* panel = SidePanelUI::From(browser)) {
+        panel->Close();
+      }
+    }
     return;
   }
   if (method == "chooseFiles") {

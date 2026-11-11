@@ -105,6 +105,10 @@ export function FullChat({ client, initialChat = null, initialAsk = null, onNavi
   const settings: ChatSettings = view.chat?.settings ?? { ...(info?.defaults ?? { mode: "guard", model: "", effort: "medium" }), scope: "agent", ...pending };
   const summary = list.find((c) => c.id === selected);
   const status = summary?.status ?? (view.run ? (view.run.approval ? "waiting" : "running") : "idle");
+  // A reply that arrives while the chat is on screen has been seen.
+  useEffect(() => {
+    if (selected && summary?.unread && document.visibilityState === "visible") void client.patchChat(selected, { read: true }).catch(() => undefined);
+  }, [selected, summary?.unread]);
 
   // Ask from the new tab page: a new chat that starts with the question, once the defaults
   // (the model above all) are known.
@@ -131,6 +135,9 @@ export function FullChat({ client, initialChat = null, initialAsk = null, onNavi
     }
   };
   const commitTitle = (title: string) => void chat.run(() => rename(title));
+  const togglePin = async () => {
+    if (view.chat) await client.patchChat(view.chat.id, { pinned: !summary?.pinned });
+  };
   const exportChat = async () => view.chat && saveFile(`${view.chat.title.replace(/[^\w .-]/g, "_")}.md`, await client.exportChat(view.chat.id));
   const remove = async () => {
     if (!view.chat) return;
@@ -150,9 +157,12 @@ export function FullChat({ client, initialChat = null, initialAsk = null, onNavi
 
   return (
     <div class="full" data-ready={info ? "true" : undefined}>
-      {listOpen && <ChatList chats={list} selected={selected} onSelect={(id) => void open(id)} onNew={() => void open(null)} />}
+      {listOpen && <ChatList chats={list} selected={selected} onSelect={(id) => void open(id)} onNew={() => void open(null)} onSettings={host?.openSettings} />}
       <main class="center">
         <header class="fc-h">
+          <button type="button" class="ib" aria-label="Chat list" title={listOpen ? "Hide chats" : "Show chats"} aria-pressed={listOpen} onClick={() => setListOpen(writePref("chat.list", !listOpen))}>
+            <Icon name="panelleft" />
+          </button>
           {editing && view.chat ? (
             <input class="title-edit" aria-label="Chat title" value={view.chat.title} autoFocus onBlur={(e) => commitTitle(e.currentTarget.value)} onKeyDown={(e) => (e.key === "Enter" ? commitTitle(e.currentTarget.value) : e.key === "Escape" && setEditing(false))} />
           ) : (
@@ -160,19 +170,30 @@ export function FullChat({ client, initialChat = null, initialAsk = null, onNavi
               {view.chat?.title ?? "New chat"}
             </button>
           )}
-          <PerchDot status={status} />
-          {status !== "idle" && <span class="state">{status === "running" ? "Working" : "Waiting for your approval"}</span>}
-          <span class="grow" />
+          {view.chat && !editing && (
+            <button type="button" class="ib" aria-label="Rename" title="Rename" onClick={() => setEditing(true)}>
+              <Icon name="pen" />
+            </button>
+          )}
           {view.chat && (
-            <Menu label="More" choices={[{ value: "export", label: "Export as Markdown" }, { value: "delete", label: "Delete chat" }]} selected={[]} align="end" onPick={(c) => (c.value === "export" ? void chat.run(exportChat) : setConfirmDelete(true))}>
+            <Menu
+              label="More"
+              choices={[
+                { value: "pin", label: summary?.pinned ? "Unpin chat" : "Pin chat" },
+                { value: "export", label: "Export as Markdown" },
+                { value: "delete", label: "Delete chat" },
+              ]}
+              selected={[]}
+              onPick={(c) => (c.value === "pin" ? void chat.run(togglePin) : c.value === "export" ? void chat.run(exportChat) : setConfirmDelete(true))}
+            >
               <Icon name="more" />
             </Menu>
           )}
+          <PerchDot status={status} />
+          {status !== "idle" && <span class="state">{status === "running" ? "Working" : "Waiting for your approval"}</span>}
+          <span class="grow" />
           <button type="button" class="btn small" disabled={!view.chat} onClick={() => void chat.run(exportChat)} title="Save this chat as a Markdown file">
             Share
-          </button>
-          <button type="button" class="ib" aria-label="Chat list" aria-pressed={listOpen} onClick={() => setListOpen(writePref("chat.list", !listOpen))}>
-            <Icon name="panelleft" />
           </button>
           <button type="button" class="ib" aria-label="Artifacts" aria-pressed={Boolean(artifact)} disabled={!view.artifacts.length} onClick={() => setArtifact(artifact ? null : view.artifacts.at(-1) ?? null)}>
             <Icon name="panel" />

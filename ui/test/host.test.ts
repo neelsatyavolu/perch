@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import { createFrameHost } from "../src/host/frame-host";
 import { HOST_EVENT, HOST_REPLY, HOST_REQUEST, openableUrl } from "../src/host/protocol";
-import { createRelay } from "../src/host/shell";
+import { createRelay, shellCanvas } from "../src/host/shell";
+import { applyAppearance } from "../src/theme/theme";
 import { applyMention, keptMentions, matchTabs, mentionQuery } from "../src/components/mentions";
 
 const FRAME = "chrome-untrusted://perch-side-chat.top-chrome";
@@ -85,6 +86,32 @@ test("the frame host talks only to a Perch shell, matches replies by id, and ign
   deliver({ type: HOST_EVENT, event: "dictation", data: { text: "find flights", final: true } });
   deliver({ type: HOST_EVENT, event: "dictation", data: { text: "late", final: false } });
   expect(heard).toEqual([["find", false], ["find flights", true]]);
+});
+
+test("the shell passes on full-chat opens with a chat id only, and appearance changes", () => {
+  const { r, sent, posted, frame } = relay();
+  r.onMessage(frame, FRAME, { type: HOST_REQUEST, id: "h1", method: "openFullChat", args: ["chat-1_a"] });
+  expect(sent).toEqual([{ message: "perchHost", args: ["shell-1", "openFullChat", ["chat-1_a"]] }]);
+  r.onMessage(frame, FRAME, { type: HOST_REQUEST, id: "h2", method: "openFullChat", args: ["../settings"] });
+  expect(sent.length).toBe(1);
+  expect(posted).toEqual([{ type: HOST_REPLY, id: "h2", ok: false, error: "Unknown chat" }]);
+  const a = { theme: "dusk", accent: "teal", matchSystem: false, darkTheme: "ink" };
+  r.onEvent("perch-appearance", a);
+  expect(posted.at(-1)).toEqual({ type: HOST_EVENT, event: "appearance", data: a });
+});
+
+test("Appearance picks the theme and accent, following macOS when Match system is on", () => {
+  const root = { dataset: {} as Record<string, string> } as unknown as HTMLElement;
+  const media = (dark: boolean, contrast = false) => (q: string) => ({ matches: q.includes("contrast") ? contrast : dark });
+  applyAppearance(root, { theme: "graphite", accent: "rose", matchSystem: false, darkTheme: "ink" }, media(false));
+  expect([root.dataset.theme, root.dataset.accent]).toEqual(["graphite", "rose"]);
+  applyAppearance(root, { theme: "graphite", accent: "nope", matchSystem: true, darkTheme: "dusk" }, media(true));
+  expect([root.dataset.theme, root.dataset.accent]).toEqual(["dusk", "blue"]);
+  applyAppearance(root, { theme: "graphite", accent: "blue", matchSystem: true, darkTheme: "dusk" }, media(false));
+  expect(root.dataset.theme).toBe("paper");
+  applyAppearance(root, { theme: "graphite", accent: "blue", matchSystem: false, darkTheme: "dusk" }, media(false, true));
+  expect(root.dataset.theme).toBe("contrast");
+  expect(shellCanvas({ theme: "graphite", accent: "blue", matchSystem: false, darkTheme: "ink" }, () => false)).toBe("#1C1D20");
 });
 
 test("@ names a tab at the end of the draft and keeps only mentions still in the text", () => {

@@ -7,7 +7,7 @@ import { render } from "preact";
 import { createClient } from "./api/client";
 import { readConfig, type AccentId, type HostConfig, type ThemeId } from "./api/config";
 import { createFrameHost, type PageHost } from "./host/frame-host";
-import { applyTheme } from "./theme/theme";
+import { applyAppearance, applyTheme } from "./theme/theme";
 
 declare global {
   interface Window {
@@ -36,6 +36,18 @@ export async function boot(page: "sidebar" | "chat"): Promise<void> {
   const client = fake ? (await import("./api/demo")).createDemoClient(config.windowId) : createClient(found!.api, found!.token);
   // Framed by Perch's trusted shell, host calls go to it over postMessage; otherwise config.js may set one.
   const host = window.perchHost ?? createFrameHost(window);
+  // The browser's Appearance settings win over the config's theme, and follow later changes.
+  if (host?.getAppearance && host.onAppearance) {
+    host.onAppearance((a) => {
+      cleanup();
+      cleanup = applyAppearance(document.documentElement, a);
+    });
+    void host.getAppearance().then((a) => {
+      if (!a) return;
+      cleanup();
+      cleanup = applyAppearance(document.documentElement, a);
+    });
+  }
   if (page === "sidebar") {
     const { Sidebar } = await import("./pages/sidebar");
     const fallbackTab = config.tabId ? { id: config.tabId, windowId: config.windowId, title: "", url: "" } : null;

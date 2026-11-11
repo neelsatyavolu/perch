@@ -331,3 +331,24 @@ test("a tab the browser never reported gets no target, and the task opens it ins
   expect(input.tab).toBeUndefined();
   expect(input.task).toContain("which you may open and use");
 });
+
+test("a finished reply is unread until the chat is read, and pinning or reading keeps its place", async () => {
+  const { ws, events } = await socket();
+  const chat = (await (await api("/api/chats", { method: "POST", json: {} })).json()) as Chat;
+  await api(`/api/chats/${chat.id}/messages`, { method: "POST", json: { text: "Unread check" } });
+  await until(() => events.find((e) => e.type === "run.finished" && e.chatId === chat.id));
+  type Row = { id: string; updatedAt: string; unread?: true; pinned?: true; failed?: true };
+  const row = async () => ((await (await api("/api/chats")).json()) as Row[]).find((c) => c.id === chat.id)!;
+  const before = await row();
+  expect(before.unread).toBe(true);
+  expect(before.failed).toBeUndefined();
+  expect((await api(`/api/chats/${chat.id}`, { method: "PATCH", json: { read: true, pinned: true } })).status).toBe(200);
+  const after = await row();
+  expect(after.unread).toBeUndefined();
+  expect(after.pinned).toBe(true);
+  expect(after.updatedAt).toBe(before.updatedAt);
+  await api(`/api/chats/${chat.id}`, { method: "PATCH", json: { pinned: false } });
+  expect((await row()).pinned).toBeUndefined();
+  expect((await api(`/api/chats/${chat.id}`, { method: "PATCH", json: { read: false } })).status).toBe(400);
+  ws.close();
+});

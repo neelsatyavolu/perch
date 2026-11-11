@@ -155,6 +155,11 @@ export function Sidebar({ client, windowId, fallbackTab = null, host }: Props) {
         <button type="button" class="ib" aria-label="New chat" title="New chat" disabled={!view.chat} onClick={() => void chat.run(() => attach())}>
           <Icon name="pen" />
         </button>
+        {view.chat && host?.openFullChat && (
+          <button type="button" class="ib" aria-label="Open in full view" title="Open in full view" onClick={() => view.chat && host.openFullChat?.(view.chat.id)}>
+            <Icon name="expand" />
+          </button>
+        )}
         <button type="button" class="ib" aria-label="Close side chat" title="Close side chat" onClick={() => host?.close?.()}>
           <Icon name="x" />
         </button>

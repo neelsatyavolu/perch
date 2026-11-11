@@ -1,54 +1,91 @@
-/** The chat list on the full-page chat: grouped by day, the selected row marked with the accent. */
+/**
+ * The chat list beside the full-page chat, in the shape of Aside's: a search field, New chat and
+ * Settings, then every chat under "Chats", pinned ones first. A blue dot marks a reply not seen
+ * yet, a red mark a reply that failed; hovering a row shows its last message and when.
+ */
 
-import { Fragment } from "preact";
+import { useState } from "preact/hooks";
 import type { ChatSummary } from "../api/types";
 import { Icon, PerchDot } from "./icon";
 
-const DAY = 86_400_000;
-
-function group(iso: string, now: number): string {
-  const d = new Date(iso);
-  const start = new Date(now);
-  start.setHours(0, 0, 0, 0);
-  if (d.getTime() >= start.getTime()) return "Today";
-  if (d.getTime() >= start.getTime() - 6 * DAY) return "This week";
-  return "Earlier";
-}
-
 const STATUS_WORDS = { idle: "", running: "Running", waiting: "Needs your approval" } as const;
 
-type Props = { chats: ChatSummary[]; selected: string | null; onSelect: (id: string) => void; onNew: () => void; now?: number };
+type Props = {
+  chats: ChatSummary[];
+  selected: string | null;
+  onSelect: (id: string) => void;
+  onNew: () => void;
+  /** Opens Perch's settings; the row is left out without it. */
+  onSettings?: () => void;
+  now?: number;
+};
 
-export function ChatList({ chats, selected, onSelect, onNew, now = Date.now() }: Props) {
-  let last = "";
+/** "just now", "5 minutes ago", "3 hours ago", "2 days ago", then the date. */
+export function ago(iso: string, now: number): string {
+  const s = Math.max(0, (now - new Date(iso).getTime()) / 1000);
+  const n = (v: number, unit: string) => `${v} ${unit}${v === 1 ? "" : "s"} ago`;
+  if (s < 60) return "just now";
+  if (s < 3600) return n(Math.floor(s / 60), "minute");
+  if (s < 86_400) return n(Math.floor(s / 3600), "hour");
+  if (s < 7 * 86_400) return n(Math.floor(s / 86_400), "day");
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+/** Pinned chats first, each group newest first; `query` keeps chats whose title or last message has it. */
+export function orderChats(chats: readonly ChatSummary[], query = ""): ChatSummary[] {
+  const q = query.trim().toLowerCase();
+  const shown = q ? chats.filter((c) => c.title.toLowerCase().includes(q) || c.preview.toLowerCase().includes(q)) : [...chats];
+  return shown.sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || b.updatedAt.localeCompare(a.updatedAt));
+}
+
+export function ChatList({ chats, selected, onSelect, onNew, onSettings, now = Date.now() }: Props) {
+  const [query, setQuery] = useState("");
+  const [hover, setHover] = useState<{ chat: ChatSummary; top: number; left: number } | null>(null);
+  const shown = orderChats(chats, query);
   return (
-    <nav class="chats" aria-label="Chats">
+    <nav class="chats" aria-label="Chats" onMouseLeave={() => setHover(null)}>
+      <label class="chats-search">
+        <Icon name="search" />
+        <input type="search" placeholder="Search.." aria-label="Search chats" value={query} onInput={(e) => setQuery(e.currentTarget.value)} />
+      </label>
       <button type="button" class="row act" onClick={onNew}>
         <Icon name="pen" />
         New chat
       </button>
-      {chats.length === 0 && <p class="lbl">No chats yet</p>}
-      {chats.map((c) => {
-        const g = group(c.updatedAt, now);
-        const heading = g !== last ? <span class="lbl">{g}</span> : null;
-        last = g;
-        return (
-          <Fragment key={c.id}>
-            {heading}
-            <button
-              type="button"
-              class={c.id === selected ? "row sel" : "row"}
-              aria-current={c.id === selected ? "page" : undefined}
-              title={STATUS_WORDS[c.status] ? `${c.title} · ${STATUS_WORDS[c.status]}` : c.title}
-              onClick={() => onSelect(c.id)}
-            >
-              <span class="row-t">{c.title}</span>
-              <PerchDot status={c.status} />
-              {c.status !== "idle" && <span class="sr">{STATUS_WORDS[c.status]}</span>}
-            </button>
-          </Fragment>
-        );
-      })}
+      {onSettings && (
+        <button type="button" class="row act" onClick={onSettings}>
+          <Icon name="settings" />
+          Settings
+        </button>
+      )}
+      <span class="lbl">Chats</span>
+      {shown.length === 0 && <p class="empty-note">{query.trim() ? "No chats match" : "No chats yet"}</p>}
+      {shown.map((c) => (
+        <button
+          type="button"
+          key={c.id}
+          class={c.id === selected ? "row sel" : "row"}
+          aria-current={c.id === selected ? "page" : undefined}
+          aria-label={[c.title, c.pinned && "Pinned", STATUS_WORDS[c.status], c.unread && "New reply", c.failed && "Failed"].filter(Boolean).join(", ")}
+          onClick={() => onSelect(c.id)}
+          onMouseEnter={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            setHover({ chat: c, top: r.top, left: r.right + 12 });
+          }}
+          onMouseLeave={() => setHover(null)}
+        >
+          <span class="row-t">{c.title}</span>
+          {c.pinned && <Icon name="pin" />}
+          {c.status !== "idle" ? <PerchDot status={c.status} /> : c.failed ? <span class="mark err" aria-hidden="true">!</span> : c.unread ? <span class="mark new" aria-hidden="true" /> : null}
+        </button>
+      ))}
+      {hover && (
+        <div class="chat-tip" role="tooltip" style={{ top: `${hover.top}px`, left: `${hover.left}px` }}>
+          <strong>{hover.chat.title}</strong>
+          {hover.chat.preview && <span class="tip-p">{hover.chat.preview}</span>}
+          <span class="tip-t">{ago(hover.chat.updatedAt, now)}</span>
+        </div>
+      )}
     </nav>
   );
 }

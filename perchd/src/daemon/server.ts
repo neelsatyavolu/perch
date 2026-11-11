@@ -22,6 +22,10 @@ export type Handler = (conn: Connection, params: Record<string, unknown>) => Pro
 
 /** The client name a Perch sidebar run's outside agent connects as. */
 export const SIDEBAR_CLIENT = "perch-sidebar";
+/** A chat's agent session (sidebar-runner.ts): its tabs stay between turns. */
+export const CHAT_SESSION_PREFIX = "chat-";
+/** How long a chat's tabs stay open after a turn, for the user to look at and for a follow-up to reuse. */
+const CHAT_KEEP_MS = 30 * 60_000;
 
 /**
  * A task the user started in Perch's sidebar and handed to an outside agent (Codex, Claude Code).
@@ -188,6 +192,7 @@ export async function startServer(opts: ServerOptions): Promise<Server> {
     if (!browser) return undefined;
     return (name) => {
       clearTimeout(state.timer);
+      state.writer.send({ type: "notice", text: `Perch is asking you to allow "${name}" to use it. Answer the card in the Perch window to continue.` });
       return browser.allowClient(name, state.left.signal);
     };
   }
@@ -304,7 +309,9 @@ export async function startServer(opts: ServerOptions): Promise<Server> {
         conn.declineAll();
         conn.session.connections--;
         if (conn.session.connections > 0) return;
-        if (conn.hello.persistent) opts.manager.scheduleEnd(conn.session, opts.graceMs ?? 10_000);
+        const chat = conn.hello.client === SIDEBAR_CLIENT && conn.hello.session.startsWith(CHAT_SESSION_PREFIX);
+        if (chat) void opts.manager.giveBack(conn.session);
+        if (conn.hello.persistent) opts.manager.scheduleEnd(conn.session, chat ? Math.max(CHAT_KEEP_MS, opts.graceMs ?? 0) : opts.graceMs ?? 10_000);
         // A terminal command that opened nothing leaves nothing behind.
         else if (!conn.session.tabIds().length && !conn.session.asleep) void opts.manager.end(conn.session, "close");
       },

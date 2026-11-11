@@ -19,7 +19,7 @@ const EXT = ".chat";
 const ADD_BATCH = 32;
 
 /** `incognito`: a private chat, kept in memory only (spec 5.8). */
-export type NewChat = { title?: string; tab?: TabRef | null; settings?: Partial<ChatSettings>; incognito?: boolean };
+export type NewChat = { title?: string; tab?: TabRef | null; settings?: Partial<ChatSettings>; incognito?: boolean; origin?: string };
 
 export class ChatStore {
   private chats = new Map<string, Chat>();
@@ -68,6 +68,7 @@ export class ChatStore {
       draft: "",
       scrollTop: 0,
       ...(init.incognito ? { incognito: true as const } : {}),
+      ...(init.origin ? { origin: init.origin } : {}),
     };
     await this.save(chat);
     return init.tab ? this.attach(chat.id, init.tab) : chat;

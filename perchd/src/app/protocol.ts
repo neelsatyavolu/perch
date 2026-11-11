@@ -64,6 +64,8 @@ export type Chat = {
    * written to disk, and is deleted when the last private window closes.
    */
   incognito?: true;
+  /** The outside client (`perch exec`) that started this chat; only that client can see or steer it. */
+  origin?: string;
   /** Messages the chat sends itself later (scheduled.ts). */
   scheduled?: ScheduledMessage[];
 };

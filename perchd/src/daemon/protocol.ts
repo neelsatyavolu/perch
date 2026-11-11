@@ -33,6 +33,8 @@ export type Welcome = { type: "welcome"; client: string; session: string; label:
 export type Response = { type: "response"; id: number; result?: unknown; error?: string };
 export type ApproveAsk = { type: "approve"; id: number; summary: string; kind: string; site: string };
 export type Fatal = { type: "error"; error: string };
+/** Something the person at the terminal should know while a request waits, such as a card in Perch. */
+export type Notice = { type: "notice"; text: string };
 
 export const SESSION_ID = /^[A-Za-z0-9._:-]{1,80}$/;
 const TITLE_LIMIT = 80;

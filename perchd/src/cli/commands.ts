@@ -59,6 +59,25 @@ export const browserCommands: Record<string, (argv: string[], io: CliIO) => Prom
     const [key] = one(a.positionals, "perch press <key>");
     return tool(io, a.options.get("--session"), "press", { key });
   },
+  async script(argv, io) {
+    const a = parseArgs(argv, { options: SESSION });
+    const code = one(a.positionals, 'perch script "<javascript calling navigate(), snapshot(), click(), js() …>"').join(" ");
+    return tool(io, a.options.get("--session"), "script", { code });
+  },
+  async navigate(argv, io) {
+    const a = parseArgs(argv, { options: SESSION });
+    const [url] = one(a.positionals, "perch navigate <url>");
+    return tool(io, a.options.get("--session"), "navigate", { url });
+  },
+  async select(argv, io) {
+    const a = parseArgs(argv, { options: SESSION });
+    const [ref, ...value] = one(a.positionals, "perch select <ref> <option>", 2);
+    return tool(io, a.options.get("--session"), "select", { ref, value: value.join(" ") });
+  },
+  async back(argv, io) {
+    const a = parseArgs(argv, { options: SESSION });
+    return tool(io, a.options.get("--session"), "back", {});
+  },
   async repl(argv, io) {
     const a = parseArgs(argv, { options: SESSION });
     const code = one(a.positionals, 'perch repl "<javascript>"').join(" ");

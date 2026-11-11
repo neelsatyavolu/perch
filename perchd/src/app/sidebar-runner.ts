@@ -11,7 +11,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import type { StepEvent } from "../agent/loop";
 import type { MemoryAccess } from "../memory/agent";
-import { SIDEBAR_CLIENT, type SidebarRun } from "../daemon/server";
+import { CHAT_SESSION_PREFIX, SIDEBAR_CLIENT, type SidebarRun } from "../daemon/server";
 import { claudeBinary, codexBinary, runClaudeCode, runCodex, type AsideEvent, type McpServer } from "../external";
 import { AGENT_OFF, agentAllowed, allowsModel, capMode, MODEL_NOT_ALLOWED, type Policy, type PolicyView } from "../policy/policy";
 import type { ModelInfo } from "./protocol";
@@ -43,9 +43,11 @@ type Agent = "codex" | "claude-code";
 
 const MODELS: (ModelInfo & { agent: Agent })[] = [
   { agent: "codex", id: "codex:gpt-6.1-sol", label: "GPT-6.1 Sol", provider: "Codex", efforts: ["low", "medium", "high"] },
+  { agent: "codex", id: "codex:gpt-6-luna", label: "GPT-6 Luna", provider: "Codex", efforts: ["low", "medium", "high"] },
   { agent: "codex", id: "codex:default", label: "Codex default", provider: "Codex", efforts: ["low", "medium", "high"] },
   { agent: "claude-code", id: "claude-code:claude-sonnet-5-5", label: "Claude Sonnet 5.5", provider: "Claude Code", efforts: ["low", "medium", "high"] },
   { agent: "claude-code", id: "claude-code:claude-opus-5-5", label: "Claude Opus 5.5", provider: "Claude Code", efforts: ["low", "medium", "high"] },
+  { agent: "claude-code", id: "claude-code:claude-haiku-5-5", label: "Claude Haiku 5.5", provider: "Claude Code", efforts: ["low", "medium", "high"] },
 ];
 
 function installed(agent: Agent): boolean {
@@ -160,7 +162,9 @@ export function sidebarRunner(opts: SidebarRunnerOptions): Runner {
     // A private chat (spec 5.8) neither reads nor teaches memory.
     const memory = input.incognito ? undefined : await opts.memory?.().catch(() => undefined);
     const known = memory ? await memory.context(input.ask ?? input.task).catch(() => "") : "";
-    const session = `sidebar-${randomBytes(12).toString("hex")}`;
+    // One session per chat, so a follow-up continues in the tabs the last turn opened. A private
+    // chat's tabs never outlive its turn.
+    const session = input.chatId && !input.incognito ? `${CHAT_SESSION_PREFIX}${input.chatId}` : `sidebar-${randomBytes(12).toString("hex")}`;
     const token = randomBytes(32).toString("base64url");
     const mode = capMode(input.settings.mode, policy);
     const catalog = await opts.skills?.().catch(() => undefined);

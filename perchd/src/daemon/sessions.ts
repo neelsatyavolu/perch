@@ -192,16 +192,7 @@ export class SessionManager {
   async end(session: AgentSession, how: OnEnd = session.info.onEnd): Promise<void> {
     if (session.endTimer) clearTimeout(session.endTimer);
     session.endTimer = null;
-    const released = [...session.borrowed];
-    session.borrowed = new Set();
-    // A released borrowed tab is the user's again: the session stops acting on it and listening
-    // to it, and the browser stops holding it drawing.
-    const ctx = session.ctx;
-    if (ctx) {
-      await releaseBorrowed(ctx, released);
-      await Promise.all(released.map((id) => ctx.browser.release(id)));
-      if (ctx.tab && !ctx.owned.includes(ctx.tab)) ctx.tab = ctx.owned.filter((t) => !t.closed).at(-1) ?? null;
-    }
+    await this.giveBack(session);
     if (how === "sleep") {
       await this.freeze(session, true);
       session.asleep = true;
@@ -212,6 +203,20 @@ export class SessionManager {
       this.sessions = next;
     }
     this.writeFile();
+  }
+
+  /** Hands the user's borrowed tabs back while the session keeps its own (a chat between turns). */
+  async giveBack(session: AgentSession): Promise<void> {
+    const released = [...session.borrowed];
+    session.borrowed = new Set();
+    // A released borrowed tab is the user's again: the session stops acting on it and listening
+    // to it, and the browser stops holding it drawing.
+    const ctx = session.ctx;
+    if (ctx) {
+      await releaseBorrowed(ctx, released);
+      await Promise.all(released.map((id) => ctx.browser.release(id)));
+      if (ctx.tab && !ctx.owned.includes(ctx.tab)) ctx.tab = ctx.owned.filter((t) => !t.closed).at(-1) ?? null;
+    }
   }
 
   /** Closes every session of a client, as after a revoke. */

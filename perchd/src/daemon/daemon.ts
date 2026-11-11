@@ -20,6 +20,9 @@ import { macConfirm, type Confirm } from "./confirm";
 import { MemoryKeychain, type Keychain } from "./keychain";
 import type { PerchPaths } from "./paths";
 import { SESSION_ID, type OnEnd } from "./protocol";
+import type { Tasks } from "../app/tasks";
+import type { MemoryApi } from "../memory/api";
+import type { SkillCatalog } from "../skills/catalog";
 import { startServer, type Connection, type Handler, type ServerOptions, type SidebarRun } from "./server";
 import { cdpTabGroups, SessionManager, type AgentSession, type TabGroups } from "./sessions";
 
@@ -48,6 +51,15 @@ export type DaemonOptions = {
   audit?: AuditLog;
   /** Inside Perch: the browser asks the user for clients that cannot ask themselves. */
   browser?: ServerOptions["browser"];
+  /** Inside Perch: tasks, memory and skills for outside clients (`perch exec`, `perch memory`). */
+  outside?: () => Outside | undefined;
+};
+
+/** What Perch's app lends the daemon for outside clients, once it has started. */
+export type Outside = {
+  tasks: Tasks;
+  memory: () => Promise<MemoryApi | undefined>;
+  skills: () => Promise<SkillCatalog>;
 };
 
 export type Daemon = { manager: SessionManager; registry: ClientRegistry; stop(): Promise<void> };
@@ -123,6 +135,19 @@ export async function startDaemon(opts: DaemonOptions): Promise<Daemon> {
     return extras.run(call, new AbortController().signal);
   };
 
+  /** Tasks, memory and skills are Perch's own: there is nothing to lend without the app, and a sidebar agent may not start tasks. */
+  const outsideOf = (conn: Connection): Outside => {
+    if (conn.client.name === SIDEBAR_CLIENT) throw new Error("A Perch chat's agent cannot start or read tasks.");
+    const outside = opts.outside?.();
+    if (!outside) throw new Error("Tasks, memory and skills need the Perch app. Open Perch and try again.");
+    return outside;
+  };
+  const memoryOf = async (conn: Connection): Promise<MemoryApi> => {
+    const api = await outsideOf(conn).memory();
+    if (!api) throw new Error("Memory is off in Perch's settings.");
+    return api;
+  };
+
   const methods: Record<string, Handler> = {
     status: async (conn) => ({
       version: VERSION,
@@ -154,6 +179,38 @@ export async function startDaemon(opts: DaemonOptions): Promise<Daemon> {
       if (how !== undefined && how !== "close" && how !== "sleep") throw new Error('onEnd must be "close" or "sleep".');
       await manager.end(sessionOf(conn, params), how);
       return { ended: true };
+    },
+    "task.start": async (conn, params) =>
+      outsideOf(conn).tasks.start({ client: conn.client.name, clientMode: conn.policy().mode, task: need(params, "task"), model: str(params, "model"), effort: str(params, "effort"), mode: str(params, "mode") }),
+    "task.list": async (conn) => outsideOf(conn).tasks.list(conn.client.name),
+    "task.get": async (conn, params) => outsideOf(conn).tasks.get(conn.client.name, need(params, "id")),
+    "task.send": async (conn, params) => outsideOf(conn).tasks.send(conn.client.name, need(params, "id"), need(params, "text")),
+    "task.steer": async (conn, params) => outsideOf(conn).tasks.steer(conn.client.name, need(params, "id"), need(params, "text")),
+    "task.queue": async (conn, params) => outsideOf(conn).tasks.queue(conn.client.name, need(params, "id"), need(params, "text")),
+    "task.stop": async (conn, params) => outsideOf(conn).tasks.stop(conn.client.name, need(params, "id")),
+    "task.delete": async (conn, params) => outsideOf(conn).tasks.remove(conn.client.name, need(params, "id")),
+    "task.models": async (conn) => outsideOf(conn).tasks.models(),
+    "memory.search": async (conn, params) => {
+      const api = await memoryOf(conn);
+      const limit = typeof params.limit === "number" ? params.limit : 10;
+      const hits = unwrap(await api.search({ query: need(params, "query"), limit }));
+      await audit.append({ time: new Date().toISOString(), tab: "", site: "memory", action: "memory_search", detail: `search (${need(params, "query").length} characters)`, client: conn.client.name, approved: null, result: "ok" });
+      return hits;
+    },
+    "memory.list": async (conn) => unwrap(await (await memoryOf(conn)).listPages({})),
+    "memory.show": async (conn, params) => {
+      const api = await memoryOf(conn);
+      const wanted = need(params, "path");
+      const page = unwrap(await api.listPages({})).find((p) => p.path === wanted || p.id === wanted || p.path === `${wanted}.md`);
+      if (!page) throw new Error(`No memory page "${wanted}". List them with: perch memory list`);
+      await audit.append({ time: new Date().toISOString(), tab: "", site: "memory", action: "memory_show", detail: page.path, client: conn.client.name, approved: null, result: "ok" });
+      return unwrap(await api.getPage({ id: page.id }));
+    },
+    "skills.list": async (conn) => (await outsideOf(conn).skills()).list().map((s) => ({ name: s.name, description: s.description, origin: s.origin })),
+    "skills.show": async (conn, params) => {
+      const text = (await outsideOf(conn).skills()).read(need(params, "name"), str(params, "file") ?? "SKILL.md");
+      if (text === null) throw new Error(`No skill "${need(params, "name")}". List them with: perch skills list`);
+      return text;
     },
     "clients.list": async (conn) => (adminOnly(conn), registry.list()),
     // Revoking and lowering a mode take effect at once; letting a client do more needs the person.
@@ -220,4 +277,15 @@ export function browserExecutable(explicit?: string): string | undefined {
   if (explicit) return explicit;
   const perch = `${PERCH_APP}/Contents/MacOS/Perch`;
   return existsSync(perch) ? perch : undefined;
+}
+
+function need(params: Record<string, unknown>, key: string): string {
+  const value = params[key];
+  if (typeof value !== "string" || !value.trim()) throw new Error(`${key} is required.`);
+  return value;
+}
+
+function unwrap<T>(result: { ok: true; data: T } | { ok: false; error: string }): T {
+  if (!result.ok) throw new Error(result.error);
+  return result.data;
 }

@@ -98,6 +98,7 @@ export async function openDaemon(io: CliIO, opts: SessionOptions = {}): Promise<
         onEnd: opts.onEnd ?? "close",
       },
       onApprove: opts.onApprove ?? (ask ? (a: ApproveAsk) => ask(`Allow: ${a.summary}?`) : undefined),
+      onNotice: (text) => io.stderr(`${text}\n`),
     });
   try {
     return await attempt();

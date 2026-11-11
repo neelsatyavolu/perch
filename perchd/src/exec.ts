@@ -14,15 +14,30 @@ import { PolicyWatcher } from "./policy/watch";
 
 export type ExecArgs = { provider: string; model: string; thinking?: string; logDump?: string; task: string };
 
+/** Aside's provider names, for `-m openai/<model>` and `-m anthropic/<model>`. */
+const PROVIDERS: Record<string, string> = { openai: "codex", anthropic: "claude-code", claude: "claude-code" };
+
 export function parseExecArgs(argv: string[]): ExecArgs {
   const args = [...argv];
   if (args[0] === "exec") args.shift();
-  const take = (name: string) => {
-    const i = args.indexOf(name);
-    return i >= 0 ? args.splice(i, 2)[1] : undefined;
+  const take = (...names: string[]) => {
+    let value: string | undefined;
+    for (const name of names) {
+      const i = args.indexOf(name);
+      if (i >= 0) value = args.splice(i, 2)[1];
+    }
+    return value;
   };
-  const [provider, ...rest] = (take("--model") ?? "claude-code/claude-sonnet-5-5").split("/");
-  const thinking = take("--thinking");
+  const drop = (...names: string[]) => names.forEach((n) => args.includes(n) && args.splice(args.indexOf(n), 1));
+  // `perch exec` options that only matter inside Perch's app; a task run on its own ignores them.
+  take("--timeout", "--permission", "--session");
+  drop("--json", "--standalone");
+  const providerName = take("-p", "--provider");
+  const named = take("-m", "--model");
+  const spec = named ? (named.includes("/") || !providerName ? named : `${providerName}/${named}`) : "claude-code/claude-sonnet-5-5";
+  const [given, ...rest] = spec.includes("/") ? spec.split("/") : [spec.startsWith("gpt") ? "codex" : "claude-code", spec];
+  const provider = PROVIDERS[given!] ?? given!;
+  const thinking = take("--thinking", "--effort");
   const logDump = take("--log-dump");
   const task = args.join(" ").trim();
   if (provider !== "claude-code" && provider !== "codex") throw new Error(`provider "${provider}" needs Perch's own sign-in, which is not built yet; use claude-code/<model> or codex/<model>`);
@@ -48,6 +63,7 @@ export async function main(argv: string[]): Promise<number> {
   const result = await run({
     task: args.task,
     model: args.model,
+    ...(args.thinking ? { effort: args.thinking } : {}),
     timeoutMs: 30 * 60_000,
     auditPath: perchPaths().auditFile,
   });

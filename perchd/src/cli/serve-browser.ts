@@ -20,7 +20,8 @@ import { openPageServices, profileAuditLog } from "../app/pages/services";
 import { allowedSidebarModels, SidebarRuns, sidebarModels, sidebarRunner } from "../app/sidebar-runner";
 import { startPolicyWatcher } from "../policy/watch";
 import { Vault } from "../app/vault";
-import { startDaemon, type Daemon } from "../daemon/daemon";
+import { startDaemon, type Daemon, type Outside } from "../daemon/daemon";
+import { Tasks } from "../app/tasks";
 import { SIDEBAR_CLIENT } from "../daemon/server";
 import { BrowserLink } from "../app/browser-link";
 import { PerchDomain } from "../browser/perch-domain";
@@ -70,6 +71,8 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
   };
   // The perch dot, Ask and outside agents' approvals in the browser (src/app/browser-link.ts).
   let agentTabs: (chatId: string) => string[] = () => [];
+  // Tasks, memory and skills for outside clients, once the app is up.
+  let outside: Outside | undefined;
   let driving: (chatId: string) => Tab | null = () => null;
   const link = new BrowserLink({ perch: new PerchDomain(conn), agentTabs: (chatId) => agentTabs(chatId), driving: (chatId) => driving(chatId), onError: io.stderr });
   const start = (env: Record<string, string | undefined>) =>
@@ -82,6 +85,7 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
       policy,
       audit,
       browser: link.approvals,
+      outside: () => outside,
     });
   let home = perchPaths(io.env).home;
   let daemon: Daemon;
@@ -125,6 +129,7 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
     artifactScheme: browser.features.has("perch-artifact"),
   });
   services.attach(app);
+  outside = { tasks: new Tasks(app), memory: services.memoryApi, skills: services.skills };
   agentTabs = (chatId) => runs.sessionsFor(chatId).flatMap((s) => daemon.manager.get(SIDEBAR_CLIENT, s)?.tabIds() ?? []);
   driving = (chatId) => runs.sessionsFor(chatId).map((s) => daemon.manager.get(SIDEBAR_CLIENT, s)?.ctx?.tab ?? null).find((t) => t && !t.closed) ?? null;
   link.attach(app);

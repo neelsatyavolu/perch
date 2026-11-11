@@ -33,6 +33,7 @@ import { isProviderId } from "../../models/ids";
 import { createModelRegistry, type ModelHandle, type ModelRegistry } from "../../models/registry";
 import type { Model } from "../../models/types";
 import { openPerchData, type PerchData } from "../../routines/service";
+import type { MemoryApi } from "../../memory/api";
 import { MacKeychain, type SecretStore } from "../../secure/keychain";
 import { SkillStore } from "../../skills/store";
 import { startBrowserSync } from "../../sync/browser-sync";
@@ -90,6 +91,8 @@ export type PageServices = {
   sidebarAudit: string;
   /** Memory for a sidebar chat. */
   chatMemory: () => Promise<Awaited<ReturnType<PerchData["chatMemory"]>>>;
+  /** The memory API for outside clients' read-only commands; undefined while memory is off. */
+  memoryApi: () => Promise<MemoryApi | undefined>;
   /** The profile's skills (built-in and the user's own), read fresh for each sidebar run. */
   skills: () => Promise<SkillCatalog>;
   /** Names a chat after its first reply with the profile's fast model (`startApp({ nameChat })`). */
@@ -159,6 +162,7 @@ export function openPageServices(opts: PageServicesOptions): PageServices {
   return {
     sidebarAudit: opts.audit.path,
     chatMemory: async () => (await data).chatMemory(),
+    memoryApi: async () => ((await (await data).chatMemory()) ? (await data).memoryApi : undefined),
     skills: () => SkillCatalog.load({ store: new SkillStore(join(base, "skills"), secrets) }),
     nameChat: async (ask, reply) => titleChat(modelOf(await (await models()).modelFor("fast")), ask, reply, AbortSignal.timeout(20_000)),
     attach(a) {

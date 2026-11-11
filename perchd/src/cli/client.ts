@@ -1,6 +1,6 @@
 /** A connection to perchd's socket, used by the `perch` command and `perch mcp`. */
 
-import type { ApproveAsk, Fatal, Hello, Response, Welcome } from "../daemon/protocol";
+import type { ApproveAsk, Fatal, Hello, Notice, Response, Welcome } from "../daemon/protocol";
 import { LineReader, SocketWriter } from "../daemon/wire";
 
 export class DaemonNotRunning extends Error {
@@ -14,6 +14,8 @@ export type ConnectOptions = {
   hello: Omit<Hello, "type" | "interactive">;
   /** Answers the daemon's approval requests; without it, the connection says it cannot. */
   onApprove?: (ask: ApproveAsk) => Promise<boolean>;
+  /** Shown while something waits on the person, such as Perch's card for a new client. */
+  onNotice?: (text: string) => void;
   /** Called once when the socket closes. */
   onClose?: () => void;
 };
@@ -43,8 +45,9 @@ export async function connect(opts: ConnectOptions): Promise<DaemonClient> {
     opts.onClose?.();
   };
 
-  const onMessage = (msg: Welcome | Response | ApproveAsk | Fatal) => {
+  const onMessage = (msg: Welcome | Response | ApproveAsk | Fatal | Notice) => {
     if (msg.type === "welcome") return welcomed(msg);
+    if (msg.type === "notice") return opts.onNotice?.(msg.text);
     if (msg.type === "error") return shutdown(new Error(msg.error));
     if (msg.type === "approve") {
       const answer = opts.onApprove ? opts.onApprove(msg) : Promise.resolve(false);

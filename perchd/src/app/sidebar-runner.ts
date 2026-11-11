@@ -146,7 +146,7 @@ export function sidebarRunner(opts: SidebarRunnerOptions): Runner {
     }
     // A private chat (spec 5.8) neither reads nor teaches memory.
     const memory = input.incognito ? undefined : await opts.memory?.().catch(() => undefined);
-    const known = memory ? await memory.context(input.task).catch(() => "") : "";
+    const known = memory ? await memory.context(input.ask ?? input.task).catch(() => "") : "";
     const session = `sidebar-${randomBytes(12).toString("hex")}`;
     const token = randomBytes(32).toString("base64url");
     const mode = capMode(input.settings.mode, policy);
@@ -201,7 +201,7 @@ export function sidebarRunner(opts: SidebarRunnerOptions): Runner {
       if ("error" in f) {
         yield { type: "error", message: f.error };
       } else if (f.result.answer.trim()) {
-        memory?.chatEnded([{ role: "user", text: input.task }, { role: "assistant", text: f.result.answer.trim(), toolCalls: [] }]);
+        memory?.chatEnded([{ role: "user", text: input.ask ?? input.task }, { role: "assistant", text: f.result.answer.trim(), toolCalls: [] }]);
         yield { type: "final", text: f.result.answer.trim() };
       } else if (!input.signal.aborted) {
         const why = f.result.timedOut ? "it ran out of time" : `it stopped (exit ${f.result.exitCode})`;

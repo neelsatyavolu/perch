@@ -119,6 +119,8 @@ export function LiveRun({ text, steps, waiting, since }: { text: string; steps: 
     const tick = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(tick);
   }, []);
+  // The first reply's `Title:` line names the chat; it isn't part of the answer.
+  const shownText = text.replace(/^\s*\**\s*title\s*:[^\n]*\n+/i, "");
   const earlier = steps.slice(0, Math.max(0, steps.length - LIVE_STEPS));
   const shown = steps.slice(earlier.length);
   return (
@@ -130,7 +132,7 @@ export function LiveRun({ text, steps, waiting, since }: { text: string; steps: 
           <span>Working for {elapsed(now - start.current)}</span>
         </div>
       )}
-      {text && <Markdown text={text} />}
+      {shownText && <Markdown text={shownText} />}
       <Steps steps={earlier} />
       {shown.length > 0 && (
         <ul class="steplist now">

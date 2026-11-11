@@ -11,6 +11,10 @@ export const ARTIFACT_FORMAT = [
   "Use a longer fence (````) when the content contains ```. Using the same title again saves a new version.",
 ].join("\n");
 
+/** On a chat's first message: the agent names the chat in its reply (chat-title.ts takes the line out). */
+export const TITLE_FORMAT =
+  "This is the first message of a new chat. Start your final reply with one line `Title: <two to six words naming the task, sentence case>`, then a blank line, then your answer.";
+
 const MAX_TURN = 2_000;
 const MAX_HISTORY = 24_000;
 
@@ -37,6 +41,7 @@ export function buildTask(input: TaskInput): string {
   const extra = [mentionContext(input.mentions ?? []), fileContext(input.files ?? [])].filter(Boolean).join("\n\n");
   if (extra) parts.push(extra);
   parts.push(ARTIFACT_FORMAT);
+  if (input.history.length === 0) parts.push(TITLE_FORMAT);
   parts.push(earlier || tabs || extra ? `Now the user asks:\n${input.text}` : input.text);
   return parts.join("\n\n");
 }

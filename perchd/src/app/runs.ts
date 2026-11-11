@@ -4,7 +4,7 @@
  * chat's task continues while its tab is in the background, spec 5.3).
  */
 
-import { provisionalTitle } from "./chat-title";
+import { provisionalTitle, takeTitleLine } from "./chat-title";
 import type { StepEvent } from "../agent/loop";
 import type { ApprovalRequest } from "../agent/session";
 import { describeApproval } from "./approval-card";
@@ -15,6 +15,8 @@ import { buildTask } from "./transcript";
 
 export type RunnerInput = {
   task: string;
+  /** The user's own message, without the history and instructions `task` adds: what memory is searched and taught with. */
+  ask?: string;
   settings: ChatSettings;
   approve: (req: ApprovalRequest) => Promise<boolean>;
   signal: AbortSignal;
@@ -51,7 +53,15 @@ export class AppError extends Error {
 }
 
 type Pending = { card: ApprovalCard; resolve: (approved: boolean) => void; done?: Promise<void> };
-type Run = { runId: string; chatId: string; controller: AbortController; text: string; steps: string[]; pending: Pending | null; done: Promise<void>; startedAt: string };
+/** `holdBack`: the user asked for the work without the final submit or send ("complete it without submitting"). */
+type Run = { runId: string; chatId: string; controller: AbortController; text: string; steps: string[]; pending: Pending | null; done: Promise<void>; startedAt: string; holdBack?: boolean };
+
+/** "without submitting", "don't send it", "do not turn it in": the user wants the last step left to them. */
+const HOLD_BACK = /\b(without|don'?t|do not|never|not|no)\b[^.\n]{0,24}?\b(submit(ting)?|turn(ing)? (it |this |them )?in|hand(ing)? (it |this |them )?in|send(ing)?|post(ing)?|publish(ing)?)\b/i;
+/** The final steps a held-back run leaves to the user. */
+const FINAL_STEP = /\b(submit|turn in|hand in|send|post|publish|go live|push live|make live|deploy)\b/i;
+const HOLD_BACK_NOTE =
+  "The user wants this done without the final submit or send: do everything up to that point, leave the submit, send or publish step for them, and say it is ready.";
 
 const MAX_MESSAGE = 50_000;
 
@@ -144,8 +154,10 @@ export class RunManager {
       ...(mentions.length ? { mentions } : {}),
     };
     const tab = context?.targetId ? context : undefined;
-    const task = buildTask({ history: chat.messages, text, scope: chat.settings.scope, tab: context, tabs: this.deps.tabs(), inTab: Boolean(tab), mentions, files });
-    const run: Run = { runId: crypto.randomUUID(), chatId, controller: new AbortController(), text: "", steps: [], pending: null, done: Promise.resolve(), startedAt: new Date().toISOString() };
+    const holdBack = HOLD_BACK.test(text);
+    const built = buildTask({ history: chat.messages, text, scope: chat.settings.scope, tab: context, tabs: this.deps.tabs(), inTab: Boolean(tab), mentions, files });
+    const task = holdBack ? `${HOLD_BACK_NOTE}\n\n${built}` : built;
+    const run: Run = { runId: crypto.randomUUID(), chatId, controller: new AbortController(), text: "", steps: [], pending: null, done: Promise.resolve(), startedAt: new Date().toISOString(), ...(holdBack ? { holdBack } : {}) };
     this.runs.set(chatId, run);
     try {
       const updated = await this.deps.chats.update(chatId, (c) => ({
@@ -161,7 +173,9 @@ export class RunManager {
       this.runs.delete(chatId);
       throw error;
     }
-    run.done = this.drive(run, task, chat.settings, tab);
+    // Skip confirmation would let the submit through unasked, so a held-back run asks (and declines it).
+    const settings = holdBack && chat.settings.mode === "skip" ? { ...chat.settings, mode: "guard" as const } : chat.settings;
+    run.done = this.drive(run, task, settings, tab, text);
     return { runId: run.runId, message };
   }
 
@@ -205,6 +219,13 @@ export class RunManager {
   private approve(run: Run) {
     return (request: ApprovalRequest): Promise<boolean> => {
       if (run.controller.signal.aborted) return Promise.resolve(false);
+      // The user said not to submit: that step is left for them, without a card.
+      if (run.holdBack && request.kind !== "read" && FINAL_STEP.test(`${request.target?.name ?? ""} ${request.summary}`)) {
+        const label = `Left "${request.target?.name || "the final step"}" for you`;
+        run.steps = [...run.steps, label];
+        this.deps.emit({ type: "run.step", chatId: run.chatId, runId: run.runId, label });
+        return Promise.resolve(false);
+      }
       const card = describeApproval(request, { id: crypto.randomUUID(), chatId: run.chatId, runId: run.runId });
       return new Promise<boolean>((resolve) => {
         run.pending = {
@@ -223,12 +244,12 @@ export class RunManager {
     };
   }
 
-  private async drive(run: Run, task: string, settings: ChatSettings, tab?: TabInfo): Promise<void> {
+  private async drive(run: Run, task: string, settings: ChatSettings, tab?: TabInfo, ask?: string): Promise<void> {
     let final: string | undefined;
     let error: string | undefined;
     try {
       const incognito = this.deps.chats.get(run.chatId)?.incognito === true;
-      const events = this.deps.runner({ task, settings, approve: this.approve(run), signal: run.controller.signal, chatId: run.chatId, ...(tab ? { tab } : {}), ...(incognito ? { incognito } : {}) });
+      const events = this.deps.runner({ task, ...(ask ? { ask } : {}), settings, approve: this.approve(run), signal: run.controller.signal, chatId: run.chatId, ...(tab ? { tab } : {}), ...(incognito ? { incognito } : {}) });
       for await (const event of events) {
         if (event.type === "text") {
           run.text += event.delta;
@@ -255,7 +276,10 @@ export class RunManager {
 
   private async finish(run: Run, final: string | undefined, error: string | undefined): Promise<void> {
     const stopped = run.controller.signal.aborted;
-    const parsed = parseArtifactBlocks(final ?? run.text.trim());
+    // A new chat's first reply starts with the agent's `Title:` line (transcript.ts TITLE_FORMAT).
+    const firstReply = this.deps.chats.get(run.chatId)?.messages.length === 1;
+    const titled = firstReply ? takeTitleLine(final ?? run.text.trim()) : { title: null, text: final ?? run.text.trim() };
+    const parsed = parseArtifactBlocks(titled.text);
     const ids: string[] = [];
     let text = parsed.text;
     for (const [i, block] of parsed.blocks.entries()) {
@@ -279,7 +303,8 @@ export class RunManager {
     };
     const updated = await this.deps.chats.update(run.chatId, (c) => ({ ...c, messages: [...c.messages, message] }));
     this.deps.emit({ type: "run.finished", chatId: run.chatId, runId: run.runId, message });
-    if (!stopped && !error && text.trim()) this.nameAfterFirstReply(updated, text);
+    if (titled.title) await this.rename(updated, titled.title);
+    else if (!stopped && !error && text.trim()) this.nameAfterFirstReply(updated, text);
   }
 
   /**
@@ -303,6 +328,16 @@ export class RunManager {
       .catch(() => undefined);
     this.naming.add(naming);
     void naming.finally(() => this.naming.delete(naming));
+  }
+
+  /** Gives a chat the agent's title, unless the user renamed it from its first-message title meanwhile. */
+  private async rename(chat: Chat, title: string): Promise<void> {
+    const ask = chat.messages[0];
+    if (!ask || ask.role !== "user") return;
+    const provisional = provisionalTitle(ask.text);
+    if (chat.title !== provisional || title === provisional) return;
+    await this.deps.chats.update(chat.id, (c) => (c.title === provisional ? { ...c, title } : c));
+    this.announce(chat.id);
   }
 
   /** Resolves once chats being named have their names, for tests and shutdown. */

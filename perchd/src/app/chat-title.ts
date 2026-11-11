@@ -52,3 +52,12 @@ export async function titleChat(model: Model, ask: string, reply: string, signal
   const answer = await askForTool(model, { system: SYSTEM, user, tool: TOOL }, signal);
   return cleanTitle(answer.args?.title) ?? cleanTitle(answer.text.split("\n")[0]);
 }
+
+const TITLE_LINE = /^\s*\**\s*title\s*:\s*\**\s*(.+?)\s*\**\s*(?:\n|$)/i;
+
+/** The `Title: …` line an agent puts first in its first reply (transcript.ts TITLE_FORMAT), and the reply without it. */
+export function takeTitleLine(text: string): { title: string | null; text: string } {
+  const m = TITLE_LINE.exec(text);
+  if (!m) return { title: null, text };
+  return { title: cleanTitle(m[1]), text: text.slice(m[0].length).replace(/^\s*\n/, "").trimStart() };
+}

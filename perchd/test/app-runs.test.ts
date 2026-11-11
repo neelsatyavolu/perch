@@ -296,3 +296,65 @@ test("a chat keeps its first-message title when naming fails or the user renamed
   await failing.named();
   expect(chats.get(plain.id)!.title).toBe("what is on this page");
 });
+
+test("a first reply's Title line names the chat and is kept out of the saved reply", async () => {
+  let task = "";
+  const runs = manager(async function* (input): AsyncIterable<StepEvent> {
+    task = input.task;
+    yield { type: "final", text: "Title: Find dark chinos\n\nThe Gap pair is $29." };
+  });
+  const chat = await chats.create({ settings: { mode: "ask", model: "fake", effort: "high" } });
+  await runs.send(chat.id, "find me dark chinos");
+  await runs.idle();
+  expect(task).toContain("Start your final reply with one line `Title:");
+  expect(chats.get(chat.id)!.title).toBe("Find dark chinos");
+  expect(chats.get(chat.id)!.messages.at(-1)!.text).toBe("The Gap pair is $29.");
+  // Later messages aren't asked for a title, and a Title line there stays as written.
+  await runs.send(chat.id, "and navy?");
+  await runs.idle();
+  expect(task).not.toContain("`Title:");
+});
+
+test("\"without submitting\" leaves the submit to the user: declined without a card, even in Skip mode", async () => {
+  let seen: RunnerInput | undefined;
+  let decided: boolean | undefined;
+  const runs = manager(async function* (input): AsyncIterable<StepEvent> {
+    seen = input;
+    decided = await input.approve({ call: { id: "c", name: "click", args: { ref: "e9" } }, target: { role: "button", name: "Submit" }, kind: "risky", site: "apclassroom.example", summary: 'Click button "Submit"' });
+    yield { type: "final", text: "All answers are filled in and ready for you to submit." };
+  });
+  const chat = await chats.create({ settings: { mode: "skip", model: "fake", effort: "high" } });
+  await runs.send(chat.id, "complete the 3.2 practice without submitting it");
+  await runs.idle();
+  expect(decided).toBe(false);
+  expect(seen!.settings.mode).toBe("guard");
+  expect(seen!.task).toContain("without the final submit or send");
+  expect(of("run.approval")).toEqual([]);
+  expect(of("run.step").map((e) => e.label)).toEqual(['Left "Submit" for you']);
+});
+
+test("a normal task still asks before submitting", async () => {
+  const runs = manager(async function* (input): AsyncIterable<StepEvent> {
+    const ok = await input.approve({ call: { id: "c", name: "click", args: { ref: "e9" } }, target: { role: "button", name: "Submit" }, kind: "risky", site: "apclassroom.example", summary: 'Click button "Submit"' });
+    yield { type: "final", text: ok ? "Submitted." : "Not submitted." };
+  });
+  const chat = await chats.create({ settings: { mode: "guard", model: "fake", effort: "high" } });
+  await runs.send(chat.id, "submit the 3.2 practice");
+  const card = await waitFor(() => of("run.approval")[0]);
+  expect(card.card).toBeDefined();
+  runs.cancel(chat.id);
+  await runs.idle();
+});
+
+test("the runner gets the user's own message for memory, apart from the assembled task", async () => {
+  let seen: RunnerInput | undefined;
+  const runs = manager(async function* (input): AsyncIterable<StepEvent> {
+    seen = input;
+    yield { type: "final", text: "Title: Chinos\n\nDone." };
+  });
+  const chat = await chats.create({ settings: { mode: "ask", model: "fake", effort: "high" } });
+  await runs.send(chat.id, "find chinos in my size");
+  await runs.idle();
+  expect(seen!.ask).toBe("find chinos in my size");
+  expect(seen!.task.length).toBeGreaterThan(seen!.ask!.length);
+});

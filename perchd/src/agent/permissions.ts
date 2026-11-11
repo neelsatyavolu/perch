@@ -27,7 +27,7 @@ export type PageContext = { payment?: boolean; passwordChange?: boolean };
 
 const READ_TOOLS = new Set(["navigate", "snapshot", "screenshot", "scroll", "hover", "wait_for", "back", "tabs", "open_tab", "switch_tab", "done"]);
 
-const RISKY = /\b(send|post|publish|submit|delete|remove|discard|share|invite|transfer|confirm|sign up|unsubscribe|reply|forward|archive|trash)\b/i;
+const RISKY = /\b(send|post|publish|submit|turn in|hand in|go live|push live|make live|deploy|delete|remove|discard|share|invite|transfer|confirm|sign up|unsubscribe|reply|forward|archive|trash)\b/i;
 const PAYMENT =
   /\b(pay|buy|purchase|checkout|check out|place (your )?order|submit (your )?order|complete (your )?(order|purchase|booking|reservation|payment|checkout)|reserve|request to book|book( now| it)?|confirm (and|&) pay|confirm (your )?(booking|purchase|payment|order|reservation)|subscribe|donate|start (your )?(free )?trial|upgrade|pre[- ]?order|rent (it|this|now|for))\b/i;
 const MONEY = /[$€£¥₹]\s?\d|\d\s?(usd|eur|gbp|inr|jpy)\b/i;

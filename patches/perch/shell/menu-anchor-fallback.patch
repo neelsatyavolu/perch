@@ -1,0 +1,24 @@
+# Perch: the app menu button is hidden, so bubbles anchored to it use the fallback anchor; when that is not registered yet (the restore-pages bubble after a crash), anchor to the hidden button instead of failing a CHECK on every launch.
+diff --git a/chrome/browser/ui/views/frame/app_menu_button.cc b/chrome/browser/ui/views/frame/app_menu_button.cc
+index 0b93b74161..e9b79527a6 100644
+--- a/chrome/browser/ui/views/frame/app_menu_button.cc
++++ b/chrome/browser/ui/views/frame/app_menu_button.cc
+@@ -56,9 +56,15 @@ views::BubbleAnchor AppMenuButton::GetAnchor() {
+   // in certain cases (e.g. content-fullscreen). In this case, use the fallback
+   // anchor instead.
+   auto* const elements = BrowserElementsViews::From(this);
+-  CHECK(elements);
+-  auto* const element = elements->GetElement(kFallbackPopupAnchorElementId);
+-  CHECK(element);
++  auto* const element =
++      elements ? elements->GetElement(kFallbackPopupAnchorElementId) : nullptr;
++  // Perch: the button is always hidden (toolbar-ends.patch), so every bubble
++  // anchored to it comes here, some before the browser view registers the
++  // fallback anchor (the restore-pages bubble after a crash). Anchor to the
++  // hidden button then, rather than crash on every launch.
++  if (!element) {
++    return views::BubbleAnchor(this);
++  }
+   return views::BubbleAnchor(element);
+ }
+ 

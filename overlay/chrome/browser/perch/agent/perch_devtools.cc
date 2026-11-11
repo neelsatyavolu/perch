@@ -388,8 +388,13 @@ bool MaybeHandleCommand(content::DevToolsAgentHostClientChannel* channel,
     return false;
   }
   // Only perchd's pipe is trusted. Everyone else gets "not found", the same
-  // answer as in a browser without the domain.
-  if (!channel->GetClient()->IsTrusted()) {
+  // answer as in a browser without the domain. A --remote-debugging-port
+  // client is trusted too, but it is not perchd: it must not fill logins, and
+  // taking over g_channel would leave it dangling when that client goes away.
+  content::DevToolsAgentHostClient* client = channel->GetClient();
+  if (!client->IsTrusted() ||
+      client->GetPeerMetadata().transport_type !=
+          content::DevToolsAgentHostClient::PeerMetadata::TransportType::kPipe) {
     Send(channel, dispatchable.CallId(),
          Fail(kMethodNotFound, "'" + std::string(method) + "' wasn't found"));
     return true;

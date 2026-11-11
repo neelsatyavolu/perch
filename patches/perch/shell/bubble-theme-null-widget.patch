@@ -1,0 +1,17 @@
+diff --git a/ui/views/bubble/bubble_dialog_delegate_view.cc b/ui/views/bubble/bubble_dialog_delegate_view.cc
+index e4279771a5..afbc09c28e 100644
+--- a/ui/views/bubble/bubble_dialog_delegate_view.cc
++++ b/ui/views/bubble/bubble_dialog_delegate_view.cc
+@@ -350,7 +350,11 @@ class BubbleDialogDelegate::AnchorWidgetObserver : public WidgetObserver,
+   void OnWidgetThemeChanged(Widget* widget) override {
+     // TODO(dfried): Consider merging BubbleWidget with ThemeCopyingWidget
+     // instead of observing the theme here.
+-    owner_->GetWidget()->ThemeChanged();
++    // Perch: a bubble whose own widget is already gone (closing, or never
++    // shown) can still be observing its anchor; a theme change then crashed.
++    if (Widget* bubble = owner_->GetWidget()) {
++      bubble->ThemeChanged();
++    }
+   }
+ 
+ #if !BUILDFLAG(IS_MAC)

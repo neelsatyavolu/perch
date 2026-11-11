@@ -95,3 +95,14 @@ test("a page cannot mark a tab private; only the browser's report does", async (
   const res = await call("/api/tabs/normal-2/chat", { method: "POST", json: { windowId: "w1", incognito: true } });
   expect(res.status).toBe(400);
 });
+
+test("the browser's tab updates may carry incognito and the site icon", async () => {
+  await call("/api/tabs", { method: "PUT", browser: true, json: { tabs: [{ id: "t-1", windowId: "w1", title: "Google", url: "https://www.google.com/" }] } });
+  const icon = "data:image/png;base64,iVBORw0KGgo=";
+  const res = await call("/api/tabs/t-1", { method: "PATCH", browser: true, json: { windowId: "w1", title: "Google", url: "https://www.google.com/", favicon: icon } });
+  expect(res.status).toBe(200);
+  const tabs = (await (await call("/api/tabs")).json()) as { id: string; favicon?: string }[];
+  expect(tabs.find((t) => t.id === "t-1")?.favicon).toBe(icon);
+  const priv = await call("/api/tabs/t-1", { method: "PATCH", browser: true, json: { windowId: "w1", title: "Google", url: "https://www.google.com/", incognito: true } });
+  expect(priv.status).toBe(200);
+});

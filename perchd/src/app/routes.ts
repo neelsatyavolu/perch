@@ -273,7 +273,7 @@ export const ROUTES: Route[] = [
   }),
   browserRoute("PATCH", "/api/tabs/:id", (ctx, [id], body) => {
     const o = v.object(body);
-    v.onlyKeys(o, ["windowId", "title", "url", "targetId"]);
+    v.onlyKeys(o, ["windowId", "title", "url", "targetId", "incognito", "favicon"]);
     const tab = v.tabInfo({ ...o, id });
     return { state: ctx.windows.update(tab) };
   }),

@@ -46,6 +46,7 @@ type AXNode = {
   value?: AXValue;
   properties?: { name: string; value: AXValue }[];
   childIds?: string[];
+  parentId?: string;
   backendDOMNodeId?: number;
 };
 type FrameTree = { frame: { id: string }; childFrames?: FrameTree[] };
@@ -128,13 +129,31 @@ async function fillMissingAttrs(tab: Tab, trees: Map<string, Tree>, layout: Layo
   await Promise.all(work);
 }
 
+/** Pages with up to this many DOM nodes get their accessibility tree in one call. */
+const ONE_CALL_NODES = 30_000;
+
 /**
- * Fetches the accessibility tree level by level, opening only nodes near the viewport.
- * A full fetch of a 10,000-row page takes about 7 s; this takes a fraction of a second.
+ * Fetches the accessibility tree, keeping only nodes near the viewport. Each CDP call waits its
+ * turn on the page's main thread, which on a page still running its scripts can take 0.5 s, so
+ * the tree comes in one call (Amazon's 8,700 nodes in about 1 s, where a call per node took 14 s)
+ * and is walked here. A very large page is fetched level by level instead, opening only nodes
+ * near the viewport: a full fetch of a 10,000-row page takes about 7 s.
  */
 async function loadTree(tab: Tab, frameId: string, layout: Layout, full: boolean, session?: string): Promise<Tree> {
   await enableAccessibility(tab, session);
-  const { node: root } = await tab.sendIn<{ node: AXNode }>(session, "Accessibility.getRootAXNode", { frameId });
+  const all =
+    full || session !== undefined || layout.mainNodes.size <= ONE_CALL_NODES
+      ? await tab
+          .sendIn<{ nodes: AXNode[] }>(session, "Accessibility.getFullAXTree", { frameId })
+          .then(({ nodes }) => new Map(nodes.map((n) => [n.nodeId, n])))
+          .catch(() => null)
+      : null;
+  const fetched = all ? [...all.values()] : [];
+  const root = fetched.find((n) => !n.parentId) ?? fetched[0] ?? (await tab.sendIn<{ node: AXNode }>(session, "Accessibility.getRootAXNode", { frameId })).node;
+  const children = (n: AXNode): Promise<AXNode[]> =>
+    all
+      ? Promise.resolve((n.childIds ?? []).flatMap((id) => all.get(id) ?? []))
+      : tab.sendIn<{ nodes: AXNode[] }>(session, "Accessibility.getChildAXNodes", { id: n.nodeId, frameId }).then((r) => r.nodes);
   const nodes = new Map<string, AXNode>([[root.nodeId, root]]);
   let frontier = [root];
   while (frontier.length > 0) {
@@ -142,9 +161,9 @@ async function loadTree(tab: Tab, frameId: string, layout: Layout, full: boolean
       // A cross-site frame is loaded in full: its node ids are not in the page's layout.
       (n) => (n.childIds?.length ?? 0) > 0 && !LEAVES.has(str(n.role)) && (full || session !== undefined || placement(layout, n.backendDOMNodeId) === "near"),
     );
-    const results = await Promise.all(open.map((n) => tab.sendIn<{ nodes: AXNode[] }>(session, "Accessibility.getChildAXNodes", { id: n.nodeId, frameId })));
+    const results = await Promise.all(open.map(children));
     frontier = [];
-    for (const { nodes: batch } of results) {
+    for (const batch of results) {
       for (const node of batch) {
         if (nodes.has(node.nodeId)) continue;
         nodes.set(node.nodeId, node);

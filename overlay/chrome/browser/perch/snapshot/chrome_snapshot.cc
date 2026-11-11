@@ -63,6 +63,11 @@
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
+#include "ui/views/controls/button/button.h"
+#include "ui/views/view_tracker.h"
+#include "ui/views/controls/menu/menu_controller.h"
+#include "ui/views/interaction/element_tracker_views.h"
+#include "chrome/browser/ui/browser_element_identifiers.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_view.h"
 #include "chrome/browser/ui/views/extensions/extensions_toolbar_desktop.h"
 #include "chrome/browser/ui/views/extensions/extensions_toolbar_button.h"
@@ -215,6 +220,47 @@ class Snapshotter {
       }
     } else if (state == "panel") {
       SidePanelUI::From(browser_)->Show(SidePanelEntryId::kPerch);
+    } else if (state == "chevron-menu" || state == "close-menus") {
+      // Clicks the tab strip's chevron like a mouse would, or closes the open
+      // menu, and logs the chevron's state.
+      BrowserView* view = BrowserView::GetBrowserViewForBrowser(browser_);
+      views::View* chevron =
+          views::ElementTrackerViews::GetInstance()->GetFirstMatchingView(
+              kTabSearchButtonElementId,
+              views::ElementTrackerViews::GetContextForView(view));
+      auto* button = views::Button::AsButton(chevron);
+      if (state == "chevron-menu" && button) {
+        const gfx::Point center = button->GetLocalBounds().CenterPoint();
+        ui::MouseEvent press(ui::EventType::kMousePressed, center, center,
+                             base::TimeTicks::Now(), ui::EF_LEFT_MOUSE_BUTTON,
+                             ui::EF_LEFT_MOUSE_BUTTON);
+        ui::MouseEvent release(ui::EventType::kMouseReleased, center, center,
+                               base::TimeTicks::Now(), ui::EF_LEFT_MOUSE_BUTTON,
+                               ui::EF_LEFT_MOUSE_BUTTON);
+        button->OnMousePressed(press);
+        button->OnMouseReleased(release);
+        // A background window ignores the synthetic click; open the menu the
+        // way the click handler does.
+        if (!views::MenuController::GetActiveInstance()) {
+          ShowPerchAppMenu(browser_, button);
+        }
+      } else if (auto* menu = views::MenuController::GetActiveInstance()) {
+        menu->Cancel(views::MenuController::ExitType::kAll);
+      }
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+          FROM_HERE,
+          base::BindOnce(
+              [](views::ViewTracker* tracker, std::string state) {
+                auto* b = views::Button::AsButton(tracker->view());
+                LOG(WARNING) << "Perch snapshot: " << state << " chevron state "
+                             << (b ? static_cast<int>(b->GetState()) : -1)
+                             << " menu open "
+                             << (views::MenuController::GetActiveInstance() !=
+                                 nullptr);
+              },
+              base::Owned(std::make_unique<views::ViewTracker>(chevron)),
+              state),
+          base::Milliseconds(800));
     } else if (state == "finish-sound") {
       // Writes the finish chime next to the snapshots, for checking the file.
       base::ThreadPool::PostTask(

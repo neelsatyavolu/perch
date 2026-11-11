@@ -27,6 +27,10 @@
 #include "content/public/browser/download_manager.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "ui/base/mojom/menu_source_type.mojom.h"
+#include "ui/views/animation/ink_drop.h"
+#include "ui/views/animation/ink_drop_state.h"
+#include "ui/views/view_tracker.h"
+#include "ui/views/controls/button/button.h"
 #include "ui/views/controls/menu/menu_runner.h"
 #include "ui/gfx/vector_icon_types.h"
 #include "ui/color/color_id.h"
@@ -67,8 +71,21 @@ void RunToolbarMenu(ui::MenuModel* model,
                     views::View* anchor) {
   // A Perch menu drawn by views (frosted, rounded, in Perch's type and
   // tokens) just below the button, not a system NSMenu.
+  // The button looks pressed while its menu is open and goes back to rest when
+  // it closes. The open menu takes the mouse, so the button never hears the
+  // pointer leave; without this its highlight would stay on.
+  base::RepeatingClosure on_closed = base::BindRepeating(
+      [](views::ViewTracker* tracker) {
+        if (auto* button = views::Button::AsButton(tracker->view())) {
+          button->SetState(views::Button::STATE_NORMAL);
+          if (auto* ink_drop = views::InkDrop::Get(button)) {
+            ink_drop->AnimateToState(views::InkDropState::HIDDEN, nullptr);
+          }
+        }
+      },
+      base::Owned(std::make_unique<views::ViewTracker>(anchor)));
   runner = std::make_unique<views::MenuRunner>(
-      model, views::MenuRunner::HAS_MNEMONICS);
+      model, views::MenuRunner::HAS_MNEMONICS, std::move(on_closed));
   // Below the whole button, 4px down, lined up with the edge nearer the
   // middle of the window so it never hangs past the window's side.
   gfx::Rect button = anchor->GetAnchorBoundsInScreen();
@@ -79,6 +96,9 @@ void RunToolbarMenu(ui::MenuModel* model,
                     right_half ? views::MenuAnchorPosition::kTopRight
                                : views::MenuAnchorPosition::kTopLeft,
                     ui::mojom::MenuSourceType::kMouse);
+  if (auto* pressed = views::Button::AsButton(anchor)) {
+    pressed->SetState(views::Button::STATE_PRESSED);
+  }
 }
 
 PerchProfileMenuModel::PerchProfileMenuModel(BrowserWindowInterface* browser,

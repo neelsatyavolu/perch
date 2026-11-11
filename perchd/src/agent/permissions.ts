@@ -25,7 +25,8 @@ export type Target = { role: string; name: string; expanded?: boolean };
 /** What the page around an action looks like: a checkout, or a password change. */
 export type PageContext = { payment?: boolean; passwordChange?: boolean };
 
-const READ_TOOLS = new Set(["navigate", "snapshot", "screenshot", "scroll", "hover", "wait_for", "back", "tabs", "open_tab", "switch_tab", "downloads", "done"]);
+// A batch is judged action by action as it runs (agent/session.ts callBatch), so the batch itself is a read.
+const READ_TOOLS = new Set(["navigate", "snapshot", "screenshot", "scroll", "hover", "wait_for", "back", "tabs", "open_tab", "switch_tab", "downloads", "batch", "done"]);
 
 const RISKY = /\b(send|post|publish|submit|turn in|hand in|go live|push live|make live|deploy|delete|remove|discard|share|invite|transfer|confirm|sign up|unsubscribe|reply|forward|archive|trash)\b/i;
 const PAYMENT =

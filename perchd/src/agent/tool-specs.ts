@@ -4,7 +4,7 @@ import { APP_TOOLS } from "../apps/index";
 import type { ToolSpec } from "../models/types";
 import { FILL_TOOL_SPECS } from "./fill-tools";
 
-type Prop = { type: "string" | "number" | "boolean" | "array"; description?: string; items?: { type: "string" } };
+type Prop = { type: "string" | "number" | "boolean" | "array"; description?: string; items?: { type: "string" } | { type: "object"; properties: Record<string, unknown>; required?: string[] } };
 
 function spec(name: string, description: string, properties: Record<string, Prop>, required: string[] = []): ToolSpec {
   return { name, description, parameters: { type: "object", properties, required, additionalProperties: false } };
@@ -32,6 +32,12 @@ export const TOOL_SPECS: ToolSpec[] = [
   spec("type_text", "Type text at the keyboard focus, without a ref: for editors drawn on canvas such as Google Sheets and Docs. Click the cell or spot first; press Enter or Tab after to move on.", { text: { type: "string" } }, ["text"]),
   spec("save_pdf", "Save the current page as a PDF in the user's Downloads folder. Returns its path.", { name: { type: "string", description: "File name, without .pdf" } }),
   spec("downloads", "List files downloaded in the last hour (newest first), with their paths, so a download can be found or uploaded.", {}),
+  spec(
+    "batch",
+    "Run actions you already know in a row (fill a form: type, type, select, click). Each is approved as usual; stops at the first that fails or needs a change of plan. Returns the page after the last.",
+    { actions: { type: "array", description: "Up to 10 of: click, type, select, press, scroll, hover, drag, type_text, wait_for", items: { type: "object", properties: { name: { type: "string" }, args: { type: "object" } }, required: ["name"] } } },
+    ["actions"],
+  ),
   spec("tabs", "List open tabs with their ids. The current agent tab is marked with *.", {}),
   spec("open_tab", "Open a URL in a new agent tab and make it current.", { url: { type: "string" } }, ["url"]),
   spec("switch_tab", "Make another tab current, by id from tabs.", { id: { type: "string" } }, ["id"]),
@@ -63,9 +69,9 @@ export function validate(name: string, args: Record<string, unknown>): string | 
     if (value === undefined || value === null) continue;
     const ok =
       prop.type === "array"
-        ? Array.isArray(value) && value.every((v) => typeof v === "string")
+        ? Array.isArray(value) && value.every((v) => (prop.items?.type === "object" ? typeof v === "object" && v !== null && !Array.isArray(v) : typeof v === "string"))
         : typeof value === prop.type && !(prop.type === "number" && !Number.isFinite(value));
-    if (!ok) return `argument "${key}" must be ${prop.type === "array" ? "a list of strings" : `a ${prop.type}`}`;
+    if (!ok) return `argument "${key}" must be ${prop.type === "array" ? (prop.items?.type === "object" ? "a list of objects" : "a list of strings") : `a ${prop.type}`}`;
   }
   return null;
 }

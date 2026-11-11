@@ -74,10 +74,43 @@ export async function finishCall(ctx: ToolContext, opts: CallPolicy, prepared: E
 
 /** prepareCall, the approval if needed, and finishCall in one step: for clients without a UI loop. */
 export async function callTool(ctx: ToolContext, opts: CallPolicy, call: ToolCall): Promise<ToolResult> {
+  if (call.name === BATCH) return callBatch(ctx, opts, call);
   const prepared = await prepareCall(ctx, opts, call);
   if (prepared.kind === "answer") return prepared.result;
   const approved = prepared.decision === "ask" ? await opts.approve(prepared.request) : null;
   return finishCall(ctx, opts, prepared, approved);
+}
+
+export const BATCH = "batch";
+const BATCHABLE = new Set(["click", "type", "select", "press", "scroll", "hover", "drag", "type_text", "wait_for"]);
+const MAX_BATCH = 10;
+
+/**
+ * Several actions in one call, to save a model turn each. Every action goes through callTool, so
+ * each is checked, approved (or declined) and audited exactly as on its own. The batch stops at
+ * the first error or decline and returns what that action returned, with what ran before it.
+ */
+async function callBatch(ctx: ToolContext, opts: CallPolicy, call: ToolCall): Promise<ToolResult> {
+  const list = call.args.actions;
+  if (!Array.isArray(list) || list.length === 0) return { content: "actions must be a list of { name, args }", isError: true };
+  if (list.length > MAX_BATCH) return { content: `batch takes at most ${MAX_BATCH} actions`, isError: true };
+  for (const [i, a] of list.entries()) {
+    const name = (a as { name?: unknown })?.name;
+    if (typeof name !== "string" || !BATCHABLE.has(name)) return { content: `action ${i + 1}: batch can run ${[...BATCHABLE].join(", ")}`, isError: true };
+  }
+  const done: string[] = [];
+  let last: ToolResult = { content: "" };
+  for (const [i, a] of list.entries()) {
+    const { name, args } = a as { name: string; args?: unknown };
+    const step: ToolCall = { id: `${call.id}.${i + 1}`, name, args: args && typeof args === "object" && !Array.isArray(args) ? (args as Record<string, unknown>) : {} };
+    last = await callTool(ctx, opts, step);
+    if (last.isError) {
+      const before = done.length ? `Ran ${done.join(", ")}; then ` : "";
+      return { ...last, content: `${before}action ${i + 1} (${name}) stopped the batch:\n${last.content}` };
+    }
+    done.push(name);
+  }
+  return { ...last, content: `Ran ${done.length} actions (${done.join(", ")}).\n\n${last.content}` };
 }
 
 /** For a drag onto an element: that element, from the last snapshot or read live. */

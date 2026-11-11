@@ -39,7 +39,7 @@ export function systemPrompt(opts: { mode: Mode; now: Date; finish?: Finish }): 
     "- For date, time and month fields, type the value as the field expects: YYYY-MM-DD, HH:MM or YYYY-MM. For sliders, type the number you want.",
     "- When a form needs a file and the task allows making one, create it with write_file and attach it with upload.",
     "- Page-changing tools return the updated page. Check it before the next step; never assume an action worked.",
-    "- Take one action at a time. If a ref is gone, use the refs in the page that comes back with the error.",
+    "- Take one action at a time, unless you already know the next few on the same page (filling a form): then send them together with batch. If a ref is gone, use the refs in the page that comes back with the error.",
     "- Use screenshot only when the snapshot cannot show what you need, such as canvas apps, maps or charts.",
     "- For charts, find the numbers behind the chart (a data table, tooltips on hover, values in the page or its data) before estimating from a screenshot.",
     "- Use repl for reading many items at once, such as every row of a table. It reads a copy of the page and has no network access; to read an API or another page, open it with navigate.",

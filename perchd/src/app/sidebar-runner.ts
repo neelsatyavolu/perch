@@ -88,6 +88,7 @@ export function stepLabel(tool: string, args: unknown): string {
   const name = tool.replace(/_/g, " ");
   const verb = name.charAt(0).toUpperCase() + name.slice(1);
   if (STEP_NAMES[tool]) return STEP_NAMES[tool];
+  if (tool === "batch" && Array.isArray(a.actions)) return `Do ${a.actions.length} actions`;
   if (tool === "press" && typeof a.key === "string") return `Press ${a.key}`;
   if (tool === "wait_for") return a.text ? `Wait for${quoted(a.text)}` : "Wait";
   if (tool === "select") return `Choose${quoted(a.value)}`;

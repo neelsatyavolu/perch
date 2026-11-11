@@ -86,6 +86,10 @@ def stage_agent(app: Path, repo: Path, run) -> Path:
     other = version / "Resources" / "perch_pages"
     shutil.rmtree(other, ignore_errors=True)
     shutil.copytree(repo / "ui-pages" / "dist", other)
+    # The built-in site skills; the compiled perchd reads them from here (skills/catalog.ts).
+    skills = version / "Resources" / "perch_skills"
+    shutil.rmtree(skills, ignore_errors=True)
+    shutil.copytree(repo / "perchd" / "skills", skills)
     return perchd
 
 

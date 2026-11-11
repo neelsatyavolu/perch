@@ -5,13 +5,21 @@
  */
 
 import { readdir } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { bundleText, readSkillFolder, type SkillBundle } from "./bundle";
 import type { SkillStore } from "./store";
 
 export type SkillEntry = SkillBundle & { origin: "built-in" | "mine" };
 
-export const BUILT_IN_SKILLS_DIR = join(import.meta.dir, "..", "..", "skills");
+/**
+ * perchd/skills in development. The compiled perchd (Helpers/perchd in the app) has no source
+ * tree, so the app ships the folder as Resources/perch_skills next to it.
+ */
+export function builtInSkillsDir(dir = import.meta.dir, execPath = process.execPath): string {
+  return dir.includes("$bunfs") ? join(dirname(execPath), "..", "Resources", "perch_skills") : join(dir, "..", "..", "skills");
+}
+
+export const BUILT_IN_SKILLS_DIR = builtInSkillsDir();
 
 export async function loadBuiltInSkills(dir: string = BUILT_IN_SKILLS_DIR): Promise<SkillBundle[]> {
   const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);

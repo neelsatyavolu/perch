@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -10,7 +10,7 @@ import { fakeModel } from "../src/models/fake";
 import type { Message, TurnEvent, TurnRequest } from "../src/models/types";
 import { MemoryKeychain } from "../src/secure/keychain";
 import { readSkillFolder } from "../src/skills/bundle";
-import { loadBuiltInSkills, SkillCatalog } from "../src/skills/catalog";
+import { builtInSkillsDir, loadBuiltInSkills, SkillCatalog } from "../src/skills/catalog";
 import { findSkillImports, importSkills, previewSkills, skillsIn } from "../src/skills/import";
 import { parseSkillFile } from "../src/skills/skill-file";
 import { SkillStore } from "../src/skills/store";
@@ -142,4 +142,13 @@ test("with no skills, no tool and no prompt text are added", () => {
   const t = skillExtraTools(SkillCatalog.of([]));
   expect(t.specs()).toEqual([]);
   expect(t.prompt()).toBe("");
+});
+
+describe("builtInSkillsDir", () => {
+  test("uses the source folder in development", () => {
+    expect(builtInSkillsDir("/repo/perchd/src/skills", "/usr/local/bin/bun")).toBe("/repo/perchd/skills");
+  });
+  test("uses Resources/perch_skills next to the compiled perchd", () => {
+    expect(builtInSkillsDir("/$bunfs/root", "/App/Versions/1/Helpers/perchd")).toBe("/App/Versions/1/Resources/perch_skills");
+  });
 });

@@ -4,213 +4,286 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Perch, an open-source browser for Mac</title>
-<meta name="description" content="Perch is a fast, private, open-source browser for Mac with an AI agent that uses the sites you're signed in to, on your own ChatGPT, Claude or Grok account, and asks before anything goes out. The beta is out.">
+<meta name="description" content="Perch is a fast, private, open-source browser for Mac, built on Chromium. Its agent uses the sites you're signed in to, on your own ChatGPT, Claude or Grok account, and asks before anything goes out. Download the beta.">
 <meta name="color-scheme" content="dark light">
-<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
-<meta name="theme-color" content="#F4F5F7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E0E0D" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F7F5EF" media="(prefers-color-scheme: light)">
 <link rel="canonical" href="https://perchbrowser.com/">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://perchbrowser.com/">
 <meta property="og:title" content="Perch, the browser that asks before it acts">
-<meta property="og:description" content="A fast, private, open-source browser for Mac with an AI agent that uses the sites you're signed in to. Download the beta.">
+<meta property="og:description" content="A fast, private, open-source browser for Mac with an agent that uses the sites you're signed in to. Download the beta.">
 <meta property="og:image" content="https://perchbrowser.com/img/beta/og.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="preload" href="/fonts/geist-serif.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/newsreader.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/geist-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 
-<header class="nav">
-  <div class="wrap nav-in">
-    <a class="brand" href="/" aria-label="Perch, home">
+<!-- The site's header is Perch's own tab strip: canvas, 36px tabs, the active tab joining the page below. -->
+<header class="strip">
+  <nav class="strip-in" aria-label="Site">
+    <a class="tab tab-on" href="/" aria-current="page">
       <svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><rect x="8" y="35" width="48" height="8" rx="2" class="mark-bar"/><circle cx="43" cy="26" r="7.5" class="mark-dot"/></svg>
       <span>Perch</span>
     </a>
-    <nav aria-label="Site">
-      <ul class="links">
-        <li class="hide-sm"><a href="#agent">Agent</a></li>
-        <li class="hide-sm"><a href="#models">Models</a></li>
-        <li class="hide-sm"><a href="#privacy">Privacy</a></li>
-        <li><a href="https://github.com/neelsatyavolu/perch">GitHub</a></li>
-        <li><a class="btn btn-sm" href="#download">Download</a></li>
-      </ul>
-    </nav>
-  </div>
+    <ul class="tabs">
+      <li><a class="tab" href="#agent">Agent</a></li>
+      <li><a class="tab" href="#models">Models</a></li>
+      <li><a class="tab" href="#browsing">Browsing</a></li>
+      <li><a class="tab" href="#privacy">Privacy</a></li>
+      <li><a class="tab" href="#everything">Everything</a></li>
+      <li><a class="tab" href="https://github.com/neelsatyavolu/perch">GitHub</a></li>
+    </ul>
+    <a class="btn btn-sm strip-dl" href="#download">Download</a>
+  </nav>
 </header>
 
-<main id="main">
-  <section class="ask" aria-labelledby="hero-title">
-    <div class="ask-col">
+<main id="main" class="sheet">
+
+  <!-- First screen: Perch's new tab page, answering what Perch is. -->
+  <section class="ntp" aria-labelledby="hero-title">
+    <div class="ntp-col">
+      <svg class="ntp-mark" viewBox="0 0 64 64" aria-hidden="true"><rect x="8" y="35" width="48" height="8" rx="2" class="mark-bar"/><circle cx="43" cy="26" r="7.5" class="mark-dot"/></svg>
       <h1 id="hero-title">The browser that asks before it&nbsp;acts</h1>
 
-      <div class="box" role="img" aria-label="Perch's new tab page, with the question “What is Perch, and can I try it?” typed into the address box and Ask selected.">
-        <svg class="box-icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/><path d="M13.2 13.2 17 17"/></svg>
+      <div class="box" role="img" aria-label="Perch's new tab address box, with “What is Perch, and can I try it?” typed in and Ask selected.">
+        <svg class="ico box-ico" viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/><path d="M13.2 13.2 17 17"/></svg>
         <span class="box-text"><span class="typed">What is Perch, and can I try it?</span><span class="caret" aria-hidden="true"></span></span>
         <span class="seg" aria-hidden="true"><span>Search</span><span class="on">Ask</span></span>
       </div>
-      <p class="hint">Perch's own new tab page<span class="long"> <span class="sep">·</span> <kbd>Tab</kbd> Google <span class="sep">·</span> <kbd>⌘↵</kbd> Ask</span></p>
+      <p class="hint"><kbd>Tab</kbd> Google <span class="dot">·</span> <kbd>⌘↵</kbd> Ask</p>
 
-      <div class="reply">
-        <p>A fast, private, open-source browser for Mac, built on Chromium so every Chrome extension works. Its agent uses the sites you're signed in to, on your own ChatGPT, Claude or Grok account, and asks before anything is sent, posted, bought or deleted.</p>
-      </div>
+      <p class="answer">A fast, private, open-source browser for Mac, built on Chromium so every Chrome extension works. Its agent uses the sites you're signed in to, on the ChatGPT, Claude or Grok account you already pay for, and stops to ask before anything is sent, posted, bought or deleted.</p>
 
       <div class="approval" id="download" aria-labelledby="dl-title">
-        <h2 class="approval-title" id="dl-title">Download Perch beta</h2>
-        <p class="approval-meta"><span class="mono">github.com</span> · Version 0.1.0 · 197 MB</p>
-        <dl class="approval-fields">
+        <div class="approval-head">
+          <h2 class="approval-title" id="dl-title">Download Perch beta</h2>
+          <p class="approval-meta"><span class="mono">github.com</span> · Downloads a disk image</p>
+        </div>
+        <dl class="fields">
+          <div><dt>Version</dt><dd class="mono">0.1.2 · 197 MB</dd></div>
           <div><dt>Needs</dt><dd>macOS 13 or later, Apple silicon</dd></div>
           <div><dt>Signed</dt><dd>Developer ID, notarized by Apple</dd></div>
         </dl>
         <div class="approval-actions">
-          <a class="btn" href="https://github.com/neelsatyavolu/perch/releases/download/v0.1.0-beta/Perch-0.1.0.dmg">Download for Mac</a>
+          <a class="btn" href="https://github.com/neelsatyavolu/perch/releases/download/v0.1.2-beta/Perch-0.1.2.dmg">Download for Mac</a>
           <a class="btn btn-quiet" href="https://github.com/neelsatyavolu/perch">View source</a>
         </div>
       </div>
     </div>
 
-    <figure class="wide shot window">
-      <picture>
-        <source media="(max-width: 700px) and (prefers-color-scheme: light)" srcset="/img/beta/agent-paper-side-380.webp 380w, /img/beta/agent-paper-side-760.webp 760w" sizes="calc(100vw - 32px)" width="380" height="744">
-        <source media="(max-width: 700px)" srcset="/img/beta/agent-ink-side-380.webp 380w, /img/beta/agent-ink-side-760.webp 760w" sizes="calc(100vw - 32px)" width="380" height="744">
-        <source media="(prefers-color-scheme: light)" srcset="/img/beta/agent-paper-1440.webp 1440w, /img/beta/agent-paper-2880.webp 2880w" sizes="(min-width: 1296px) 1248px, calc(100vw - 48px)" width="1440" height="904">
-        <img src="/img/beta/agent-ink-1440.webp" srcset="/img/beta/agent-ink-1440.webp 1440w, /img/beta/agent-ink-2880.webp 2880w" sizes="(min-width: 1296px) 1248px, calc(100vw - 48px)" width="1440" height="904" decoding="async" alt="The Perch beta with a mail site open and the side chat beside it. The agent took five steps and is waiting on an approval card: send an email to Maya Chen with the exact reply text, To and Subject, and Send message and Don't allow buttons.">
-      </picture>
-      <figcaption>The Perch beta, captured from the app. Mailroom is a stand-in site and the chat runs on sample data, so nothing was sent.</figcaption>
+    <!-- The agent at work, drawn from Perch's real tokens: tab strip, toolbar, a stand-in mail site, the side chat. -->
+    <figure class="win-wrap" aria-label="Perch with a mail site open and the side chat beside it. The agent took five steps and waits on an approval card that shows the exact email to Maya Chen, with Send message and Don't allow buttons.">
+      <div class="win" aria-hidden="true">
+        <div class="w-strip">
+          <span class="w-lights"><i></i><i></i><i></i></span>
+          <span class="w-tab">New tab</span>
+          <span class="w-tab w-tab-on"><b class="fav fav-mail"></b>Re: Thursday planning<span class="perch-dot"></span></span>
+          <span class="w-tab">Readwell · Orders</span>
+          <span class="w-plus">+</span>
+        </div>
+        <div class="w-bar">
+          <svg class="ico" viewBox="0 0 20 20"><path d="M12 5 7 10l5 5"/></svg>
+          <svg class="ico" viewBox="0 0 20 20"><path d="M8 5l5 5-5 5"/></svg>
+          <svg class="ico" viewBox="0 0 20 20"><path d="M15.5 10a5.5 5.5 0 1 1-1.8-4.1M15.5 4.5v3.2h-3.2"/></svg>
+          <span class="w-url"><svg class="ico ico-sm" viewBox="0 0 20 20"><path d="M6 9V7a4 4 0 0 1 8 0v2M5 9h10v7H5z"/></svg>mailroom.app<span class="w-path">/inbox/t/4821</span></span>
+          <span class="w-chip">Ask Perch</span>
+        </div>
+        <div class="w-body">
+          <div class="site">
+            <div class="site-nav">
+              <b class="site-logo">Mailroom</b>
+              <span class="site-compose">Compose</span>
+              <span class="on">Inbox <em>12</em></span><span>Starred</span><span>Sent</span><span>Drafts <em>2</em></span>
+            </div>
+            <div class="site-list">
+              <div class="msg on"><b>Maya Chen</b><span>Re: Thursday planning</span><small>Does Thursday afternoon work for the review?</small></div>
+              <div class="msg"><b>Northwind Billing</b><span>Your November invoice</span><small>Invoice NW-20931 is ready to view.</small></div>
+              <div class="msg"><b>Priya Raman</b><span>Notes from Monday</span><small>Three decisions and two open questions.</small></div>
+              <div class="msg"><b>Jordan Lee</b><span>Saturday watch party</span><small>Here's the Backrow link for 8 pm.</small></div>
+            </div>
+            <div class="site-read">
+              <b class="site-h">Re: Thursday planning</b>
+              <p>Hi Neel,</p>
+              <p>Does Thursday afternoon work for the planning review? Anything between 2 and 5 is fine on my side.</p>
+              <p>Thanks,<br>Maya</p>
+            </div>
+          </div>
+          <div class="side">
+            <div class="side-head"><span>Reply to Maya about Thursday</span><span class="side-state"><span class="perch-dot still"></span>Waiting for you</span></div>
+            <div class="bubble">Maya asked if Thursday works for the planning review. Check my calendar and draft a reply.</div>
+            <div class="steps"><svg class="ico ico-sm" viewBox="0 0 20 20"><path d="M8 5l5 5-5 5"/></svg>5 steps · Typed the reply into “Reply”</div>
+            <div class="card-ap">
+              <b>Send email to Maya Chen</b>
+              <small><span class="mono">mailroom.app</span> · Sends, posts or deletes</small>
+              <div class="card-body">Hi Maya, Thursday works. I've put 3:00 to 4:00 on my calendar for the planning review. See you then. Neel</div>
+              <div class="card-fields"><span>To</span><span>Maya Chen &lt;maya@northwind.co&gt;</span><span>Subject</span><span>Re: Thursday planning</span></div>
+              <div class="card-btns"><span class="mini-btn">Send message</span><span class="mini-btn quiet">Don't allow</span></div>
+            </div>
+            <div class="composer">
+              <span class="ctx"><b class="fav fav-mail"></b>Re: Thursday planning</span>
+              <span class="ph">Ask Perch a task, @ for context</span>
+              <div class="ctrls"><span>Guard</span><span>Current tab</span><span>Claude Opus</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
     </figure>
   </section>
 
+  <!-- Agent -->
   <section class="band" id="agent" aria-labelledby="agent-title">
     <div class="wrap split">
       <div class="copy">
         <h2 id="agent-title">It shows you what goes out</h2>
-        <p>Open a side chat on any tab and say what you need done. The agent reads the page, clicks and types in it, and lists each step. Before anything is sent, posted, bought or deleted, it stops on a card with the exact message or total, and the button names the action.</p>
+        <p class="lede">Open a side chat on any tab and say what you need. The agent reads the page, clicks and types in it, and lists every step. Before anything is sent, posted, bought or deleted, it stops on a card with the exact message or total, and the button names the action.</p>
         <dl class="rows">
-          <div><dt>Permission modes</dt><dd>Ask waits on every change. Guard, the default, reads, searches and fills forms on its own and asks before it sends. Skip confirmation runs without asking, but payments and password changes still wait for you.</dd></div>
-          <div><dt>Site rules</dt><dd>Mark a site always allow, always ask or never touch. Never touch keeps the agent off a site entirely, your bank for example.</dd></div>
-          <div><dt>Chats stay with their tab</dt><dd>Switch tabs and you see that tab's chat; switch back and yours is where you left it, draft included.</dd></div>
-          <div><dt>An audit log</dt><dd>Every action is recorded with the time, the site, which client asked and whether you approved it.</dd></div>
+          <div><dt>Three permission modes</dt><dd>Ask waits on every change. Guard, the default, reads, searches and fills forms on its own and asks before it sends. Skip confirmation runs straight through, but payments and password changes still wait for you.</dd></div>
+          <div><dt>Site rules</dt><dd>Mark a site always allow, always ask or never touch. Never touch keeps the agent off it entirely, your bank for example.</dd></div>
+          <div><dt>A chat for each tab</dt><dd>Switch tabs and you see that tab's chat. Come back and yours is where you left it, draft included.</dd></div>
+          <div><dt>Activity log</dt><dd>Every action is recorded with the time, the site, who asked and whether you approved it.</dd></div>
         </dl>
       </div>
-      <figure class="shot">
-        <picture>
-          <source media="(prefers-color-scheme: light)" srcset="/img/beta/permissions-paper-860.webp 860w, /img/beta/permissions-paper-1720.webp 1720w" sizes="(min-width: 1168px) 600px, (min-width: 960px) 52vw, calc(100vw - 48px)">
-          <img src="/img/beta/permissions-ink-860.webp" srcset="/img/beta/permissions-ink-860.webp 860w, /img/beta/permissions-ink-1720.webp 1720w" sizes="(min-width: 1168px) 600px, (min-width: 960px) 52vw, calc(100vw - 48px)" width="860" height="737" loading="lazy" decoding="async" alt="Perch's Permissions settings: Guard is the default mode, between Ask and Skip confirmation. Site rules set *.chase.com to Never touch and github.com to Always allow, and outside agents such as Claude Code each have their own mode.">
-        </picture>
-        <figcaption>Captured from the Perch beta, with sample data.</figcaption>
-      </figure>
+      <div class="panel" role="img" aria-label="Perch's Permissions settings: Guard selected between Ask and Skip confirmation, with site rules for chase.com set to Never touch and github.com set to Always allow.">
+        <div class="panel-title">Permissions</div>
+        <div class="p-row p-col">
+          <span class="p-label">Permission mode</span>
+          <span class="seg seg-wide"><span>Ask</span><span class="on">Guard</span><span>Skip confirmation</span></span>
+          <span class="p-note">Reads, searches and fills forms on its own. Asks before it sends, posts, buys or deletes.</span>
+        </div>
+        <div class="p-sub">Site rules</div>
+        <div class="p-row"><span class="mono">*.chase.com</span><span class="pill">Never touch</span></div>
+        <div class="p-row"><span class="mono">github.com</span><span class="pill">Always allow</span></div>
+        <div class="p-row"><span class="mono">mailroom.app</span><span class="pill">Always ask</span></div>
+        <div class="p-sub">Outside agents</div>
+        <div class="p-row"><span>Claude Code</span><span class="pill">Guard</span></div>
+        <div class="p-row"><span>Codex</span><span class="pill">Ask</span></div>
+      </div>
     </div>
   </section>
 
+  <!-- Models -->
   <section class="band" id="models" aria-labelledby="models-title">
     <div class="wrap split flip">
       <div class="copy">
         <h2 id="models-title">Bring the model you already pay for</h2>
-        <p>Perch has no paid plan and no model of its own. Connect what you have, and pick a model for each kind of work: a quick one for summaries, a stronger one for planning, one that can read images.</p>
+        <p class="lede">Perch has no account, no paid plan and no model of its own. Connect what you have, then pick a model for each kind of work: a quick one for summaries, a stronger one for planning, one that reads images.</p>
         <dl class="rows">
-          <div><dt>Claude</dt><dd>Perch runs the Claude Code you already have installed, which keeps its own sign-in. Perch never reads its tokens.</dd></div>
+          <div><dt>Claude</dt><dd>Perch runs the Claude Code you already have, which keeps its own sign-in. Perch never reads its tokens.</dd></div>
           <div><dt>ChatGPT and Grok</dt><dd>Sign in with your account.</dd></div>
-          <div><dt>API keys and local models</dt><dd>Anthropic, OpenAI, xAI, Gemini and OpenRouter keys, or any OpenAI-compatible server such as Ollama or LM Studio on your Mac.</dd></div>
+          <div><dt>API keys and local models</dt><dd>Anthropic, OpenAI, xAI, Gemini and OpenRouter keys, or any OpenAI-compatible server on your Mac, such as Ollama or LM Studio.</dd></div>
         </dl>
       </div>
-      <figure class="shot">
-        <picture>
-          <source media="(prefers-color-scheme: light)" srcset="/img/beta/models-paper-860.webp 860w, /img/beta/models-paper-1720.webp 1720w" sizes="(min-width: 1168px) 600px, (min-width: 960px) 52vw, calc(100vw - 48px)">
-          <img src="/img/beta/models-ink-860.webp" srcset="/img/beta/models-ink-860.webp 860w, /img/beta/models-ink-1720.webp 1720w" sizes="(min-width: 1168px) 600px, (min-width: 960px) 52vw, calc(100vw - 48px)" width="860" height="737" loading="lazy" decoding="async" alt="Perch's Models settings: Claude connected through Claude Code, ChatGPT connected, Grok not connected. Task models pick a model and effort for Default, Fast, Standard, Deep, Visual and Image generation.">
-        </picture>
-        <figcaption>Captured from the Perch beta, with sample data.</figcaption>
-      </figure>
-    </div>
-  </section>
-
-  <section class="band" id="newtab" aria-labelledby="newtab-title">
-    <div class="wrap narrow-copy">
-      <h2 id="newtab-title">A new tab that picks up where you left off</h2>
-      <p>Type to search, or press ⌘↵ to ask. Your recent chats sit under the box, and a rail on the left keeps the rest, the way Aside does it.</p>
-    </div>
-    <figure class="wide shot">
-      <picture>
-        <source media="(prefers-color-scheme: light)" srcset="/img/beta/newtab-paper-1440.webp 1440w, /img/beta/newtab-paper-2880.webp 2880w" sizes="(min-width: 1296px) 1248px, calc(100vw - 48px)">
-        <img src="/img/beta/newtab-ink-1440.webp" srcset="/img/beta/newtab-ink-1440.webp 1440w, /img/beta/newtab-ink-2880.webp 2880w" sizes="(min-width: 1296px) 1248px, calc(100vw - 48px)" width="1440" height="900" loading="lazy" decoding="async" alt="Perch's new tab page: the Perch mark, a Search or ask box with Search and Ask, three recent chats such as Reply to Maya about Thursday, and suggestions to set up memory, find routines and import from another browser.">
-      </picture>
-      <figcaption>Captured from the Perch beta, with sample data.</figcaption>
-      </figure>
-  </section>
-
-  <section class="band" id="themes" aria-labelledby="themes-title">
-    <div class="wrap split flip">
-      <div class="copy">
-        <h2 id="themes-title">Quiet chrome, your colours</h2>
-        <p>The tab strip, toolbar and menus stay Chromium's own native code, redrawn so they step back and let the sites carry the colour. Pick one of five themes and five accents; Contrast turns on by itself with macOS Increase Contrast.</p>
-        <ul class="chips" aria-label="Themes">
-          <li><span class="sw sw-ink"></span>Ink</li><li><span class="sw sw-graphite"></span>Graphite</li><li><span class="sw sw-dusk"></span>Dusk</li><li><span class="sw sw-paper"></span>Paper</li><li><span class="sw sw-contrast"></span>Contrast</li>
-        </ul>
+      <div class="panel" role="img" aria-label="Perch's Models settings: Claude connected through Claude Code, ChatGPT connected, Grok not connected, and a model picked for each kind of task.">
+        <div class="panel-title">Models</div>
+        <div class="p-sub">Model providers</div>
+        <div class="p-row"><span>Claude <small class="mute">via Claude Code</small></span><span class="state ok">Connected</span></div>
+        <div class="p-row"><span>ChatGPT</span><span class="state ok">Connected</span></div>
+        <div class="p-row"><span>Grok</span><span class="mini-btn quiet">Sign in</span></div>
+        <div class="p-sub">Task models</div>
+        <div class="p-row"><span>Default</span><span class="pill">Claude Opus 5.5</span></div>
+        <div class="p-row"><span>Fast</span><span class="pill">Claude Haiku 5.5</span></div>
+        <div class="p-row"><span>Deep</span><span class="pill">Claude Opus 5.5 · high</span></div>
+        <div class="p-row"><span>Visual</span><span class="pill">Claude Sonnet 5.5</span></div>
       </div>
-      <figure class="shot">
-        <img src="/img/beta/themes-ink-860.webp" srcset="/img/beta/themes-ink-860.webp 860w, /img/beta/themes-ink-1720.webp 1720w" sizes="(min-width: 1168px) 600px, (min-width: 960px) 52vw, calc(100vw - 48px)" width="860" height="410" loading="lazy" decoding="async" alt="Perch's Appearance settings with five themes, Ink, Graphite, Dusk, Paper and Contrast, and five accent colours, Blue, Teal, Amber, Rose and Mono.">
-        <figcaption>Captured from the Perch beta, with sample data.</figcaption>
-      </figure>
     </div>
   </section>
 
-  <section class="band" id="speed" aria-labelledby="speed-title">
+  <!-- Browsing -->
+  <section class="band" id="browsing" aria-labelledby="browsing-title">
     <div class="wrap split">
       <div class="copy">
-        <h2 id="speed-title">Speed comes first</h2>
-        <p>Perch keeps Chromium's engine as it is and adds as little as it can on top. Each release will be measured against Chrome built from the same Chromium version, and 1.0 ships only when it clears this bar.</p>
-      </div>
-      <div class="targets">
-        <p class="t-head">The bar for 1.0, measured against Chrome</p>
-        <dl>
-          <div><dt>Speedometer 3 and JetStream</dt><dd>within 2%</dd></div>
-          <div><dt>Cold start to a usable window</dt><dd>no slower</dd></div>
-          <div><dt>Perch's own additions, idle</dt><dd>under 60 MB</dd></div>
-          <div><dt>Memory with 100 tabs open</dt><dd>half or less</dd></div>
+        <h2 id="browsing-title">A browser first</h2>
+        <p class="lede">Tabs, toolbar and menus are Chromium's own native code, redrawn so they step back and let the sites carry the colour. Extensions from the Chrome Web Store install and run as they do in Chrome.</p>
+        <dl class="rows">
+          <div><dt>Spaces and split view</dt><dd>Keep work and home apart in Spaces, and put two tabs side by side.</dd></div>
+          <div><dt>Command bar</dt><dd>One box for your open tabs, commands, bookmarks and history.</dd></div>
+          <div><dt>Sleeping tabs</dt><dd>Tabs you haven't used in a while give their memory back and wake when you click them. You choose after how long, and which sites never sleep.</dd></div>
+          <div><dt>Out of the way</dt><dd>Hide the tab strip and bookmarks bar, and they slide in when you point at the top edge.</dd></div>
+          <div><dt>Netflix plays</dt><dd>Netflix tabs play through Apple's FairPlay, the way Safari does.</dd></div>
         </dl>
-        <p class="t-foot">These are targets, not results. The beta hasn't been benchmarked yet.</p>
+      </div>
+      <div class="cmd" role="img" aria-label="Perch's command bar over a page, with “split” typed and results for Split view with this tab, Move tab to Space Work, and a recent tab.">
+        <div class="cmd-page" aria-hidden="true"><b></b><i></i><i></i><i></i><u></u><u></u><i></i><i></i></div>
+        <div class="cmd-box"><svg class="ico" viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/><path d="M13.2 13.2 17 17"/></svg><span>split</span><span class="caret caret-still"></span><kbd>esc</kbd></div>
+        <div class="cmd-list">
+          <div class="cmd-row on"><span>Split view with this tab</span><kbd>⌘⇧S</kbd></div>
+          <div class="cmd-row"><span>Move tab to Space “Work”</span></div>
+          <div class="cmd-row"><span>Close other tabs</span></div>
+          <div class="cmd-sub">Tabs</div>
+          <div class="cmd-row"><span>Readwell · Orders</span><span class="mono mute">readwell.co</span></div>
+          <div class="cmd-row"><span>Q4 planning notes</span><span class="mono mute">docs.example.com</span></div>
+        </div>
       </div>
     </div>
   </section>
 
+  <!-- Built in -->
+  <section class="band" id="builtin" aria-labelledby="builtin-title">
+    <div class="wrap">
+      <h2 id="builtin-title">Small things that come built in</h2>
+      <p class="lede">Perch's own tools ship with it and can each be turned off in Settings.</p>
+      <ul class="tools">
+        <li><b>Reader view</b><span>Strips a page down to the article, set in Newsreader.</span></li>
+        <li><b>Picture in picture</b><span>A playing video follows you when you switch tabs.</span></li>
+        <li><b>Video keys</b><span>Change the speed of any video from the keyboard.</span></li>
+        <li><b>Link preview</b><span>Look at a link without leaving the page.</span></li>
+        <li><b>Screenshots</b><span>Capture a whole page, top to bottom, in one image.</span></li>
+        <li><b>Backrow</b><span>Watch Netflix, YouTube and others in sync with friends, with an encrypted chat beside the video.</span></li>
+        <li><b>Caveatly</b><span>Reads a site's terms and privacy policy and grades what they say, using your own Gemini key.</span></li>
+        <li><b>Imports</b><span>Bookmarks, history, passwords and cookies from your current browser, and memory, skills and chats from Aside.</span></li>
+      </ul>
+      <p class="list-title">Imports from</p>
+      <ul class="chips">
+        <li>Chrome</li><li>Arc</li><li>Dia</li><li>Safari</li><li>Firefox</li><li>Brave</li><li>Edge</li><li>Vivaldi</li><li>Opera</li><li>Helium</li><li>Zen</li><li>Comet</li><li>ChatGPT Atlas</li><li>Aside</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- Privacy -->
   <section class="band" id="privacy" aria-labelledby="privacy-title">
     <div class="wrap split">
       <div class="copy">
         <h2 id="privacy-title">Private without extra setup</h2>
-        <p>Perch works without an account, and what it stores stays on your Mac unless you choose to sync.</p>
+        <p class="lede">Perch works without an account. What it stores stays on your Mac unless you choose to sync, and nothing about how you use it is sent unless you opt in.</p>
+        <dl class="rows">
+          <div><dt>Sync the server can't read</dt><dd>Sync is optional and end-to-end encrypted. The server keeps only ciphertext, sizes and timestamps, and you can run your own.</dd></div>
+          <div><dt>Every connection listed</dt><dd>Settings shows each background connection Perch makes, each with its own switch.</dd></div>
+          <div><dt>Your data, portable</dt><dd>Export everything at any time, and restore on a new Mac with your recovery key.</dd></div>
+        </dl>
       </div>
-      <dl class="rows rows-side">
-        <div><dt>No telemetry by default</dt><dd>Nothing about how you use Perch is sent unless you opt in. Settings lists every background connection, each with its own switch.</dd></div>
-        <div><dt>A blocker built in</dt><dd>EasyList and EasyPrivacy block ads and trackers before they load. Cookie banners are rejected where the site allows it, and tracking parameters such as utm_ and fbclid come off links.</dd></div>
-        <div><dt>Sleeping tabs</dt><dd>Tabs you haven't used in a while go to sleep and give their memory back, and wake when you click them.</dd></div>
-        <div><dt>Sync the server can't read</dt><dd>Sync is optional and end-to-end encrypted. The server keeps only ciphertext, sizes and timestamps, and you can run your own.</dd></div>
-      </dl>
-    </div>
-  </section>
-
-  <section class="band" id="chromium" aria-labelledby="chromium-title">
-    <div class="wrap split">
-      <div class="copy">
-        <h2 id="chromium-title">Chromium underneath</h2>
-        <p>Extensions from the Chrome Web Store install and run as they do in Chrome, and sites behave the same way. Perch copies bookmarks, history, passwords and cookies from the browser you use now, and brings memory, skills and chats over from Aside.</p>
-      </div>
-      <div>
-        <p class="list-title">Imports from</p>
-        <ul class="chips">
-          <li>Chrome</li><li>Arc</li><li>Dia</li><li>Safari</li><li>Firefox</li><li>Brave</li><li>Edge</li><li>Vivaldi</li><li>Opera</li><li>Helium</li><li>Zen</li><li>Comet</li><li>ChatGPT Atlas</li><li>Aside</li>
-        </ul>
+      <div class="panel" role="img" aria-label="Perch's Privacy settings with ad and tracker blocking, cookie banner rejection, tracking parameter removal, HTTPS-only, encrypted DNS, blocking ad-targeting APIs and third-party cookies all switched on.">
+        <div class="panel-title">Privacy and security</div>
+        <div class="p-sub">Ads and tracking</div>
+        <div class="p-row"><span>Block ads and trackers <small class="mute">EasyList, EasyPrivacy</small></span><span class="sw-on"></span></div>
+        <div class="p-row"><span>Reject cookie banners</span><span class="sw-on"></span></div>
+        <div class="p-row"><span>Remove tracking parameters <small class="mute mono">utm_, fbclid</small></span><span class="sw-on"></span></div>
+        <div class="p-row"><span>Block ad-targeting APIs</span><span class="sw-on"></span></div>
+        <div class="p-row"><span>Block third-party cookies</span><span class="sw-on"></span></div>
+        <div class="p-sub">Connections</div>
+        <div class="p-row"><span>HTTPS-only</span><span class="sw-on"></span></div>
+        <div class="p-row"><span>Encrypted DNS</span><span class="sw-on"></span></div>
       </div>
     </div>
   </section>
 
-  <section class="band" id="outside-agents" aria-labelledby="outside-title">
-    <div class="wrap split">
+  <!-- Agents and memory -->
+  <section class="band" id="agents" aria-labelledby="agents-title">
+    <div class="wrap split flip">
       <div class="copy">
-        <h2 id="outside-title">Other agents can use it too</h2>
-        <p>The <code>perch</code> command and its MCP server let Claude Code, Codex and other agents hand Perch a whole task or work a tab step by step. Each one gets its own permission mode, Guard unless you change it, and you can revoke any of them in Settings.</p>
+        <h2 id="agents-title">It learns your routine, and other agents can use it</h2>
+        <p class="lede">The <code>perch</code> command and its MCP server let Claude Code, Codex and other agents hand Perch a whole task or work a tab step by step. Each gets its own permission mode, and you can revoke any of them.</p>
+        <dl class="rows">
+          <div><dt>Memory</dt><dd>Perch can learn from your chats and browsing history, if you allow it, and tidies what it knows overnight. You can read and edit all of it.</dd></div>
+          <div><dt>Routines</dt><dd>Tasks that run on a schedule, such as summarising unread mail each morning.</dd></div>
+          <div><dt>Skills and MCP</dt><dd>Add skills and MCP servers, or import the ones your other tools already use.</dd></div>
+        </dl>
       </div>
       <div class="term" role="region" aria-label="Example perch commands" tabindex="0">
         <pre><code><span class="c"># add Perch's skill and MCP server</span>
@@ -227,15 +300,74 @@ perch click e12</code></pre>
     </div>
   </section>
 
+  <!-- Themes: each mini window is drawn in that theme's real tokens. -->
+  <section class="band" id="themes" aria-labelledby="themes-title">
+    <div class="wrap">
+      <h2 id="themes-title">Five themes, five accents</h2>
+      <p class="lede">A theme changes every surface and text colour at once; layout and type never move. Contrast turns on by itself with macOS Increase Contrast, and Match system follows your Mac between a dark theme and Paper.</p>
+      <ul class="themes">
+        <li class="th th-ink"><span class="th-win" aria-hidden="true"><i class="th-strip"><b></b></i><i class="th-bar"><u></u></i><i class="th-page"><em></em><s></s><s></s><s></s></i></span>Ink</li>
+        <li class="th th-graphite"><span class="th-win" aria-hidden="true"><i class="th-strip"><b></b></i><i class="th-bar"><u></u></i><i class="th-page"><em></em><s></s><s></s><s></s></i></span>Graphite</li>
+        <li class="th th-dusk"><span class="th-win" aria-hidden="true"><i class="th-strip"><b></b></i><i class="th-bar"><u></u></i><i class="th-page"><em></em><s></s><s></s><s></s></i></span>Dusk</li>
+        <li class="th th-paper"><span class="th-win" aria-hidden="true"><i class="th-strip"><b></b></i><i class="th-bar"><u></u></i><i class="th-page"><em></em><s></s><s></s><s></s></i></span>Paper</li>
+        <li class="th th-contrast"><span class="th-win" aria-hidden="true"><i class="th-strip"><b></b></i><i class="th-bar"><u></u></i><i class="th-page"><em></em><s></s><s></s><s></s></i></span>Contrast</li>
+      </ul>
+      <ul class="accents" aria-label="Accents">
+        <li><span class="ac" style="--a:#4C8DFF"></span>Blue</li><li><span class="ac" style="--a:#2EC4B6"></span>Teal</li><li><span class="ac" style="--a:#F5A524"></span>Amber</li><li><span class="ac" style="--a:#FF6B8A"></span>Rose</li><li><span class="ac" style="--a:#E6E8EB"></span>Mono</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- Speed -->
+  <section class="band" id="speed" aria-labelledby="speed-title">
+    <div class="wrap split">
+      <div class="copy">
+        <h2 id="speed-title">Speed comes first</h2>
+        <p class="lede">Perch keeps Chromium's engine as it is and adds as little as it can on top. Each release will be measured against Chrome built from the same Chromium version, and 1.0 ships only when it clears this bar.</p>
+      </div>
+      <div class="targets">
+        <p class="t-head">The bar for 1.0, measured against Chrome</p>
+        <dl>
+          <div><dt>Speedometer 3 and JetStream</dt><dd>within 2%</dd></div>
+          <div><dt>Cold start to a usable window</dt><dd>no slower</dd></div>
+          <div><dt>Perch's own additions, idle</dt><dd>under 60 MB</dd></div>
+          <div><dt>Memory with 100 tabs open</dt><dd>half or less</dd></div>
+        </dl>
+        <p class="t-foot">These are targets, not results. The beta hasn't been benchmarked yet.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Everything, as Perch's Settings lists it -->
+  <section class="band" id="everything" aria-labelledby="everything-title">
+    <div class="wrap">
+      <h2 id="everything-title">Everything in the beta</h2>
+      <p class="lede">The whole list, grouped the way Perch's Settings groups it.</p>
+      <div class="index">
+        <div class="ix"><h3>Agent</h3><ul><li>Side chat for each tab</li><li>Reads and acts on the page</li><li>Approval cards that name the action</li><li>Ask, Guard and Skip confirmation</li><li>Site rules</li><li>Activity log</li><li>Full-page chat with artifacts</li><li>Attach files and pages</li></ul></div>
+        <div class="ix"><h3>Models</h3><ul><li>Claude through Claude Code</li><li>ChatGPT and Codex sign-in</li><li>Grok sign-in</li><li>API keys for five providers</li><li>Local OpenAI-compatible servers</li><li>A model for each kind of task</li><li>Image generation model</li></ul></div>
+        <div class="ix"><h3>Memory and routines</h3><ul><li>Learn from chats</li><li>Learn from browsing history</li><li>Tidy memory overnight</li><li>Scheduled routines</li><li>Skills</li><li>MCP servers and import</li></ul></div>
+        <div class="ix"><h3>Browsing</h3><ul><li>Every Chrome extension</li><li>Spaces</li><li>Split view</li><li>Command bar</li><li>Sleeping tabs and memory by tab</li><li>Hide the tab strip and bookmarks</li><li>Netflix through FairPlay</li><li>Reopens last session's tabs</li></ul></div>
+        <div class="ix"><h3>Built in</h3><ul><li>Reader view</li><li>Picture in picture</li><li>Video keys</li><li>Link preview</li><li>Screenshots</li><li>Backrow</li><li>Caveatly</li></ul></div>
+        <div class="ix"><h3>Privacy and security</h3><ul><li>Ad and tracker blocker</li><li>Cookie banner rejection</li><li>Tracking parameters removed</li><li>HTTPS-only</li><li>Encrypted DNS</li><li>Ad-targeting APIs blocked</li><li>Third-party cookies blocked</li><li>No telemetry unless you opt in</li></ul></div>
+        <div class="ix"><h3>Sync and backup</h3><ul><li>End-to-end encrypted sync</li><li>Self-hostable sync server</li><li>Recovery key</li><li>Export everything</li><li>Import from 14 browsers</li></ul></div>
+        <div class="ix"><h3>Appearance</h3><ul><li>Ink, Graphite, Dusk, Paper, Contrast</li><li>Blue, Teal, Amber, Rose, Mono</li><li>Match system</li><li>Density</li><li>Frosted menus</li></ul></div>
+        <div class="ix"><h3>For developers and IT</h3><ul><li><code>perch</code> command</li><li>MCP server</li><li>A mode for each outside agent</li><li>Managed with the MDM tools used for Chrome</li><li>Updates itself, signed and notarized</li></ul></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Closing -->
   <section class="band closing" aria-labelledby="oss-title">
     <div class="wrap closing-in">
-      <h2 id="oss-title">Open source, MIT licensed</h2>
-      <p>All of Perch is on GitHub: the Chromium patches, the agent, the interface and the sync server. This is a beta, so expect rough edges, and tell us what breaks.</p>
+      <svg class="ntp-mark" viewBox="0 0 64 64" aria-hidden="true"><rect x="8" y="35" width="48" height="8" rx="2" class="mark-bar"/><circle cx="43" cy="26" r="7.5" class="mark-dot"/></svg>
+      <h2 id="oss-title" class="display">Open source, MIT licensed</h2>
+      <p class="lede">All of Perch is on GitHub: the Chromium patches, the agent, the interface and the sync server. This is a beta, so expect rough edges, and tell us what breaks.</p>
       <div class="actions">
-        <a class="btn" href="https://github.com/neelsatyavolu/perch/releases/download/v0.1.0-beta/Perch-0.1.0.dmg">Download for Mac</a>
-        <a class="text-link" href="https://github.com/neelsatyavolu/perch/issues">Report an issue</a>
+        <a class="btn" href="https://github.com/neelsatyavolu/perch/releases/download/v0.1.2-beta/Perch-0.1.2.dmg">Download for Mac</a>
+        <a class="btn btn-quiet" href="https://github.com/neelsatyavolu/perch/issues">Report an issue</a>
       </div>
-      <p class="fine">Version 0.1.0 beta · macOS 13 or later on Apple silicon · <a href="https://github.com/neelsatyavolu/perch/releases/tag/v0.1.0-beta">Release notes</a></p>
+      <p class="fine">Version 0.1.2 beta · macOS 13 or later on Apple silicon · <a href="https://github.com/neelsatyavolu/perch/releases/tag/v0.1.2-beta">Release notes</a></p>
     </div>
   </section>
 </main>
@@ -245,6 +377,7 @@ perch click e12</code></pre>
     <p>© 2026 Neel Satyavolu</p>
     <ul class="links">
       <li><a href="https://github.com/neelsatyavolu/perch/blob/main/LICENSE">MIT License</a></li>
+      <li><a href="https://github.com/neelsatyavolu/perch/tree/main/docs/enterprise">For IT teams</a></li>
       <li><a href="https://github.com/neelsatyavolu/perch">GitHub</a></li>
       <li><a href="/privacy">Site privacy</a></li>
     </ul>

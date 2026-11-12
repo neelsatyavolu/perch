@@ -1,0 +1,56 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "perchd/test/fixtures/pages/controls.html"
+        ],
+        "createdAt": "2026-11-05T19:19:29.312Z",
+        "reason": "assistant: browser-agent test fixture page, not product UI"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "perchd/test/fixtures/pages/drag.html"
+        ],
+        "createdAt": "2026-11-05T19:19:29.329Z",
+        "reason": "assistant: browser-agent test fixture page, not product UI"
+      },
+      {
+        "rule": "overused-font",
+        "value": "geist",
+        "createdAt": "2026-11-06T03:14:12.371Z",
+        "reason": "Owner's design system: ~/DESIGN.md (Blackletter) and perch/DESIGN.md specify Geist / Geist Mono"
+      },
+      {
+        "rule": "overused-font",
+        "value": "geist mono",
+        "createdAt": "2026-11-06T03:14:12.389Z",
+        "reason": "Owner's design system: ~/DESIGN.md (Blackletter) and perch/DESIGN.md specify Geist / Geist Mono"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "site/public/index.html"
+        ],
+        "createdAt": "2026-11-12T18:44:55.466Z",
+        "reason": "model triage: all six are fixed-height controls centred by height and align-items at DESIGN.md sizes (segmented control, 40px toolbar, 52px command box, 32px command rows) or a window whose tab strip sits at its top edge; rendered screenshots at 1440 and 390 show the text centred, not flush"
+      },
+      {
+        "rule": "flat-type-hierarchy",
+        "value": "*",
+        "files": [
+          "site/public/index.html"
+        ],
+        "createdAt": "2026-11-12T18:44:55.483Z",
+        "reason": "model triage: the 15-16px h2/h3 are the approval card title and Settings-style index group labels; section h2s render at 28-38px and the hero h1 at 42-68px Newsreader"
+      }
+    ]
+  }
+}

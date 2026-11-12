@@ -4,11 +4,17 @@
  * model gets one of a few fixed words back. Usernames and card digits appear only on the approval
  * card, which goes to the user, never to the model.
  *
+ * When Perch has no saved login or code for the site and the person connected 1Password
+ * (secure/onepassword.ts), the login or code comes from 1Password instead, which asks for Touch ID
+ * itself. perchd fills it into the page (page/fill-form.ts); the model still sees only the outcome.
+ *
  * Permissions (spec 7.4): signing in or filling a code on a site for the first time asks in Guard;
  * a card fill is a payment, so it always asks.
  */
 
 import { extensionTabId, fillCard, fillCode, fillLogin, listCards, listLogins, type FillResult, type SavedCard, type SavedLogin } from "../browser/perch-domain";
+import { fillCodeField, fillLoginFields } from "../page/fill-form";
+import type { OpCredentials, OpLogin } from "../secure/onepassword";
 import type { ToolSpec } from "../models/types";
 import { rememberedSecrets, secretKey } from "../page/secrets";
 import type { Kind } from "./permissions";
@@ -46,6 +52,29 @@ export function memoryFillSites(): FillSites {
 const defaultSites = memoryFillSites();
 const sitesOf = (ctx: ToolContext): FillSites => ctx.fillSites ?? defaultSites;
 
+/** A password manager outside Perch (1Password). Reading may show its own Touch ID prompt. */
+export type PasswordManager = {
+  readonly name: string;
+  logins(pageUrl: string): Promise<readonly OpLogin[]>;
+  credentials(id: string): Promise<OpCredentials>;
+  otp(id: string): Promise<string | null>;
+};
+
+let defaultManager: () => Promise<PasswordManager | null> = async () => null;
+
+/** The app sets this from Settings › Passwords; every chat and outside agent in perchd uses it. */
+export function setPasswordManager(get: () => Promise<PasswordManager | null>): void {
+  defaultManager = get;
+}
+
+async function managerOf(ctx: ToolContext): Promise<PasswordManager | null> {
+  try {
+    return await (ctx.passwordManager ?? defaultManager)();
+  } catch {
+    return null;
+  }
+}
+
 export function fillKind(name: string, site: string, ctx: ToolContext): Kind {
   if (name === "fill_card") return "payment";
   return sitesOf(ctx).known(site) ? "change" : "risky";
@@ -76,7 +105,11 @@ export async function fillSummary(ctx: ToolContext, name: string, site: string):
   if (name === "sign_in") {
     const logins = await listLogins(ctx.browser.conn, ctx.tab.id).catch(() => []);
     const login = pickLogin(logins, await pageOrigin(ctx));
-    if (!login) return `Sign in to ${site}`;
+    if (!login) {
+      // Asking 1Password here would show Touch ID before the person approved; it asks after.
+      const manager = await managerOf(ctx);
+      return manager ? `Sign in to ${site} with a login from ${manager.name}` : `Sign in to ${site}`;
+    }
     return `Sign in to ${site} as ${maskUsername(login.username)}${logins.length > 1 ? ` (1 of ${logins.length} saved logins)` : ""}`;
   }
   if (name === "fill_card") {
@@ -93,7 +126,7 @@ function hideFilled(ctx: ToolContext, filled: FillResult): void {
   for (const id of filled.fields) secrets.add(secretKey(id));
 }
 
-function outcome(r: FillResult): string {
+function outcome(r: { readonly result: FillResult["result"] }): string {
   return r.result === "filled" ? FILLED : NEEDS_YOU;
 }
 
@@ -107,10 +140,14 @@ export async function runFillTool(ctx: ToolContext, name: string): Promise<ToolR
   let content: string;
   if (name === "sign_in") {
     const login = pickLogin(await listLogins(conn, tab.id), await pageOrigin(ctx));
-    if (!login) return { content: NO_LOGIN };
-    const r = await fillLogin(conn, tab.id, login.loginId);
-    hideFilled(ctx, r);
-    content = outcome(r);
+    if (!login) {
+      content = await signInFromManager(ctx);
+      if (content === NO_LOGIN) return { content };
+    } else {
+      const r = await fillLogin(conn, tab.id, login.loginId);
+      hideFilled(ctx, r);
+      content = outcome(r);
+    }
   } else if (name === "fill_card") {
     const card: SavedCard | undefined = (await listCards(conn, tab.id))[0];
     if (!card) return { content: NO_CARD };
@@ -119,8 +156,54 @@ export async function runFillTool(ctx: ToolContext, name: string): Promise<ToolR
     content = outcome(r);
   } else {
     const r = await fillCode(conn, await extensionTabId(conn, tab.id), await tab.url());
-    content = r === "filled" ? FILLED : r === "no-code" ? NO_CODE : NEEDS_YOU;
+    content = r === "filled" ? FILLED : r === "no-code" ? await codeFromManager(ctx) : NEEDS_YOU;
   }
   if (content === FILLED && name !== "fill_card") sitesOf(ctx).remember(site);
   return { content };
+}
+
+/**
+ * sign_in from the password manager: the best-matching login for the page, filled by perchd into
+ * the origin it was picked for. Its errors (Touch ID dismissed, 1Password locked) come back as
+ * "needs you", so the agent hands the sign-in to the person instead of retrying.
+ */
+async function signInFromManager(ctx: ToolContext): Promise<string> {
+  const manager = await managerOf(ctx);
+  if (!manager || !ctx.tab) return NO_LOGIN;
+  const tab = ctx.tab;
+  try {
+    const url = await tab.url();
+    const origin = new URL(url).origin;
+    const login = (await manager.logins(url))[0];
+    if (!login) return NO_LOGIN;
+    const { username, password } = await manager.credentials(login.id);
+    if (!username && !password) return NO_LOGIN;
+    return outcome(await fillLoginFields(tab, origin, username, password, (fields) => hideNodes(ctx, fields)));
+  } catch {
+    return NEEDS_YOU;
+  }
+}
+
+async function codeFromManager(ctx: ToolContext): Promise<string> {
+  const manager = await managerOf(ctx);
+  if (!manager || !ctx.tab) return NO_CODE;
+  const tab = ctx.tab;
+  try {
+    const url = await tab.url();
+    const origin = new URL(url).origin;
+    for (const login of (await manager.logins(url)).slice(0, 5)) {
+      const code = await manager.otp(login.id);
+      if (code) return outcome(await fillCodeField(tab, origin, code, (fields) => hideNodes(ctx, fields)));
+    }
+    return NO_CODE;
+  } catch {
+    return NEEDS_YOU;
+  }
+}
+
+/** Hides fields from later snapshots; called before any value is written into them. */
+function hideNodes(ctx: ToolContext, fields: readonly number[]): void {
+  if (!ctx.tab) return;
+  const secrets = rememberedSecrets(ctx.tab);
+  for (const id of fields) secrets.add(secretKey(id));
 }

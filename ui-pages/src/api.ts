@@ -356,7 +356,9 @@ export type RoutineProposal = { readonly id: string; readonly title: string; rea
 
 /* ---------- Import (spec 10) ---------- */
 
-export type BrowserId = "aside" | "chrome" | "arc" | "dia" | "brave" | "edge" | "vivaldi" | "opera" | "helium" | "safari" | "firefox" | "zen";
+export type BrowserId =
+  | "aside" | "chrome" | "chrome-beta" | "chrome-canary" | "arc" | "dia" | "comet" | "atlas" | "brave" | "edge" | "vivaldi"
+  | "opera" | "opera-gx" | "helium" | "chromium" | "safari" | "firefox" | "zen";
 export type ImportKind =
   | "bookmarks" | "history" | "passwords" | "cookies" | "tabs" | "extensions" | "settings"
   | "aside-memory" | "aside-skills" | "aside-chats" | "aside-preferences";
@@ -367,15 +369,31 @@ export type DetectedBrowser = {
   readonly name: string;
   readonly profiles: readonly { readonly id: string; readonly name: string }[];
   readonly options: readonly ImportOption[];
+  /** When it was last browsed in (Unix ms). The list comes most recent first. */
+  readonly lastUsed?: number;
 };
 export type ImportRequest = {
   readonly browser: BrowserId;
   readonly profile: string;
   readonly kinds: readonly ImportKind[];
-  /** A `chooseFile("passwords-csv")` id. Required when passwords are picked and their option needs "csv-export". */
+  /** A `chooseFile("passwords-csv")` id. Required when passwords are picked and their option needs "csv-export" (Safari, Firefox, Zen). */
   readonly passwordsCsv?: string;
 };
 export type SystemAccess = { readonly fullDiskAccess: boolean };
+
+/* ---------- 1Password (the agent's sign_in and fill_code) ---------- */
+
+export type OnePasswordAccount = { readonly id: string; readonly email: string; readonly url: string };
+/**
+ * `installed`: 1Password's command-line tool is on this Mac. `account`: the account the agent
+ * may read logins from, or null when 1Password is off. `problem`: why it can't be used yet.
+ */
+export type OnePasswordSettings = {
+  readonly installed: boolean;
+  readonly accounts: readonly OnePasswordAccount[];
+  readonly account: string | null;
+  readonly problem?: string;
+};
 
 /* ---------- Welcome and About ---------- */
 
@@ -568,6 +586,10 @@ export interface PerchApi {
   /** Opens System Settings at the Full Disk Access pane. */
   openFullDiskAccess(): Promise<void>;
   startImport(request: ImportRequest): Promise<JobId>;
+  // 1Password
+  getOnePassword(): Promise<OnePasswordSettings>;
+  /** Turns 1Password on for an account (1Password asks for Touch ID now), or off with null. */
+  setOnePassword(account: string | null): Promise<OnePasswordSettings>;
 
   // Jobs (profile build, import)
   /** The job's latest progress; null when perchd doesn't know the id (for example after a restart). */
@@ -608,5 +630,6 @@ export const API_METHODS = [
   "listDreamLogs", "listSetupSources", "startProfileBuild", "getProfileBuild", "getProfileDraft", "saveProfileDraft", "discardProfileDraft",
   "listRoutines", "saveRoutine", "setRoutineEnabled", "deleteRoutine", "runRoutine", "findRoutineProposals", "acceptProposal", "dismissProposal",
   "detectBrowsers", "getSystemAccess", "openFullDiskAccess", "startImport", "getJob",
+  "getOnePassword", "setOnePassword",
   "getOnboarding", "completeOnboardingStep", "finishOnboarding", "getAbout", "checkForUpdates", "installUpdate", "setAutoUpdate",
 ] as const satisfies readonly Exclude<keyof PerchApi, "watchJob">[];

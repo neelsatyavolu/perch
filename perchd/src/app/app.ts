@@ -53,6 +53,8 @@ export type PagesCore = {
   setDefaults: (patch: Partial<ChatSettings>) => void;
   /** The chat models and the settings a new chat starts with. */
   info: () => AppInfo;
+  /** Files the person picked in the browser's open panel, by the id the page holds. */
+  files: FileRegistry;
 };
 
 export type App = {
@@ -167,14 +169,15 @@ export async function startApp(opts: AppOptions): Promise<App> {
     defaults = { ...defaults, ...patch };
     publish({ type: "defaults", defaults });
   };
+  const files = new FileRegistry();
   const pages = opts.pages?.({
     chats,
     runs,
     emit: (event, data) => publish({ type: "pages.event", event, data }),
     setDefaults: applyDefaults,
     info: () => info(),
+    files,
   }) ?? null;
-  const files = new FileRegistry();
   const token = opts.token ?? Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url");
   const server = startServer({
     token,

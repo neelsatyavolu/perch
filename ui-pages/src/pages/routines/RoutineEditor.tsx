@@ -80,8 +80,10 @@ export function RoutineEditor({ open, routine, onClose, onSaved }: Props) {
       </Field>
       <div class="label">
         <span>When</span>
+        {/* Perch can't start a routine on an event yet, so only a routine that already has one shows the choice. */}
         <Segmented<Kind> label="When" value={d.kind} onChange={(kind) => edit({ kind })} options={[
-          { value: "daily", label: "On days at a time" }, { value: "interval", label: "Every few hours" }, { value: "trigger", label: "When something happens" },
+          { value: "daily", label: "On days at a time" }, { value: "interval", label: "Every few hours" },
+          ...(routine?.schedule.kind === "trigger" ? [{ value: "trigger" as const, label: "When something happens" }] : []),
         ]} />
       </div>
       {d.kind === "daily" && (

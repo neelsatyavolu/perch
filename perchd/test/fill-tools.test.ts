@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { AuditEntry, AuditLog } from "../src/agent/audit";
-import { maskUsername, memoryFillSites } from "../src/agent/fill-tools";
+import { maskUsername, memoryFillSites, type PasswordManager } from "../src/agent/fill-tools";
 import type { Mode } from "../src/agent/permissions";
 import { callTool, label, type ApprovalRequest } from "../src/agent/session";
 import { TOOL_SPECS } from "../src/agent/tool-specs";
@@ -26,6 +26,9 @@ function fakeConn(opts: { logins?: boolean; cards?: boolean; fill?: string; code
     "Runtime.evaluate": () => ({ result: { objectId: "G" } }),
     "Runtime.callFunctionOn": () => ({ result: { value: opts.code ?? "filled" } }),
     "Target.detachFromTarget": () => ({}),
+    "DOM.getDocument": () => ({ root: { nodeId: 1 } }),
+    "DOM.querySelectorAll": (p) => ({ nodeIds: p.selector === "[data-perch-filled]" ? [5, 6] : [] }),
+    "DOM.describeNode": (p) => ({ node: { backendNodeId: 50 + Number(p.nodeId) } }),
   };
   return {
     sent,
@@ -40,8 +43,32 @@ function fakeConn(opts: { logins?: boolean; cards?: boolean; fill?: string; code
   };
 }
 
-function context(conn: unknown, perch = true): ToolContext {
-  const tab = { id: "T1", url: async () => "https://github.com/login", evaluate: async () => null };
+/**
+ * A tab whose page has `inputs` fields (backend ids 61, 62, ...). `origin` is where the page is when
+ * a value is written: a different one means it navigated during Touch ID.
+ */
+function context(conn: unknown, perch = true, tabSent: Sent[] = [], page: { inputs?: number; origin?: string; onPut?: () => void } = {}): ToolContext {
+  const inputs = page.inputs ?? 2;
+  const tab = {
+    id: "T1",
+    url: async () => "https://github.com/login",
+    evaluate: async () => null,
+    send: async (method: string, params: Record<string, unknown> = {}) => {
+      tabSent.push({ method, params });
+      if (method === "Runtime.evaluate") return { result: { objectId: "DOC" } };
+      if (method === "Runtime.getProperties") {
+        return { result: Array.from({ length: inputs }, (_, i) => ({ name: String(i), value: { objectId: `EL${i}`, subtype: "node" } })) };
+      }
+      if (method === "DOM.describeNode") return { node: { backendNodeId: 61 + Number(String(params.objectId).slice(2)) } };
+      if (method === "Runtime.callFunctionOn" && params.objectId === "DOC") return { result: { objectId: "FOUND" } };
+      if (method === "Runtime.callFunctionOn") {
+        page.onPut?.();
+        const [, origin] = params.arguments as { value: string }[];
+        return { result: { value: origin!.value === (page.origin ?? "https://github.com") } };
+      }
+      throw new Error(`unexpected ${method}`);
+    },
+  };
   return {
     browser: { perch, conn } as never,
     tab: tab as never,
@@ -172,4 +199,108 @@ test("usernames are masked on the card", () => {
   expect(maskUsername("neel@example.com")).toBe("neel@…");
   expect(maskUsername("neelsat")).toBe("ne…");
   expect(maskUsername("ab")).toBe("…");
+});
+
+const OP_PASSWORD = "correct horse battery staple";
+
+function fakeManager(opts: { logins?: boolean; otp?: string | null; fail?: boolean } = {}) {
+  const calls: string[] = [];
+  const manager: PasswordManager = {
+    name: "1Password",
+    logins: async (url) => {
+      calls.push(`logins ${url}`);
+      if (opts.fail) throw new Error("1Password didn't allow Perch this time.");
+      return opts.logins === false ? [] : [{ id: "abcdefghijklmnopqrstuvwxyz", title: "GitHub", username: USERNAME, rank: 2 }];
+    },
+    credentials: async (id) => (calls.push(`credentials ${id}`), { username: USERNAME, password: OP_PASSWORD }),
+    otp: async (id) => (calls.push(`otp ${id}`), opts.otp === undefined ? "123456" : opts.otp),
+  };
+  return { manager, calls };
+}
+
+test("sign_in with no saved login asks first, then fills a 1Password login in the page", async () => {
+  const { conn } = fakeConn({ logins: false });
+  const tabSent: Sent[] = [];
+  const ctx = context(conn, true, tabSent);
+  const { manager, calls } = fakeManager();
+  ctx.passwordManager = async () => manager;
+  const approvals: ApprovalRequest[] = [];
+
+  // Declined: 1Password is never asked, so no Touch ID prompt shows.
+  expect(await callTool(ctx, policy("guard", approvals, false).opts, call("sign_in"))).not.toEqual({ content: "filled" });
+  expect(approvals[0]!.summary).toBe("Sign in to github.com with a login from 1Password");
+  expect(calls).toEqual([]);
+
+  const p = policy("guard", approvals);
+  expect(await callTool(ctx, p.opts, call("sign_in"))).toEqual({ content: "filled" });
+  expect(calls).toEqual(["logins https://github.com/login", "credentials abcdefghijklmnopqrstuvwxyz"]);
+  // The finder runs with no secrets; each value goes to its own field, bound to the page's origin.
+  const fills = tabSent.filter((s) => s.method === "Runtime.callFunctionOn");
+  expect(fills[0]!.params.arguments).toEqual([]);
+  expect(fills.slice(1).map((c) => [c.params.objectId, c.params.arguments])).toEqual([
+    ["EL0", [{ value: USERNAME }, { value: "https://github.com" }]],
+    ["EL1", [{ value: OP_PASSWORD }, { value: "https://github.com" }]],
+  ]);
+  // The filled fields are hidden from later snapshots.
+  expect([...rememberedSecrets(ctx.tab!)]).toEqual([secretKey(61), secretKey(62)]);
+  const all = JSON.stringify([...p.entries, approvals]);
+  expect(all).not.toContain(OP_PASSWORD);
+  expect(all).not.toContain("neel.satya");
+});
+
+test("1Password: no matching login says so, and a refusal hands the sign-in to the person", async () => {
+  const none = fakeManager({ logins: false });
+  const ctx = context(fakeConn({ logins: false }).conn);
+  ctx.passwordManager = async () => none.manager;
+  expect(await callTool(ctx, policy("skip", []).opts, call("sign_in"))).toEqual({ content: "no saved login" });
+
+  const refused = fakeManager({ fail: true });
+  const ctx2 = context(fakeConn({ logins: false }).conn);
+  ctx2.passwordManager = async () => refused.manager;
+  expect(await callTool(ctx2, policy("skip", []).opts, call("sign_in"))).toEqual({ content: "needs you" });
+
+  const off = context(fakeConn({ logins: false }).conn);
+  off.passwordManager = async () => null;
+  expect(await callTool(off, policy("skip", []).opts, call("sign_in"))).toEqual({ content: "no saved login" });
+});
+
+test("a page that navigated during Touch ID gets nothing, and its fields were masked before any write", async () => {
+  const { manager } = fakeManager();
+  let maskedBeforeWrite = false;
+  const ctx: ToolContext = context(fakeConn({ logins: false }).conn, true, [], {
+    origin: "https://evil.example",
+    onPut: () => void (maskedBeforeWrite = rememberedSecrets(ctx.tab!).has(secretKey(61))),
+  });
+  ctx.passwordManager = async () => manager;
+  expect(await callTool(ctx, policy("skip", []).opts, call("sign_in"))).toEqual({ content: "needs you" });
+  expect(maskedBeforeWrite).toBe(true);
+});
+
+test("a Perch login wins over 1Password, which is then never asked", async () => {
+  const { manager, calls } = fakeManager();
+  const ctx = context(fakeConn().conn);
+  ctx.passwordManager = async () => manager;
+  expect(await callTool(ctx, policy("skip", []).opts, call("sign_in"))).toEqual({ content: "filled" });
+  expect(calls).toEqual([]);
+});
+
+test("fill_code falls back to the 1Password item's one-time code", async () => {
+  const tabSent: Sent[] = [];
+  const ctx = context(fakeConn({ code: "no-code" }).conn, true, tabSent, { inputs: 1 });
+  const { manager } = fakeManager();
+  ctx.passwordManager = async () => manager;
+  expect(await callTool(ctx, policy("skip", []).opts, call("fill_code"))).toEqual({ content: "filled" });
+  const writes = tabSent.filter((s) => s.method === "Runtime.callFunctionOn" && s.params.objectId !== "DOC");
+  expect(writes.map((w) => (w.params.arguments as { value: string }[])[0]!.value)).toEqual(["123456"]);
+
+  // A row of six one-digit boxes takes a digit each.
+  const boxes: Sent[] = [];
+  const six = context(fakeConn({ code: "no-code" }).conn, true, boxes, { inputs: 6 });
+  six.passwordManager = async () => manager;
+  expect(await callTool(six, policy("skip", []).opts, call("fill_code"))).toEqual({ content: "filled" });
+  expect(boxes.filter((s) => s.method === "Runtime.callFunctionOn" && s.params.objectId !== "DOC").map((w) => (w.params.arguments as { value: string }[])[0]!.value)).toEqual(["1", "2", "3", "4", "5", "6"]);
+
+  const without = context(fakeConn({ code: "no-code" }).conn);
+  without.passwordManager = async () => fakeManager({ otp: null }).manager;
+  expect(await callTool(without, policy("skip", []).opts, call("fill_code"))).toEqual({ content: "no saved code" });
 });

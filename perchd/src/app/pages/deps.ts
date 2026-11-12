@@ -16,6 +16,7 @@ import type { ModelRegistry } from "../../models/registry";
 import type { PolicyError, PolicyView } from "../../policy/policy";
 import type { PerchData } from "../../routines/service";
 import type { SecretStore } from "../../secure/keychain";
+import type { OpRun } from "../../secure/onepassword";
 import type { SkillStore } from "../../skills/store";
 import type { ChatStore } from "../chats";
 import type { RunManager } from "../runs";
@@ -54,12 +55,16 @@ export type PagesDeps = {
   /** Memory and routines, opened in the background at startup. */
   data: () => Promise<PerchData>;
   importer: {
+    /** Files picked in the browser's open panel (a passwords CSV), by id. */
+    files?: { resolve(id: string): { readonly path: string; readonly name: string } };
     home: string;
     target: Target;
     keychain: ImportKeychain;
     running?: CdpConnection;
     browser?: ImportInput["browser"];
   };
+  /** Runs 1Password's `op`; null when it isn't installed. Left out where perchd runs without Perch. */
+  onePassword?: { run: OpRun | null };
   /** Sync over the browser's data (Settings › Sync); left out where perchd runs without Perch. */
   sync?: BrowserSync;
   now?: () => Date;

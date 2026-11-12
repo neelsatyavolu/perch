@@ -5,7 +5,6 @@ import { errorText, useAction, useAnnounce, useApi, useLoad } from "../../ui/fra
 import { Dialog } from "../../ui/Dialog";
 import { Icon, Plus, Trash2 } from "../../ui/icons";
 import { Group, Row } from "../../ui/Row";
-import { Segmented } from "../../ui/Segmented";
 import { Switch } from "../../ui/Switch";
 
 type Origin = "folder" | "url" | "git";
@@ -14,7 +13,8 @@ const ORIGIN_WORDS: Readonly<Record<Skill["origin"], string>> = { "built-in": "B
 
 function AddSkillDialog({ open, onClose, onAdded }: { readonly open: boolean; readonly onClose: () => void; readonly onAdded: (s: Skill) => void }) {
   const api = useApi();
-  const [origin, setOrigin] = useState<Origin>("folder");
+  // Perch adds skills from a folder only; a link or git repository needs downloading first.
+  const origin: Origin = "folder";
   const [location, setLocation] = useState("");
   const [error, setError] = useState<string | null>(null);
   const close = () => {
@@ -36,7 +36,6 @@ function AddSkillDialog({ open, onClose, onAdded }: { readonly open: boolean; re
   return (
     <Dialog open={open} title="Add a skill" onClose={close} footer={<><button type="button" class="btn" onClick={close}>Cancel</button><button type="button" class="btn primary" onClick={save}>Add skill</button></>}>
       <p class="note">Skills use the SKILL.md format, so the same folder works in Claude Code and Codex.</p>
-      <Segmented<Origin> label="Where the skill is" value={origin} onChange={setOrigin} options={[{ value: "folder", label: "Folder" }, { value: "url", label: "Link" }, { value: "git", label: "Git repository" }]} />
       <label class="label">
         <span>{origin === "folder" ? "Folder" : origin === "url" ? "Link" : "Repository"}</span>
         <input class="field mono" spellcheck={false} placeholder={PLACEHOLDER[origin]} value={location} aria-invalid={error ? "true" : undefined} onInput={(e) => setLocation((e.currentTarget as HTMLInputElement).value)} />
@@ -65,7 +64,7 @@ export function SkillsCard() {
   return (
     <Group label="Skills" id="skills-list">
       <div class="card">
-        <Row title="Built-in site skills" detail={`Mail, calendar, docs, GitHub, Slack and more. ${builtIn.filter((s) => s.enabled).length} of ${builtIn.length} on`}>
+        <Row title="Built-in site skills" detail={`Gmail, Google Docs, GitHub, YouTube and more. ${builtIn.filter((s) => s.enabled).length} of ${builtIn.length} on`}>
           <button type="button" class="btn" aria-expanded={showBuiltIn ? "true" : "false"} onClick={() => setShowBuiltIn((x) => !x)}>
             {showBuiltIn ? "Hide list" : "Show list"}
           </button>
@@ -83,7 +82,7 @@ export function SkillsCard() {
             <Switch label={`Use the ${s.name} skill`} checked={s.enabled} onChange={(v) => toggle(s, v)} />
           </Row>
         ))}
-        <button type="button" class="more-row" onClick={() => setAdding(true)}><Icon of={Plus} />Add a skill from a folder, link or git repository</button>
+        <button type="button" class="more-row" onClick={() => setAdding(true)}><Icon of={Plus} />Add a skill from a folder</button>
       </div>
       <AddSkillDialog open={adding} onClose={() => setAdding(false)} onAdded={(s) => {
         setAdding(false);

@@ -1,9 +1,11 @@
+import { Fragment } from "preact";
 import type preact from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { OnboardingStep, Provider } from "../../api";
 import { ACCENTS, ACCENT_NAMES, THEMES, THEME_NAMES } from "../../theme/tokens";
 import { errorText, useAction, useApi, useAppearance, useLoad } from "../../ui/frame";
 import { PerchMark } from "../../ui/PerchMark";
+import { PasteCode } from "../../ui/PasteCode";
 import { ProviderMark } from "../../ui/ProviderMark";
 import { ImportWizard } from "../import/ImportWizard";
 import { RestoreForm } from "../settings/Backup";
@@ -11,6 +13,7 @@ import { Swatches } from "../../ui/Swatches";
 import { createSound, type Sound } from "./sound";
 import "./welcome.css";
 
+const RESTORE_CHECK_MS = 3000;
 const ORDER: readonly OnboardingStep[] = ["appearance", "models", "import", "memory"];
 
 function Look() {
@@ -33,22 +36,37 @@ function Models() {
   const api = useApi();
   const act = useAction();
   const providers = useLoad((a) => a.listProviders());
+  // Claude's sign-in page shows a code to paste back here.
+  const [awaiting, setAwaiting] = useState<Provider["id"] | null>(null);
   const list = (providers.data ?? []).filter((p) => p.kind === "subscription");
   const replace = (p: Provider) => providers.set((providers.data ?? []).map((x) => (x.id === p.id ? p : x)));
   return (
     <div class="card">
       {list.map((p) => (
-        <div class="srow" key={p.id} id={`prov-${p.id}`}>
+        <Fragment key={p.id}>
+        <div class="srow" id={`prov-${p.id}`}>
           <ProviderMark id={p.id} />
           <div><div class="n">{p.name}</div><div class="d">{p.detail}</div></div>
           <div class="ctl">
             {p.state === "connected" ? (
               <span class="status ok"><span class="dotc" />Connected{p.account ? ` · ${p.account}` : ""}</span>
             ) : (
-              <button type="button" class="btn" aria-label={`Sign in to ${p.name}`} onClick={async () => { const r = await act(() => api.signIn(p.id)); if (r) replace(r); }}>Sign in</button>
+              <button type="button" class="btn" aria-label={`Sign in to ${p.name}`} onClick={async () => {
+                const r = await act(() => api.signIn(p.id));
+                if (!r) return;
+                if (r.awaitingCode) setAwaiting(p.id);
+                else replace(r);
+              }}>Sign in</button>
             )}
           </div>
         </div>
+        {awaiting === p.id && (
+          <PasteCode provider={p} onCancel={() => setAwaiting(null)} onDone={(r) => {
+            setAwaiting(null);
+            replace(r);
+          }} />
+        )}
+        </Fragment>
       ))}
       <p class="empty">API keys and models on this Mac are in Settings, under Models.</p>
     </div>
@@ -57,7 +75,7 @@ function Models() {
 
 const COPY: Readonly<Record<OnboardingStep, { title: string; lead: string }>> = {
   appearance: { title: "Pick a look", lead: "Five themes and five accents. The pages you visit keep their own colours." },
-  models: { title: "Connect a model", lead: "Perch's agent uses your own subscription. Claude runs through Claude Code on this Mac, which keeps its own sign-in." },
+  models: { title: "Connect a model", lead: "Perch's agent runs on your own Claude, ChatGPT or Grok plan, so there's nothing new to pay for. Sign in to one now, or later in Settings." },
   import: { title: "Bring everything over", lead: "Windows and tabs, bookmarks, history, passwords, extensions, and the cookies that keep you signed in. Each window comes over as its own window, with its tabs asleep until you click them." },
   memory: { title: "Set up your memory", lead: "Perch can learn about you from sources you pick, so you explain less. You review every fact before it's saved, and it stays on this Mac, encrypted." },
 };
@@ -169,7 +187,13 @@ function useRestoreView() {
   const [asked] = useState(() => window.location.hash === "#restore");
   const [done, setDone] = useState(false);
   const security = useLoad((a) => a.getSecurity());
-  const loading = !asked && !security.data && !security.error;
+  // A browser that never answers shouldn't leave a blank window: after a few seconds, show setup.
+  const [waited, setWaited] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setWaited(true), RESTORE_CHECK_MS);
+    return () => clearTimeout(timer);
+  }, []);
+  const loading = !asked && !waited && !security.data && !security.error;
   const show = !done && (asked || Boolean(security.data?.needsRestore));
   const finish = () => {
     setDone(true);
@@ -201,7 +225,8 @@ function Setup() {
 
   const finish = async (page: "newtab" | "memory" = "newtab") => {
     sound.play("done");
-    await act(() => api.finishOnboarding());
+    // If saving fails, stay here (the error shows) rather than leave and see setup again next launch.
+    if (!(await act(() => api.finishOnboarding().then(() => true)))) return;
     await act(() => api.openPage(page, page === "memory" ? "setup" : undefined));
   };
   const advance = async (completed: boolean) => {

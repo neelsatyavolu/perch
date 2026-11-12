@@ -29,6 +29,13 @@ describe("Import wizard", () => {
     expect(r.getByText("Passwords")).toBeTruthy();
   });
 
+  test("the browser listed first, the one used most recently, starts picked", async () => {
+    const r = renderWithApi(<ImportWizard />);
+    const radios = await r.findAllByRole("radio");
+    await waitFor(() => expect((radios[0] as HTMLInputElement).checked).toBe(true));
+    expect((r.getByRole("button", { name: "Continue" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
   test("the hash preselects a browser; Aside extras are listed separately", async () => {
     window.location.hash = "#aside";
     const r = renderWithApi(<ImportWizard />);
@@ -43,7 +50,7 @@ describe("Import wizard", () => {
     const r = renderWithApi(<ImportWizard />);
     await r.findByRole("group", { name: "What to bring from Safari" });
     fireEvent.click(r.getByRole("button", { name: "Continue" }));
-    expect(await r.findByText(/Safari keeps open tabs, history and cookies where only apps with Full Disk Access can read them/)).toBeTruthy();
+    expect(await r.findByText(/Safari keeps its data where only apps with Full Disk Access can read it/)).toBeTruthy();
     fireEvent.click(r.getByRole("button", { name: "Open System Settings" }));
     await waitFor(() => expect(r.nav.some((n) => n.what === "system-settings")).toBe(true));
   });

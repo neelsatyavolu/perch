@@ -81,7 +81,7 @@ describe("Skills and MCP", () => {
     const r = at("#skills");
     fireEvent.click(await r.findByRole("button", { name: "Show list" }));
     expect(await r.findByRole("switch", { name: "Use the Gmail skill" })).toBeTruthy();
-    fireEvent.click(r.getByRole("button", { name: "Add a skill from a folder, link or git repository" }));
+    fireEvent.click(r.getByRole("button", { name: "Add a skill from a folder" }));
     const dlg = await r.findByRole("dialog", { name: "Add a skill" });
     fireEvent.input(within(dlg).getByLabelText("Folder"), { target: { value: "skills/pdf" } });
     fireEvent.click(within(dlg).getByRole("button", { name: "Add skill" }));
@@ -144,7 +144,7 @@ describe("Settings under a company policy", () => {
     const r = renderWithApi(<Settings />, { policy });
     const learn = (await r.findByRole("switch", { name: "Learn from chats" })) as HTMLButtonElement;
     await waitFor(() => expect(learn.disabled).toBe(true));
-    expect(r.getAllByText("Managed by your organization").length).toBe(3);
+    expect(r.getAllByText("Managed by your organization").length).toBe(2);
     cleanup();
     window.location.hash = "#about";
     const about = renderWithApi(<Settings />, { policy });
@@ -211,8 +211,9 @@ describe("Memory, Routines, Import and About", () => {
 
   test("memory switches and the delete-all confirmation", async () => {
     const r = at("#memory");
-    fireEvent.click(await r.findByRole("switch", { name: "Learn from browsing history" }));
-    await waitFor(async () => expect((await r.api.getMemorySettings()).historyExtraction).toBe(true));
+    // Learning from browsing history isn't offered until Perch can do it.
+    fireEvent.click(await r.findByRole("switch", { name: "Learn from chats" }));
+    expect(r.queryByRole("switch", { name: "Learn from browsing history" })).toBeNull();
     fireEvent.click(r.getByRole("button", { name: "Delete all" }));
     fireEvent.click(within(await r.findByRole("dialog", { name: "Delete all memory?" })).getByRole("button", { name: "Delete all memory" }));
     await waitFor(async () => expect(await r.api.listMemoryPages()).toEqual([]));

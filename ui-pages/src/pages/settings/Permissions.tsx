@@ -10,6 +10,7 @@ import { Icon, Plus, Trash2 } from "../../ui/icons";
 import { Group, Row } from "../../ui/Row";
 import { focusSibling, nextIndex } from "../../ui/roving";
 import { AuditLog } from "./AuditLog";
+import { OnePasswordGroup } from "./OnePassword";
 
 const ORDER: readonly PermissionMode[] = ["ask", "guard", "skip"];
 const RULE_KINDS = Object.keys(SITE_RULES) as SiteRuleKind[];
@@ -130,6 +131,8 @@ export function Permissions() {
         </p>
         {locked("client-rules") && !p.maxMode && <p class="note">{MANAGED_NOTE}</p>}
       </Group>
+
+      <OnePasswordGroup />
 
       <AuditLog />
     </div>

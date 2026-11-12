@@ -10,6 +10,23 @@ export function profileLine(browser: string, profiles: readonly { readonly name:
   return name.trim().toLowerCase() === browser.trim().toLowerCase() ? "1 profile" : name;
 }
 
+/** "Used today", "Used yesterday", "Used 3 days ago", "Used in March". */
+export function lastUsedLine(at: number, now = Date.now()): string {
+  const day = 24 * 60 * 60 * 1000;
+  const days = Math.floor((startOfDay(now) - startOfDay(at)) / day);
+  if (days <= 0) return "Used today";
+  if (days === 1) return "Used yesterday";
+  if (days < 30) return `Used ${days} days ago`;
+  const d = new Date(at);
+  const month = d.toLocaleString("en-US", { month: "long" });
+  return new Date(now).getFullYear() === d.getFullYear() ? `Used in ${month}` : `Used in ${month} ${d.getFullYear()}`;
+}
+
+function startOfDay(t: number): number {
+  const d = new Date(t);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+
 export function BrowserStep({ browsers, browser, profile, onBrowser, onProfile }: {
   readonly browsers: readonly DetectedBrowser[];
   readonly browser: DetectedBrowser | null;
@@ -27,7 +44,7 @@ export function BrowserStep({ browsers, browser, profile, onBrowser, onProfile }
             <span class="tile" aria-hidden="true">{b.name.charAt(0)}</span>
             <span class="pick-t">
               <span class="ink">{b.name}</span>
-              <span class="cap">{profileLine(b.name, b.profiles)}</span>
+              <span class="cap">{profileLine(b.name, b.profiles)}{b.lastUsed ? ` · ${lastUsedLine(b.lastUsed)}` : ""}</span>
             </span>
           </label>
         ))}
@@ -73,11 +90,13 @@ export function DataStep({ browser, kinds, onToggle }: {
 const NEED_TEXT = (need: ImportNeed, browser: string): string => {
   switch (need) {
     case "full-disk-access":
-      return `${browser} keeps open tabs, history and cookies where only apps with Full Disk Access can read them. Turn it on for Perch in System Settings, then come back.`;
+      return `${browser} keeps its data where only apps with Full Disk Access can read it. Turn it on for Perch in System Settings, then come back.`;
     case "keychain":
       return `macOS asks to unlock ${browser}'s Keychain item. Choose Allow to let Perch read it once.`;
     case "csv-export":
-      return "Safari doesn't share passwords with other apps. In the Passwords app choose File, then Export All Passwords, then choose that file here. Delete the file after the import; it isn't encrypted.";
+      return browser === "Safari"
+        ? "Safari doesn't share passwords with other apps. In the Passwords app choose File, then Export All Passwords, then choose that file here. Delete the file after the import; it isn't encrypted."
+        : `${browser} keeps passwords encrypted with its own key. In ${browser}, open about:logins, choose the ••• menu, then Export Passwords, then choose that file here. Delete the file after the import; it isn't encrypted.`;
     case "primary-password":
       return `If ${browser} has a primary password, Perch asks you to type it.`;
   }

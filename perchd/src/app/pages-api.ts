@@ -8,6 +8,7 @@
 import { API_METHODS } from "../../../ui-pages/src/api";
 import type { PagesDeps } from "./pages/deps";
 import { importPages } from "./pages/import";
+import { onePasswordPages } from "./pages/onepassword";
 import { mcpPages } from "./pages/mcp";
 import { memoryPages } from "./pages/memory";
 import { modelsPages } from "./pages/models";
@@ -47,7 +48,7 @@ const ARITY: Partial<Record<PerchdMethod, number>> = {
   setMemorySettings: 1, readMemoryPage: 1, writeMemoryPage: 2, deleteMemoryPage: 1, listDreamLogs: 1,
   startProfileBuild: 2, saveProfileDraft: 1,
   saveRoutine: 1, setRoutineEnabled: 2, deleteRoutine: 1, runRoutine: 1, acceptProposal: 1, dismissProposal: 1,
-  startImport: 1, getJob: 1, completeOnboardingStep: 1,
+  startImport: 1, getJob: 1, completeOnboardingStep: 1, setOnePassword: 1,
   checkSyncPairing: 1, removeSyncDevice: 1,
 };
 
@@ -68,6 +69,7 @@ export function createPagesApi(deps: PagesDeps): PagesApi {
     ...profileMethods,
     ...routinesPages(deps),
     ...importPages(deps),
+    ...onePasswordPages(deps),
     ...syncPages(deps),
     getJob: async ([id]) => deps.jobs.get(v.text(id, "id", 100)),
   } satisfies Methods<PerchdMethod>;

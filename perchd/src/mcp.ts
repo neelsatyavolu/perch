@@ -8,6 +8,7 @@
  */
 
 import { mkdtempSync } from "node:fs";
+import { PERCH_VERSION } from "./version";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { homeAuditLog } from "./agent/audit-home";
@@ -18,7 +19,7 @@ import { newToolContext, TOOL_SPECS, type ToolContext } from "./agent/tools";
 import { Browser } from "./browser/browser";
 
 const PROTOCOL = "2025-06-18";
-const SERVER = { name: "perch", version: "0.1.0" };
+const SERVER = { name: "perch", version: PERCH_VERSION };
 
 type Request = { jsonrpc: "2.0"; id?: number | string; method: string; params?: any };
 
@@ -114,7 +115,7 @@ function budgetFrom(value: string | undefined): Budget | undefined {
   return value !== undefined && Number.isFinite(seconds) && seconds > 0 ? { maxMs: seconds * 1000 } : undefined;
 }
 
-async function main(argv: string[]): Promise<void> {
+export async function main(argv: string[]): Promise<void> {
   const audit = homeAuditLog({ path: arg(argv, "--audit") });
   const server = createServer({
     profileDir: arg(argv, "--profile") ?? mkdtempSync(join(tmpdir(), "perch-mcp-")),

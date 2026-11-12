@@ -103,6 +103,13 @@ const commands: Record<string, Command> = {
     const { runMcp } = await import("./mcp-proxy");
     return runMcp(argv, io);
   },
+  // Not in the help: Perch's MCP server on a private browser, for `perch exec` when Perch isn't
+  // running. The compiled binary has no src/mcp.ts on disk to run, so it runs it from here.
+  async "mcp-private"(argv) {
+    const { main } = await import("../mcp");
+    await main(argv);
+    return 0;
+  },
   async skill(argv, io) {
     const { skillCommand } = await import("./install/index");
     return skillCommand(argv, io);

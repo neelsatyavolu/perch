@@ -21,6 +21,8 @@ export type PagesSettings = {
   /** The model and effort a task asked from the new tab page starts with; unset follows the first model. */
   readonly chatModel?: string;
   readonly chatEffort?: ChatEffort;
+  /** The 1Password account the agent may sign in with; unset while 1Password is off. */
+  readonly onePasswordAccount?: string;
 };
 
 export const DEFAULT_PAGES_SETTINGS: PagesSettings = {

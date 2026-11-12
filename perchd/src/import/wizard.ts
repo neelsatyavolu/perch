@@ -31,6 +31,7 @@ export type SourceSummary = {
   readonly name: string;
   readonly family: string;
   readonly access: Source["access"];
+  readonly lastUsed?: number;
   readonly profiles: readonly { readonly id: string; readonly name: string; readonly lastImported?: number }[];
   readonly types: readonly DataType[];
   /** Said before importing: which types will make macOS ask for Keychain access or need Full Disk Access. */
@@ -69,6 +70,7 @@ export function listSources(home: string, userDataDir?: string): SourceSummary[]
       name: s.browser.name,
       family: s.browser.family,
       access: s.access,
+      ...(s.lastUsed ? { lastUsed: s.lastUsed } : {}),
       profiles: s.profiles.map((p) => ({ id: p.id, name: p.name, ...(log[`${s.browser.key}/${p.id}`] ? { lastImported: log[`${s.browser.key}/${p.id}`] } : {}) })),
       types: reader.types,
       needs: { keychain: reader.needsKeychain, fullDiskAccess: reader.needsFullDiskAccess },

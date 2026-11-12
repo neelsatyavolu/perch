@@ -14,6 +14,8 @@ export type Source = {
   readonly profiles: readonly Profile[];
   /** "full-disk-access": the folder exists but macOS blocks reading it until Perch is allowed. */
   readonly access: "ok" | "full-disk-access";
+  /** When any of its profiles was last browsed in (Unix ms), from its history file; unset when unknown. */
+  readonly lastUsed?: number;
 };
 
 export function appSupport(home: string): string {
@@ -29,7 +31,9 @@ export function browserRoot(home: string, browser: BrowserInfo): string {
 export function detectSources(home: string, browsers: readonly BrowserInfo[] = BROWSERS): Source[] {
   return browsers.flatMap((browser) => {
     const source = detectOne(home, browser);
-    return source && (source.profiles.length > 0 || source.access !== "ok") ? [source] : [];
+    if (!source || (source.profiles.length === 0 && source.access === "ok")) return [];
+    const lastUsed = lastUsedOf(source);
+    return [lastUsed ? { ...source, lastUsed } : source];
   });
 }
 
@@ -45,6 +49,30 @@ function detectOne(home: string, browser: BrowserInfo): Source | undefined {
       return { browser, profiles: asideAccounts(root), access: "ok" };
     case "safari":
       return safariSource(root, browser);
+  }
+}
+
+/** The file each family writes as you browse; its modification time says when the browser was last used. */
+const HISTORY_FILE: Readonly<Record<BrowserInfo["family"], string>> = {
+  chromium: "History",
+  firefox: "places.sqlite",
+  safari: "History.db",
+  aside: "",
+};
+
+function lastUsedOf(source: Source): number | undefined {
+  const file = HISTORY_FILE[source.browser.family];
+  if (!file) return undefined;
+  // A browser that's open writes to the database's -wal file first.
+  const times = source.profiles.flatMap((p) => [mtime(join(p.path, file)), mtime(join(p.path, `${file}-wal`))]).filter((t): t is number => t !== undefined);
+  return times.length ? Math.max(...times) : undefined;
+}
+
+function mtime(path: string): number | undefined {
+  try {
+    return statSync(path).mtimeMs;
+  } catch {
+    return undefined;
   }
 }
 

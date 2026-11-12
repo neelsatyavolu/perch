@@ -54,22 +54,13 @@ describe("Routines page", () => {
     await waitFor(async () => expect((await r.api.listRoutines()).find((x) => x.id === "rt1")?.schedule).toEqual({ kind: "interval", hours: 6 }));
   });
 
-  test("a routine can run when something happens; a site trigger needs a valid site", async () => {
+  test("a new routine isn't offered an event trigger, which Perch can't run yet", async () => {
     const r = renderWithApi(<RoutinesPage />);
     expect(await r.findByText("When mail arrives matching “invoice”")).toBeTruthy();
     fireEvent.click(r.getByRole("button", { name: "New routine" }));
     const dlg = await r.findByRole("dialog", { name: "New routine" });
-    fireEvent.input(within(dlg).getByLabelText("Name"), { target: { value: "Review requests" } });
-    fireEvent.input(within(dlg).getByLabelText("What Perch should do"), { target: { value: "List pull requests waiting on my review" } });
-    fireEvent.click(within(dlg).getByRole("radio", { name: "When something happens" }));
-    fireEvent.change(within(dlg).getByLabelText("What starts it"), { target: { value: "site-opened" } });
-    fireEvent.click(within(dlg).getByRole("button", { name: "Save routine" }));
-    expect(await within(dlg).findByText("Enter a site, like github.com")).toBeTruthy();
-    fireEvent.input(within(dlg).getByLabelText("Site"), { target: { value: "github.com/pulls" } });
-    fireEvent.click(within(dlg).getByRole("button", { name: "Save routine" }));
-    expect(await r.findByText("When you open github.com/pulls")).toBeTruthy();
-    const saved = (await r.api.listRoutines()).find((x) => x.title === "Review requests")!;
-    expect(saved.schedule).toEqual({ kind: "trigger", event: "site-opened", match: "github.com/pulls" });
+    expect(within(dlg).queryByRole("radio", { name: "When something happens" })).toBeNull();
+    expect(within(dlg).getByRole("radio", { name: "Every few hours" })).toBeTruthy();
   });
 
   test("editing a trigger routine changes its trigger", async () => {

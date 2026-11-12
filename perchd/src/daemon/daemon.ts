@@ -4,6 +4,7 @@
  */
 
 import type { SidebarExtras } from "../app/sidebar-extras";
+import { PERCH_VERSION } from "../version";
 import { needsApproval } from "../agent/permissions";
 import { DECLINED } from "../agent/session";
 import type { ToolCall } from "../models/types";
@@ -27,7 +28,7 @@ import type { SkillCatalog } from "../skills/catalog";
 import { startServer, type Connection, type Handler, type ServerOptions, type SidebarRun } from "./server";
 import { cdpTabGroups, SessionManager, type AgentSession, type TabGroups } from "./sessions";
 
-export const VERSION = "0.1.0";
+export const VERSION = PERCH_VERSION;
 export const PERCH_APP = "/Applications/Perch.app";
 export const PERCH_BUNDLE_ID = "co.xanom.perch";
 

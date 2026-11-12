@@ -1,6 +1,6 @@
 /** Runs the model's tool calls against the browser. Errors come back as text; nothing throws. */
 
-import { FILL_TOOLS, runFillTool, type FillSites } from "./fill-tools";
+import { FILL_TOOLS, runFillTool, type FillSites, type PasswordManager } from "./fill-tools";
 import { existsSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, join } from "node:path";
@@ -34,6 +34,8 @@ export type ToolContext = {
   workDir: string;
   /** Sites where the user let the agent sign in (fill-tools.ts); a shared default when unset. */
   fillSites?: FillSites;
+  /** Where sign_in and fill_code look when Perch has nothing saved (1Password); the app's choice when unset. */
+  passwordManager?: () => Promise<PasswordManager | null>;
   close(): Promise<void>;
 };
 

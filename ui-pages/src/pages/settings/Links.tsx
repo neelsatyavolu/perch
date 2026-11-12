@@ -32,9 +32,6 @@ export function MemorySection() {
           <Row id="memory-extraction" title="Learn from chats" detail={locked("memory-extraction") ? MANAGED_NOTE : "After each chat, your Fast model saves lasting facts to memory"}>
             <Switch label="Learn from chats" describedBy="memory-extraction-d" checked={s.extraction} disabled={locked("memory-extraction")} onChange={(extraction) => patch({ extraction })} />
           </Row>
-          <Row id="history-extraction" title="Learn from browsing history" detail={locked("history-extraction") ? MANAGED_NOTE : "Notes which sites you use for what. Runs on this Mac on a schedule."}>
-            <Switch label="Learn from browsing history" describedBy="history-extraction-d" checked={s.historyExtraction} disabled={locked("history-extraction")} onChange={(historyExtraction) => patch({ historyExtraction })} />
-          </Row>
           <Row id="dreaming" title="Tidy memory overnight" detail={locked("dreaming") ? MANAGED_NOTE : s.lastDream ? `Merges duplicates and moves old facts to history. Last ran ${inlineTime(s.lastDream)}.` : "Merges duplicates and moves old facts to history"}>
             <Switch label="Tidy memory overnight" describedBy="dreaming-d" checked={s.dreaming} disabled={locked("dreaming")} onChange={(dreaming) => patch({ dreaming })} />
           </Row>

@@ -35,6 +35,8 @@ import type { Model } from "../../models/types";
 import { openPerchData, type PerchData } from "../../routines/service";
 import type { MemoryApi } from "../../memory/api";
 import { MacKeychain, type SecretStore } from "../../secure/keychain";
+import { findOp, OnePassword, opRunner } from "../../secure/onepassword";
+import { setPasswordManager } from "../../agent/fill-tools";
 import { SkillStore } from "../../skills/store";
 import { startBrowserSync } from "../../sync/browser-sync";
 import type { PagesCore, Windows } from "../app";
@@ -162,6 +164,20 @@ export function openPageServices(opts: PageServicesOptions): PageServices {
   const domain = new PerchDomain(opts.conn);
   // Bookmarks, history and open tabs sync every 15 minutes while sync is on (plan 3b task 14).
   const browserSync = startBrowserSync({ domain, dataDir: base, ...(opts.policy ? { policy: opts.policy } : {}) });
+  const pagesState = new PagesState(base, opts.vault);
+  // Looked up on each use, so installing 1Password's CLI works without restarting Perch.
+  const opRun = () => {
+    const path = findOp(opts.env);
+    return path ? opRunner(path, opts.env) : null;
+  };
+  // sign_in and fill_code in every chat use the 1Password account picked in Settings, if any.
+  setPasswordManager(async () => {
+    const account = (await pagesState.get()).onePasswordAccount;
+    const run = account ? opRun() : null;
+    if (!account || !run) return null;
+    const op = new OnePassword(run, account);
+    return { name: "1Password", logins: (url) => op.logins(url), credentials: (id) => op.credentials(id), otp: (id) => op.otp(id) };
+  });
 
   return {
     sidebarAudit: opts.audit.path,
@@ -194,7 +210,7 @@ export function openPageServices(opts: PageServicesOptions): PageServices {
         setDefaults: core.setDefaults,
         chatInfo: core.info,
         jobs: new Jobs(core.emit),
-        state: new PagesState(base, opts.vault),
+        state: pagesState,
         models: { registry: models, keychain: settingsKeychain, openUrl },
         mcp: { store: mcpStore, keychain: secrets, manager, findImports: () => findImports({ home, env: opts.env }) },
         skills: { store: new SkillStore(join(base, "skills"), secrets), home },
@@ -203,8 +219,13 @@ export function openPageServices(opts: PageServicesOptions): PageServices {
         ...(opts.policy ? { policy: opts.policy } : {}),
         ...(opts.policyProblems ? { policyProblems: opts.policyProblems } : {}),
         data: () => data.catch((error: Error) => Promise.reject(new AppError(`Perch couldn't open memory and routines: ${error.message}`, 503))),
-        importer: { home, target: { userDataDir: opts.userDataDir }, keychain: opts.secrets?.importer ?? importKeychain(), running: opts.conn, browser: domain },
+        importer: { files: core.files, home, target: { userDataDir: opts.userDataDir }, keychain: opts.secrets?.importer ?? importKeychain(), running: opts.conn, browser: domain },
         sync: browserSync.sync,
+        onePassword: {
+          get run() {
+            return opRun();
+          },
+        },
       }),
     async stop() {
       browserSync.stop();

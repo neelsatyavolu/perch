@@ -5,7 +5,7 @@
  */
 
 import type {
-  AboutInfo, Appearance, BuiltInExtension, ChatSummary, CommandBarResult, DetectedBrowser, DraftFact, FileChoice, FileKind, JobId, JobProgress, McpImportCandidate, McpServer,
+  AboutInfo, Appearance, BuiltInExtension, ChatSummary, CommandBarResult, DetectedBrowser, DraftFact, FileChoice, FileKind, JobId, JobProgress, McpImportCandidate, OnePasswordSettings, McpServer,
   MemoryDoc, MemorySaverSettings, SyncStatus, MemorySettings, NtpLayout, Onboarding, PerchApi, PermissionMode, Permissions, PolicyProblem, PrivacySettings, Provider, Routine, RoutineInput,
   RoutineProposal, SecurityInfo, SiteData, SleepRule, Skill, SystemAccess, TaskModel, Composer } from "../api";
 import { DEFAULT_APPEARANCE } from "../theme/apply";
@@ -43,6 +43,7 @@ type State = {
   routines: readonly Routine[];
   proposals: readonly RoutineProposal[];
   browsers: readonly DetectedBrowser[];
+  onePassword: OnePasswordSettings;
   onboarding: Onboarding;
   about: AboutInfo;
   files: readonly (FileChoice & { readonly kind: FileKind })[];
@@ -174,6 +175,7 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     routines: seed.ROUTINES,
     proposals: seed.PROPOSALS,
     browsers: seed.BROWSERS,
+    onePassword: { installed: true, accounts: [{ id: "FAKEUSER0000000000000001", email: "you@example.com", url: "my.1password.com" }], account: null },
     onboarding: options.onboarding ?? { finished: false, done: [] },
     about: seed.ABOUT,
     files: [],
@@ -748,6 +750,15 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
           return o.count !== undefined ? countOf(o.count, noun) : IMPORT_KINDS[o.kind].label;
         });
       });
+    },
+
+    async getOnePassword() {
+      return state.onePassword;
+    },
+    async setOnePassword(account) {
+      if (account !== null && !state.onePassword.accounts.some((a) => a.id === account)) throw new Error("That account isn't in the 1Password app");
+      state.onePassword = { ...state.onePassword, account };
+      return state.onePassword;
     },
 
     async getJob(id) {

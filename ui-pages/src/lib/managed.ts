@@ -11,7 +11,7 @@ export const MANAGED_NOTE = "Managed by your organization";
 /** Settings anchors (sections.ts SEARCH_INDEX) a policy can lock. */
 export type RowId =
   | "permission-mode" | "client-rules" | "providers"
-  | "memory-extraction" | "history-extraction" | "dreaming"
+  | "memory-extraction" | "dreaming"
   | "import-browsers" | "built-in-backrow" | "memory-saver" | "auto-update" | "sync";
 
 type Values = PolicyState["values"];
@@ -21,7 +21,6 @@ const RULES: readonly [RowId, (v: Values) => boolean][] = [
   ["client-rules", (v) => v.MaxPermissionMode !== undefined || v.MCPServerEnabled === false || v.AllowedMCPClients !== undefined],
   ["providers", (v) => v.AllowedModelProviders !== undefined || v.AllowedModels !== undefined || v.ModelEndpoints !== undefined],
   ["memory-extraction", (v) => v.MemoryEnabled === false],
-  ["history-extraction", (v) => v.MemoryEnabled === false || v.HistoryExtractionEnabled === false],
   ["dreaming", (v) => v.MemoryEnabled === false],
   ["import-browsers", (v) => v.ImportEnabled !== undefined],
   ["built-in-backrow", (v) => (v.BuiltInExtensions as { backrow?: unknown } | undefined)?.backrow !== undefined],

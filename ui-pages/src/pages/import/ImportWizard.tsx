@@ -37,6 +37,8 @@ export function ImportWizard({ onFinished, embedded = false, onSkip, onBack }: P
   const [jobId, setJobId] = useState<JobId | null>(null);
   const progress = useJob(jobId);
   const heading = useRef<HTMLHeadingElement>(null);
+  // Set once the person picks a browser, so the automatic pick below never overrides theirs.
+  const picked = useRef(false);
 
   const choose = (b: DetectedBrowser) => {
     setBrowser(b);
@@ -45,14 +47,16 @@ export function ImportWizard({ onFinished, embedded = false, onSkip, onBack }: P
     setCsv(null);
   };
 
+  // perch://import#chrome opens on that browser's data step; otherwise the one used most recently
+  // (the list comes in that order) starts picked.
   useEffect(() => {
-    if (embedded) return;
-    const id = window.location.hash.slice(1);
-    const found = browsers.data?.find((b) => b.id === id);
+    const list = browsers.data;
+    if (!list?.length) return;
+    const found = embedded ? undefined : list.find((b) => b.id === window.location.hash.slice(1));
     if (found) {
       choose(found);
       setStep("data");
-    }
+    } else if (!picked.current) choose(list[0]!);
   }, [browsers.data]);
 
   const go = (s: Step) => {
@@ -65,7 +69,9 @@ export function ImportWizard({ onFinished, embedded = false, onSkip, onBack }: P
   const start = async () => {
     if (!browser) return;
     setJobId(null);
-    const id = await act(() => api.startImport({ browser: browser.id, profile, kinds, passwordsCsv: csv?.id }));
+    // The chosen file goes only with Passwords still ticked; unticking it on the way back drops it.
+    const passwordsCsv = needs.includes("csv-export") ? csv?.id : undefined;
+    const id = await act(() => api.startImport({ browser: browser.id, profile, kinds, ...(passwordsCsv ? { passwordsCsv } : {}) }));
     if (id) {
       setJobId(id);
       go("run");
@@ -116,7 +122,7 @@ export function ImportWizard({ onFinished, embedded = false, onSkip, onBack }: P
         <section class="panel imp-body">
           {browsers.error && <p class="err-note">{browsers.error}</p>}
           {step === "browser" && browsers.data && (
-            <BrowserStep browsers={browsers.data} browser={browser} profile={profile} onBrowser={choose} onProfile={setProfile} />
+            <BrowserStep browsers={browsers.data} browser={browser} profile={profile} onBrowser={(b) => { picked.current = true; choose(b); }} onProfile={setProfile} />
           )}
           {step === "data" && browser && (
             <>

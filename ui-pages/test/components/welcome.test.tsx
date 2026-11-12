@@ -40,6 +40,17 @@ describe("Welcome", () => {
     expect(r.nav.at(-1)).toEqual({ what: "page", detail: { page: "newtab", section: undefined } });
   });
 
+  test("Claude's sign-in finishes with the pasted code, right in the welcome step", async () => {
+    const r = renderWithApi(<Welcome />);
+    fireEvent.click(await r.findByRole("button", { name: "Set up Perch" }));
+    fireEvent.click(await r.findByRole("button", { name: "Continue" }));
+    fireEvent.click(await r.findByRole("button", { name: "Sign in to Claude" }));
+    const field = await r.findByLabelText("Paste the code Claude shows after you approve");
+    fireEvent.input(field, { target: { value: "abc#def" } });
+    fireEvent.submit(field.closest("form")!);
+    await waitFor(async () => expect((await r.api.listProviders()).find((p) => p.id === "claude")?.state).toBe("connected"));
+  });
+
   test("the import step can be skipped", async () => {
     const r = renderWithApi(<Welcome />);
     fireEvent.click(await r.findByRole("button", { name: "Set up Perch" }));

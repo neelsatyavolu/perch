@@ -77,6 +77,8 @@ export function claudeBinary(): string {
 }
 
 const MCP_ENTRY = join(import.meta.dir, "mcp.ts");
+/** In the compiled perch binary, src/mcp.ts lives inside the binary, not on disk. */
+const COMPILED = import.meta.dir.includes("$bunfs") || !/\/bun$/.test(process.execPath);
 
 export type RunOptions = {
   task: string;
@@ -106,7 +108,8 @@ export type McpServer = { command: string; args: string[]; env: Record<string, s
 function mcpServer(opts: RunOptions, client: string, work: string): McpServer {
   if (opts.mcp) return opts.mcp;
   const mode = opts.mode ?? "guard";
-  const args = ["run", MCP_ENTRY, "--mode", mode, "--client", client, "--audit", opts.auditPath, "--profile", join(work, "profile")];
+  const entry = COMPILED ? ["mcp-private"] : ["run", MCP_ENTRY];
+  const args = [...entry, "--mode", mode, "--client", client, "--audit", opts.auditPath, "--profile", join(work, "profile")];
   return { command: process.execPath, args: [...args, ...serverArgs(opts)], env: {} };
 }
 

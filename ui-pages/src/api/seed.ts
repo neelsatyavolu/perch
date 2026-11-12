@@ -223,7 +223,7 @@ export const PROPOSALS: readonly RoutineProposal[] = [
 
 export const BROWSERS: readonly DetectedBrowser[] = [
   {
-    id: "aside", name: "Aside", profiles: [{ id: "0", name: "Personal" }],
+    id: "aside", name: "Aside", profiles: [{ id: "0", name: "Personal" }], lastUsed: Date.now() - 2 * 60 * 60 * 1000,
     options: [
       { kind: "tabs", available: true, count: 23 }, { kind: "bookmarks", available: true, count: 412 },
       { kind: "history", available: true }, { kind: "passwords", available: true, needs: "keychain" },
@@ -233,7 +233,7 @@ export const BROWSERS: readonly DetectedBrowser[] = [
     ],
   },
   {
-    id: "chrome", name: "Chrome", profiles: [{ id: "Default", name: "Neel" }, { id: "Profile 1", name: "School" }],
+    id: "chrome", name: "Chrome", profiles: [{ id: "Default", name: "Neel" }, { id: "Profile 1", name: "School" }], lastUsed: Date.now() - 6 * 24 * 60 * 60 * 1000,
     options: [
       { kind: "tabs", available: true, count: 41 }, { kind: "bookmarks", available: true, count: 1290 },
       { kind: "history", available: true }, { kind: "passwords", available: true, needs: "keychain" },

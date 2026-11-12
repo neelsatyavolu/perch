@@ -12,8 +12,7 @@ test("an unmanaged policy locks nothing", () => {
 test.each<[string, Record<string, unknown>, RowId[]]>([
   ["MaxPermissionMode", { MaxPermissionMode: "guard" }, ["client-rules", "permission-mode"]],
   ["AgentEnabled", { AgentEnabled: false }, ["permission-mode"]],
-  ["MemoryEnabled", { MemoryEnabled: false }, ["dreaming", "history-extraction", "memory-extraction"]],
-  ["HistoryExtractionEnabled", { HistoryExtractionEnabled: false }, ["history-extraction"]],
+  ["MemoryEnabled", { MemoryEnabled: false }, ["dreaming", "memory-extraction"]],
   ["MCPServerEnabled", { MCPServerEnabled: false }, ["client-rules"]],
   ["AllowedMCPClients", { AllowedMCPClients: ["codex"] }, ["client-rules"]],
   ["AllowedModelProviders", { AllowedModelProviders: ["anthropic"] }, ["providers"]],

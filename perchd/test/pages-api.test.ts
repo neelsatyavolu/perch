@@ -5,7 +5,7 @@
 
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { bundledModels } from "@neelsatyavolu/shared-ai-auth";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { API_METHODS, type JobProgress, type PerchApi } from "../../ui-pages/src/api";
@@ -33,7 +33,7 @@ import { MemoryKeychain } from "../src/secure/keychain";
 import { SkillCatalog } from "../src/skills/catalog";
 import { SkillStore } from "../src/skills/store";
 import { fakeServer, json, type FakeServer } from "./fixtures/fake-providers";
-import { pendingBundles } from "../src/import/bundle";
+import { bundleDir, pendingBundles } from "../src/import/bundle";
 import { asideAgent, chromeProfile, FAKE_SAFE_STORAGE, HISTORY_SCHEMA, sqlite } from "./import/fixtures";
 
 const TOKEN = "page-token-0123456789abcdef0123456789abcdef";
@@ -122,6 +122,16 @@ function write(path: string, text: string): void {
   writeFileSync(path, text);
 }
 
+const OP_ACCOUNT = "E3OXZANXQRDOBNXQMPXZ6YBHTY";
+const opCalls: (readonly string[])[] = [];
+let opRefuses = false;
+const fakeOp = async (args: readonly string[]) => {
+  opCalls.push(args);
+  if (args[0] === "account") return { code: 0, stdout: JSON.stringify([{ url: "my.1password.com", email: "grace@example.com", user_uuid: OP_ACCOUNT }]), stderr: "" };
+  if (opRefuses) return { code: 1, stdout: "", stderr: "[ERROR] authorization prompt dismissed" };
+  return { code: 0, stdout: "[]", stderr: "" };
+};
+
 beforeAll(async () => {
   dir = mkdtempSync(join(tmpdir(), "perch-pages-"));
   const home = join(dir, "home");
@@ -199,7 +209,8 @@ beforeAll(async () => {
         clients,
         audit: new AuditLog(audit, { legacy: [join(dir, "missing.jsonl")] }),
         data: async () => data,
-        importer: { home, target: { userDataDir: userData }, keychain: importKeychain({ "Chrome Safe Storage": FAKE_SAFE_STORAGE }) },
+        importer: { files: core.files, home, target: { userDataDir: userData }, keychain: importKeychain({ "Chrome Safe Storage": FAKE_SAFE_STORAGE }) },
+        onePassword: { run: fakeOp },
       }),
   });
   ws = new WebSocket(`${app.server.url.replace("http", "ws")}/ws`, ["perch-app", `token.${TOKEN}`]);
@@ -589,7 +600,7 @@ test("import: browsers found, progress as job events, then the suggestion goes a
   expect((await raw("getSystemAccess", [1])).status).toBe(400);
 
   expect((await fails(api.startImport({ browser: "chrome", profile: "Nobody", kinds: ["bookmarks"] }))).message).toBe("That browser profile wasn't found");
-  expect((await fails(api.startImport({ browser: "chrome", profile: "Default", kinds: ["passwords"], passwordsCsv: "file-1" }))).status).toBe(501);
+  expect((await fails(api.startImport({ browser: "chrome", profile: "Default", kinds: ["passwords"], passwordsCsv: "file-1" }))).message).toBe("A passwords file goes with Safari or Firefox passwords only");
   expect((await fails(api.startImport({ browser: "netscape" as never, profile: "Default", kinds: ["bookmarks"] }))).status).toBe(400);
 
   const id = await api.startImport({ browser: "chrome", profile: "Default", kinds: ["bookmarks", "history"] });
@@ -602,6 +613,76 @@ test("import: browsers found, progress as job events, then the suggestion goes a
   expect(await api.getJob("job-unknown")).toBeNull();
   expect((await fails(api.getJob(42 as never))).status).toBe(400);
   expect((await api.listSuggestions()).map((s) => s.id)).toEqual([]);
+});
+
+test("import: the browser used most recently comes first, Comet and Atlas included", async () => {
+  const home = join(dir, "home");
+  chromeProfile(home, "Comet");
+  const history = join(home, "Library", "Application Support", "Comet", "Default", "History");
+  const later = new Date(Date.now() + 60_000);
+  utimesSync(history, later, later);
+  const browsers = await api.detectBrowsers();
+  expect(browsers[0]).toMatchObject({ id: "comet", name: "Comet" });
+  expect(browsers[0]!.lastUsed).toBeGreaterThan(browsers.find((b) => b.id === "chrome")!.lastUsed!);
+  // An open browser writes to History-wal first; that counts too.
+  const wal = join(home, "Library", "Application Support", "Google", "Chrome", "Default", "History-wal");
+  writeFileSync(wal, "");
+  const latest = new Date(Date.now() + 120_000);
+  utimesSync(wal, latest, latest);
+  expect((await api.detectBrowsers())[0]!.id).toBe("chrome");
+  rmSync(wal);
+  rmSync(join(home, "Library", "Application Support", "Comet"), { recursive: true, force: true });
+});
+
+test("import: Safari's passwords come from the CSV the person exported", async () => {
+  const home = join(dir, "home");
+  mkdirSync(join(home, "Library", "Safari"), { recursive: true });
+  const safari = (await api.detectBrowsers()).find((b) => b.id === "safari")!;
+  expect(safari.options.find((o) => o.kind === "passwords")).toEqual({ kind: "passwords", available: true, needs: "csv-export" });
+
+  expect((await fails(api.startImport({ browser: "safari", profile: "", kinds: ["passwords"] }))).message).toBe("Choose the passwords file you exported");
+  expect((await fails(api.startImport({ browser: "safari", profile: "", kinds: ["passwords"], passwordsCsv: crypto.randomUUID() }))).status).toBe(404);
+
+  const csvPath = join(dir, "Passwords.csv");
+  writeFileSync(csvPath, "Title,URL,Username,Password,Notes,OTPAuth\nExample,https://example.com/,grace,hunter2,,\nNews,https://news.example.com/,ada,lovelace,,\n");
+  const registered = await fetch(`${app.server.url}/api/files`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${BROWSER_TOKEN}`, "content-type": "application/json" },
+    body: JSON.stringify({ paths: [csvPath] }),
+  }).then((r) => r.json() as Promise<{ files: { id: string }[] }>);
+  const id = await api.startImport({ browser: "safari", profile: "", kinds: ["passwords"], passwordsCsv: registered.files[0]!.id });
+  expect((await untilDone(id)).at(-1)).toMatchObject({ state: "done", summary: ["2 passwords"] });
+
+  // Without Full Disk Access, Safari's history fails with the reason, and the passwords still come in.
+  const safariDir = join(home, "Library", "Safari");
+  chmodSync(safariDir, 0o000);
+  try {
+    const locked = await untilDone(await api.startImport({ browser: "safari", profile: "", kinds: ["history", "passwords"], passwordsCsv: registered.files[0]!.id }));
+    const summary = locked.at(-1)!.summary!;
+    expect(summary[0]).toStartWith("History entries: Safari's files are protected by macOS.");
+    expect(summary[1]).toBe("2 passwords");
+  } finally {
+    chmodSync(safariDir, 0o755);
+  }
+  // Without a running browser the passwords wait in a bundle; the next test expects none.
+  expect(pendingBundles(join(dir, "user-data")).length).toBeGreaterThan(0);
+  rmSync(bundleDir(join(dir, "user-data")), { recursive: true, force: true });
+  rmSync(join(home, "Library", "Safari"), { recursive: true, force: true });
+});
+
+test("1Password: pick an account, which 1Password checks right away, then turn it off", async () => {
+  expect(await api.getOnePassword()).toEqual({ installed: true, accounts: [{ id: OP_ACCOUNT, email: "grace@example.com", url: "my.1password.com" }], account: null });
+  expect((await fails(api.setOnePassword("SOMEONEELSE"))).message).toBe("That account isn't in the 1Password app");
+  opCalls.length = 0;
+  opRefuses = true;
+  expect((await fails(api.setOnePassword(OP_ACCOUNT))).message).toBe("1Password didn't allow Perch this time.");
+  expect((await api.getOnePassword()).account).toBeNull();
+  opRefuses = false;
+  expect((await api.setOnePassword(OP_ACCOUNT)).account).toBe(OP_ACCOUNT);
+  expect(opCalls).toContainEqual(["vault", "list", "--account", OP_ACCOUNT, "--format", "json"]);
+  expect((await api.getOnePassword()).account).toBe(OP_ACCOUNT);
+  expect((await api.setOnePassword(null)).account).toBeNull();
+  expect((await raw("setOnePassword", [42])).status).toBe(400);
 });
 
 test("import: Aside's memory, skills and chats go into Perch's own stores, once", async () => {

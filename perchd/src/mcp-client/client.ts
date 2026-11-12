@@ -1,10 +1,11 @@
 /** One connection to an MCP server: initialize, list tools (all pages), call tools. */
 
 import { RpcSession, type RequestOptions, type Transport } from "./jsonrpc";
+import { PERCH_VERSION } from "../version";
 
 export const PROTOCOL_VERSION = "2025-06-18";
 const SUPPORTED = new Set(["2025-06-18", "2025-03-26", "2024-11-05"]);
-const CLIENT_INFO = { name: "perch", title: "Perch", version: "0.1.0" };
+const CLIENT_INFO = { name: "perch", title: "Perch", version: PERCH_VERSION };
 const MAX_PAGES = 20;
 const MAX_TOOLS = 500;
 

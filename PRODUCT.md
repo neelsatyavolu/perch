@@ -16,7 +16,7 @@ Perch is a fast, private, open-source browser for macOS, built on Chromium so ev
 Chromium-native (tabs, toolbar and menus are Chromium's own code, not a web-page shell) plus an agent that runs on the user's own ChatGPT, Claude or Grok account, with no Perch account, no paid plan and no model of its own. MIT licensed end to end, including the sync server, which a user can self-host and which only ever stores ciphertext.
 
 ## Operating Context
-A Mac on Apple silicon, macOS 13 or later. The beta is distributed as a signed, notarized DMG (Perch-0.1.2.dmg, 197 MB) on a GitHub pre-release (v0.1.2-beta) of the public repo neelsatyavolu/perch. The site is static HTML served by a Cloudflare Worker (site/), deployed with `bunx wrangler deploy`.
+A Mac on Apple silicon, macOS 13 or later. The beta is distributed as a signed, notarized DMG (Perch-0.1.3.dmg, 197 MB) on a GitHub pre-release (v0.1.3-beta) of the public repo neelsatyavolu/perch. The site is static HTML served by a Cloudflare Worker (site/), deployed with `bunx wrangler deploy`.
 
 ## Capabilities and Constraints
 Built and working in the beta (confirmed in the repo): side chat per tab with an agent that reads and acts on pages; approval cards; permission modes (Ask, Guard default, Skip confirmation) and site rules; audit log; models via ChatGPT/Codex sign-in, Claude Code, Grok, API keys and local OpenAI-compatible servers; built-in ad and tracker blocker; sleeping tabs (memory saver); Spaces; split view; command bar; import from other browsers and Aside; `perch` CLI and MCP server; optional end-to-end encrypted sync; five themes and five accents; frosted Perch menus.

@@ -148,8 +148,6 @@ export type AppEvent =
   | { type: "run.finished"; chatId: string; runId: string; message: ChatMessage }
   | { type: "artifact.saved"; chatId: string; artifact: ArtifactMeta }
   | { type: "window.active"; state: WindowState }
-  /** The live thumbnail of the tab a running chat drives: a JPEG in base64; null when the run ends. */
-  | { type: "run.frame"; chatId: string; tabId: string | null; data: string | null }
   /** For Perch's own pages (ui-pages): `job:<id>` carries a job's progress; `appearance` the theme. */
   | { type: "pages.event"; event: string; data: unknown };
 

@@ -7,25 +7,74 @@ import type { ArtifactMeta, ChatMessage } from "../api/types";
 import { Icon } from "./icon";
 import { Markdown } from "./markdown";
 
-export function Steps({ steps, open: initial = false }: { steps: string[]; open?: boolean }) {
+/** A step as saved; chats from before step details have plain labels. */
+type StepLike = string | { label: string; detail?: string; output?: string };
+type StepItem = { label: string; detail?: string; output?: string };
+const asStep = (s: StepLike): StepItem => (typeof s === "string" ? { label: s } : s);
+
+/** One step: its label, and when it ran code or a query, a box with that and what came back. */
+function StepRow({ step, current }: { step: StepItem; current?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const more = Boolean(step.detail || step.output);
+  const cls = current ? "step current" : "step";
+  if (!more) return <li class={cls}><span class="step-l">{step.label}</span></li>;
+  return (
+    <li class={cls}>
+      <button type="button" class="step-l more" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <span>{step.label}</span>
+        <Icon name="down" size={12} />
+      </button>
+      {open && (
+        <div class="step-box">
+          {step.detail && <pre class="step-in">{step.detail}</pre>}
+          {step.output && <pre class="step-out">{step.output}</pre>}
+        </div>
+      )}
+    </li>
+  );
+}
+
+export function StepList({ steps, live = false }: { steps: StepItem[]; live?: boolean }) {
+  return (
+    <ul class={live ? "steplist now" : "steplist"}>
+      {steps.map((s, i) => (
+        <StepRow key={i} step={s} current={live && i === steps.length - 1} />
+      ))}
+    </ul>
+  );
+}
+
+/** A finished reply's steps, folded into "7 steps" until opened. */
+export function Steps({ steps: raw, open: initial = false }: { steps: StepLike[]; open?: boolean }) {
   const [open, setOpen] = useState(initial);
-  if (!steps.length) return null;
-  const summary = `${steps.length} ${steps.length === 1 ? "step" : "steps"} · ${steps.at(-1)}`;
+  if (!raw.length) return null;
+  const steps = raw.map(asStep);
   return (
     <div class="steps-wrap">
       <button type="button" class="steps" aria-expanded={open} onClick={() => setOpen(!open)}>
         <Icon name="right" size={14} />
-        <span>{summary}</span>
+        <span>{`${steps.length} ${steps.length === 1 ? "step" : "steps"}`}</span>
       </button>
-      {open && (
-        <ul class="steplist">
-          {steps.map((s, i) => (
-            <li key={i}>{s}</li>
-          ))}
-        </ul>
-      )}
+      {open && <StepList steps={steps} />}
     </div>
   );
+}
+
+const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/**
+ * `text` revealed a few characters a frame, so an answer that arrives in one piece reads as typed.
+ * Speeds up when far behind, so a long answer never takes more than about a second to catch up.
+ */
+export function useTyped(text: string, from: number | null): string {
+  const [n, setN] = useState(from === null || reducedMotion() ? text.length : from);
+  const shown = Math.min(n, text.length);
+  useEffect(() => {
+    if (shown >= text.length) return;
+    const id = requestAnimationFrame(() => setN((k) => Math.min(text.length, k + Math.max(2, Math.ceil((text.length - k) / 45)))));
+    return () => cancelAnimationFrame(id);
+  }, [text, shown]);
+  return text.slice(0, shown);
 }
 
 export function ArtifactCard({ meta, onOpen, selected }: { meta: ArtifactMeta; onOpen: (meta: ArtifactMeta) => void; selected?: boolean }) {
@@ -76,24 +125,16 @@ export function newDay(iso: string, prev?: string): boolean {
 
 type MessageProps = {
   message: ChatMessage;
+  /** For the reply that just finished: how much of its text was already on screen; the rest types out. */
+  typeFrom?: number;
   artifact: (id: string) => VNode | null;
   onBranch?: (message: ChatMessage) => void;
 };
 
 /** Memoized: a streamed token re-renders the thread, not every past reply's Markdown. */
-export const Message = memo(function Message({ message, artifact, onBranch }: MessageProps) {
+export const Message = memo(function Message({ message, artifact, onBranch, typeFrom }: MessageProps) {
   const [copied, setCopied] = useState(false);
-  if (message.role === "user") {
-    return (
-      <div class="me" data-id={message.id}>
-        {message.scheduled && <span class="me-sched">Sent on schedule</span>}
-        {message.text}
-        {message.attachments?.length ? (
-          <span class="me-files">{message.attachments.map((f) => <span class="chip file" key={f.id}><span class="chip-t">{f.name}</span></span>)}</span>
-        ) : null}
-      </div>
-    );
-  }
+  const typed = useTyped(message.role === "assistant" ? message.text : "", typeFrom ?? null);
   const copy = async () => {
     try {
       await navigator.clipboard?.writeText(message.text.replace(/\[\[artifact:[^\]]+\]\]\n?/g, ""));
@@ -103,10 +144,29 @@ export const Message = memo(function Message({ message, artifact, onBranch }: Me
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
+  const copyButton = (what: string) => (
+    <button type="button" class="ib" aria-label={copied ? "Copied" : `Copy ${what}`} title={copied ? "Copied" : "Copy"} onClick={() => void copy()}>
+      <Icon name={copied ? "check" : "copy"} size={14} />
+    </button>
+  );
+  if (message.role === "user") {
+    return (
+      <div class="me-row" data-id={message.id}>
+        <span class="me-actions">{copyButton("message")}</span>
+        <div class="me">
+          {message.scheduled && <span class="me-sched">Sent on schedule</span>}
+          {message.text}
+          {message.attachments?.length ? (
+            <span class="me-files">{message.attachments.map((f) => <span class="chip file" key={f.id}><span class="chip-t">{f.name}</span></span>)}</span>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
   return (
     <div class="reply" data-id={message.id}>
       <Steps steps={message.steps ?? []} />
-      {message.text && <Markdown text={message.text} renderArtifact={artifact} />}
+      {typed && <Markdown text={typed} renderArtifact={artifact} />}
       {message.stopped && <div class="note">Stopped</div>}
       {message.error && (
         <div class="note error" role="alert">
@@ -114,9 +174,7 @@ export const Message = memo(function Message({ message, artifact, onBranch }: Me
         </div>
       )}
       <div class="meta-row">
-        <button type="button" class="ib" aria-label={copied ? "Copied" : "Copy reply"} title={copied ? "Copied" : "Copy"} onClick={() => void copy()}>
-          <Icon name={copied ? "check" : "copy"} size={14} />
-        </button>
+        {copyButton("reply")}
         {onBranch && (
           <button type="button" class="ib" aria-label="Branch from here" title="Branch from here" onClick={() => onBranch(message)}>
             <Icon name="branch" size={14} />
@@ -128,6 +186,7 @@ export const Message = memo(function Message({ message, artifact, onBranch }: Me
   );
 });
 
+/** Steps shown while a run works; earlier ones fold behind "Show N earlier steps". */
 const LIVE_STEPS = 6;
 
 function elapsed(ms: number): string {
@@ -140,17 +199,18 @@ function elapsed(ms: number): string {
  * list with the current one marked. Older steps fold away once the list gets long. While an approval
  * waits, every step folds into one line so the card is what the eye lands on.
  */
-export function LiveRun({ text, steps, waiting, since }: { text: string; steps: string[]; waiting: boolean; since?: string }) {
+export function LiveRun({ text, steps: raw, waiting, since }: { text: string; steps: StepLike[]; waiting: boolean; since?: string }) {
   const start = useRef(since ? Date.parse(since) || Date.now() : Date.now());
   const [now, setNow] = useState(Date.now());
+  const [all, setAll] = useState(false);
   useEffect(() => {
     const tick = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(tick);
   }, []);
   // The first reply's `Title:` line names the chat; it isn't part of the answer.
-  const shownText = text.replace(/^\s*\**\s*title\s*:[^\n]*\n+/i, "");
-  const earlier = steps.slice(0, Math.max(0, steps.length - LIVE_STEPS));
-  const shown = steps.slice(earlier.length);
+  const typed = useTyped(text.replace(/^\s*\**\s*title\s*:[^\n]*\n+/i, ""), 0);
+  const steps = raw.map(asStep);
+  const hidden = all ? 0 : Math.max(0, steps.length - LIVE_STEPS);
   return (
     <div class="reply live">
       {/* While an approval card is up it is the only status. */}
@@ -160,16 +220,21 @@ export function LiveRun({ text, steps, waiting, since }: { text: string; steps: 
           <span>Working for {elapsed(now - start.current)}</span>
         </div>
       )}
-      {shownText && <Markdown text={shownText} />}
-      {waiting ? <Steps steps={steps} /> : <Steps steps={earlier} />}
-      {!waiting && shown.length > 0 && (
-        <ul class="steplist now">
-          {shown.map((s, i) => (
-            <li key={earlier.length + i} class={i === shown.length - 1 ? "current" : undefined}>
-              {s}
-            </li>
-          ))}
-        </ul>
+      {typed && <Markdown text={typed} />}
+      {waiting ? (
+        <Steps steps={steps} />
+      ) : (
+        steps.length > 0 && (
+          <div class="steps-wrap">
+            {hidden > 0 && (
+              <button type="button" class="steps" onClick={() => setAll(true)}>
+                <Icon name="right" size={14} />
+                <span>{`Show ${hidden} earlier ${hidden === 1 ? "step" : "steps"}`}</span>
+              </button>
+            )}
+            <StepList steps={steps.slice(hidden)} live />
+          </div>
+        )
       )}
     </div>
   );

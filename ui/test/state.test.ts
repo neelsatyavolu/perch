@@ -15,7 +15,7 @@ const chat: Chat = {
   scrollTop: 0,
 };
 const user: ChatMessage = { id: "u1", role: "user", text: "Hi", time: "2026-11-05T09:00:01Z" };
-const reply: ChatMessage = { id: "a1", role: "assistant", text: "Hello", time: "2026-11-05T09:00:02Z", steps: ["Opened x"] };
+const reply: ChatMessage = { id: "a1", role: "assistant", text: "Hello", time: "2026-11-05T09:00:02Z", steps: [{ label: "Opened x" }] };
 const card: ApprovalCard = { id: "p1", chatId: "c1", runId: "r1", title: "Click", site: "x", kind: "risky", confirm: "Send", danger: false };
 
 test("a run streams into the view and ends as a saved reply", () => {
@@ -28,7 +28,7 @@ test("a run streams into the view and ends as a saved reply", () => {
   v = applyToView(v, { type: "run.text", chatId: "c1", runId: "r1", delta: "lo" });
   v = applyToView(v, { type: "run.step", chatId: "c1", runId: "r1", label: "Opened x" });
   expect(before.run!.text).toBe("");
-  expect(v.run).toMatchObject({ text: "Hello", steps: ["Opened x"] });
+  expect(v.run).toMatchObject({ text: "Hello", steps: [{ label: "Opened x" }] });
   v = applyToView(v, { type: "run.approval", chatId: "c1", runId: "r1", card });
   expect(v.run!.approval).toEqual(card);
   v = applyToView(v, { type: "run.approval.resolved", chatId: "c1", runId: "r1", approvalId: "p1", approved: true });

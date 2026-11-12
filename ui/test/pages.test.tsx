@@ -1,10 +1,13 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import type { ArtifactMeta } from "../src/api/types";
 import { ArtifactPane } from "../src/components/artifact-pane";
 import { FullChat } from "../src/pages/full-chat";
 import { Sidebar } from "../src/pages/sidebar";
+import { reduceMotion } from "./setup";
+
+beforeAll(reduceMotion);
 import { fakeClient } from "./fake-client";
 
 const setWidth = (width: number) => (window as unknown as { happyDOM: { setWindowSize(s: { width: number; height: number }): void } }).happyDOM.setWindowSize({ width, height: 900 });

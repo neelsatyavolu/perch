@@ -11,6 +11,9 @@ import type { ChatEffort, ComposerModel } from "../api";
 import { Check, ChevronDown, ChevronRight, ExternalLink, Icon, Search } from "./icons";
 import { ProviderGlyph } from "./ProviderMark";
 
+/** A model's name without its maker: "Sonnet 5.5", not "Claude Sonnet 5.5". */
+export const modelName = (label: string): string => label.replace(/^Claude\s+/, "");
+
 type Row =
   | { readonly kind: "provider"; readonly provider: string }
   | { readonly kind: "back"; readonly provider: string }
@@ -142,7 +145,7 @@ export function ModelMenu({ models, selected, onPick, onSettings, children }: Pr
           <li key={row.model.id} {...props} aria-selected={chosen} data-kind="model">
             <span class="mm-l">
               {row.hint !== undefined && <ProviderGlyph provider={row.model.provider} />}
-              {row.model.label}
+              {modelName(row.model.label)}
               {row.hint && <span class="mm-hint">{row.hint}</span>}
             </span>
             {chosen && <Icon of={Check} size={14} />}

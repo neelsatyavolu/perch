@@ -33,7 +33,6 @@ const SIGN_IN_CHECK_MS = 60_000;
 const CATALOG_TTL_MS = 10 * 60_000;
 import { BrowserLink } from "../app/browser-link";
 import { PerchDomain } from "../browser/perch-domain";
-import type { Tab } from "../browser/tab";
 import { MacKeychain } from "../daemon/keychain";
 import { perchPaths } from "../daemon/paths";
 import { parseBrowserSettings as parseSettingsObject, readKeyChannel, type BrowserSettings } from "../secure/key-channel";
@@ -85,8 +84,7 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
   let ownLoop: OwnLoop = async function* () {
     yield { type: "error", message: "Perch is still starting. Try again in a moment." };
   };
-  let driving: (chatId: string) => Tab | null = () => null;
-  const link = new BrowserLink({ perch: new PerchDomain(conn), agentTabs: (chatId) => agentTabs(chatId), driving: (chatId) => driving(chatId), onError: io.stderr });
+  const link = new BrowserLink({ perch: new PerchDomain(conn), agentTabs: (chatId) => agentTabs(chatId), onError: io.stderr });
   const start = (env: Record<string, string | undefined>) =>
     startDaemon({
       paths: perchPaths(env),
@@ -188,7 +186,6 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
   };
   outside = { tasks: new Tasks(app), memory: services.memoryApi, skills: services.skills };
   agentTabs = (chatId) => runs.sessionsFor(chatId).flatMap((s) => daemon.manager.get(SIDEBAR_CLIENT, s)?.tabIds() ?? []);
-  driving = (chatId) => runs.sessionsFor(chatId).map((s) => daemon.manager.get(SIDEBAR_CLIENT, s)?.ctx?.tab ?? null).find((t) => t && !t.closed) ?? null;
   link.attach(app);
   io.stderr(`perchd ${process.pid}: connected to browser; app API on 127.0.0.1:${settings.port}; socket in ${home}\n`);
   await Promise.race([closed, conn.closed]);

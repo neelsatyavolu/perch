@@ -1,4 +1,4 @@
-import { afterEach, expect, mock, test } from "bun:test";
+import { afterEach, beforeAll, expect, mock, test } from "bun:test";
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import type { ApprovalCard as Card, ChatMessage, ChatSettings, ModelInfo } from "../src/api/types";
@@ -11,6 +11,9 @@ import { PerchDot } from "../src/components/icon";
 import { memo } from "../src/components/memo";
 import { dayLabel, LiveRun, Message, newDay, Steps } from "../src/components/message";
 import { providerPath } from "../src/components/provider-mark";
+import { reduceMotion } from "./setup";
+
+beforeAll(reduceMotion);
 import { resolveTheme } from "../src/theme/theme";
 
 let root: HTMLElement;
@@ -62,13 +65,13 @@ test("the perch dot breathes only while running, is still while waiting, and is 
 
 test("steps collapse into one line and open on click", () => {
   const el = mount(<Steps steps={["Opened mail.example", "Read the thread", 'Clicked button "Send"']} />);
-  expect(el.querySelector(".steps")!.textContent).toBe('3 steps · Clicked button "Send"');
+  expect(el.querySelector(".steps")!.textContent).toBe("3 steps");
   expect(el.querySelector(".steplist")).toBeNull();
   click(el.querySelector(".steps"));
   expect(el.querySelectorAll(".steplist li")).toHaveLength(3);
 });
 
-const reply: ChatMessage = { id: "a1", role: "assistant", text: "Done.\n[[artifact:x1]]", time: "2026-11-05T09:12:00Z", steps: ["Opened x"] };
+const reply: ChatMessage = { id: "a1", role: "assistant", text: "Done.\n[[artifact:x1]]", time: "2026-11-05T09:12:00Z", steps: [{ label: "Opened x" }] };
 
 test("a reply can be copied without artifact markers and branched", async () => {
   const writes: string[] = [];
@@ -159,7 +162,7 @@ test("mode, effort and model pickers change the chat's settings", () => {
   // The picker opens on the providers; a provider opens its models.
   expect([...el.querySelectorAll(".mm [role='option']")].map((o) => o.textContent)).toEqual(["ChatGPT", "Claude Code"]);
   click([...el.querySelectorAll(".mm [role='option']")].find((o) => o.textContent === "Claude Code")!);
-  click([...el.querySelectorAll('[role="option"]')].find((o) => o.textContent!.startsWith("Claude Opus 5.5"))!);
+  click([...el.querySelectorAll('[role="option"]')].find((o) => o.textContent!.startsWith("Opus 5.5"))!);
   // Opus has no "high" effort here, so the effort falls back to one it has.
   expect(calls.settings.at(-1)).toEqual({ model: "opus", effort: "medium" });
 });
@@ -171,7 +174,7 @@ test("the model picker searches across providers and works from the keyboard", (
   expect(document.activeElement).toBe(search);
   search.value = "opus";
   act(() => void search.dispatchEvent(new Event("input", { bubbles: true })));
-  expect([...el.querySelectorAll(".mm [role='option'] .opt-label")].map((o) => o.textContent)).toEqual(["Claude Opus 5.5"]);
+  expect([...el.querySelectorAll(".mm [role='option'] .opt-label")].map((o) => o.textContent)).toEqual(["Opus 5.5"]);
   act(() => void search.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
   expect(calls.settings.at(-1)).toEqual({ model: "opus", effort: "medium" });
   expect(el.querySelector(".mm")).toBeNull();
@@ -278,8 +281,8 @@ test("a working run shows its clock, what the agent said and its steps with the 
   root.remove();
   const waiting = mount(<LiveRun text="" steps={["a", "b", "c", "d", "e", "f", "g", "h"]} waiting />);
   expect(waiting.querySelector(".work")).toBeNull();
-  // While the approval card is up, all the steps fold into one line with the last step showing.
-  expect(waiting.querySelector(".steps")?.textContent).toBe("8 steps · h");
+  // While the approval card is up, all the steps fold into one line.
+  expect(waiting.querySelector(".steps")?.textContent).toBe("8 steps");
   expect(waiting.querySelectorAll(".steps").length).toBe(1);
   expect(waiting.querySelector(".steplist")).toBeNull();
   click(waiting.querySelector(".steps"));
@@ -335,4 +338,33 @@ test("the thread's day divider says Today, Yesterday or the date, with the time"
   expect(newDay(new Date(2026, 10, 11, 9).toISOString())).toBe(true);
   expect(newDay(new Date(2026, 10, 11, 9).toISOString(), new Date(2026, 10, 11, 1).toISOString())).toBe(false);
   expect(newDay(new Date(2026, 10, 11, 9).toISOString(), new Date(2026, 10, 10, 23).toISOString())).toBe(true);
+});
+
+test("a long live run folds its earlier steps behind one button, and a step with code opens to show it and its output", () => {
+  const steps = [...["a", "b", "c", "d", "e", "f", "g"].map((label) => ({ label })), { label: "Read each pen's reviews", detail: "const s = await snapshot(page)", output: "- title: Pens" }];
+  const el = mount(<LiveRun text="" steps={steps} waiting={false} />);
+  expect(el.querySelector(".steps")?.textContent).toBe("Show 2 earlier steps");
+  expect(el.querySelectorAll(".steplist.now li").length).toBe(6);
+  click(el.querySelector(".steps"));
+  expect(el.querySelectorAll(".steplist.now li").length).toBe(8);
+  expect(el.querySelector(".steps")).toBeNull();
+  const more = el.querySelector("li.current .step-l.more");
+  expect(more?.textContent).toBe("Read each pen's reviews");
+  expect(el.querySelector(".step-box")).toBeNull();
+  click(more);
+  expect(el.querySelector(".step-in")?.textContent).toBe("const s = await snapshot(page)");
+  expect(el.querySelector(".step-out")?.textContent).toBe("- title: Pens");
+});
+
+test("the user's message has a copy button beside it", () => {
+  const el = mount(<Message message={{ id: "u1", role: "user", text: "Find pens", time: "2026-11-05T09:00:00Z" }} artifact={() => null} />);
+  const row = el.querySelector(".me-row")!;
+  expect(row.firstElementChild?.classList.contains("me-actions")).toBe(true);
+  expect(row.querySelector('[aria-label="Copy message"]')).not.toBeNull();
+  expect(row.querySelector(".me")?.textContent).toBe("Find pens");
+});
+
+test("saved chats with plain-text steps still show them", () => {
+  const el = mount(<Steps steps={["Opened x"]} open />);
+  expect(el.querySelector(".steplist li")?.textContent).toBe("Opened x");
 });

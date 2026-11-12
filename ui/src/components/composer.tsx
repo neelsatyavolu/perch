@@ -11,7 +11,7 @@ import type { AttachedFile } from "../host/protocol";
 import { Icon } from "./icon";
 import { applyMention, keptMentions, matchTabs, mentionLabel, mentionQuery } from "./mentions";
 import { Menu, type Choice } from "./menu";
-import { EFFORT_LABEL, fitEffort, ModelMenu } from "./model-menu";
+import { EFFORT_LABEL, fitEffort, ModelMenu, modelName } from "./model-menu";
 import { ProviderMark } from "./provider-mark";
 
 /** What a message carries besides its text. */
@@ -41,8 +41,6 @@ type ComposerProps = {
   host?: PageHost;
   /** The open tabs, for `@`. */
   listTabs?: () => Promise<TabInfo[]>;
-  /** The live thumbnail of the tab the running task drives (a base64 JPEG). */
-  frame?: string | null;
 };
 
 function fileSize(bytes: number): string {
@@ -165,14 +163,13 @@ export function Composer(p: ComposerProps) {
   const canDictate = Boolean(p.host?.startDictation);
   const model = p.models.find((m) => m.id === p.settings.model);
   const effortChoices: Choice<Effort>[] = (model?.efforts ?? []).map((e) => ({ value: e, label: EFFORT_LABEL[e] }));
-  const modelLabel = model ? model.label : p.models.length ? "Pick a model" : "No model signed in";
+  const modelLabel = model ? modelName(model.label) : p.models.length ? "Pick a model" : "No model signed in";
   // The round button: stop while a task runs, the microphone while there is nothing to send, send
   // otherwise (with a small microphone beside it, to dictate after what is typed).
   const showMic = !p.running && canDictate && (dictating || !p.draft.trim());
 
   return (
     <div class="composer-block">
-      {p.running && p.frame && <img class="live-thumb" src={`data:image/jpeg;base64,${p.frame}`} alt="The tab the agent is working in, live" />}
       <div class="composer">
         {choices.length > 0 && (
           <ul class="menu start mentions" role="listbox" aria-label="Tabs to mention">

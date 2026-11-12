@@ -38,7 +38,6 @@ export function useChat(client: Client) {
       current.current = { chatId: next.chat?.id ?? null, draft, saved: draft };
       setDraftState(draft);
       setError(null);
-      setFrame(null);
       setView(next);
     },
     [saveDraft],
@@ -47,19 +46,12 @@ export function useChat(client: Client) {
   /** The chat shown now and its unsent draft, read at call time. */
   const unsent = useCallback(() => ({ chatId: current.current.chatId, draft: current.current.draft }), []);
 
-  /** The live thumbnail of the open chat's running task. */
-  const [frame, setFrame] = useState<string | null>(null);
   const onEvent = useCallback((event: AppEvent) => {
-    if (event.type === "run.frame") {
-      if (event.chatId === current.current.chatId) setFrame(event.data);
-      return;
-    }
     // The open chat was deleted elsewhere: show none, keep the unsent text, and save nothing to it.
     if (event.type === "chat.removed" && event.chatId === current.current.chatId) {
       const { draft, timer } = current.current;
       clearTimeout(timer);
       current.current = { chatId: null, draft, saved: draft };
-      setFrame(null);
       setView(emptyView);
       return;
     }
@@ -121,5 +113,5 @@ export function useChat(client: Client) {
 
   useEffect(() => () => void saveDraft(), [saveDraft]);
 
-  return { view, setView, show, unsent, onEvent, draft, setDraft, saveDraft, send, stop, decide, setSettings, error, setError, frame, run: guard };
+  return { view, setView, show, unsent, onEvent, draft, setDraft, saveDraft, send, stop, decide, setSettings, error, setError, run: guard };
 }

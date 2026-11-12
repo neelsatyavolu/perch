@@ -2,7 +2,7 @@ import { useState } from "preact/hooks";
 import type { ChatEffort, Composer as ComposerState, PermissionMode, Query, SearchEngine } from "../../api";
 import { useAction, useApi, useLoad } from "../../ui/frame";
 import { Icon, Search } from "../../ui/icons";
-import { EFFORT_NAMES, ModelMenu } from "../../ui/ModelMenu";
+import { EFFORT_NAMES, ModelMenu, modelName } from "../../ui/ModelMenu";
 import { ProviderGlyph } from "../../ui/ProviderMark";
 import { Segmented } from "../../ui/Segmented";
 
@@ -111,7 +111,7 @@ function Composer({ side, composer }: { readonly side: "mode" | "model"; readonl
     <span class="composer-model">
       <ModelMenu models={c.models} selected={c.model} onPick={(m) => void save({ model: m.id })} onSettings={openSettings}>
         {model && <ProviderGlyph provider={model.provider} size={12} />}
-        <span class="mm-t">{model?.label ?? "Pick a model"}</span>
+        <span class="mm-t">{model ? modelName(model.label) : "Pick a model"}</span>
       </ModelMenu>
       {efforts.length > 0 && (
         <select class="picker quiet" aria-label="Effort" value={c.effort} onChange={(e) => void save({ effort: e.currentTarget.value as ChatEffort })}>

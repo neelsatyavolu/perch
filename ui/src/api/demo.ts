@@ -5,7 +5,7 @@
  */
 
 import { ApiError, type ChatPayload, type Client } from "./client";
-import type { AppEvent, AppInfo, ApprovalCard, Chat, ChatMessage, ChatSettings, ChatSummary, RunSnapshot, TabInfo, WindowState } from "./types";
+import type { AppEvent, AppInfo, ApprovalCard, Chat, ChatMessage, ChatSettings, ChatSummary, RunSnapshot, Step, TabInfo, WindowState } from "./types";
 
 const DEFAULTS: ChatSettings = { mode: "guard", model: "claude-code:claude-opus-5-5", effort: "medium", scope: "current" };
 
@@ -26,12 +26,12 @@ const INFO: AppInfo = {
 const TAB_ID = "demo-tab";
 const CHAT_ID = "demo-chat";
 const RUN_ID = "demo-run";
-const STEPS = [
-  "Read the thread on mailroom.app",
-  "Opened calendar.mailroom.app",
-  "Found Thursday 3:00 to 4:00 free",
-  'Added "Planning review" on Thursday, 3:00 to 4:00',
-  'Typed the reply into textbox "Reply"',
+const STEPS: Step[] = [
+  { label: "Read the thread on mailroom.app" },
+  { label: "Opened calendar.mailroom.app" },
+  { label: "Find a free hour on Thursday", detail: "const s = await snapshot(page); log(s.tree.match(/Thu.*free/g))", output: '["Thu 3:00 PM–4:00 PM free"]' },
+  { label: 'Added "Planning review" on Thursday, 3:00 to 4:00' },
+  { label: 'Typed the reply into textbox "Reply"' },
 ];
 const CARD: ApprovalCard = {
   id: "demo-approval",
@@ -93,7 +93,7 @@ export function createDemoClient(windowId: string): Client {
   const newChat = (over: Partial<Chat> = {}): Chat =>
     put({ id: `demo-new-${++next}`, title: "New chat", createdAt: ago(0), updatedAt: ago(0), settings: DEFAULTS, messages: [], tab: null, draft: "", scrollTop: 0, ...over });
   /** Adds an assistant reply to a chat, ends its run and tells the page. */
-  const finish = (chatId: string, runId: string, text: string, steps: string[]) => {
+  const finish = (chatId: string, runId: string, text: string, steps: Step[]) => {
     const message: ChatMessage = { id: `demo-reply-${++next}`, role: "assistant", text, time: ago(0), ...(steps.length ? { steps } : {}) };
     const chat = put({ ...find(chatId), messages: [...find(chatId).messages, message], updatedAt: ago(0) });
     run = null;
@@ -159,7 +159,7 @@ export function createDemoClient(windowId: string): Client {
       run = { ...current, approval: null };
       later(0, () => emit({ type: "run.approval.resolved", chatId: current.chatId, runId: current.runId, approvalId, approved }));
       const reply = approved ? "Sent." : "I didn't send it. The reply is still in the draft.";
-      const steps = approved ? [...current.steps, 'Clicked button "Send"'] : current.steps;
+      const steps = approved ? [...current.steps, { label: 'Clicked button "Send"' }] : current.steps;
       later(STEP_MS, () => finish(current.chatId, current.runId, reply, steps));
       return { ok: true as const };
     }),

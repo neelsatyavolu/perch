@@ -86,7 +86,7 @@ describe("New tab page", () => {
     fireEvent.keyDown(search, { key: "Escape" });
     expect(options()[0]).toBe("Codex");
     fireEvent.input(search, { target: { value: "opus" } });
-    expect(options()).toEqual(["Claude Opus 5.5Claude", "Claude Opus 5.5Claude Code"]);
+    expect(options()).toEqual(["Opus 5.5Claude", "Opus 5.5Claude Code"]);
     fireEvent.keyDown(search, { key: "ArrowDown" });
     fireEvent.keyDown(search, { key: "Enter" });
     await waitFor(() => expect(queryByRole("dialog", { name: "Choose a model" })).toBeNull());
@@ -103,7 +103,7 @@ describe("New tab page", () => {
     const effort = (await findByRole("combobox", { name: "Effort" })) as HTMLSelectElement;
     expect([...effort.options].map((o) => o.text)).toEqual(["Low", "Medium", "High", "Extra high", "Max", "Ultra"]);
     fireEvent.click(getByRole("option", { name: "Claude" }));
-    fireEvent.click(getByRole("option", { name: /Claude Opus 5\.5/ }));
+    fireEvent.click(getByRole("option", { name: /^Opus 5\.5/ }));
     await waitFor(async () => expect((await api.getComposer()).effort).toBe("max"));
     await waitFor(() => expect([...(getByRole("combobox", { name: "Effort" }) as HTMLSelectElement).options].map((o) => o.text)).toEqual(["Low", "Medium", "High", "Extra high", "Max"]));
   });

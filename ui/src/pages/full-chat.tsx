@@ -230,7 +230,6 @@ export function FullChat({ client, initialChat = null, initialAsk = null, onNavi
           onSend={(text, extras) => chat.send(text, undefined, create, extras)}
           host={host}
           listTabs={() => client.tabs()}
-          frame={chat.frame}
           onStop={() => void chat.stop()}
           running={Boolean(view.run)}
           tab={null}

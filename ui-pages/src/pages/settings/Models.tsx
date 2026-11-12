@@ -8,6 +8,7 @@ import { Icon, Plus } from "../../ui/icons";
 import { Group, Row } from "../../ui/Row";
 import { ProviderMark } from "../../ui/ProviderMark";
 import { Switch } from "../../ui/Switch";
+import { modelName } from "../../ui/ModelMenu";
 import { ConnectDialog } from "./ConnectDialog";
 
 function ProviderStatus({ p }: { readonly p: Provider }) {
@@ -134,7 +135,7 @@ function TaskModels({ models }: { readonly models: readonly Model[] }) {
             <Row key={t.role} id={`role-${t.role}`} title={label} detail={ROLES[t.role].detail}>
               <select class="picker" aria-label={`${label} model`} value={t.modelId ?? ""} onChange={(e) => save(t.role, { modelId: (e.currentTarget as HTMLSelectElement).value })}>
                 {!options.some((m) => m.id === t.modelId) && <option value="">Choose a model</option>}
-                {options.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+                {options.map((m) => <option key={m.id} value={m.id}>{modelName(m.label)}</option>)}
               </select>
               {t.role !== "image" && (
                 <>

@@ -96,7 +96,12 @@ svg.pmark { flex: none; }
   /* The headers have no rule, so text scrolling under them fades out over 8px instead of being sliced. */
   -webkit-mask-image: linear-gradient(to bottom, transparent, #000 8px); mask-image: linear-gradient(to bottom, transparent, #000 8px); }
 .day { align-self: center; color: var(--mute); font-size: 12px; line-height: 16px; margin: 0; padding: 8px 0 0; font-variant-numeric: tabular-nums; }
-.me { align-self: flex-end; max-width: 80%; background: var(--fill); color: var(--ink); padding: 8px 12px; border-radius: var(--r-panel); line-height: 20px; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* The user's message, with its copy button on the left, shown on hover. */
+.me-row { align-self: flex-end; display: flex; align-items: center; gap: 4px; max-width: 85%; min-width: 0; }
+.me-actions { opacity: 0; transition: opacity var(--t-hover) var(--ease); }
+.me-actions .ib { width: 24px; height: 24px; }
+.me-row:hover .me-actions, .me-row:focus-within .me-actions { opacity: 1; }
+.me { min-width: 0; background: var(--fill); color: var(--ink); padding: 8px 12px; border-radius: var(--r-panel); line-height: 20px; white-space: pre-wrap; overflow-wrap: anywhere; }
 /* On the light and high-contrast canvases white fill alone barely shows: ring it like the approval card. */
 :root[data-theme="paper"] .me, :root[data-theme="contrast"] .me { box-shadow: inset 0 0 0 1px var(--hair); }
 .reply { color: var(--body); display: flex; flex-direction: column; gap: 12px; min-width: 0; }
@@ -117,6 +122,20 @@ svg.pmark { flex: none; }
 .work { display: flex; align-items: center; gap: 8px; color: var(--mute); font-size: 13px; font-variant-numeric: tabular-nums; }
 .steplist.now { margin: 0; padding: 0 0 0 14px; border-left: 1px solid var(--hair-strong); gap: 6px; }
 .steplist.now li.current { color: var(--ink); }
+.step-l { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; }
+.step-l span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.step-l.more { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-align: left; }
+.step-l.more:hover { color: var(--ink); }
+.step-l.more svg.i { flex: none; opacity: 0.7; transition: transform var(--t-hover) var(--ease); }
+.step-l.more[aria-expanded="true"] svg.i { transform: rotate(180deg); }
+/* A step's code and what came back, like a terminal. */
+.step-box { margin: 6px 0 2px; max-height: 240px; overflow: auto; background: var(--fill); border: 1px solid var(--hair); border-radius: var(--r-chip); font: 12px/18px var(--mono); }
+.step-box pre { margin: 0; padding: 8px 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.step-in { color: var(--ink); }
+.step-in::before { content: "> "; color: var(--mute); }
+.step-in + .step-out { border-top: 1px solid var(--hair); }
+.step-out { color: var(--mute); }
+.thread-pad { flex: none; height: 0; margin-top: -16px; }
 
 /* Markdown */
 .md { display: flex; flex-direction: column; gap: 12px; overflow-wrap: anywhere; }
@@ -216,9 +235,6 @@ button.artifact-card:hover { background: var(--fill-hover); }
 .chip.file { padding-left: 8px; padding-right: 2px; max-width: 220px; }
 .chip.file .ib.x { width: 20px; height: 20px; }
 .cnote { color: var(--mute); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-/* The live thumbnail: what the agent's tab shows now, small and quiet above the composer. */
-.live-thumb { display: block; width: 120px; max-height: 90px; object-fit: cover; object-position: top; margin: 0 12px 8px auto; border: 1px solid var(--hair); border-radius: var(--r-chip); background: var(--fill); }
-
 /* Sidebar */
 /* The side chat is one surface: header, thread and composer all on the card colour. */
 .side { height: 100%; display: flex; flex-direction: column; background: var(--card); min-height: 0; }

@@ -300,7 +300,7 @@ async function* runOwnLoop(opts: SidebarRunnerOptions, ownLoop: OwnLoop, input: 
   const extras = sidebarExtras(catalog, memory, input.files, input.incognito ? undefined : input.schedule);
   const session = input.chatId && !input.incognito ? `${CHAT_SESSION_PREFIX}${input.chatId}` : `sidebar-${randomBytes(12).toString("hex")}`;
   const mode = capMode(input.settings.mode, policy);
-  // Registered like a CLI agent's run, so the perch dot and the live thumbnail find its tabs.
+  // Registered like a CLI agent's run, so the perch dot finds its tabs.
   opts.runs.add(session, { token: randomBytes(32).toString("base64url"), mode, approve: input.approve, ...(input.chatId ? { chatId: input.chatId } : {}), ...(input.incognito ? { private: true } : {}) });
   try {
     yield* ownLoop({ input, provider, model, session, mode, ...(memory ? { memory } : {}), ...(extras ? { extras } : {}) });

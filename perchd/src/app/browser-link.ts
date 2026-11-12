@@ -16,14 +16,11 @@ import { askFromBrowser } from "./ask";
 import { OutsideApprovals } from "./outside-approvals";
 import type { ApprovalCard, ChatStatus } from "./protocol";
 import { TaskStatusReporter } from "./task-status";
-import { LiveThumbnails, type CastTab } from "./thumbnail";
 
 export type BrowserLinkOptions = {
   perch: PerchDomain;
   /** The agent tabs a sidebar chat's run works in now (its daemon sessions' tabs). */
   agentTabs: (chatId: string) => string[];
-  /** The tab a chat's run drives now, for the live thumbnail. */
-  driving?: (chatId: string) => CastTab | null;
   onError?: (message: string) => void;
 };
 
@@ -32,14 +29,12 @@ export class BrowserLink {
   private reporter: TaskStatusReporter | null = null;
   private outside: OutsideApprovals | null = null;
   private stopAsk: (() => void) | null = null;
-  private thumbs: LiveThumbnails | null = null;
 
   constructor(private readonly opts: BrowserLinkOptions) {}
 
   /** RunManager's `onStatus` (AppOptions.onStatus). */
   readonly onStatus = (chatId: string, status: ChatStatus, card: ApprovalCard | null): void => {
     this.reporter?.update(chatId, status, card);
-    this.thumbs?.update(chatId, status);
   };
 
   /** DaemonOptions.browser. */
@@ -57,8 +52,6 @@ export class BrowserLink {
     const defaults = () => app.info().defaults;
     this.outside = new OutsideApprovals({ chats: app.chats, runs: app.runs, defaults, perch: this.opts.perch });
     this.reporter = new TaskStatusReporter({ perch: this.opts.perch, targets: (chatId) => this.targets(chatId) });
-    const driving = this.opts.driving;
-    if (driving) this.thumbs = new LiveThumbnails({ emit: (event) => app.server.publish(event), driving });
     this.stopAsk = this.opts.perch.onAskRequested((ask) => {
       void askFromBrowser({ chats: app.chats, runs: app.runs, tab: (id) => app.windows.tab(id), defaults, perch: this.opts.perch }, ask).catch((error: Error) =>
         this.opts.onError?.(`perchd: Ask from the browser failed: ${error.message}\n`),
@@ -78,6 +71,5 @@ export class BrowserLink {
   stop(): void {
     this.stopAsk?.();
     this.reporter?.stop();
-    this.thumbs?.stop();
   }
 }

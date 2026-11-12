@@ -11,6 +11,9 @@ import type { Effort, ModelInfo } from "../api/types";
 import { Icon } from "./icon";
 import { ProviderMark } from "./provider-mark";
 
+/** A model's name without its maker: "Sonnet 5.5", not "Claude Sonnet 5.5". */
+export const modelName = (label: string): string => label.replace(/^Claude\s+/, "");
+
 type Row =
   | { kind: "provider"; provider: string }
   | { kind: "back"; provider: string }
@@ -183,7 +186,7 @@ export function ModelMenu({ models, selected, onPick, onSettings, align = "end",
                 <li key={row.model.id} role="option" aria-selected={chosen} class={cls("")} {...common}>
                   <span class="opt-label">
                     {row.hint !== undefined && <ProviderMark provider={row.model.provider} />}
-                    {row.model.label}
+                    {modelName(row.model.label)}
                   </span>
                   {row.hint && <span class="opt-hint">{row.hint}</span>}
                   {chosen && <Icon name="check" size={14} />}

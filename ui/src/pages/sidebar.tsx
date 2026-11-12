@@ -188,7 +188,6 @@ export function Sidebar({ client, windowId, fallbackTab = null, host }: Props) {
         onSend={(text, extras) => chat.send(text, tab ?? undefined, () => attach(), extras)}
         host={host}
         listTabs={() => client.tabs()}
-        frame={chat.frame}
         onStop={() => void chat.stop()}
         running={Boolean(view.run)}
         tab={tab}

@@ -18,7 +18,7 @@ const tabs: TabInfo[] = [
 ];
 
 /** A composer that keeps its own draft, like the pages do. */
-function mount(host: PageHost | undefined, frame: string | null = null, running = false, delivered = true) {
+function mount(host: PageHost | undefined, _frame: string | null = null, running = false, delivered = true) {
   const sent: { text: string; extras: SendExtras }[] = [];
   function Harness() {
     const [draft, setDraft] = useState("");
@@ -38,7 +38,6 @@ function mount(host: PageHost | undefined, frame: string | null = null, running 
         onSettings={() => {}}
         host={host}
         listTabs={async () => tabs}
-        frame={frame}
       />
     );
   }
@@ -125,11 +124,3 @@ test("@ lists matching tabs; Enter picks one and the message sends it as a menti
   expect(sent[0]!.extras.mentions.map((t) => t.id)).toEqual(["a"]);
 });
 
-test("the live thumbnail shows only while the task runs", () => {
-  const { el } = mount(undefined, "AAAA", true);
-  expect(el.querySelector("img.live-thumb")!.getAttribute("src")).toBe("data:image/jpeg;base64,AAAA");
-  render(null, root);
-  root.remove();
-  const idle = mount(undefined, "AAAA", false);
-  expect(idle.el.querySelector("img.live-thumb")).toBeNull();
-});

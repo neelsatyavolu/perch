@@ -18,7 +18,12 @@ export function applyToView(view: ChatView, event: AppEvent): ChatView {
     case "run.text":
       return view.run ? { ...view, run: { ...view.run, text: view.run.text + event.delta } } : view;
     case "run.step":
-      return view.run ? { ...view, run: { ...view.run, steps: [...view.run.steps, event.label] } } : view;
+      return view.run ? { ...view, run: { ...view.run, steps: [...view.run.steps, { label: event.label, ...(event.detail ? { detail: event.detail } : {}) }] } } : view;
+    case "run.step.output": {
+      const steps = view.run?.steps ?? [];
+      const last = steps.at(-1);
+      return view.run && last ? { ...view, run: { ...view.run, steps: [...steps.slice(0, -1), { ...last, output: event.output }] } } : view;
+    }
     case "run.approval":
       // A card with no run of this chat's own: an outside agent or a new client asking (held in perchd).
       return { ...view, run: view.run ? { ...view.run, approval: event.card } : { runId: event.runId, chatId: chat.id, text: "", steps: [], approval: event.card } };

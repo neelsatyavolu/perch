@@ -1,4 +1,48 @@
 # Perch: 8px buttons and fields, 12px cards, 28px controls, quiet nav selection in WebUI pages, and the split tab chooser on the theme's surfaces.
+diff --git a/chrome/browser/resources/tab_search/split_view/app.css b/chrome/browser/resources/tab_search/split_view/app.css
+index 78eaf15354..ab0e707e2b 100644
+--- a/chrome/browser/resources/tab_search/split_view/app.css
++++ b/chrome/browser/resources/tab_search/split_view/app.css
+@@ -13,6 +13,14 @@
+   display: flex;
+   flex-direction: column;
+   height: 100vh;
++  /* Perch: the theme's surfaces, hover and hairline scrollbar, not the
++   * shared Material greys this page otherwise falls back to. */
++  --mwb-background-color: var(--color-tab-search-background);
++  --mwb-list-item-hover-background-color: var(--cr-hover-background-color);
++  --mwb-list-item-selected-background-color: var(--cr-hover-background-color);
++  --mwb-scrollbar-thumb-color: var(--color-sys-outline);
++  --mwb-scrollbar-thumb-hover-color: var(--color-sys-on-surface-subtle);
++  --mwb-scrollbar-track-color: transparent;
+ }
+ 
+ #header {
+@@ -62,10 +70,12 @@ picture {
+   display: flex;
+   max-height: calc(100% - 92px - 4 * 16px);
+   background: var(--color-tab-search-background);
+-  border-radius: 16px;
++  /* Perch: a 12px panel (DESIGN.md). */
++  border-radius: 12px;
+   margin: 16px auto;
+   width: calc(min(100% - 2*16px, 394px));
+-  padding: 16px 0;
++  /* Perch: rows sit 8px in from the panel's edge. */
++  padding: 16px 8px;
+ }
+ 
+ .scroller {
+@@ -84,3 +94,9 @@ picture {
+ .scroller::-webkit-scrollbar-thumb {
+   border-radius: 8px;
+ }
++
++/* Perch: 8px rows; the padding keeps the text where it was. */
++.scroller .mwb-list-item {
++  border-radius: 8px;
++  padding-inline: 12px;
++}
 diff --git a/ui/webui/resources/cr_elements/cr_action_menu/cr_action_menu.css b/ui/webui/resources/cr_elements/cr_action_menu/cr_action_menu.css
 index e8d2cd459a..bb23a25bee 100644
 --- a/ui/webui/resources/cr_elements/cr_action_menu/cr_action_menu.css
@@ -170,47 +214,3 @@ index 076db3e24e..ca54fbe530 100644
  }
  
  @media (prefers-color-scheme: dark) {
-diff --git a/chrome/browser/resources/tab_search/split_view/app.css b/chrome/browser/resources/tab_search/split_view/app.css
-index 78eaf15354..27cef13c9c 100644
---- a/chrome/browser/resources/tab_search/split_view/app.css
-+++ b/chrome/browser/resources/tab_search/split_view/app.css
-@@ -13,6 +13,14 @@
-   display: flex;
-   flex-direction: column;
-   height: 100vh;
-+  /* Perch: the theme's surfaces, hover and hairline scrollbar, not the
-+   * shared Material greys this page otherwise falls back to. */
-+  --mwb-background-color: var(--color-tab-search-background);
-+  --mwb-list-item-hover-background-color: var(--cr-hover-background-color);
-+  --mwb-list-item-selected-background-color: var(--cr-hover-background-color);
-+  --mwb-scrollbar-thumb-color: var(--color-sys-outline);
-+  --mwb-scrollbar-thumb-hover-color: var(--color-sys-on-surface-subtle);
-+  --mwb-scrollbar-track-color: transparent;
- }
- 
- #header {
-@@ -62,10 +70,12 @@ picture {
-   display: flex;
-   max-height: calc(100% - 92px - 4 * 16px);
-   background: var(--color-tab-search-background);
--  border-radius: 16px;
-+  /* Perch: a 12px panel (DESIGN.md). */
-+  border-radius: 12px;
-   margin: 16px auto;
-   width: calc(min(100% - 2*16px, 394px));
--  padding: 16px 0;
-+  /* Perch: rows sit 8px in from the panel's edge. */
-+  padding: 16px 8px;
- }
- 
- .scroller {
-@@ -84,3 +94,9 @@ picture {
- .scroller::-webkit-scrollbar-thumb {
-   border-radius: 8px;
- }
-+
-+/* Perch: 8px rows; the padding keeps the text where it was. */
-+.scroller .mwb-list-item {
-+  border-radius: 8px;
-+  padding-inline: 12px;
-+}

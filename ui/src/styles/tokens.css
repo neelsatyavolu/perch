@@ -16,8 +16,9 @@
   --btn-bg: #F2F0EA; --btn-fg: #0E0E0D;
   --side: color-mix(in srgb, var(--ink) 6%, var(--canvas)); --fill: color-mix(in srgb, var(--ink) 6%, var(--card));
   --fill-hover: color-mix(in srgb, var(--ink) 10%, var(--card));
-  --nav-on: color-mix(in srgb, var(--ink) 13%, var(--side)); --nav-ring: transparent;
+  --nav-on: color-mix(in srgb, var(--ink) 13%, var(--side)); --nav-ring: var(--hair);
   --danger: #EE5A4B;
+  --btn-danger: #BC2E23;
   --pop: none;
   --accent: var(--accent-dark);
   --accent-soft: color-mix(in srgb, var(--accent) 22%, var(--raised));
@@ -30,8 +31,9 @@
   --btn-bg: #F2F3F5; --btn-fg: #1C1D20;
   --side: color-mix(in srgb, var(--ink) 6%, var(--canvas)); --fill: color-mix(in srgb, var(--ink) 6%, var(--card));
   --fill-hover: color-mix(in srgb, var(--ink) 10%, var(--card));
-  --nav-on: color-mix(in srgb, var(--ink) 13%, var(--side)); --nav-ring: transparent;
+  --nav-on: color-mix(in srgb, var(--ink) 13%, var(--side)); --nav-ring: var(--hair);
   --danger: #EE5A4B;
+  --btn-danger: #BC2E23;
   --pop: none;
   --accent: var(--accent-dark);
   --accent-soft: color-mix(in srgb, var(--accent) 22%, var(--raised));
@@ -44,8 +46,9 @@
   --btn-bg: #EEF2F8; --btn-fg: #0E1116;
   --side: color-mix(in srgb, var(--ink) 6%, var(--canvas)); --fill: color-mix(in srgb, var(--ink) 6%, var(--card));
   --fill-hover: color-mix(in srgb, var(--ink) 10%, var(--card));
-  --nav-on: color-mix(in srgb, var(--ink) 13%, var(--side)); --nav-ring: transparent;
+  --nav-on: color-mix(in srgb, var(--ink) 13%, var(--side)); --nav-ring: var(--hair);
   --danger: #EE5A4B;
+  --btn-danger: #BC2E23;
   --pop: none;
   --accent: var(--accent-dark);
   --accent-soft: color-mix(in srgb, var(--accent) 22%, var(--raised));
@@ -57,8 +60,9 @@
   --hair: rgba(22, 22, 26, 0.1); --hair-strong: rgba(22, 22, 26, 0.22); --hover: rgba(0, 0, 0, 0.04);
   --btn-bg: #16161A; --btn-fg: #F7F5EF;
   --side: var(--raised); --fill: #FFFFFF; --fill-hover: color-mix(in srgb, var(--ink) 4%, #FFFFFF);
-  --nav-on: color-mix(in srgb, var(--ink) 9%, var(--side)); --nav-ring: transparent;
+  --nav-on: color-mix(in srgb, var(--ink) 9%, var(--side)); --nav-ring: var(--hair);
   --danger: #BC2E23;
+  --btn-danger: #EE5A4B;
   --pop: none;
   --accent: var(--accent-light);
   --accent-soft: color-mix(in srgb, var(--accent) 10%, transparent);
@@ -72,6 +76,7 @@
   --side: #000000; --fill: #141414; --fill-hover: #1F1F1F;
   --nav-on: #262626; --nav-ring: var(--hair-strong);
   --danger: #EE5A4B;
+  --btn-danger: #BC2E23;
   --pop: none;
   --accent: var(--accent-dark);
   --accent-soft: color-mix(in srgb, var(--accent) 22%, var(--raised));

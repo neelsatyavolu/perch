@@ -24,8 +24,9 @@ const label = (c: ChatSummary) =>
 
 /**
  * The chat rail on the new tab page, in the shape of Aside's: a search field, New chat and
- * Settings, then every chat under "Chats", pinned ones first. A blue dot marks a reply not seen
- * yet, a red mark one that failed; hovering a row shows its last message and when.
+ * Settings, then every chat under "Chats", pinned ones first. A breathing accent dot marks a running
+ * chat, a mute dot a reply not seen yet, a red mark one that failed; nothing breathes while a chat
+ * waits for approval. Hovering a row shows its last message and when.
  * `chats` is null while they load, when the list shows nothing rather than "No chats yet".
  * `drawer` draws it over the page, for windows too narrow to give it a column.
  */
@@ -56,7 +57,7 @@ export function ChatRail({ chats, now = Date.now(), drawer = false }: { readonly
         <input
           type="search"
           aria-label="Search chats"
-          placeholder="Search.."
+          placeholder="Search chats"
           value={query}
           onInput={(e) => setQuery((e.currentTarget as HTMLInputElement).value)}
           onKeyDown={(e) => e.key === "Escape" && setQuery("")}
@@ -85,9 +86,9 @@ export function ChatRail({ chats, now = Date.now(), drawer = false }: { readonly
             >
               <span class="rail-t">{c.title}</span>
               {c.pinned && <Icon of={Pin} size={14} />}
-              {c.status !== "idle" ? (
+              {c.status === "running" ? (
                 <span class="rail-mark live" aria-hidden="true" />
-              ) : c.failed ? (
+              ) : c.status === "waiting" ? null : c.failed ? (
                 <span class="rail-mark err" aria-hidden="true">!</span>
               ) : c.unread ? (
                 <span class="rail-mark new" aria-hidden="true" />

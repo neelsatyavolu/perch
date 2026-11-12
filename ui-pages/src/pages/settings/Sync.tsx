@@ -7,7 +7,7 @@ import { useEffect, useState } from "preact/hooks";
 import type { SyncDevice, SyncPairing, SyncStatus } from "../../api";
 import { MANAGED_NOTE } from "../../lib/managed";
 import { qrMatrix } from "../../lib/qr";
-import { relativeTime } from "../../lib/time";
+import { inlineTime } from "../../lib/time";
 import { Dialog } from "../../ui/Dialog";
 import { errorText, useAction, useApi, useLoad } from "../../ui/frame";
 import { useManaged } from "../../ui/useManaged";
@@ -154,7 +154,7 @@ export function Sync() {
     );
   }
 
-  const summary = s.lastError ?? (s.lastSync ? `Last synced ${relativeTime(s.lastSync).toLowerCase()}` : "Not synced yet");
+  const summary = s.lastError ?? (s.lastSync ? `Last synced ${inlineTime(s.lastSync)}` : "Not synced yet");
   return (
     <div class="sec">
       <Group label="Sync" bare>
@@ -171,7 +171,7 @@ export function Sync() {
         <div class="card">
           {s.devices.length === 0 && <p class="empty">Perch couldn't list your devices right now.</p>}
           {s.devices.map((d) => (
-            <Row key={d.id} title={d.current ? `${d.name} (this Mac)` : d.name} detail={`${KIND[d.kind] ?? d.kind} · seen ${relativeTime(d.lastSeen).toLowerCase()}`}>
+            <Row key={d.id} title={d.current ? `${d.name} (this Mac)` : d.name} detail={`${KIND[d.kind] ?? d.kind} · seen ${inlineTime(d.lastSeen)}`}>
               {!d.current && <button type="button" class="btn" aria-label={`Remove ${d.name}`} onClick={() => setRemoving(d)}>Remove</button>}
             </Row>
           ))}

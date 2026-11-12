@@ -79,7 +79,7 @@ function Stage({ step, mute, children }: { readonly step?: number; readonly mute
             <p class="cap">Step {step + 1} of {ORDER.length}</p>
           </>
         )}
-        {mute && <button type="button" class="btn quiet wl-mute" aria-pressed={!mute.muted} onClick={mute.toggle}>{mute.muted ? "Sound off" : "Sound on"}</button>}
+        {mute && <button type="button" class="btn quiet wl-mute" onClick={mute.toggle}>{mute.muted ? "Sound off" : "Sound on"}</button>}
       </header>
       {children}
     </div>
@@ -116,6 +116,14 @@ function Restore({ onDone }: { readonly onDone: () => void }) {
   const [restored, setRestored] = useState(false);
   const [confirmFresh, setConfirmFresh] = useState(false);
   const [freshError, setFreshError] = useState<string | null>(null);
+  // The button that opens the confirmation goes away with it, so focus moves into the confirmation
+  // and comes back to that button on Cancel.
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const askRef = useRef<HTMLButtonElement>(null);
+  const confirm = (open: boolean) => {
+    setConfirmFresh(open);
+    requestAnimationFrame(() => (open ? cancelRef : askRef).current?.focus());
+  };
 
   const startFresh = async () => {
     setFreshError(null);
@@ -129,7 +137,7 @@ function Restore({ onDone }: { readonly onDone: () => void }) {
 
   return (
     <Stage>
-    <main class="wl">
+    <main class="wl wl-restore">
       <h1 class="serif-title" tabIndex={-1}>Restore your Perch data</h1>
       <p class="wl-lead">This Mac has your Perch data but not its key. Enter your recovery key to unlock it.</p>
       <div class="wl-body"><RestoreForm onRestored={() => setRestored(true)} /></div>
@@ -141,14 +149,14 @@ function Restore({ onDone }: { readonly onDone: () => void }) {
         <div class="wl-body restore-confirm" role="alert">
           <p>Perch moves the old data aside, untouched, and starts with an empty memory and no chats. Your recovery key still opens the old data if you find it later.</p>
           <div>
-            <button type="button" class="btn" onClick={() => setConfirmFresh(false)}>Cancel</button>
+            <button type="button" class="btn" ref={cancelRef} onClick={() => confirm(false)}>Cancel</button>
             <button type="button" class="btn primary" onClick={startFresh}>Start fresh</button>
           </div>
           {freshError && <p class="field-error">{freshError}</p>}
         </div>
       ) : (
         <div class="wl-actions">
-          <button type="button" class="btn ghost" onClick={() => setConfirmFresh(true)}>I don't have my recovery key</button>
+          <button type="button" class="btn quiet" ref={askRef} onClick={() => confirm(true)}>I don't have my recovery key</button>
         </div>
       )}
     </main>
@@ -231,27 +239,32 @@ function Setup() {
     <main class="wl" key={step}>
       <h1 class="serif-title" ref={heading} tabIndex={-1}>{COPY[step].title}</h1>
       <p class="wl-lead">{COPY[step].lead}</p>
-      <div class="wl-body">
-        {step === "appearance" && <Look />}
-        {step === "models" && <Models />}
-        {step === "import" && <ImportWizard embedded onFinished={() => advance(true)} />}
-      </div>
-      <div class="wl-actions">
-        {step === "memory" ? (
-          <>
-            <button type="button" class="btn primary" onClick={async () => { await act(() => api.completeOnboardingStep("memory")); await finish("memory"); }}>Set up memory</button>
-            <button type="button" class="btn quiet" onClick={() => advance(false)}>Not now</button>
-          </>
-        ) : step === "import" ? (
-          <button type="button" class="btn quiet" onClick={() => advance(false)}>Skip import</button>
-        ) : (
-          <>
-            <button type="button" class="btn primary" onClick={() => advance(true)}>Continue</button>
-            {step !== "appearance" && <button type="button" class="btn quiet" onClick={() => advance(false)}>Skip</button>}
-          </>
-        )}
-        <button type="button" class="btn quiet wl-back" onClick={back}>Back</button>
-      </div>
+      {step !== "memory" && (
+        <div class="wl-body">
+          {step === "appearance" && <Look />}
+          {step === "models" && <Models />}
+          {step === "import" && <ImportWizard embedded onFinished={() => advance(true)} onSkip={() => advance(false)} onBack={back} />}
+        </div>
+      )}
+      {/* Back at the bottom left, the primary at the bottom right, as in a Mac assistant. The import
+          wizard carries its own row. */}
+      {step !== "import" && (
+        <div class="wl-actions">
+          <button type="button" class="btn quiet" onClick={back}>Back</button>
+          <span class="grow" />
+          {step === "memory" ? (
+            <>
+              <button type="button" class="btn quiet" onClick={() => advance(false)}>Not now</button>
+              <button type="button" class="btn primary" onClick={async () => { await act(() => api.completeOnboardingStep("memory")); await finish("memory"); }}>Set up memory</button>
+            </>
+          ) : (
+            <>
+              {step !== "appearance" && <button type="button" class="btn quiet" onClick={() => advance(false)}>Skip</button>}
+              <button type="button" class="btn primary" onClick={() => advance(true)}>Continue</button>
+            </>
+          )}
+        </div>
+      )}
     </main>
     </Stage>
   );

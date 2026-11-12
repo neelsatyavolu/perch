@@ -1,12 +1,12 @@
 import { useState } from "preact/hooks";
 import type { PermissionMode, Permissions as P, SiteRuleKind } from "../../api";
 import { MODES, SITE_RULES } from "../../lib/labels";
-import { relativeTime } from "../../lib/time";
+import { inlineTime } from "../../lib/time";
 import { checkSitePattern } from "../../lib/validate";
 import { MANAGED_NOTE } from "../../lib/managed";
 import { useAction, useApi, useLoad } from "../../ui/frame";
 import { useManaged } from "../../ui/useManaged";
-import { Icon, Trash2 } from "../../ui/icons";
+import { Icon, Plus, Trash2 } from "../../ui/icons";
 import { Group, Row } from "../../ui/Row";
 import { focusSibling, nextIndex } from "../../ui/roving";
 import { AuditLog } from "./AuditLog";
@@ -104,17 +104,17 @@ export function Permissions() {
             <select class="picker" aria-label="Rule" value={rule} onChange={(e) => setRule((e.currentTarget as HTMLSelectElement).value as SiteRuleKind)}>
               {RULE_KINDS.map((k) => <option key={k} value={k}>{SITE_RULES[k]}</option>)}
             </select>
-            <button type="submit" class="btn">Add rule</button>
+            <button type="submit" class="ib" aria-label="Add rule"><Icon of={Plus} /></button>
             {error && <p class="field-error" id="rule-err" role="alert">{error}</p>}
           </form>
         </div>
-        <p class="note">"Never touch" stops the agent from reading or acting on a site, for example your bank.</p>
+        <p class="note">“Never touch” stops the agent from reading or acting on a site, for example your bank.</p>
       </Group>
 
       <Group label="Outside agents" id="client-rules">
         <div class="card">
           {p.clientRules.map((c) => (
-            <Row key={c.id} title={c.client} detail={c.lastUsed ? `Last used ${relativeTime(c.lastUsed).toLowerCase()}` : "Not used yet"}>
+            <Row key={c.id} title={c.client} detail={c.lastUsed ? `Last used ${inlineTime(c.lastUsed)}` : "Not used yet"}>
               <select class="picker" aria-label={`Mode for ${c.client}`} value={c.mode} onChange={(e) => {
                 const mode = (e.currentTarget as HTMLSelectElement).value as PermissionMode;
                 apply(() => api.setClientMode(c.id, mode));

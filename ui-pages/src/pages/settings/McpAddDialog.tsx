@@ -91,7 +91,7 @@ export function McpAddDialog({ open, onClose, onAdded }: Props) {
             <button type="button" class="ib" aria-label={`Remove ${s.name || `entry ${i + 1}`}`} onClick={() => setSecrets((x) => x.filter((_, j) => j !== i))}><Icon of={X} /></button>
           </div>
         ))}
-        <button type="button" class="btn quiet" style={{ justifySelf: "start" }} onClick={() => setSecrets((s) => [...s, { name: "", value: "" }])}>
+        <button type="button" class="btn quiet" onClick={() => setSecrets((s) => [...s, { name: "", value: "" }])}>
           <Icon of={Plus} />Add {transport === "stdio" ? "a variable" : "a header"}
         </button>
         <span>Values are saved in the macOS Keychain, not in a file.</span>

@@ -65,14 +65,17 @@ export function readCachedAppearance(store: KeyValueStore): Appearance {
   try {
     const raw = store.getItem(CACHE_KEY);
     if (!raw) return DEFAULT_APPEARANCE;
-    const value = JSON.parse(raw) as Partial<Appearance>;
+    const value: unknown = JSON.parse(raw);
     return isAppearance(value) ? value : DEFAULT_APPEARANCE;
   } catch {
     return DEFAULT_APPEARANCE;
   }
 }
 
-function isAppearance(v: Partial<Appearance>): v is Appearance {
+/** Whether a value (the cache, or the browser's appearance event) is a complete appearance. */
+export function isAppearance(value: unknown): value is Appearance {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Partial<Appearance>;
   return (
     (THEME_NAMES as readonly string[]).includes(String(v.theme)) &&
     (ACCENT_NAMES as readonly string[]).includes(String(v.accent)) &&

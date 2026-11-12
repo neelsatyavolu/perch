@@ -7,7 +7,7 @@ import type {
 export const SEED_NOW = "2026-11-05T09:46:00.000Z";
 
 export const PROVIDERS: readonly Provider[] = [
-  { id: "claude", name: "Claude", kind: "subscription", detail: "Sign in with your Claude Pro or Max plan.", state: "signed-out" },
+  { id: "claude", name: "Claude", kind: "subscription", detail: "Sign in with your Claude Pro or Max plan", state: "signed-out" },
   { id: "claude-code", name: "Claude Code", kind: "subscription", detail: "Subscription, through Claude Code on this Mac", state: "connected", account: "Claude Code 2.4" },
   { id: "chatgpt", name: "ChatGPT", kind: "subscription", detail: "Subscription, signs in through OpenAI", state: "connected", account: "neel@example.com" },
   { id: "grok", name: "Grok", kind: "subscription", detail: "Subscription, signs in through xAI", state: "signed-out" },

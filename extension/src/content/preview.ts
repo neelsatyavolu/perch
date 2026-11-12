@@ -10,8 +10,7 @@ type Reply = { ok: true; value: Preview } | { ok: false; error: string };
 
 const DELAY_MS = 300;
 const CSS = `
-.card { position: fixed; width: 360px; max-width: calc(100vw - 16px); background: var(--card); color: var(--body);
-  border: 1px solid var(--hairline-strong); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden;
+.card { position: fixed; width: 360px; max-width: calc(100vw - 16px); color: var(--body); border-radius: 12px; overflow: hidden;
   opacity: 0; transform: translateY(4px); transition: opacity 180ms var(--ease), transform 180ms var(--ease); }
 .card.shown { opacity: 1; transform: none; }
 .image { display: block; width: 100%; aspect-ratio: 1.91 / 1; object-fit: cover; background: var(--elevated); border-bottom: 1px solid var(--hairline); }
@@ -88,7 +87,7 @@ window.addEventListener("pointerdown", (event) => card && !event.composedPath().
 async function show(link: HTMLAnchorElement): Promise<void> {
   close();
   const overlay = createOverlay("perch-link-preview", CSS);
-  const node = el("div", { class: "perch card", attrs: { role: "dialog", "aria-label": "Link preview" } }, [
+  const node = el("div", { class: "perch glass card", attrs: { role: "dialog", "aria-label": "Link preview" } }, [
     el("div", { class: "body" }, [el("div", { class: "site", text: new URL(link.href).hostname }), el("div", { class: "note", text: "Loading preview" })]),
   ]);
   overlay.root.append(node);

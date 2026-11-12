@@ -14,3 +14,24 @@ describe("PageFrame without perchd", () => {
     expect(text).not.toContain("perchbrowser.com");
   });
 });
+
+describe("PageFrame appearance", () => {
+  test("repaints when the browser says the appearance changed", async () => {
+    const { act, waitFor } = await import("@testing-library/preact");
+    const { createFakeApi } = await import("../../src/api/fake");
+    const { DEFAULT_APPEARANCE } = await import("../../src/theme/apply");
+    const listeners: ((data: unknown) => void)[] = [];
+    const win = window as Window & { perch?: unknown };
+    win.perch = { call: async () => undefined, subscribe: (_e: string, fn: (data: unknown) => void) => (listeners.push(fn), () => undefined) };
+    try {
+      render(<PageFrame api={createFakeApi()}><p>page</p></PageFrame>);
+      await waitFor(() => expect(listeners.length).toBe(1));
+      act(() => listeners[0]!({ ...DEFAULT_APPEARANCE, theme: "graphite" }));
+      expect(document.documentElement.dataset.theme).toBe("graphite");
+      act(() => listeners[0]!({ theme: "dusk" }));
+      expect(document.documentElement.dataset.theme).toBe("graphite");
+    } finally {
+      delete win.perch;
+    }
+  });
+});

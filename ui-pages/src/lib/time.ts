@@ -26,6 +26,15 @@ export function relativeTime(iso: string, now: Date = new Date(), timeZone?: str
   return then.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }), timeZone });
 }
 
+/**
+ * A relative time inside a sentence ("used yesterday", "seen Nov 7"): only the leading word is lowercased,
+ * so month names keep their capital.
+ */
+export function inlineTime(iso: string): string {
+  const t = relativeTime(iso);
+  return /^(Just now|Yesterday|In )/.test(t) ? t.charAt(0).toLowerCase() + t.slice(1) : t;
+}
+
 /** "Nov 5, 9:46" for run times and audit-style rows. */
 export function shortDateTime(iso: string, timeZone?: string): string {
   const d = new Date(iso);

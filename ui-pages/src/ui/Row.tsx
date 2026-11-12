@@ -30,7 +30,7 @@ export function Row({ id, title, detail, icon, children, hit, sub }: Props) {
 export function Group({ label, children, id, bare }: { readonly label: string; readonly children: ComponentChildren; readonly id?: string; readonly bare?: boolean }) {
   return (
     <section class="group" aria-label={label} id={id}>
-      {!bare && <h3 class="lbl">{label}</h3>}
+      {!bare && <h2 class="lbl">{label}</h2>}
       {children}
     </section>
   );

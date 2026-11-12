@@ -1,13 +1,15 @@
 /**
  * The frame every page renders in: finds the backend, applies the appearance (and keeps
- * following macOS), and gives the page its API, appearance and a status line for announcements.
+ * following macOS and the browser's appearance changes), and gives the page its API, appearance
+ * and a status line for announcements.
  */
 
 import { createContext, type ComponentChildren } from "preact";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { Appearance, PerchApi } from "../api";
 import { loadApi } from "../api/resolve";
-import { DEFAULT_APPEARANCE, applyAppearance, cacheAppearance, readSystemPrefs, watchSystemPrefs } from "../theme/apply";
+import { isBridge } from "../api/rpc";
+import { DEFAULT_APPEARANCE, applyAppearance, cacheAppearance, isAppearance, readSystemPrefs, watchSystemPrefs } from "../theme/apply";
 
 type AppearanceCtx = { readonly appearance: Appearance; readonly update: (patch: Partial<Appearance>) => Promise<void> };
 type Announce = (message: string, tone?: "polite" | "error") => void;
@@ -66,6 +68,19 @@ export function PageFrame({ children, api: injected, title }: FrameProps) {
     return () => {
       live = false;
     };
+  }, [api]);
+
+  // The browser sends "appearance" whenever the theme or accent changes, from any page or the
+  // toolbar, so every open page repaints with the chrome (as the sidebar does, ui/src/host).
+  useEffect(() => {
+    if (!api) return;
+    const bridge = (window as Window & { perch?: unknown }).perch;
+    if (!isBridge(bridge)) return;
+    return bridge.subscribe("appearance", (data) => {
+      if (!isAppearance(data)) return;
+      setAppearance(data);
+      paint(data);
+    });
   }, [api]);
 
   useEffect(() => watchSystemPrefs(window, () => paint(appearance)), [appearance]);

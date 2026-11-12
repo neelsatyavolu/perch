@@ -22,7 +22,7 @@ const SIGN_IN_POLL_MS = 1000;
 const SIGN_IN_TIMEOUT_MS = 5 * 60_000;
 
 const DETAIL: Record<PageProvider, string> = {
-  claude: "Sign in with your Claude Pro or Max plan.",
+  claude: "Sign in with your Claude Pro or Max plan",
   "claude-code": "Uses the Claude Code you signed in to on this Mac.",
   chatgpt: "Sign in with your ChatGPT plan.",
   grok: "Sign in with your Grok plan.",

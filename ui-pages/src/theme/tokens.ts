@@ -25,6 +25,8 @@ export type Theme = {
   readonly hover: string;
   readonly btnBg: string;
   readonly btnFg: string;
+  /** Behind a modal dialog. */
+  readonly scrim: string;
 };
 
 export const THEMES: Readonly<Record<ThemeName, Theme>> = Object.freeze({
@@ -32,31 +34,31 @@ export const THEMES: Readonly<Record<ThemeName, Theme>> = Object.freeze({
     label: "Ink", dark: true, canvas: "#0E0E0D", card: "#141413", raised: "#1A1A18",
     ink: "#F2F0EA", body: "rgba(242,240,234,0.86)", mute: "#8B8A87",
     hair: "rgba(242,240,234,0.08)", hairStrong: "rgba(242,240,234,0.18)", hover: "rgba(255,255,255,0.08)",
-    btnBg: "#FCFDFF", btnFg: "#000000",
+    btnBg: "#F2F0EA", btnFg: "#0E0E0D", scrim: "rgba(9,9,8,0.70)",
   },
   graphite: {
     label: "Graphite", dark: true, canvas: "#1C1D20", card: "#232428", raised: "#2B2C31",
     ink: "#F2F3F5", body: "rgba(242,243,245,0.86)", mute: "#9A9DA3",
     hair: "rgba(255,255,255,0.07)", hairStrong: "rgba(255,255,255,0.14)", hover: "rgba(255,255,255,0.06)",
-    btnBg: "#F2F3F5", btnFg: "#1C1D20",
+    btnBg: "#F2F3F5", btnFg: "#1C1D20", scrim: "rgba(9,9,8,0.70)",
   },
   dusk: {
     label: "Dusk", dark: true, canvas: "#0E1116", card: "#141922", raised: "#1B2130",
     ink: "#EEF2F8", body: "rgba(238,242,248,0.86)", mute: "#8E98A8",
     hair: "rgba(255,255,255,0.07)", hairStrong: "rgba(255,255,255,0.14)", hover: "rgba(255,255,255,0.05)",
-    btnBg: "#EEF2F8", btnFg: "#0E1116",
+    btnBg: "#EEF2F8", btnFg: "#0E1116", scrim: "rgba(9,9,8,0.70)",
   },
   paper: {
     label: "Paper", dark: false, canvas: "#F7F5EF", card: "#FBFAF6", raised: "#EFECE4",
     ink: "#16161A", body: "rgba(22,22,26,0.86)", mute: "#676667",
     hair: "rgba(22,22,26,0.10)", hairStrong: "rgba(22,22,26,0.22)", hover: "rgba(0,0,0,0.04)",
-    btnBg: "#16161A", btnFg: "#F7F5EF",
+    btnBg: "#16161A", btnFg: "#F7F5EF", scrim: "rgba(22,22,26,0.40)",
   },
   contrast: {
     label: "Contrast", dark: true, canvas: "#000000", card: "#000000", raised: "#141414",
     ink: "#FFFFFF", body: "#FFFFFF", mute: "#C8C8C8",
     hair: "rgba(255,255,255,0.28)", hairStrong: "rgba(255,255,255,0.5)", hover: "rgba(255,255,255,0.1)",
-    btnBg: "#FFFFFF", btnFg: "#000000",
+    btnBg: "#FFFFFF", btnFg: "#000000", scrim: "rgba(0,0,0,0.75)",
   },
 });
 
@@ -100,6 +102,15 @@ export function surfaceSteps(theme: ThemeName): Steps {
   return { side, fill: mix(t.ink, 6, t.card), fillHover: mix(t.ink, 10, t.card), navOn: mix(t.ink, 13, side) };
 }
 
+/**
+ * Danger as words (a "Delete all" button, a field error): the state colour lifted toward ink on dark themes,
+ * because the raw red falls under 4.5:1 on Graphite's and Dusk's row fill. Fills keep `--danger`.
+ */
+export function dangerText(theme: ThemeName): string {
+  const t = THEMES[theme];
+  return t.dark ? mix(t.ink, 20, STATE_COLOURS.dangerDark) : STATE_COLOURS.dangerLight;
+}
+
 /** Every CSS custom property Perch's pages read, for one theme and accent. */
 export function tokenVars(theme: ThemeName, accent: AccentName): Readonly<Record<string, string>> {
   const t = THEMES[theme];
@@ -121,11 +132,14 @@ export function tokenVars(theme: ThemeName, accent: AccentName): Readonly<Record
     "--nav-on": steps.navOn,
     "--btn-bg": t.btnBg,
     "--btn-fg": t.btnFg,
+    "--field": theme === "contrast" ? rgba("#FFFFFF", 0.7) : rgba(t.ink, t.dark ? 0.42 : 0.5),
+    "--scrim": t.scrim,
     "--accent": a,
     "--accent-soft": t.dark ? `color-mix(in srgb, ${a} 22%, ${t.raised})` : rgba(a, 0.1),
     "--ok": STATE_COLOURS.ok,
     "--warn": t.dark ? STATE_COLOURS.warn : "#8A5E12",
     "--danger": t.dark ? STATE_COLOURS.dangerDark : STATE_COLOURS.dangerLight,
+    "--danger-text": dangerText(theme),
     "--pop": "none",
   });
 }

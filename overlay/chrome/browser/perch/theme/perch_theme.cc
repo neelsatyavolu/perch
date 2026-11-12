@@ -104,9 +104,9 @@ void AddPerchMixer(ui::ColorProvider* provider,
   const SkColor hair = Over(t->hair, t->canvas);
   const SkColor body = Over(t->body, t->card);
   const SkColor tint = Mix(accent, t->raised, t->dark ? 0.22f : 0.10f);
-  // Errors: a red that holds 4.5:1 on each theme's card.
-  const SkColor danger = t->dark ? SkColorSetRGB(0xFF, 0x45, 0x3A)
-                                 : SkColorSetRGB(0xD9, 0x2D, 0x3F);
+  // Errors: DESIGN.md's danger, which holds 4.5:1 on each theme's card.
+  const SkColor danger = t->dark ? SkColorSetRGB(0xEE, 0x5A, 0x4B)
+                                 : SkColorSetRGB(0xBC, 0x2E, 0x23);
 
   ui::ColorMixer& m = provider->AddMixer();
   // Raised: the tab strip and the frame around it, a step off the toolbar so
@@ -134,12 +134,11 @@ void AddPerchMixer(ui::ColorProvider* provider,
                          kColorLocationBarBorderOpaque}) {
     m[id] = {t->canvas};
   }
-  // Card: the side panel.
-  for (ui::ColorId id : std::initializer_list<ui::ColorId>{kColorSidePanelBackground, kColorSidePanelContentBackground,
-        kColorTabHoverCardBackground}) {
-    m[id] = {t->card};
-  }
-  m[kColorLocationBarBackgroundHovered] = {Over(t->hair, t->canvas)};
+  // Card: the tab hover card.
+  m[kColorTabHoverCardBackground] = {t->card};
+  // Hover fills the field with the same raised step as focus, so focusing a
+  // hovered field only adds the accent ring and never darkens it.
+  m[kColorLocationBarBackgroundHovered] = {t->raised};
   m[kColorLocationBarBorder] = {SK_ColorTRANSPARENT};
   // The site controls icon is a plain icon, with no chip behind it.
   m[kColorOmniboxIconBackground] = {SK_ColorTRANSPARENT};
@@ -152,6 +151,8 @@ void AddPerchMixer(ui::ColorProvider* provider,
     m[id] = {t->ink};
   }
   m[kColorToolbarButtonIcon] = {body};
+  // Inactive tabs keep the mute colour in a background window too: dimming
+  // it further dropped their titles below 4.5:1 on the strip.
   for (ui::ColorId id : std::initializer_list<ui::ColorId>{kColorTabForegroundInactiveFrameActive,
                          kColorTabForegroundInactiveFrameInactive,
                          kColorOmniboxTextDimmed,
@@ -159,9 +160,15 @@ void AddPerchMixer(ui::ColorProvider* provider,
     m[id] = {t->mute};
   }
   // Hairlines.
-  for (ui::ColorId id : std::initializer_list<ui::ColorId>{kColorToolbarSeparator, kColorTabDividerFrameActive,
-        kColorTabDividerFrameInactive, kColorToolbarContentAreaSeparator}) {
+  for (ui::ColorId id : std::initializer_list<ui::ColorId>{kColorToolbarSeparator,
+        kColorToolbarContentAreaSeparator}) {
     m[id] = {hair};
+  }
+  // The dividers between inactive tabs sit on the raised strip, so the
+  // hairline is composited onto that, not the canvas, or it disappears.
+  for (ui::ColorId id : std::initializer_list<ui::ColorId>{
+           kColorTabDividerFrameActive, kColorTabDividerFrameInactive}) {
+    m[id] = {Over(t->hair, t->raised)};
   }
   // The accent: focus rings, text selection and the app menu's highlight.
   m[ui::kColorFocusableBorderFocused] = {accent};
@@ -170,8 +177,10 @@ void AddPerchMixer(ui::ColorProvider* provider,
   m[kColorOmniboxKeywordSelected] = {accent};
 
   // Tabs that are hovered or picked for a multi-tab action step up from the
-  // canvas; Chromium's own selection blue doesn't belong in a Perch theme.
-  const SkColor tab_hover = Over(t->hair, t->canvas);
+  // raised strip they sit on; Chromium's own selection blue doesn't belong in
+  // a Perch theme. (A hairline over the canvas came out within 1-6 levels of
+  // the strip in Ink, Graphite and Dusk, so hover showed nothing.)
+  const SkColor tab_hover = Over(t->hair, t->raised);
   for (ui::ColorId id : std::initializer_list<ui::ColorId>{
            kColorTabBackgroundInactiveHoverFrameActive,
            kColorTabBackgroundInactiveHoverFrameInactive}) {
@@ -373,14 +382,28 @@ void AddPerchMixer(ui::ColorProvider* provider,
   m[kColorOmniboxResultsButtonBorder] = {strong_on_card};
   m[kColorOmniboxAnswerIconGM3Background] = {Over(t->hair_strong, t->raised)};
   m[kColorOmniboxAnswerIconGM3Foreground] = {t->ink};
-  m[kColorSidePanelContentAreaSeparator] = {hair};
+  // The panel's edge reads like the toolbar's rule over the page beside it.
+  m[kColorSidePanelContentAreaSeparator] = {hair_on_card};
+  // Split view: the focused pane gets a stronger hairline, the other a plain
+  // one, both Perch's warm hairlines rather than Google grey.
+  m[kColorMultiContentsViewActiveContentOutline] = {
+      Over(t->hair_strong, t->canvas)};
+  m[kColorMultiContentsViewInactiveContentOutline] = {hair};
+  // While the address bar is in use, the pane it will load into wears the
+  // focus ring's accent (DESIGN.md), not Material's grey inactive ring.
+  m[kColorMultiContentsViewHighlightContentOutline] = {accent};
   m[kColorMultiContentsViewMiniToolbarForeground] = {t->mute};
   m[kColorSplitViewBackground] = {t->canvas};
   m[kColorTabForegroundActiveFrameInactive] = {body};
-  m[kColorTabForegroundInactiveFrameInactive] = {Mix(t->mute, t->canvas, 0.8f)};
   m[kColorTabStrokeFrameInactive] = {hair};
   m[kColorSidePanelBackground] = {t->canvas};
   m[kColorSidePanelContentBackground] = {t->canvas};
+
+  // Toolbar button hover and press: the ink at 8% and 12%, as the Spaces
+  // button uses, instead of Chromium's max-contrast grey.
+  m[kColorToolbarInkDrop] = {t->ink};
+  m[kColorToolbarInkDropHover] = {SkColorSetA(t->ink, 0x14)};
+  m[kColorToolbarInkDropRipple] = {SkColorSetA(t->ink, 0x1F)};
 
   // No rules between the toolbar's buttons: the gaps group them (DESIGN.md).
   m[kColorToolbarExtensionSeparatorEnabled] = {SK_ColorTRANSPARENT};

@@ -37,7 +37,7 @@ test("the approval card shows what goes out and its button names the action", as
   expect(el.querySelector(".body")!.textContent).toBe("Hi Maya, Thursday works.");
   expect(el.querySelector(".meta")!.textContent).toContain("mail.example");
   const buttons = [...el.querySelectorAll("button")];
-  expect(buttons.map((b) => b.textContent)).toEqual(["Type and press Enter", "Don't allow"]);
+  expect(buttons.map((b) => b.textContent)).toEqual(["Type and press Enter", "Don’t allow"]);
   expect(buttons.some((b) => /^(ok|confirm)$/i.test(b.textContent ?? ""))).toBe(false);
   await act(async () => buttons[0]!.click());
   expect(decide).toHaveBeenCalledWith(true);
@@ -233,9 +233,10 @@ test("the chat list puts pinned chats first, marks unread, failed, selected and 
   expect(rows().map((r) => r.querySelector(".row-t")!.textContent)).toEqual(["Old", "Subscriptions from receipts", "Compare SFO to HND fares", "Broken"]);
   expect(rows()[0]!.getAttribute("aria-label")).toBe("Old, Pinned, Needs your approval");
   expect(el.querySelector(".row.sel")!.textContent).toContain("Subscriptions from receipts");
-  expect(el.querySelector(".row.sel .dot.live")).not.toBeNull();
-  expect(rows()[2]!.querySelector(".mark.new")).not.toBeNull();
-  expect(rows()[3]!.querySelector(".mark.err")).not.toBeNull();
+  expect(el.querySelector(".row.sel .row-s")!.textContent).toBe("Working");
+  expect(rows()[0]!.querySelector(".row-s")!.textContent).toBe("Waiting");
+  expect(rows()[2]!.querySelector(".row-s")!.textContent).toBe("New");
+  expect(rows()[3]!.querySelector(".row-s.err")!.textContent).toBe("Failed");
   click([...el.querySelectorAll(".row.act")].find((r) => r.textContent!.includes("Settings"))!);
   expect(settings).toBe(1);
   click(rows().find((r) => r.textContent!.includes("Compare"))!);

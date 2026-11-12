@@ -45,7 +45,7 @@ export function ApprovalCard({ card, onDecide }: { card: Card; onDecide: (approv
           {card.confirm}
         </button>
         <button type="button" class="btn small outline" disabled={busy} onClick={() => void decide(false)}>
-          Don't allow
+          Don’t allow
         </button>
       </div>
     </section>

@@ -4,6 +4,9 @@ import { relativeTime } from "../../lib/time";
 import { useAction, useApi } from "../../ui/frame";
 import { TabList } from "../../ui/TabList";
 
+/** The digits of a time or schedule in mono, the words around them in the caption face. */
+const digits = (s: string) => s.split(/(\d[\d:]*)/).map((part, i) => (i % 2 ? <span key={i} class="mono">{part}</span> : part));
+
 const STATUS: Readonly<Record<ChatStatus, string | null>> = { idle: null, running: "Working", waiting: "Waiting for your approval" };
 
 type Props = {
@@ -22,7 +25,7 @@ export function Recent({ chats, routines, tab, onTab, onHide }: Props) {
       <div class="sec-h">
         <TabList label="Recent" idPrefix="recent" value={tab} onChange={onTab} tabs={[{ value: "chats", label: "Chats" }, { value: "routines", label: "Routines" }]} />
         {tab === "routines" && (
-          <button type="button" class="btn quiet sm" onClick={() => act(() => api.openPage("routines"))}>All routines</button>
+          <button type="button" class="btn quiet sm all-btn" onClick={() => act(() => api.openPage("routines"))}>All routines</button>
         )}
         <button type="button" class="btn quiet sm hide-btn" aria-label="Hide recent" onClick={onHide}>Hide</button>
       </div>
@@ -31,7 +34,7 @@ export function Recent({ chats, routines, tab, onTab, onHide }: Props) {
           (chats.length ? chats.slice(0, 3).map((c) => (
             <button type="button" key={c.id} class="ccard" onClick={() => act(() => api.openChat(c.id))}>
               <span class="when">
-                <span class="mono">{relativeTime(c.updatedAt)}</span>
+                <span class="w">{digits(relativeTime(c.updatedAt))}</span>
                 {STATUS[c.status] && <><span aria-hidden="true">·</span><span>{STATUS[c.status]}</span></>}
               </span>
               <span class="tt">{c.title}</span>
@@ -42,7 +45,7 @@ export function Recent({ chats, routines, tab, onTab, onHide }: Props) {
           (routines.length ? routines.slice(0, 3).map((r) => (
             <button type="button" key={r.id} class="ccard" onClick={() => act(() => api.openPage("routines", r.id))}>
               <span class="when">
-                <span class="mono">{describeSchedule(r.schedule)}</span>
+                <span class="w">{digits(describeSchedule(r.schedule))}</span>
                 {!r.enabled && <><span aria-hidden="true">·</span><span>Paused</span></>}
               </span>
               <span class="tt">{r.title}</span>

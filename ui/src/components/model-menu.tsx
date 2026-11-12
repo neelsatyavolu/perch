@@ -184,12 +184,12 @@ export function ModelMenu({ models, selected, onPick, onSettings, align = "end",
               const chosen = row.model.id === selected;
               return (
                 <li key={row.model.id} role="option" aria-selected={chosen} class={cls("")} {...common}>
+                  <span class="opt-check">{chosen && <Icon name="check" size={14} />}</span>
                   <span class="opt-label">
                     {row.hint !== undefined && <ProviderMark provider={row.model.provider} />}
                     {modelName(row.model.label)}
                   </span>
                   {row.hint && <span class="opt-hint">{row.hint}</span>}
-                  {chosen && <Icon name="check" size={14} />}
                 </li>
               );
             })}

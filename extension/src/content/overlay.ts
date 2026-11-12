@@ -6,28 +6,34 @@
 export const TOKENS = `
 :host { all: initial; }
 .perch {
-  --canvas: #000000; --card: #0E0E10; --elevated: #1A1A1E; --ink: #FCFDFF; --body: rgb(252 253 255 / 0.86);
-  --mute: #A1A4A5; --hairline: rgb(255 255 255 / 0.06); --hairline-strong: rgb(255 255 255 / 0.14);
-  --accent: #4C8DFF; --btn-fg: #000000; --btn-bg: #FCFDFF;
-  --shadow: 0 8px 28px rgb(0 0 0 / 0.45);
+  --canvas: #0E0E0D; --card: #141413; --elevated: #1A1A18; --ink: #F2F0EA; --body: rgb(242 240 234 / 0.86);
+  --mute: #8B8A87; --hairline: rgb(242 240 234 / 0.08); --hairline-strong: rgb(242 240 234 / 0.18);
+  --accent: #4C8DFF; --btn-fg: #0E0E0D; --btn-bg: #F2F0EA;
   --sans: "Geist", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
-  --serif: "Geist Serif", "New York", ui-serif, Georgia, serif;
+  --serif: "Newsreader", Georgia, serif;
   --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --ease: cubic-bezier(0.2, 0, 0, 1);
-  font: 13px/1.45 var(--sans); color: var(--body); -webkit-font-smoothing: antialiased; letter-spacing: 0;
+  font: 13px/20px var(--sans); color: var(--body); -webkit-font-smoothing: antialiased; letter-spacing: 0;
 }
 @media (prefers-color-scheme: light) {
   .perch {
-    --canvas: #F4F5F7; --card: #FFFFFF; --elevated: #ECEEF1; --ink: #0A0A0C; --body: rgb(10 10 12 / 0.82);
-    --mute: #5F6366; --hairline: rgb(0 0 0 / 0.06); --hairline-strong: rgb(0 0 0 / 0.12);
-    --accent: #2B68D6; --btn-fg: #FFFFFF; --btn-bg: #0A0A0C; --shadow: 0 8px 28px rgb(0 0 0 / 0.14);
+    --canvas: #F7F5EF; --card: #FBFAF6; --elevated: #EFECE4; --ink: #16161A; --body: rgb(22 22 26 / 0.86);
+    --mute: #676667; --hairline: rgb(22 22 26 / 0.1); --hairline-strong: rgb(22 22 26 / 0.22);
+    --accent: #2A63CC; --btn-fg: #F7F5EF; --btn-bg: #16161A;
   }
 }
 .perch * { box-sizing: border-box; }
 .perch button { font: 500 13px/1 var(--sans); color: var(--ink); background: var(--elevated); border: 1px solid var(--hairline-strong);
-  border-radius: 8px; height: 28px; padding: 0 12px; cursor: pointer; transition: background-color 120ms var(--ease); }
-.perch button:hover { background: var(--hairline-strong); }
+  border-radius: 8px; height: 28px; padding: 0 12px; cursor: default; transition: background-color 120ms var(--ease); }
+.perch button:hover { background: color-mix(in srgb, var(--ink) 6%, var(--elevated)); }
 .perch button.primary { background: var(--btn-bg); color: var(--btn-fg); border-color: transparent; }
+.perch button.primary:hover { background: color-mix(in srgb, var(--btn-fg) 12%, var(--btn-bg)); }
+/* Floating overlays are glass, not shadowed: a blurred backdrop under a tint, with a hairline edge. The page
+   underneath can be any colour (a dark card over a white page), so the tint is dense enough and secondary
+   text a step brighter that every line keeps 4.5:1 over the worst backdrop. */
+.perch.glass { background: color-mix(in srgb, var(--elevated) 84%, transparent); -webkit-backdrop-filter: blur(28px) saturate(1.5);
+  backdrop-filter: blur(28px) saturate(1.5); border: 1px solid var(--hairline-strong);
+  --mute: color-mix(in srgb, var(--ink) 72%, var(--elevated)); }
 .perch button:focus-visible, .perch a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .perch * { transition: none !important; animation: none !important; } }
 `;

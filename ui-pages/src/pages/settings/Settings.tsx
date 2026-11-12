@@ -76,6 +76,11 @@ export function Settings() {
     if (!anchor) requestAnimationFrame(() => heading.current?.focus());
   };
 
+  // In a narrow window the nav is one scrolling strip; keep the current section in view.
+  useEffect(() => {
+    document.querySelector(".snav a[aria-current=page]")?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }, [section]);
+
   const results = searchSettings(query);
   /** While searching, the section of the top result keeps a faint mark in the nav. */
   const hinted = query.trim() ? results[0]?.section : undefined;
@@ -138,7 +143,19 @@ export function Settings() {
                   ))}
                 </ul>
               ) : (
-                <p class="mute">No settings match “{query.trim()}”</p>
+                <div class="no-results">
+                  <p class="mute">No settings match “{query.trim()}”</p>
+                  <button
+                    type="button"
+                    class="btn"
+                    onClick={() => {
+                      setQuery("");
+                      requestAnimationFrame(() => document.querySelector<HTMLInputElement>(".snav-search input")?.focus());
+                    }}
+                  >
+                    Clear search
+                  </button>
+                </div>
               )}
             </>
           ) : (

@@ -29,24 +29,30 @@ export async function codesPanel(): Promise<HTMLElement> {
 
   const entryRow = (entry: VaultEntry): HTMLElement => {
     const row = h("div", { class: "item" });
-    const view = () =>
+    // Each swap removes the focused button, so focus moves to the control that takes its place.
+    const view = (focus?: "edit" | "remove") => {
+      const editButton = h("button", { text: "Edit", on: { click: edit } });
+      const removeButton = h("button", { class: "danger", text: "Remove", on: { click: confirmRemove } });
       row.replaceChildren(
         h("div", { class: "grow" }, [
           h("div", { class: "label", text: entry.issuer || entry.account }),
           h("div", { class: "detail", text: [entry.issuer ? entry.account : "", entry.site ? `fills on ${entry.site}` : "copy only"].filter(Boolean).join(" · ") }),
         ]),
-        h("button", { text: "Edit", on: { click: edit } }),
-        h("button", { class: "danger", text: "Remove", on: { click: confirmRemove } }),
+        editButton,
+        removeButton,
       );
+      if (focus) (focus === "edit" ? editButton : removeButton).focus();
+    };
     const edit = () => {
       const issuer = input("Issuer", entry.issuer);
       const account = input("Account", entry.account);
       const site = input("Site it fills on", entry.site ?? "");
       row.replaceChildren(
         h("div", { class: "grow form", attrs: { style: "border: 0; padding: 0" } }, [
-          h("div", { class: "fields" }, [issuer, account]),
-          site,
+          h("div", { class: "fields" }, [field("Issuer", issuer), field("Account", account)]),
+          field("Site it fills on", site),
           h("div", { class: "actions" }, [
+            h("button", { class: "quiet", text: "Cancel", on: { click: () => view("edit") } }),
             h("button", {
               class: "primary",
               text: "Save",
@@ -57,27 +63,30 @@ export async function codesPanel(): Promise<HTMLElement> {
                     .then(draw, (e: unknown) => (status.textContent = errorText(e))),
               },
             }),
-            h("button", { class: "quiet", text: "Cancel", on: { click: view } }),
           ]),
         ]),
       );
+      issuer.focus();
     };
-    const confirmRemove = () =>
+    const confirmRemove = () => {
+      const cancel = h("button", { class: "quiet", text: "Cancel", on: { click: () => view("remove") } });
       row.replaceChildren(
         h("span", { class: "grow", text: `Remove ${entry.issuer || entry.account}? Make sure you can still sign in to it another way.` }),
-        h("button", { class: "quiet", text: "Cancel", on: { click: view } }),
-        h("button", { class: "primary", text: "Remove", on: { click: () => void vault.remove(entry.id).then(draw) } }),
+        cancel,
+        h("button", { class: "danger", text: "Remove", on: { click: () => void vault.remove(entry.id).then(draw) } }),
       );
+      cancel.focus();
+    };
     view();
     return row;
   };
 
-  const issuer = input("Issuer, such as GitHub", "");
-  const account = input("Account", "");
-  const key = input("Setup key", "");
+  const issuer = input("Issuer", "", "GitHub");
+  const account = input("Account", "", "you@example.com");
+  const key = input("Setup key", "", "The key the site shows under its QR code");
   key.setAttribute("autocomplete", "off");
   key.setAttribute("spellcheck", "false");
-  const site = input("Site it fills on, such as github.com", "");
+  const site = input("Site it fills on", "", "github.com");
   const add = h("button", { class: "primary", text: "Add code" });
   add.addEventListener("click", async () => {
     status.textContent = "";
@@ -99,12 +108,22 @@ export async function codesPanel(): Promise<HTMLElement> {
     h("h2", { text: "Authenticator" }),
     h("p", { class: "intro", text: keyInProfile ? DEV_INTRO : INTRO }),
     list,
-    h("div", { class: "form" }, [h("div", { class: "fields" }, [issuer, account]), key, site, h("div", { class: "actions" }, [add, status])]),
+    h("div", { class: "form" }, [
+      h("div", { class: "fields" }, [field("Issuer", issuer), field("Account", account)]),
+      field("Setup key", key),
+      field("Site it fills on", site),
+      h("div", { class: "actions" }, [add, status]),
+    ]),
   ]);
 }
 
-function input(placeholder: string, value: string): HTMLInputElement {
-  const field = h("input", { attrs: { type: "text", placeholder, "aria-label": placeholder } });
+/** A visible label above a field, so a filled field still says what it holds. */
+function field(label: string, control: HTMLInputElement): HTMLLabelElement {
+  return h("label", { class: "field" }, [h("span", { class: "caption", text: label }), control]);
+}
+
+function input(label: string, value: string, placeholder = ""): HTMLInputElement {
+  const field = h("input", { attrs: { type: "text", placeholder, "aria-label": label } });
   field.value = value;
   return field;
 }

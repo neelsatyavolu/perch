@@ -1,6 +1,6 @@
 # Perch: inactive tabs show their close button only on hover or focus.
 diff --git a/chrome/browser/ui/views/tabs/tab.cc b/chrome/browser/ui/views/tabs/tab.cc
-index 5db520967f..b537c7b3b5 100644
+index 5db520967f..daadfa65a3 100644
 --- a/chrome/browser/ui/views/tabs/tab.cc
 +++ b/chrome/browser/ui/views/tabs/tab.cc
 @@ -316,9 +316,7 @@ class Tab::TabCloseButtonObserver : public views::ViewObserver {
@@ -25,7 +25,33 @@ index 5db520967f..b537c7b3b5 100644
    }
  
    base::ScopedObservation<views::View, views::ViewObserver>
-@@ -854,6 +850,7 @@ void Tab::OnMouseMoved(const ui::MouseEvent& event) {
+@@ -550,10 +546,11 @@ void Tab::Layout(PassKey) {
+     const gfx::Size close_button_actual_size =
+         close_button_->GetPreferredSize();
+ 
+-    // The close button is vertically centered in the contents_rect.
++    // Perch: the close button is centred on the favicon's centre line, not
++    // the contents_rect's, so the two sit level.
+     const int top =
+         contents_rect.y() +
+-        Center(contents_rect.height(), close_button_actual_size.height());
++        Center(gfx::kFaviconSize, close_button_actual_size.height());
+ 
+     // The visible part of the close button should be placed against the
+     // right of the contents rect unless the tab is so small that it would
+@@ -634,7 +631,10 @@ void Tab::Layout(PassKey) {
+     // provided vertical space.
+     const gfx::Rect title_bounds(title_left, GetLocalBounds().y(), title_width,
+                                  GetLocalBounds().height());
+-    show_title = title_width > 0;
++    // Perch: a sliver too narrow for a few letters reads as a stray glyph,
++    // so a narrow tab shows only its favicon and close button.
++    constexpr int kPerchMinTitleWidth = 24;
++    show_title = title_width >= kPerchMinTitleWidth;
+ 
+     if (title_bounds != target_title_bounds_) {
+       target_title_bounds_ = title_bounds;
+@@ -854,6 +854,7 @@ void Tab::OnMouseMoved(const ui::MouseEvent& event) {
  
  void Tab::OnMouseEntered(const ui::MouseEvent& event) {
    MaybeUpdateHoverStatus(event);
@@ -33,7 +59,7 @@ index 5db520967f..b537c7b3b5 100644
  }
  
  void Tab::OnMouseExited(const ui::MouseEvent& event) {
-@@ -862,6 +859,7 @@ void Tab::OnMouseExited(const ui::MouseEvent& event) {
+@@ -862,6 +863,7 @@ void Tab::OnMouseExited(const ui::MouseEvent& event) {
    }
    mouse_hovered_ = false;
    controller_->HideHover(this, TabStyle::HideHoverStyle::kGradual);
@@ -41,7 +67,7 @@ index 5db520967f..b537c7b3b5 100644
  }
  
  void Tab::OnGestureEvent(ui::GestureEvent* event) {
-@@ -961,9 +959,8 @@ void Tab::OnFocus() {
+@@ -961,9 +963,8 @@ void Tab::OnFocus() {
    UpdateAccessibleName();
    controller_->UpdateHoverCard(this,
                                 TabSlotController::HoverCardUpdateType::kFocus);
@@ -53,7 +79,7 @@ index 5db520967f..b537c7b3b5 100644
  }
  
  void Tab::OnBlur() {
-@@ -975,9 +972,8 @@ void Tab::OnBlur() {
+@@ -975,9 +976,8 @@ void Tab::OnBlur() {
      controller_->UpdateHoverCard(
          nullptr, TabSlotController::HoverCardUpdateType::kFocus);
    }
@@ -65,7 +91,7 @@ index 5db520967f..b537c7b3b5 100644
  }
  
  void Tab::OnThemeChanged() {
-@@ -1425,8 +1421,14 @@ void Tab::UpdateIconVisibility() {
+@@ -1425,8 +1425,14 @@ void Tab::UpdateIconVisibility() {
        available_width -= favicon_width;
      }
  

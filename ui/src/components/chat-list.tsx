@@ -1,14 +1,15 @@
 /**
  * The chat list beside the full-page chat, in the shape of Aside's: a search field, New chat and
- * Settings, then every chat under "Chats", pinned ones first. A blue dot marks a reply not seen
- * yet, a red mark a reply that failed; hovering a row shows its last message and when.
+ * Settings, then every chat under "Chats", pinned ones first. A word at a row's end says its state
+ * (Working, Waiting, Failed or New); hovering a row shows its last message and when.
  */
 
 import { useState } from "preact/hooks";
 import type { ChatSummary } from "../api/types";
-import { Icon, PerchDot } from "./icon";
+import { Icon } from "./icon";
 
 const STATUS_WORDS = { idle: "", running: "Running", waiting: "Needs your approval" } as const;
+const ROW_WORDS = { idle: "", running: "Working", waiting: "Waiting" } as const;
 
 type Props = {
   chats: ChatSummary[];
@@ -76,7 +77,19 @@ export function ChatList({ chats, selected, onSelect, onNew, onSettings, now = D
         >
           <span class="row-t">{c.title}</span>
           {c.pinned && <Icon name="pin" />}
-          {c.status !== "idle" ? <PerchDot status={c.status} /> : c.failed ? <span class="mark err" aria-hidden="true">!</span> : c.unread ? <span class="mark new" aria-hidden="true" /> : null}
+          {c.status !== "idle" ? (
+            <span class="row-s" aria-hidden="true">
+              {ROW_WORDS[c.status]}
+            </span>
+          ) : c.failed ? (
+            <span class="row-s err" aria-hidden="true">
+              Failed
+            </span>
+          ) : c.unread ? (
+            <span class="row-s" aria-hidden="true">
+              New
+            </span>
+          ) : null}
         </button>
       ))}
       {hover && (

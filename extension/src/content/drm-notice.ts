@@ -11,8 +11,7 @@ let shown = false;
 
 const CSS = `
 .bar { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; align-items: center;
-  max-width: min(640px, calc(100vw - 32px)); padding: 10px 12px 10px 16px; background: var(--card); color: var(--ink);
-  border: 1px solid var(--hairline-strong); border-radius: 12px; box-shadow: var(--shadow); }
+  max-width: min(640px, calc(100vw - 32px)); padding: 7px 8px 7px 16px; color: var(--ink); border-radius: 12px; }
 .bar p { margin: 0; }
 `;
 
@@ -24,7 +23,7 @@ async function show(): Promise<void> {
   if (stored?.[service.id]) return;
   const overlay = createOverlay("perch-drm-notice", CSS);
   const close = el("button", { text: "Dismiss" });
-  const bar = el("div", { class: "perch bar", attrs: { role: "status" } }, [el("p", { text: noticeText(service.name) }), close]);
+  const bar = el("div", { class: "perch glass bar", attrs: { role: "status" } }, [el("p", { text: noticeText(service.name) }), close]);
   close.addEventListener("click", async () => {
     overlay.remove();
     const now = (await chrome.storage.local.get(KEY))[KEY] as Record<string, boolean> | undefined;

@@ -3,7 +3,7 @@ import type { Skill } from "../../api";
 import { checkSkillLocation } from "../../lib/validate";
 import { errorText, useAction, useAnnounce, useApi, useLoad } from "../../ui/frame";
 import { Dialog } from "../../ui/Dialog";
-import { Icon, Trash2 } from "../../ui/icons";
+import { Icon, Plus, Trash2 } from "../../ui/icons";
 import { Group, Row } from "../../ui/Row";
 import { Segmented } from "../../ui/Segmented";
 import { Switch } from "../../ui/Switch";
@@ -83,7 +83,7 @@ export function SkillsCard() {
             <Switch label={`Use the ${s.name} skill`} checked={s.enabled} onChange={(v) => toggle(s, v)} />
           </Row>
         ))}
-        <button type="button" class="more-row" onClick={() => setAdding(true)}>Add a skill from a folder, link or git repository</button>
+        <button type="button" class="more-row" onClick={() => setAdding(true)}><Icon of={Plus} />Add a skill from a folder, link or git repository</button>
       </div>
       <AddSkillDialog open={adding} onClose={() => setAdding(false)} onAdded={(s) => {
         setAdding(false);

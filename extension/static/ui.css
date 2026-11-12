@@ -1,40 +1,39 @@
-/* Perch extension pages: DESIGN.md tokens. Ink by default, Paper when the system is light. */
+/* Perch extension pages: DESIGN.md tokens (the Ink and Paper values of ui/src/styles/tokens.css,
+   with --elevated for --raised and --hairline for --hair). Ink by default, Paper when the system is light. */
 :root {
-  --canvas: #000000;
-  --card: #0e0e10;
-  --elevated: #1a1a1e;
-  --ink: #fcfdff;
-  --body: rgb(252 253 255 / 0.86);
-  --mute: #a1a4a5;
-  --hairline: rgb(255 255 255 / 0.06);
-  --hairline-strong: rgb(255 255 255 / 0.14);
+  --canvas: #0e0e0d;
+  --card: #141413;
+  --elevated: #1a1a18;
+  --ink: #f2f0ea;
+  --body: rgb(242 240 234 / 0.86);
+  --mute: #8b8a87;
+  --hairline: rgb(242 240 234 / 0.08);
+  --hairline-strong: rgb(242 240 234 / 0.18);
   --accent: #4c8dff;
-  --accent-tint: color-mix(in srgb, var(--accent) 22%, var(--elevated));
-  --btn-fg: #000000;
-  --btn-bg: #fcfdff;
-  --ok: #3dd68c;
-  --danger: #ff453a;
+  --btn-fg: #0e0e0d;
+  --btn-bg: #f2f0ea;
+  --ok: #4fbf85;
+  --danger: #ee5a4b;
   --sans: "Geist", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
-  --serif: "Geist Serif", "New York", ui-serif, Georgia, serif;
+  --serif: "Newsreader", Georgia, serif;
   --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --ease: cubic-bezier(0.2, 0, 0, 1);
   color-scheme: dark;
 }
 @media (prefers-color-scheme: light) {
   :root {
-    --canvas: #f4f5f7;
-    --card: #ffffff;
-    --elevated: #eceef1;
-    --ink: #0a0a0c;
-    --body: rgb(10 10 12 / 0.82);
-    --mute: #5f6366;
-    --hairline: rgb(0 0 0 / 0.06);
-    --hairline-strong: rgb(0 0 0 / 0.12);
-    --accent: #2b68d6;
-    --accent-tint: color-mix(in srgb, var(--accent) 10%, var(--elevated));
-    --btn-fg: #ffffff;
-    --btn-bg: #0a0a0c;
-    --danger: #d92d3f;
+    --canvas: #f7f5ef;
+    --card: #fbfaf6;
+    --elevated: #efece4;
+    --ink: #16161a;
+    --body: rgb(22 22 26 / 0.86);
+    --mute: #676667;
+    --hairline: rgb(22 22 26 / 0.1);
+    --hairline-strong: rgb(22 22 26 / 0.22);
+    --accent: #2a63cc;
+    --btn-fg: #f7f5ef;
+    --btn-bg: #16161a;
+    --danger: #bc2e23;
     color-scheme: light;
   }
 }
@@ -44,7 +43,7 @@ html, body { margin: 0; }
 body {
   background: var(--card);
   color: var(--body);
-  font: 13px/1.45 var(--sans);
+  font: 13px/20px var(--sans);
   -webkit-font-smoothing: antialiased;
 }
 h1, h2, h3 { color: var(--ink); font-weight: 500; margin: 0; }
@@ -65,15 +64,16 @@ button {
   border: 1px solid var(--hairline-strong);
   background: var(--elevated);
   font-weight: 500;
-  cursor: pointer;
+  cursor: default; /* Mac controls keep the arrow; only links get the pointing hand. */
   transition: background-color 120ms var(--ease), border-color 120ms var(--ease);
   white-space: nowrap;
 }
-button:hover { border-color: var(--mute); }
+button:not(.switch, :disabled):hover { background: color-mix(in srgb, var(--ink) 6%, var(--elevated)); }
 button.primary { background: var(--btn-bg); color: var(--btn-fg); border-color: transparent; }
+button.primary:not(:disabled):hover { background: color-mix(in srgb, var(--btn-fg) 12%, var(--btn-bg)); }
 button.danger { color: var(--danger); }
 button.quiet { background: transparent; border-color: transparent; color: var(--mute); }
-button.quiet:hover { color: var(--ink); }
+button.quiet:not(:disabled):hover { background: transparent; color: var(--ink); }
 button:disabled { opacity: 0.5; cursor: default; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
@@ -85,9 +85,11 @@ select, input[type="text"] {
   padding: 0 8px;
 }
 input[type="text"] { width: 100%; }
+select { cursor: default; transition: background-color 120ms var(--ease); }
+select:not(:disabled):hover { background: color-mix(in srgb, var(--ink) 6%, var(--elevated)); }
 input::placeholder { color: var(--mute); }
 
-/* Switch: knob is btn-fg on dark themes and white on Paper, so it shows on every accent. */
+/* Switch: on uses the primary button colours (btn-bg track, btn-fg knob, white knob on Paper), never the accent. */
 .switch {
   position: relative;
   width: 32px;
@@ -109,8 +111,10 @@ input::placeholder { color: var(--mute); }
   background: var(--ink);
   transition: transform 120ms var(--ease);
 }
-.switch[aria-checked="true"] { background: var(--accent); }
+.switch[aria-checked="true"] { background: var(--btn-bg); }
 .switch[aria-checked="true"]::after { transform: translateX(14px); background: var(--btn-fg); }
+.switch:not(:disabled):hover { background: color-mix(in srgb, var(--ink) 26%, transparent); }
+.switch[aria-checked="true"]:not(:disabled):hover { background: color-mix(in srgb, var(--btn-fg) 12%, var(--btn-bg)); }
 @media (prefers-color-scheme: light) { .switch[aria-checked="true"]::after { background: #ffffff; } }
 
 .row {
@@ -122,8 +126,17 @@ input::placeholder { color: var(--mute); }
 .row > .grow { flex: 1; min-width: 0; }
 .section { padding: 12px 16px; border-top: 1px solid var(--hairline); }
 .section-title { font-size: 12px; line-height: 16px; color: var(--mute); margin-bottom: 4px; }
-.value { color: var(--ink); font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.value { color: var(--ink); }
 .error { color: var(--danger); }
+.caption[role="status"]:empty { display: none; }
+
+/* Segmented control: the picked segment is a surface step with a hairline ring, never an accent fill. */
+.segmented { display: grid; grid-template-columns: 1fr 1fr; height: 28px; padding: 2px; border-radius: 8px; background: var(--elevated); }
+.segmented button { height: 24px; border: 0; border-radius: 6px; background: transparent; color: var(--mute); }
+.segmented button:not([aria-selected="true"], [aria-pressed="true"], :disabled):hover { background: transparent; color: var(--ink); }
+.segmented button[aria-selected="true"], .segmented button[aria-pressed="true"] {
+  background: var(--card); color: var(--ink); box-shadow: inset 0 0 0 1px var(--hairline-strong);
+}
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }

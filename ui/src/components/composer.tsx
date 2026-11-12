@@ -235,8 +235,8 @@ export function Composer(p: ComposerProps) {
           >
             <Icon name="plus" />
           </button>
-          <Menu label="Permission mode" choices={MODES} selected={[p.settings.mode]} onPick={(c) => p.onSettings({ mode: c.value })}>
-            <Icon name="shield" size={13} />
+          <Menu label="Permission mode" stacked choices={MODES} selected={[p.settings.mode]} onPick={(c) => p.onSettings({ mode: c.value })}>
+            <Icon name="shield" size={14} />
             {/* Ask and Guard fold to the shield in a narrow side chat; Skip confirmation always says so. */}
             <span class={p.settings.mode === "skip" ? undefined : "mode-t"}>{MODES.find((m) => m.value === p.settings.mode)?.label}</span>
           </Menu>
@@ -256,7 +256,7 @@ export function Composer(p: ComposerProps) {
           {effortChoices.length > 0 && (
             <Menu label="Effort" align="end" choices={effortChoices} selected={[p.settings.effort]} onPick={(c) => p.onSettings({ effort: c.value })}>
               <span class="eff-i">
-                <Icon name="gauge" size={13} />
+                <Icon name="gauge" size={14} />
               </span>
               <span class="eff-t">{EFFORT_LABEL[p.settings.effort]}</span>
             </Menu>

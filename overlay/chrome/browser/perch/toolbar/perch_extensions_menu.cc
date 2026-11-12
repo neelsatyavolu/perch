@@ -31,9 +31,12 @@
 #include "ui/base/mojom/dialog_button.mojom.h"
 #include "ui/color/color_id.h"
 #include "ui/gfx/geometry/insets.h"
+#include "ui/views/animation/ink_drop.h"
+#include "ui/views/animation/ink_drop_state.h"
 #include "ui/views/border.h"
 #include "ui/views/bubble/bubble_border.h"
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
+#include "ui/views/controls/button/button.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/controls/scroll_view.h"
 #include "ui/views/controls/separator.h"
@@ -41,6 +44,7 @@
 #include "ui/views/layout/box_layout_view.h"
 #include "ui/views/style/typography.h"
 #include "ui/views/view.h"
+#include "ui/views/view_tracker.h"
 #include "ui/views/widget/widget.h"
 
 namespace perch {
@@ -82,14 +86,17 @@ class ExtensionsPanel : public views::View,
     separator->SetProperty(views::kMarginsKey, gfx::Insets::VH(6, 0));
     separator->SetColorId(ui::kColorMenuSeparator);
     auto* title = AddChildView(std::make_unique<views::Label>(
-        u"Installed extensions", views::style::CONTEXT_LABEL,
+        u"Installed Extensions", views::style::CONTEXT_LABEL,
         views::style::STYLE_SECONDARY));
     title->SetHorizontalAlignment(gfx::ALIGN_LEFT);
-    title->SetBorder(views::CreateEmptyBorder(gfx::Insets::TLBR(2, 12, 4, 12)));
+    // On the 16 px edge the command rows' icons and the list's icons share.
+    title->SetBorder(views::CreateEmptyBorder(gfx::Insets::TLBR(2, 16, 4, 16)));
 
     auto list = std::make_unique<views::BoxLayoutView>();
     list->SetOrientation(views::BoxLayout::Orientation::kVertical);
-    // The rows' icons line up under the icons of the two commands above.
+    // The rows' icons line up under the icons of the two commands above:
+    // 10 px here plus the 6 px around a 16 px icon in its 28 px box is the
+    // commands' 16 px padding.
     list->SetInsideBorderInsets(gfx::Insets::TLBR(0, 10, 0, 6));
     std::vector<std::unique_ptr<ExtensionMenuItemView>> rows;
     for (const std::string& id : model_->action_ids()) {
@@ -220,6 +227,19 @@ bool ShowPerchExtensionsMenu(BrowserWindowInterface* browser,
   bubble->SetBackgroundColor(ui::kColorMenuBackground);
   bubble->SetEnableArrowKeyTraversal(true);
   bubble->SetContentsView(std::move(panel));
+  // The button rests again when the panel closes. The open panel takes the
+  // mouse, so the button never hears the pointer leave and would otherwise
+  // keep its pressed fill (as RunToolbarMenu does for the menus).
+  bubble->RegisterWindowClosingCallback(base::BindOnce(
+      [](views::ViewTracker* tracker) {
+        if (auto* button = views::Button::AsButton(tracker->view())) {
+          button->SetState(views::Button::STATE_NORMAL);
+          if (auto* ink_drop = views::InkDrop::Get(button)) {
+            ink_drop->AnimateToState(views::InkDropState::HIDDEN, nullptr);
+          }
+        }
+      },
+      base::Owned(std::make_unique<views::ViewTracker>(anchor))));
   views::Widget* widget =
       views::BubbleDialogDelegate::CreateBubbleDeprecated(
           std::move(bubble), views::Widget::InitParams::NATIVE_WIDGET_OWNS_WIDGET);

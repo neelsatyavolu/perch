@@ -11,7 +11,8 @@ type Props = {
   readonly wide?: boolean;
 };
 
-const FOCUSABLE = "button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex='-1'])";
+const FIELDS = "input:not(:disabled):not([type=checkbox]):not([type=radio]), select:not(:disabled), textarea:not(:disabled)";
+const FOCUSABLE ="button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex='-1'])";
 
 /**
  * Keeps Tab inside the dialog. A modal <dialog> makes the page behind it inert, but Tab can still
@@ -50,6 +51,9 @@ export function Dialog({ open, title, onClose, children, footer, wide }: Props) 
       opener.current = document.activeElement;
       if (typeof dlg.showModal === "function") dlg.showModal();
       else dlg.setAttribute("open", "");
+      // As on a Mac sheet: focus starts in the first field, or on Cancel for a confirmation, not on the close button.
+      const start = dlg.querySelector<HTMLElement>(`.dlg-b :is(${FIELDS}), .dlg-f .btn:not(.primary)`);
+      start?.focus();
     }
     if (!open && dlg.open) {
       dlg.close();

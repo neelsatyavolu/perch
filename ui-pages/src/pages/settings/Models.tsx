@@ -1,5 +1,5 @@
 import { Fragment } from "preact";
-import { useState } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
 import type { Effort, Model, Provider, TaskModel, TaskRole } from "../../api";
 import { EFFORTS, EFFORT_LABELS, ROLES } from "../../lib/labels";
 import { useAction, useApi, useLoad } from "../../ui/frame";
@@ -27,6 +27,7 @@ function Providers({ onModelsChanged }: { readonly onModelsChanged: () => void }
   /** A sign-in whose page shows a code to paste back (Claude), and what has been pasted so far. */
   const [awaiting, setAwaiting] = useState<{ id: Provider["id"]; code: string } | null>(null);
   const [showMore, setShowMore] = useState(false);
+  const card = useRef<HTMLDivElement>(null);
   const list = providers.data ?? [];
   const replace = (p: Provider) => {
     providers.set(list.map((x) => (x.id === p.id ? p : x)));
@@ -66,7 +67,7 @@ function Providers({ onModelsChanged }: { readonly onModelsChanged: () => void }
 
   return (
     <Group label="Providers" id="providers">
-      <div class="card">
+      <div class="card" ref={card}>
         {providers.error && <p class="empty">{providers.error}</p>}
         {visible.map((p) => (
           <Fragment key={p.id}>
@@ -86,7 +87,7 @@ function Providers({ onModelsChanged }: { readonly onModelsChanged: () => void }
                 }}
               >
                 <label for={`code-${p.id}`}>Paste the code {p.name} shows after you approve</label>
-                <input id={`code-${p.id}`} class="input" autoFocus spellcheck={false} autoComplete="off" value={awaiting.code} onInput={(e) => setAwaiting({ id: p.id, code: e.currentTarget.value })} />
+                <input id={`code-${p.id}`} class="field mono" autoFocus spellcheck={false} autoComplete="off" value={awaiting.code} onInput={(e) => setAwaiting({ id: p.id, code: e.currentTarget.value })} />
                 <button type="submit" class="btn primary" disabled={!awaiting.code.trim()}>Continue</button>
                 <button type="button" class="btn" onClick={() => setAwaiting(null)}>Cancel</button>
               </form>
@@ -94,7 +95,16 @@ function Providers({ onModelsChanged }: { readonly onModelsChanged: () => void }
           </Fragment>
         ))}
         {!showMore && (
-          <button type="button" class="more-row" onClick={() => setShowMore(true)}>
+          <button
+            type="button"
+            class="more-row"
+            onClick={() => {
+              // The button goes away, so focus moves to the first provider it revealed instead of dropping to the page.
+              const first = visible.length;
+              setShowMore(true);
+              requestAnimationFrame(() => card.current?.querySelectorAll(".srow")[first]?.querySelector<HTMLElement>("button, select")?.focus());
+            }}
+          >
             <Icon of={Plus} />Connect an API key or a model on this Mac
           </button>
         )}
@@ -116,7 +126,8 @@ function Providers({ onModelsChanged }: { readonly onModelsChanged: () => void }
 const fitsRole = (role: TaskRole, m: Model) =>
   role === "image" ? m.imageGeneration : role === "visual" ? m.vision && !m.imageGeneration : !m.imageGeneration;
 
-function TaskModels({ models }: { readonly models: readonly Model[] }) {
+function TaskModels({ models: loaded }: { readonly models: readonly Model[] | undefined }) {
+  const models = loaded ?? [];
   const api = useApi();
   const act = useAction();
   const tasks = useLoad((a) => a.getTaskModels());
@@ -127,7 +138,7 @@ function TaskModels({ models }: { readonly models: readonly Model[] }) {
   return (
     <Group label="Task models" id="task-models">
       <div class="card">
-        {models.length === 0 && <p class="empty">Sign in to a provider above to pick models.</p>}
+        {loaded && models.length === 0 && <p class="empty">Sign in to a provider above to pick models.</p>}
         {models.length > 0 && (tasks.data ?? []).map((t) => {
           const options = models.filter((m) => fitsRole(t.role, m));
           const label = ROLES[t.role].label;
@@ -159,7 +170,7 @@ export function Models() {
   return (
     <div class="sec">
       <Providers onModelsChanged={models.reload} />
-      <TaskModels models={models.data ?? []} />
+      <TaskModels models={models.data} />
     </div>
   );
 }

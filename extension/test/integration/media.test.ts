@@ -99,7 +99,7 @@ describe("picture in picture and speed from the panel and menus", () => {
     const point = await waitFor(
       () =>
         panel.evaluate<{ x: number; y: number } | null>(
-          `(() => { const b = [...document.querySelectorAll("button")].find((b) => b.textContent === "Picture in picture"); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`,
+          `(() => { const b = [...document.querySelectorAll("button")].find((b) => b.textContent === "Pop out video"); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`,
         ),
       "the panel's button",
     );

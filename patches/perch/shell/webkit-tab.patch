@@ -1,0 +1,127 @@
+# Perch: Netflix plays in a WebKit view inside the tab (FairPlay); Chromium commits a placeholder underneath, and the tab icon, favicon and security level read the WebKit page. No Widevine VMP signature yet (spec 5.2).
+diff --git a/chrome/browser/chrome_content_browser_client_navigation_throttles.cc b/chrome/browser/chrome_content_browser_client_navigation_throttles.cc
+index 696d48a30f..a09dca66c4 100644
+--- a/chrome/browser/chrome_content_browser_client_navigation_throttles.cc
++++ b/chrome/browser/chrome_content_browser_client_navigation_throttles.cc
+@@ -5,6 +5,7 @@
+ #include "chrome/browser/chrome_content_browser_client_navigation_throttles.h"
+ 
+ #include "chrome/browser/perch/agent/artifact_navigation_throttle.h"
++#include "chrome/browser/perch/webkit_tab/webkit_tab_throttle.h"
+ 
+ #include "base/command_line.h"
+ #include "base/feature_list.h"
+@@ -293,6 +294,8 @@ void CreateAndAddChromeThrottlesForNavigation(
+   content::NavigationHandle& handle = registry.GetNavigationHandle();
+   // Perch: artifacts can't navigate anywhere else.
+   perch::ArtifactNavigationThrottle::MaybeCreateAndAdd(registry);
++  // Perch: Netflix plays in a WebKit view (no Widevine VMP signature yet).
++  perch::WebKitTabThrottle::MaybeCreateAndAdd(registry);
+   if (handle.IsInMainFrame()) {
+     // MetricsNavigationThrottle requires that it runs before
+     // NavigationThrottles that may delay or cancel navigations, so only
+diff --git a/chrome/browser/ssl/chrome_security_state_util.cc b/chrome/browser/ssl/chrome_security_state_util.cc
+index f225c7cad1..de4ca1f0a3 100644
+--- a/chrome/browser/ssl/chrome_security_state_util.cc
++++ b/chrome/browser/ssl/chrome_security_state_util.cc
+@@ -12,6 +12,7 @@
+ #include "chrome/browser/browser_process.h"
+ #include "chrome/browser/lookalikes/safety_tip_web_contents_observer.h"
+ #include "chrome/browser/net/qwac_web_contents_observer.h"
++#include "chrome/browser/perch/webkit_tab/webkit_tab_state.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/ssl/https_only_mode_tab_helper.h"
+ #include "components/password_manager/core/browser/password_manager_metrics_util.h"
+@@ -99,6 +100,11 @@ std::unique_ptr<security_state::VisibleSecurityState> GetVisibleSecurityState(
+ 
+ security_state::SecurityLevel GetSecurityLevel(
+     content::WebContents* web_contents) {
++  // Perch: a WebKit tab's page is WebKit's; Chromium only holds a placeholder.
++  if (const perch::WebKitTabState* webkit =
++          perch::GetWebKitTabState(web_contents)) {
++    return webkit->secure ? security_state::SECURE : security_state::NONE;
++  }
+   return security_state::GetSecurityLevel(
+       *GetVisibleSecurityState(web_contents));
+ }
+diff --git a/chrome/browser/ui/browser_window/internal/BUILD.gn b/chrome/browser/ui/browser_window/internal/BUILD.gn
+index b24332fbc8..15f1c5a5d9 100644
+--- a/chrome/browser/ui/browser_window/internal/BUILD.gn
++++ b/chrome/browser/ui/browser_window/internal/BUILD.gn
+@@ -61,8 +61,12 @@ source_set("internal") {
+     ]
+   } else {
+     if (is_mac) {
+-      # Perch: on-device dictation (perch_dictation.mm).
+-      frameworks = [ "Speech.framework" ]
++      # Perch: on-device dictation (perch_dictation.mm) and WebKit tabs
++      # (webkit_tab.mm).
++      frameworks = [
++        "Speech.framework",
++        "WebKit.framework",
++      ]
+     }
+     sources += [
+       "browser_window_features.cc",
+@@ -122,6 +126,13 @@ source_set("internal") {
+       "//chrome/browser/perch/perch_menu_mac.mm",
+       "//chrome/browser/perch/agent/artifact_navigation_throttle.cc",
+       "//chrome/browser/perch/agent/artifact_navigation_throttle.h",
++      "//chrome/browser/perch/webkit_tab/webkit_tab.h",
++      "//chrome/browser/perch/webkit_tab/webkit_tab.mm",
++      "//chrome/browser/perch/webkit_tab/webkit_tab_rules.cc",
++      "//chrome/browser/perch/webkit_tab/webkit_tab_rules.h",
++      "//chrome/browser/perch/webkit_tab/webkit_tab_state.h",
++      "//chrome/browser/perch/webkit_tab/webkit_tab_throttle.cc",
++      "//chrome/browser/perch/webkit_tab/webkit_tab_throttle.h",
+       "//chrome/browser/perch/agent/artifact_scheme.cc",
+       "//chrome/browser/perch/agent/artifact_scheme.h",
+       "//chrome/browser/perch/agent/credential_fill.cc",
+diff --git a/components/favicon/content/content_favicon_util.cc b/components/favicon/content/content_favicon_util.cc
+index d3fec51eef..68b8508181 100644
+--- a/components/favicon/content/content_favicon_util.cc
++++ b/components/favicon/content/content_favicon_util.cc
+@@ -5,6 +5,7 @@
+ #include "components/favicon/content/content_favicon_util.h"
+ 
+ #include "base/check.h"
++#include "chrome/browser/perch/webkit_tab/webkit_tab_state.h"
+ #include "components/favicon/content/content_favicon_driver.h"
+ #include "components/favicon/core/favicon_driver.h"
+ #include "content/public/browser/navigation_controller.h"
+@@ -39,7 +40,8 @@ gfx::Image GetTabFaviconMaybeDesaturatedOnError(
+   gfx::Image favicon = favicon_driver->GetFavicon();
+ 
+   // Favicons are only desaturated for committed network-error pages.
+-  if (contents->ShouldShowLoadingUI()) {
++  // Perch: a WebKit tab's placeholder is an error page, but its page is not.
++  if (contents->ShouldShowLoadingUI() || perch::GetWebKitTabState(contents)) {
+     return favicon;
+   }
+ 
+diff --git a/components/tabs/impl/tab_network_state.cc b/components/tabs/impl/tab_network_state.cc
+index 496a197b1e..01634806c2 100644
+--- a/components/tabs/impl/tab_network_state.cc
++++ b/components/tabs/impl/tab_network_state.cc
+@@ -7,6 +7,7 @@
+ #include "base/check.h"
+ #include "content/public/browser/navigation_controller.h"
+ #include "content/public/browser/navigation_entry.h"
++#include "chrome/browser/perch/webkit_tab/webkit_tab_state.h"
+ #include "content/public/browser/web_contents.h"
+ 
+ namespace tabs {
+@@ -14,6 +15,13 @@ namespace tabs {
+ TabNetworkState TabNetworkStateForWebContents(content::WebContents* contents) {
+   DCHECK(contents);
+ 
++  // Perch: a WebKit tab loads in WebKit; Chromium's placeholder underneath is
++  // an error page that would otherwise show the tab's error icon.
++  if (const perch::WebKitTabState* webkit =
++          perch::GetWebKitTabState(contents)) {
++    return webkit->loading ? TabNetworkState::kLoading : TabNetworkState::kNone;
++  }
++
+   if (!contents->ShouldShowLoadingUI()) {
+     content::NavigationEntry* entry =
+         contents->GetController().GetLastCommittedEntry();

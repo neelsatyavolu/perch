@@ -15,21 +15,28 @@ html:has(.wl-stage), body:has(.wl-stage) { background: var(--card); }
 .wl-dots li.done { background: var(--mute); }
 .wl-dots li.on { background: var(--ink); }
 
-.wl { width: 600px; max-width: calc(100% - 48px); margin: 0 auto; padding: clamp(32px, 11vh, 128px) 0 72px; display: grid; gap: 16px; align-content: start; }
+.wl { width: 600px; max-width: calc(100% - 48px); margin: 0 auto; padding: 96px 0 72px; display: grid; gap: 16px; align-content: start; }
+@media (max-height: 760px) { .wl { padding-top: 48px; } }
 .wl .serif-title { font-size: 44px; }
-.wl-lead { color: var(--body); font-size: 15px; line-height: 1.6; max-width: 56ch; }
+.wl-lead { color: var(--body); font-size: 15px; line-height: 1.6; max-width: 56ch; text-wrap: pretty; }
 .wl-body { margin-top: 16px; }
 .wl-grid { display: grid; gap: 20px; }
 .wl-actions { display: flex; align-items: center; gap: 8px; margin-top: 20px; }
 .wl-actions .btn { height: 36px; font-size: 14px; }
 .wl-actions .btn.primary { padding: 0 16px; }
-.wl-back { margin-left: auto; }
+/* A quiet Back at the start of the row lines its label up with the column edge. */
+.wl-actions > .btn.quiet:first-child { margin-left: -12px; }
 
 .wl-hero { justify-items: center; text-align: center; align-content: center; gap: 22px; padding-top: 0; padding-bottom: 14vh; }
 .wl-hero { width: 880px; }
 .wl-hero .serif-title { font-size: clamp(44px, 6vw, 76px); text-wrap: balance; }
-.wl-hero .wl-lead { font-size: 17px; max-width: 46ch; }
+.wl-hero .wl-lead { font-size: 17px; max-width: 46ch; text-wrap: balance; }
 .wl-hero .wl-actions { justify-content: center; margin-top: 12px; }
+
+/* The restore page's "start fresh" confirmation. */
+/* Every button on the restore page takes the welcome size, so Restore, Cancel and Start fresh match the row below. */
+.wl-restore .btn { height: 36px; font-size: 14px; }
+.wl-restore .btn.primary { padding: 0 16px; }
 
 /* Each step arrives once, top to bottom. */
 @media (prefers-reduced-motion: no-preference) {

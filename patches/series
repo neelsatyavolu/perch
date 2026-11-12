@@ -2,6 +2,7 @@
 # Each patch starts with a "# Perch: <why>" comment. Borrowed patches keep their licence and credit.
 perch/branding/branding-file.patch
 perch/branding/chrome-client-hint.patch
+perch/branding/widevine-helper-signing.patch
 perch/branding/user-data-dir.patch
 perch/branding/safe-storage-name.patch
 perch/branding/no-api-keys-infobar.patch
@@ -118,3 +119,4 @@ perch/shell/settings-from-app-menu.patch
 perch/shell/bubble-theme-null-widget.patch
 perch/shell/sleep-pinned-tabs.patch
 perch/shell/restore-last-session.patch
+perch/shell/webkit-tab.patch

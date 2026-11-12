@@ -43,11 +43,29 @@ export function NewTab() {
   useEffect(() => {
     if (!narrow) setDrawer(false);
   }, [narrow]);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  // The drawer covers the page, so it takes focus while open: it starts on the search field, Tab
+  // cycles through the drawer and its toggle, and closing it puts focus back on the toggle.
   useEffect(() => {
     if (!drawer) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setDrawer(false);
+    const rail = () => document.getElementById("chat-rail");
+    rail()?.querySelector<HTMLElement>("input")?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setDrawer(false);
+      } else if (e.key === "Tab") {
+        const stops = [toggleRef.current, ...(rail()?.querySelectorAll<HTMLElement>("input, button") ?? [])].filter((x): x is HTMLElement => x !== null);
+        const at = stops.indexOf(document.activeElement as HTMLElement);
+        if (stops.length === 0) return;
+        e.preventDefault();
+        stops[(at + (e.shiftKey ? -1 : 1) + stops.length) % stops.length]?.focus();
+      }
+    };
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      if (rail()?.contains(document.activeElement) || document.activeElement === document.body) toggleRef.current?.focus();
+    };
   }, [drawer]);
 
   const refresh = () =>
@@ -90,6 +108,7 @@ export function NewTab() {
       <main class="ntp-main">
         <div class="ntp-bar">
           <button
+            ref={toggleRef}
             type="button"
             class="ib rail-toggle"
             aria-label={railOpen ? "Hide chats" : "Show chats"}

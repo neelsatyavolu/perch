@@ -28,6 +28,8 @@ def staged_build(paths, tmp_path):
     sparkle = tmp_path / "sparkle"
     (sparkle / "Sparkle.framework" / "Versions" / "B").mkdir(parents=True)
     repo = tmp_path / "repo"
+    (repo / "perchd" / "skills" / "example").mkdir(parents=True)
+    (repo / "perchd" / "skills" / "example" / "SKILL.md").write_text("Example skill")
     (repo / "ui" / "dist" / "assets").mkdir(parents=True)
     (repo / "ui" / "dist" / "sidebar.html").write_text("<!doctype html>")
     (repo / "ui" / "dist" / "assets" / "a.js").write_text("1")
@@ -62,6 +64,7 @@ def test_package_release_runs_steps_in_order(staged_build, recorder):
     assert recorder.calls[8][:2] == ["codesign", "--force"] and recorder.calls[8][-1] == str(perchd)
     assert "--entitlements" in recorder.calls[8] and "runtime" in recorder.calls[8]
     assert (framework / "Resources" / "perch_ui" / "assets" / "a.js").read_text() == "1"
+    assert (framework / "Resources" / "perch_skills" / "example" / "SKILL.md").read_text() == "Example skill"
     assert recorder.calls[10] == [
         "python3", str(dist / "stage" / "Perch Packaging" / "sign_chrome.py"),
         "--input", str(dist / "stage"), "--output", str(dist / "signed"),

@@ -1,6 +1,6 @@
 /* Backup and restore: the recovery key form under its row, and the export result. */
 .restore-form { display: grid; gap: 10px; justify-items: start; }
 .restore-form .restore-key { justify-self: stretch; }
-.card .restore-form { padding: 12px 16px 14px; }
+.card .restore-form { padding: 4px 14px 16px; }
 .restore-key { letter-spacing: 0.04em; }
-.backup-msg { padding: 0 16px 10px; }
+.backup-msg { padding: 8px 14px; }

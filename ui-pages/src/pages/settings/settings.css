@@ -25,15 +25,21 @@
 .spage h1:focus, .spage h1:focus-visible { outline: none; }
 .sec { display: grid; gap: 32px; }
 .spage .card { margin: 0 -14px; }
+/* Paper and Contrast draw a 1px card border, so the bleed grows by 1px to keep row text on the title's column. */
+:root[data-theme="paper"] .spage .card, :root[data-theme="contrast"] .spage .card { margin: 0 -15px; }
+/* A card inside a dialog sits on the dialog's own 20px inset, not the page bleed. */
+dialog.dlg .card { margin: 0; }
 .spage .group > .note, .spage .group > .err-note { max-width: 60ch; }
 
 .results { list-style: none; padding: 0; }
+.no-results { display: grid; gap: 12px; justify-items: start; }
 .result {
   width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; padding: 8px 14px;
-  background: none; border: 0; text-align: left; cursor: pointer; color: var(--mute); transition: background 120ms var(--ease);
+  background: none; border: 0; text-align: left; cursor: default; color: var(--mute); transition: background 120ms var(--ease);
 }
 .result .rt { display: grid; gap: 2px; min-width: 0; }
 .result:hover { background: var(--fill-hover); }
+.result:hover .cap { color: color-mix(in srgb, var(--mute) 85%, var(--ink)); }
 .result .n { color: var(--ink); font-size: 14px; line-height: 20px; font-weight: 500; }
 
 .srow.stack { grid-template-columns: 1fr; gap: 12px; }
@@ -41,12 +47,13 @@
 .mode-list { display: grid; }
 .mode-opt {
   display: grid; grid-template-columns: 20px 1fr; gap: 10px; align-items: start; padding: 14px; border: 0;
-  text-align: left; cursor: pointer; width: 100%; transition: background 120ms var(--ease);
+  text-align: left; cursor: default; width: 100%; transition: background 120ms var(--ease);
 }
 .mode-opt:hover:not(:disabled) { background: var(--fill-hover); }
+.mode-opt:hover:not(:disabled) .d { color: color-mix(in srgb, var(--mute) 85%, var(--ink)); }
 .mode-opt .n { color: var(--ink); font-size: 14px; line-height: 20px; font-weight: 500; }
 .mode-opt .d { color: var(--mute); font-size: 12px; }
-.mode-opt .radio { width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--hair-strong); margin-top: 2px; display: grid; place-items: center; }
+.mode-opt .radio { width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--field); margin-top: 2px; display: grid; place-items: center; }
 .mode-opt[aria-checked="true"] .radio { border-color: var(--ink); }
 .mode-opt[aria-checked="true"] .radio::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ink); }
 .mode-opt:disabled { cursor: default; }
@@ -54,13 +61,19 @@
 
 .add-rule { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; padding: 10px 14px; align-items: start; }
 .add-rule .field-error { grid-column: 1 / -1; }
+/* The add button sits in the rows' trash column and the pickers share one width, so both columns line up. */
+.add-rule > .ib { margin-top: 2px; }
+#site-rules .picker { width: 140px; }
 .cand { display: grid; grid-template-columns: auto 1fr; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--hair); align-items: start; }
 .cand:last-child { border-bottom: 0; }
 .cand .meta { display: grid; gap: 2px; min-width: 0; }
 .cand .mono { font-size: 12px; color: var(--mute); overflow-wrap: anywhere; }
 .cand-src { color: var(--ink); font-weight: 500; padding-top: 6px; }
+.cand-group { border: 0; margin: 0; padding: 0; min-width: 0; }
+legend.cand-src { padding: 6px 0 0; }
+.check-input { width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--ink); }
 .secret-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: center; }
-.kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; font-size: 13px; }
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; font-size: 13px; margin: 0; }
 .kv dt { color: var(--mute); }
 .kv dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
 
@@ -75,6 +88,8 @@
   .snav {
     width: auto; height: auto; padding: 8px 8px 8px; flex-direction: row; align-items: center; gap: 8px;
     overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+    /* Scrolling the current section into view leaves it a gutter instead of flush with the window edge. */
+    scroll-padding-inline: 16px;
   }
   .snav::-webkit-scrollbar { display: none; }
   .snav .snav-search { flex: none; width: 180px; }
@@ -84,16 +99,17 @@
   .snav a.row { width: auto; }
   .spage-panel { margin: 0; border-radius: 0; box-shadow: none; overflow: visible; }
   .spage { padding: 24px 16px 64px; }
-  .spage .card { margin: 0; }
+  .spage .card, :root[data-theme="paper"] .spage .card, :root[data-theme="contrast"] .spage .card { margin: 0; }
 }
 
 /* Activity log (spec 7.4): Geist Mono for times and sites. */
 .audit { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
-.audit th { text-align: left; font-weight: 400; color: var(--mute); padding: 8px 12px; border-bottom: 1px solid var(--hair); }
-.audit td { padding: 8px 12px; border-bottom: 1px solid var(--hair); color: var(--body); vertical-align: top; overflow-wrap: break-word; }
+.audit th { text-align: left; font-weight: 400; color: var(--mute); padding: 8px 14px; border-bottom: 1px solid var(--hair); }
+.audit td { padding: 8px 14px; border-bottom: 1px solid var(--hair); color: var(--body); vertical-align: top; overflow-wrap: break-word; }
 .audit td.where > span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .audit tr:last-child td { border-bottom: 0; }
-.audit th:nth-child(1) { width: 104px; }
+.audit th:nth-child(1) { width: 120px; }
+.audit td.mono { white-space: nowrap; }
 .audit th:nth-child(5) { width: 96px; }
 .audit .tab-t { display: block; color: var(--mute); }
 .audit .o-declined td:last-child, .audit .o-blocked td:last-child { color: var(--ink); }

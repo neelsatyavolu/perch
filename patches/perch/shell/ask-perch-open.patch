@@ -1,6 +1,6 @@
-# Perch: Ask Perch hides while the chat is open, and its words sit in the middle of the pill.
+# Perch: Ask Perch hides while the chat is open, its words sit in the middle of the pill, and the pill keeps the toolbar buttons' height.
 diff --git a/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.cc b/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.cc
-index 84ae4d5a9d..9876b871d7 100644
+index 84ae4d5a9d..b9f1a31538 100644
 --- a/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.cc
 +++ b/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.cc
 @@ -165,12 +165,21 @@ void PinnedActionToolbarButton::SetIconVisibility(bool is_visible) {
@@ -25,7 +25,22 @@ index 84ae4d5a9d..9876b871d7 100644
    anchor_higlight_.reset();
    GetViewAccessibility().SetCheckedState(ax::mojom::CheckedState::kFalse);
    UpdateStatusIndicator();
-@@ -232,8 +241,12 @@ void PinnedActionToolbarButton::Layout(PassKey) {
+@@ -222,6 +231,14 @@ gfx::Size PinnedActionToolbarButton::CalculatePreferredSize(
+   const gfx::Size toolbar_button_size = container_->GetDefaultButtonSize();
+   const gfx::Size preferred_size =
+       ToolbarButton::CalculatePreferredSize(available_size);
++  // Perch: Ask Perch's words make it wider than a toolbar button, but it
++  // keeps the toolbar button's height so the pill lines up with the address
++  // bar instead of shrinking to its text.
++  if (action_id_ == kActionSidePanelShowPerch) {
++    gfx::Size pill_size = preferred_size;
++    pill_size.SetToMax(toolbar_button_size);
++    return pill_size;
++  }
+   return std::max(preferred_size, toolbar_button_size,
+                   [](const gfx::Size s1, const gfx::Size s2) {
+                     return s1.width() < s2.width();
+@@ -232,8 +249,12 @@ void PinnedActionToolbarButton::Layout(PassKey) {
    LayoutSuperclass<ToolbarButton>(this);
    // Perch: Ask Perch's words sit in the middle of its pill.
    if (action_id_ == kActionSidePanelShowPerch) {

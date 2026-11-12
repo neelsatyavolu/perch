@@ -40,6 +40,11 @@ export function FullChat({ client, initialChat = null, initialAsk = null, onNavi
   const [pending, setPending] = useState<Partial<ChatSettings>>({});
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  /** The delete bar's safe button: it takes focus when the bar opens, so a keyboard user lands in it. */
+  const keep = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (confirmDelete) keep.current?.focus();
+  }, [confirmDelete]);
   const { view } = chat;
   const selected = view.chat?.id ?? null;
   /** Counts opens, so a slow load never replaces a chat opened after it. */
@@ -210,7 +215,7 @@ export function FullChat({ client, initialChat = null, initialAsk = null, onNavi
             <button type="button" class="btn small danger-text" onClick={() => void chat.run(remove)}>
               Delete chat
             </button>
-            <button type="button" class="btn small outline" onClick={() => setConfirmDelete(false)}>
+            <button ref={keep} type="button" class="btn small outline" onClick={() => setConfirmDelete(false)}>
               Keep it
             </button>
           </div>

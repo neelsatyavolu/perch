@@ -81,6 +81,17 @@
       "description": "Picture in picture for the playing video"
     }
   },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "fonts/newsreader.woff2"
+      ],
+      "matches": [
+        "<all_urls>"
+      ],
+      "use_dynamic_url": true
+    }
+  ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'"
   },

@@ -1,4 +1,4 @@
-# Perch: a hairline split divider with an 8 px grab area, and ⌃⌘[ / ⌃⌘] to focus a side.
+# Perch: a hairline split divider with an 8 px grab area, and ⌃⌘[ / ⌃⌘] to focus a side; the address bar's target pane gets a 2 px accent ring.
 diff --git a/chrome/browser/global_keyboard_shortcuts_mac.mm b/chrome/browser/global_keyboard_shortcuts_mac.mm
 index 4e41528d09..bd511ac498 100644
 --- a/chrome/browser/global_keyboard_shortcuts_mac.mm
@@ -24,6 +24,20 @@ index 4e41528d09..bd511ac498 100644
      // Tab Group Shortcuts
      keys.push_back(
          {true, false, true, false, kVK_ANSI_C, IDC_ADD_NEW_TAB_TO_GROUP});
+diff --git a/chrome/browser/ui/views/frame/contents_container_outline.h b/chrome/browser/ui/views/frame/contents_container_outline.h
+index 3dd6c5cf30..424a75f0f4 100644
+--- a/chrome/browser/ui/views/frame/contents_container_outline.h
++++ b/chrome/browser/ui/views/frame/contents_container_outline.h
+@@ -22,7 +22,8 @@ class ContentsContainerOutline : public views::View,
+  public:
+   static constexpr int kCornerRadius = 8;
+   static constexpr int kThickness = 1;
+-  static constexpr int kHighlightThickness = 3;
++  // Perch: the highlight is a focus ring, 2px like every other (DESIGN.md).
++  static constexpr int kHighlightThickness = 2;
+ 
+   explicit ContentsContainerOutline(views::View* mini_toolbar);
+   ContentsContainerOutline(ContentsContainerOutline&) = delete;
 diff --git a/chrome/browser/ui/views/frame/multi_contents_resize_area.cc b/chrome/browser/ui/views/frame/multi_contents_resize_area.cc
 index 37a68df743..7c77fa80d6 100644
 --- a/chrome/browser/ui/views/frame/multi_contents_resize_area.cc

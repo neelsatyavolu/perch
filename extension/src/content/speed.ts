@@ -4,8 +4,7 @@ import { mainVideo, stepRate } from "../media/video";
 import { createOverlay, el, isEditable, type Overlay } from "./overlay";
 
 const CSS = `
-.chip { position: fixed; padding: 0 10px; height: 28px; display: flex; align-items: center; border-radius: 8px;
-  background: var(--card); color: var(--ink); border: 1px solid var(--hairline-strong); box-shadow: var(--shadow);
+.chip { position: fixed; padding: 0 12px; height: 28px; display: flex; align-items: center; border-radius: 8px; color: var(--ink);
   font: 500 13px/1 var(--mono); font-variant-numeric: tabular-nums; transition: opacity 180ms var(--ease); }
 `;
 
@@ -30,7 +29,7 @@ window.addEventListener(
 function showRate(video: HTMLVideoElement): void {
   if (!chip) {
     const overlay = createOverlay("perch-speed", CSS);
-    const node = el("div", { class: "perch chip", attrs: { role: "status", "aria-live": "polite" } });
+    const node = el("div", { class: "perch glass chip", attrs: { role: "status", "aria-live": "polite" } });
     overlay.root.append(node);
     chip = { overlay, node };
   }

@@ -1,0 +1,47 @@
+# Perch: let the utility helper dlopen Google's Widevine CDM. Library validation rejects it because the CDM team id is Google's, not Perch's. Aperitif helpers are the ones that actually run.
+diff --git a/chrome/installer/mac/BUILD.gn b/chrome/installer/mac/BUILD.gn
+index dc338faaaf..783998f8b5 100644
+--- a/chrome/installer/mac/BUILD.gn
++++ b/chrome/installer/mac/BUILD.gn
+@@ -141,6 +141,7 @@ copy("copies") {
+     "$root_gen_dir/chrome/app-entitlements.plist",
+     "$root_out_dir/dmg_tool",
+     "$root_out_dir/hfs_tool",
++    "//chrome/app/helper-cdm-entitlements.plist",
+     "//chrome/app/helper-gpu-entitlements.plist",
+     "//chrome/app/helper-renderer-entitlements.plist",
+     "pkg-dmg",
+diff --git a/chrome/installer/mac/signing/parts.py b/chrome/installer/mac/signing/parts.py
+index 0a3ba9233e..8c93d91907 100644
+--- a/chrome/installer/mac/signing/parts.py
++++ b/chrome/installer/mac/signing/parts.py
+@@ -60,7 +60,12 @@ def get_parts(config):
+         'helper-app': CodeSignedProduct(
+             '{0.framework_dir}/Helpers/{0.product} Helper.app'.format(config),
+             '{}.helper'.format(uncustomized_bundle_id),
+-            options=CodeSignOptions.FULL_HARDENED_RUNTIME_OPTIONS,
++            # This helper dlopens Widevine. Google signs the CDM, so library
++            # validation has to be off. Omit restrict: with that entitlement,
++            # restrict makes dyld refuse the helper's @executable_path loads.
++            options=CodeSignOptions.KILL
++            | CodeSignOptions.HARDENED_RUNTIME,
++            entitlements='helper-cdm-entitlements.plist',
+             verify_options=verify_options,
+         ),
+         'helper-renderer-app': CodeSignedProduct(
+@@ -94,8 +99,14 @@ def get_parts(config):
+         'helper-aperitif-app': CodeSignedProduct(
+             '{0.framework_dir}/Helpers/{0.product} Helper (Aperitif).app'.format(
+                 config
+             ),
+             '{}.helper'.format(uncustomized_bundle_id),
+-            options=CodeSignOptions.FULL_HARDENED_RUNTIME_OPTIONS,
++            # Aperitif is on by default, so the Widevine CDM host runs here.
++            # Google signs the CDM, so library validation has to be off.
++            # Omit restrict: with that entitlement, restrict makes dyld refuse
++            # this helper's @executable_path loads of libaperitif.
++            options=CodeSignOptions.KILL
++            | CodeSignOptions.HARDENED_RUNTIME,
++            entitlements='helper-cdm-entitlements.plist',
+             verify_options=verify_options,
+         ),

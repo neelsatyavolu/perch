@@ -1,6 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
 import type { MemoryDoc, MemoryFolder, MemoryPage as Page } from "../../api";
-import { relativeTime } from "../../lib/time";
+import { inlineTime } from "../../lib/time";
 import { useAction, useApi, useLoad } from "../../ui/frame";
 import { Dialog } from "../../ui/Dialog";
 import { ArrowLeft, Icon, Search, User } from "../../ui/icons";
@@ -30,7 +30,7 @@ function Editor({ path, onDeleted }: { readonly path: string; readonly onDeleted
       <div class="doc-h">
         <div>
           <h2 id="doc-h">{d.title}</h2>
-          <p class="cap"><span class="mono">{d.path}</span> · updated {relativeTime(d.updatedAt).toLowerCase()}</p>
+          <p class="cap"><span class="mono">{d.path}</span> · updated {inlineTime(d.updatedAt)}</p>
         </div>
         <span class="grow" />
         <button type="button" class="btn danger" onClick={() => setConfirming(true)}>Delete page</button>
@@ -145,7 +145,7 @@ export function MemoryPage() {
     <main class="mem-page">
       {view === "setup" ? (
         <>
-          <button type="button" class="btn quiet back" onClick={() => go("browse")}><Icon of={ArrowLeft} />Memory</button>
+          <div class="mem-back"><button type="button" class="btn quiet back" onClick={() => go("browse")}><Icon of={ArrowLeft} />Memory</button></div>
           <SetupMemory onOpenMemory={() => go("browse")} />
         </>
       ) : (

@@ -1,4 +1,4 @@
-# Perch: Ledger's shapes in the native chrome: 4px fields, buttons and rows, 6px menus and trays, and Ask Perch's words centred.
+# Perch: Ledger's shapes in the native chrome: 4px fields, buttons and rows, 6px menus, bubbles and trays, Ask Perch's words centred, and the address bar's focus ring 2px outside the field.
 diff --git a/chrome/browser/resources/omnibox_popup/omnibox_popup_searchbox.css b/chrome/browser/resources/omnibox_popup/omnibox_popup_searchbox.css
 index 4a9e23a1e2..8640c7bff4 100644
 --- a/chrome/browser/resources/omnibox_popup/omnibox_popup_searchbox.css
@@ -13,7 +13,7 @@ index 4a9e23a1e2..8640c7bff4 100644
    --cr-searchbox-height: var(--location-bar-height);
    --cr-searchbox-icon-size-in-searchbox: var(--location-bar-icon-size);
 diff --git a/chrome/browser/ui/views/chrome_layout_provider.cc b/chrome/browser/ui/views/chrome_layout_provider.cc
-index 925fc1d223..3289dd7613 100644
+index 925fc1d223..6870a0f2c4 100644
 --- a/chrome/browser/ui/views/chrome_layout_provider.cc
 +++ b/chrome/browser/ui/views/chrome_layout_provider.cc
 @@ -339,8 +339,8 @@ views::ShapeSysTokens GetShapeSysToken(views::ShapeContextToken id) {
@@ -27,7 +27,7 @@ index 925fc1d223..3289dd7613 100644
        });
    const auto it = shape_token_map.find(id);
    return it == shape_token_map.end() ? views::ShapeSysTokens::kDefault
-@@ -352,9 +352,9 @@ int ChromeLayoutProvider::GetCornerRadiusMetric(views::ShapeContextToken token,
+@@ -352,9 +352,14 @@ int ChromeLayoutProvider::GetCornerRadiusMetric(views::ShapeContextToken token,
    CHECK_GE(token, views::kShapeContextTokenStart, base::NotFatalUntil::M162);
    CHECK_LT(token, kChromeShapeContextTokenEnd, base::NotFatalUntil::M162);
  
@@ -36,14 +36,33 @@ index 925fc1d223..3289dd7613 100644
    if (token == views::ShapeContextTokens::kButtonRadius) {
 -    return 8;
 +    return 4;
++  }
++  // Perch: bubbles and the native dialogs built like them are 6px, the
++  // menus' shape (DESIGN.md), not Material's 12px.
++  if (token == views::ShapeContextTokens::kDialogRadius) {
++    return 6;
    }
    if (token < views::ShapeContextTokens::kShapeContextTokenEnd) {
      return LayoutProvider::GetCornerRadiusMetric(token, size);
 diff --git a/chrome/browser/ui/views/location_bar/location_bar_view.cc b/chrome/browser/ui/views/location_bar/location_bar_view.cc
-index 14ce1f3adc..2c5f3dc5a7 100644
+index 14ce1f3adc..179f197a18 100644
 --- a/chrome/browser/ui/views/location_bar/location_bar_view.cc
 +++ b/chrome/browser/ui/views/location_bar/location_bar_view.cc
-@@ -557,8 +557,8 @@ int LocationBarView::GetBorderRadius() const {
+@@ -271,8 +271,11 @@ LocationBarView::LocationBarView(BrowserWindowInterface* browser,
+           return v->GetOmniboxController()->edit_model()->is_caret_visible() &&
+                  !v->ShouldUsePopupOpenAppearance();
+         }));
+-    views::FocusRing::Get(this)->SetOutsetFocusRingDisabled(true);
+-    views::InstallPillHighlightPathGenerator(this);
++    // Perch: the ring sits 2px outside the 4px field and follows its corners
++    // (DESIGN.md); the 28px field leaves 6px of the 40px toolbar above and
++    // below it, room for the 2px gap and the 2px ring.
++    views::InstallRoundRectHighlightPathGenerator(this, gfx::Insets(),
++                                                  GetBorderRadius());
+ 
+ #if BUILDFLAG(OS_LEVEL_GEOLOCATION_PERMISSION_SUPPORTED)
+     if (features::IsOsLevelGeolocationPermissionSupportEnabled()) {
+@@ -557,8 +560,8 @@ int LocationBarView::GetBorderRadius() const {
  
  // static
  int LocationBarView::ComputeBorderRadius(gfx::Size size) {
@@ -54,7 +73,7 @@ index 14ce1f3adc..2c5f3dc5a7 100644
  }
  
  // static
-@@ -1102,7 +1102,9 @@ void LocationBarView::LayoutPerchTitle(const gfx::Rect& location_bounds) {
+@@ -1102,7 +1105,9 @@ void LocationBarView::LayoutPerchTitle(const gfx::Rect& location_bounds) {
    const int x =
        location_bounds.x() + omnibox_view_->GetUnelidedTextWidth() + kGap;
    const int room = location_bounds.right() - x;
@@ -110,10 +129,10 @@ index a96a273a1a..2d6825901b 100644
  
  float ToolbarButton::GetCornerRadiusFor(ToolbarButton::Edge edge) const {
 diff --git a/ui/views/controls/menu/menu_config_mac.mm b/ui/views/controls/menu/menu_config_mac.mm
-index db8e801278..3670ecbea2 100644
+index db8e801278..522c1b36ce 100644
 --- a/ui/views/controls/menu/menu_config_mac.mm
 +++ b/ui/views/controls/menu/menu_config_mac.mm
-@@ -12,16 +12,16 @@ void MenuConfig::InitPlatform() {
+@@ -12,16 +12,18 @@ void MenuConfig::InitPlatform() {
    use_mnemonics = false;
    show_context_menu_accelerators = false;
    all_menus_use_prefix_selection = true;
@@ -131,6 +150,8 @@ index db8e801278..3670ecbea2 100644
 -  rounded_menu_vertical_border_size = 6;
 -  menu_horizontal_border_size = 6;
 +  corner_radius = 6;
++  // Combobox dropdowns and context menus too, not Material's 12px.
++  auxiliary_corner_radius = 6;
 +  rounded_menu_vertical_border_size = 4;
 +  menu_horizontal_border_size = 4;
    // The hairline edge (kColorMenuBorder) around the frosted fill.

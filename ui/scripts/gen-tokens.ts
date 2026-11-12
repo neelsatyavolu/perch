@@ -30,7 +30,7 @@ const HOVER: Record<string, number> = { ink: 0.08, graphite: 0.06, dusk: 0.05, p
 /**
  * The surface steps above the theme table (aside-parity spec 1): a lifted sidebar (`--side`), filled
  * rows, bubbles and the composer (`--fill`), their hover (`--fill-hover`) and the current list row
- * (`--nav-on`, with `--nav-ring` drawn round it only on Contrast). Mixes of the theme's own colours,
+ * (`--nav-on`, with the hairline `--nav-ring` DESIGN.md asks for round it, so it never reads as a hovered row). Mixes of the theme's own colours,
  * so every theme and accent keeps working.
  */
 export function surfaces(t: Theme): string[] {
@@ -39,12 +39,12 @@ export function surfaces(t: Theme): string[] {
   if (!t.dark)
     return [
       "  --side: var(--raised); --fill: #FFFFFF; --fill-hover: color-mix(in srgb, var(--ink) 4%, #FFFFFF);",
-      "  --nav-on: color-mix(in srgb, var(--ink) 9%, var(--side)); --nav-ring: transparent;",
+      "  --nav-on: color-mix(in srgb, var(--ink) 9%, var(--side)); --nav-ring: var(--hair);",
     ];
   return [
     "  --side: color-mix(in srgb, var(--ink) 6%, var(--canvas)); --fill: color-mix(in srgb, var(--ink) 6%, var(--card));",
     "  --fill-hover: color-mix(in srgb, var(--ink) 10%, var(--card));",
-    "  --nav-on: color-mix(in srgb, var(--ink) 13%, var(--side)); --nav-ring: transparent;",
+    "  --nav-on: color-mix(in srgb, var(--ink) 13%, var(--side)); --nav-ring: var(--hair);",
   ];
 }
 
@@ -144,6 +144,8 @@ export function renderCss(d: Design): string {
       `  --btn-bg: ${t.btnBg}; --btn-fg: ${t.btnFg};`,
       ...surfaces(t),
       `  --danger: ${t.dark ? d.danger.dark : d.danger.light};`,
+      // The danger word on a primary button sits on the opposite theme's fill, so it takes that theme's red.
+      `  --btn-danger: ${t.dark ? d.danger.light : d.danger.dark};`,
       "  --pop: none;",
       `  --accent: var(${t.dark ? "--accent-dark" : "--accent-light"});`,
       `  --accent-soft: ${t.dark ? "color-mix(in srgb, var(--accent) 22%, var(--raised))" : "color-mix(in srgb, var(--accent) 10%, transparent)"};`,

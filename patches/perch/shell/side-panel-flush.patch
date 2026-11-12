@@ -1,6 +1,6 @@
 # Perch: the side panel sits flush with one hairline.
 diff --git a/chrome/browser/ui/views/side_panel/side_panel.cc b/chrome/browser/ui/views/side_panel/side_panel.cc
-index 0098885c7d..9ffa33ce77 100644
+index 0098885c7d..98f4c8b879 100644
 --- a/chrome/browser/ui/views/side_panel/side_panel.cc
 +++ b/chrome/browser/ui/views/side_panel/side_panel.cc
 @@ -73,12 +73,14 @@ constexpr BrowserAnimationGroup kAnimationGroup =
@@ -20,7 +20,24 @@ index 0098885c7d..9ffa33ce77 100644
  
  // We want the border to visually look like GetBorderThickness() units on all
  // sides except the top. On the top side, background is drawn on top of the
-@@ -218,10 +220,8 @@ class ContentParentView : public views::View, public views::ViewObserver {
+@@ -91,6 +93,16 @@ gfx::Insets GetBorderInsets() {
+                            border_thickness, border_thickness);
+ }
+ 
++// Perch: the panel's 1px edge is painted as a hairline in the separator
++// colour so it meets the toolbar's bottom rule, rather than showing whatever
++// is behind the panel. `top_inset` is the unpainted space for the header.
++std::unique_ptr<views::Border> CreatePerchPanelBorder(int top_inset) {
++  return views::CreatePaddedBorder(
++      views::CreateSolidSidedBorder(GetBorderInsets().set_top(0),
++                                    kColorSidePanelContentAreaSeparator),
++      gfx::Insets::TLBR(top_inset, 0, 0, 0));
++}
++
+ SidePanel::HorizontalAlignment GetHorizontalAlignment(
+     PrefService* pref_service,
+     std::optional<SidePanelEntryId> entry_id) {
+@@ -218,10 +230,8 @@ class ContentParentView : public views::View, public views::ViewObserver {
    }
  
    gfx::RoundedCornersF GetRoundedCorners() {
@@ -33,3 +50,18 @@ index 0098885c7d..9ffa33ce77 100644
    }
  
    const raw_ptr<BrowserView> browser_view_;
+@@ -417,12 +427,11 @@ void SidePanel::AddHeaderView(std::unique_ptr<views::View> view) {
+   // Update the border so that the insets include space for the header to be
+   // placed on top of the border area.
+   int top_inset = header_view_->height() - GetBorderInsets().top();
+-  SetBorder(views::CreateEmptyBorder(GetBorderInsets() +
+-                                     gfx::Insets::TLBR(top_inset, 0, 0, 0)));
++  SetBorder(CreatePerchPanelBorder(GetBorderInsets().top() + top_inset));
+ }
+ 
+ void SidePanel::RemoveHeaderView() {
+-  SetBorder(views::CreateEmptyBorder(GetBorderInsets().set_top(0)));
++  SetBorder(CreatePerchPanelBorder(0));
+   if (header_view_) {
+     auto header_view = RemoveChildViewT(header_view_);
+     header_view_ = nullptr;

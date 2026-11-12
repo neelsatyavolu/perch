@@ -18,10 +18,13 @@ type Props = {
   readonly onFinished?: () => void;
   /** Inside another page (the welcome flow): no <main>, an h2 title, and the URL hash is ignored. */
   readonly embedded?: boolean;
+  /** Embedded only: the host flow's Skip and Back, shown in the wizard's own button row. */
+  readonly onSkip?: () => void;
+  readonly onBack?: () => void;
 };
 
 /** The import wizard (spec 10), also the first-run import step. */
-export function ImportWizard({ onFinished, embedded = false }: Props) {
+export function ImportWizard({ onFinished, embedded = false, onSkip, onBack }: Props) {
   const api = useApi();
   const act = useAction();
   const browsers = useLoad((a) => a.detectBrowsers());
@@ -95,11 +98,16 @@ export function ImportWizard({ onFinished, embedded = false }: Props) {
   const csvMissing = needs.includes("csv-export") && !csv;
   const Wrap = embedded ? "div" : "main";
   const Title = embedded ? "h2" : "h1";
+  // Embedded, the host page's heading and step dots already say where you are; the title stays for
+  // screen readers and focus, and shows only to report the outcome.
+  const titleClass = embedded && !done && !failed ? "sr-only" : undefined;
+  const ownBack = step === "data" || step === "access" || failed;
+  const backClass = embedded ? "btn quiet" : "btn";
 
   return (
     <Wrap class={embedded ? "imp imp-embedded" : "imp-page"}>
       <div class="imp">
-        <Title ref={heading} tabIndex={-1}>{done ? "Import finished" : failed ? "Import stopped" : "Import from another browser"}</Title>
+        <Title ref={heading} class={titleClass} tabIndex={-1}>{done ? "Import finished" : failed ? "Import stopped" : "Import from another browser"}</Title>
         <ol class="steps-ol" aria-label="Steps">
           {STEPS.map((s, i) => (
             <li key={s.id} aria-current={i === at ? "step" : undefined} class={i < at ? "past" : ""}>{s.label}</li>
@@ -139,8 +147,10 @@ export function ImportWizard({ onFinished, embedded = false }: Props) {
           )}
         </section>
         <div class="imp-foot">
-          {(step === "data" || step === "access" || failed) && <button type="button" class="btn" onClick={back}>Back</button>}
+          {ownBack && <button type="button" class={backClass} onClick={back}>Back</button>}
+          {!ownBack && onBack && step === "browser" && <button type="button" class={backClass} onClick={onBack}>Back</button>}
           <span class="grow" />
+          {onSkip && !done && <button type="button" class="btn quiet" onClick={onSkip}>Skip import</button>}
           {step === "browser" && <button type="button" class="btn primary" disabled={!browser} onClick={next}>Continue</button>}
           {step === "data" && <button type="button" class="btn primary" disabled={kinds.length === 0} onClick={next}>Continue</button>}
           {step === "access" && <button type="button" class="btn primary" disabled={csvMissing} onClick={next}>Start import</button>}

@@ -21,20 +21,24 @@ type MenuProps<T extends string> = {
   align?: "start" | "end";
   /** What an open list with no choices says. */
   empty?: string;
+  /** Puts each hint on its own line under the label, for hints that are sentences. */
+  stacked?: boolean;
 };
 
-export function Menu<T extends string>({ label, children, choices, selected, onPick, mono, align = "start", empty = "Nothing here yet" }: MenuProps<T>) {
+export function Menu<T extends string>({ label, children, choices, selected, onPick, mono, align = "start", empty = "Nothing here yet", stacked = false }: MenuProps<T>) {
   const id = useId();
   const [open, setOpen] = useState(false);
-  const [active, setActive] = useState(0);
+  // -1 is no highlight: a menu opened by the pointer highlights nothing until the pointer enters a row
+  // or an arrow key is pressed, as on macOS. One opened from the keyboard starts on the chosen row.
+  const [active, setActive] = useState(-1);
+  const byPointer = useRef(false);
   const root = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLUListElement>(null);
   const button = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return;
-    const first = choices.findIndex((c) => selected.includes(c.value));
-    setActive(first < 0 ? 0 : first);
+    setActive(byPointer.current ? -1 : anchor());
     list.current?.focus();
     const away = (e: PointerEvent) => {
       if (!root.current?.contains(e.target as Node)) setOpen(false);
@@ -43,6 +47,8 @@ export function Menu<T extends string>({ label, children, choices, selected, onP
     return () => document.removeEventListener("pointerdown", away);
   }, [open]);
 
+  /** The chosen row, or the first: where the keyboard starts. */
+  const anchor = () => Math.max(0, choices.findIndex((c) => selected.includes(c.value)));
   const pick = (i: number) => {
     const choice = choices[i];
     if (!choice) return;
@@ -55,8 +61,8 @@ export function Menu<T extends string>({ label, children, choices, selected, onP
     if (e.key === "Escape") {
       setOpen(false);
       button.current?.focus();
-    } else if (e.key === "ArrowDown") setActive((i) => Math.min(choices.length - 1, i + 1));
-    else if (e.key === "ArrowUp") setActive((i) => Math.max(0, i - 1));
+    } else if (e.key === "ArrowDown") setActive((i) => Math.min(choices.length - 1, (i < 0 ? anchor() : i) + 1));
+    else if (e.key === "ArrowUp") setActive((i) => Math.max(0, (i < 0 ? anchor() : i) - 1));
     else if (e.key === "Enter" || e.key === " ") pick(active);
     else return;
     e.preventDefault();
@@ -64,12 +70,16 @@ export function Menu<T extends string>({ label, children, choices, selected, onP
 
   return (
     <div class="menu-wrap" ref={root}>
-      <button ref={button} type="button" class={mono ? "pill mono" : "pill"} aria-haspopup="listbox" aria-expanded={open} aria-label={label} title={label} onClick={() => setOpen(!open)}>
+      <button ref={button} type="button" class={mono ? "pill mono" : "pill"} aria-haspopup="listbox" aria-expanded={open} aria-label={label} title={label}
+        onPointerDown={() => (byPointer.current = true)}
+        onKeyDown={() => (byPointer.current = false)}
+        onClick={() => setOpen(!open)}
+      >
         <span class="pill-t">{children}</span>
         <Icon name="down" size={12} />
       </button>
       {open && (
-        <ul class={`menu ${align}`} role="listbox" aria-label={label} tabIndex={-1} ref={list} onKeyDown={onKey} aria-activedescendant={`${id}-${active}`}>
+        <ul class={`menu ${align}${stacked ? " stacked" : ""}`} role="listbox" aria-label={label} tabIndex={-1} ref={list} onKeyDown={onKey} aria-activedescendant={active < 0 ? undefined : `${id}-${active}`}>
           {choices.length === 0 && (
             <li class="menu-empty" role="option" aria-disabled="true" aria-selected="false">
               {empty}
@@ -90,12 +100,12 @@ export function Menu<T extends string>({ label, children, choices, selected, onP
                 onPointerEnter={() => setActive(i)}
                 onClick={() => pick(i)}
               >
+                <span class="opt-check">{selected.includes(c.value) && <Icon name="check" size={14} />}</span>
                 <span class="opt-label">
                   {c.icon}
                   {c.label}
                 </span>
                 {c.hint && <span class="opt-hint">{c.hint}</span>}
-                {selected.includes(c.value) && <Icon name="check" size={14} />}
               </li>
             </Fragment>
           ))}

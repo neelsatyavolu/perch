@@ -3,7 +3,7 @@
 import { useState } from "preact/hooks";
 import type { MemorySettings } from "../../api";
 import { describeSchedule } from "../../lib/labels";
-import { relativeTime } from "../../lib/time";
+import { inlineTime } from "../../lib/time";
 import { MANAGED_NOTE } from "../../lib/managed";
 import { useAction, useApi, useLoad } from "../../ui/frame";
 import { useManaged } from "../../ui/useManaged";
@@ -35,7 +35,7 @@ export function MemorySection() {
           <Row id="history-extraction" title="Learn from browsing history" detail={locked("history-extraction") ? MANAGED_NOTE : "Notes which sites you use for what. Runs on this Mac on a schedule."}>
             <Switch label="Learn from browsing history" describedBy="history-extraction-d" checked={s.historyExtraction} disabled={locked("history-extraction")} onChange={(historyExtraction) => patch({ historyExtraction })} />
           </Row>
-          <Row id="dreaming" title="Tidy memory overnight" detail={locked("dreaming") ? MANAGED_NOTE : s.lastDream ? `Merges duplicates and moves old facts to history. Last ran ${relativeTime(s.lastDream).toLowerCase()}.` : "Merges duplicates and moves old facts to history"}>
+          <Row id="dreaming" title="Tidy memory overnight" detail={locked("dreaming") ? MANAGED_NOTE : s.lastDream ? `Merges duplicates and moves old facts to history. Last ran ${inlineTime(s.lastDream)}.` : "Merges duplicates and moves old facts to history"}>
             <Switch label="Tidy memory overnight" describedBy="dreaming-d" checked={s.dreaming} disabled={locked("dreaming")} onChange={(dreaming) => patch({ dreaming })} />
           </Row>
           <Row id="dream-log" sub title="Overnight tidy log" detail="What each pass merged, updated and moved, by date">
@@ -80,7 +80,7 @@ export function RoutinesSection() {
     <div class="sec">
       <Group label="Routines" id="routines-list" bare>
         <div class="card">
-          {routines.data && list.length === 0 && <p class="empty">No routines yet.</p>}
+          {routines.data && list.length === 0 && <p class="empty">No routines yet. Open Routines to set one up.</p>}
           {list.map((r) => (
             <Row key={r.id} title={r.title} detail={describeSchedule(r.schedule)}>
               <Switch label={`Run ${r.title}`} checked={r.enabled} onChange={async (enabled) => {

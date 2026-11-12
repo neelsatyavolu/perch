@@ -23,7 +23,7 @@ Perch follows `~/DESIGN.md` (Ledger) and the unslop rules (unslop by Damir Sokol
 | Dark and light | Five themes and five accents (below) | People live in a browser; it should feel like theirs |
 | One accent use list | Accent marks: the perch dot, focus rings, text selection, the search engine chip, links in chat, the active artifact | Same restraint, named for browser surfaces |
 
-Everything else carries over: Newsreader / Geist / Geist Mono, weights 400 and 500, the 4px grid, radii (controls and rows 4, panels, menus and cards 6, pills full), three text roles plus `stone`, hairlines for depth, the single easing curve, no gradients, glows, glass (menus aside) or emoji.
+Everything else carries over: Newsreader / Geist / Geist Mono, weights 400 and 500, the 4px grid, radii (controls, rows and chips 8, panels, menus, dialogs and cards 12, the composer and the new tab address box 16, pills full; owner's Aside-parity layout, 2026-11-11). The native chrome (toolbar buttons, menu rows, menus) stays tighter: 4 for buttons and rows, 6 for menus and bubbles, three text roles plus `stone`, hairlines for depth, the single easing curve, no gradients, glows, glass (menus aside) or emoji.
 
 ## Themes
 
@@ -66,7 +66,7 @@ State colours: ok `#4FBF85`, warn `#D9A23A`, danger `#EE5A4B` on dark themes, `#
 ## Surfaces in the browser
 
 - **Tab strip and sidebar**: canvas. **Toolbar, active tab and Perch's own pages**: card. The active tab joins the toolbar so the two read as one piece.
-- **Address bar**: elevated, 28px tall, 8px radius. Focus, here and on every control: a 2px solid accent outline with a 2px offset (a 45% ring failed the 3:1 rule for controls).
+- **Address bar**: 28px tall, 4px radius (chips inside it 4px); it sits on the toolbar colour at rest and steps to elevated on hover and focus. Focus, here and on every control: a 2px solid accent outline with a 2px offset (a 45% ring failed the 3:1 rule for controls).
 - **Tabs**: flexible width, 72 to 220px, shrinking as tabs are added; a 16px close button shows on hover, focus and the active tab; a 1×16px hairline separates inactive tabs. A browser menu button (28×28) ends the toolbar. Agent tabs sit in a tab group labelled "Agent" (20px chip, 8px radius, accent tint).
 - **Switches**: on uses the primary button's colours (`btn-bg` track, `btn-fg` knob; white knob on Paper), so a page of switches doesn't fill with the accent.
 - **Sleeping tabs** (memory saver): title in mute colour with a 12px moon icon. Never lowered opacity: a sleeping tab must stay readable (AA) and clickable.
@@ -75,14 +75,14 @@ State colours: ok `#4FBF85`, warn `#D9A23A`, danger `#EE5A4B` on dark themes, `#
 
 ## New tab page
 
-- A 640px column: the Perch mark (48px), then the address box (640×48, 12px radius) with a Search | Ask segmented control (28px tall) at its right end; the shortcuts (`Tab` Google, `⌘↵` Ask) sit in 12px mute text under the box.
-- A collapsible chat rail on the left (200px): New chat, Search chats, then recent chats, as in Aside.
-- Below the box: "Chats" and "Routines" switcher, three recent cards (elevated fill, no border, 16px padding, 112px tall, title plus two lines, time in mono), then "Suggested": lighter cards (transparent, 24px icon tile, 80px tall). A suggestion disappears once its job is done; after setup the suggestions become tasks to run ("Summarise unread mail").
+- A 680px column: the Perch mark (48px), then the address box (680 wide, 16px radius) with a Search | Ask segmented control (28px tall) at its right end; the shortcuts (`Tab` Google, `⌘↵` Ask) sit in 12px mute text under the box.
+- A collapsible chat rail on the left (270px, rows 32px with 8px radius): New chat, Search chats, then recent chats, as in Aside.
+- Below the box: "Chats" and "Routines" switcher, three recent cards (elevated fill, no border, 16px padding, 112px tall, title plus two lines, time in mono), then "Suggested": lighter cards (transparent, 32px icon tile, 104px tall). A suggestion disappears once its job is done; after setup the suggestions become tasks to run ("Summarise unread mail").
 - No greeting headline. Users can hide each section.
 
 ## Chat
 
-- Replies have copy, branch and a timestamp on hover. The composer's mode, tab scope and model are real controls (24px, elevated fill, 6px radius), not captions.
+- Replies have copy, branch and a timestamp on hover. The composer's mode, tab scope and model are real controls (24px, elevated fill, 8px radius), not captions.
 - While an approval card is up it is the only status in the thread: no separate "working" row. The card uses the elevated surface with a hairline, no shadow.
 - Full-page chat: chat list 200px (collapses below 1100px), conversation at least 480px, artifact pane 360px and resizable.
 

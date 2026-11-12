@@ -1,7 +1,7 @@
 import { useState } from "preact/hooks";
 import type { DohProvider, PrivacyPatch, PrivacySettings, SiteData } from "../../api";
 import { formatBytes } from "../../lib/labels";
-import { relativeTime } from "../../lib/time";
+import { inlineTime } from "../../lib/time";
 import { checkDohUrl } from "../../lib/validate";
 import { useAction, useApi, useLoad } from "../../ui/frame";
 import { Dialog } from "../../ui/Dialog";
@@ -32,7 +32,7 @@ function SiteDataCard() {
       <div class="card">
         {sites.data && list.length === 0 && <p class="empty">No sites have stored data.</p>}
         {list.map((s) => (
-          <Row key={s.host} title={<span class="mono">{s.host}</span>} detail={`${formatBytes(s.bytes)} · ${s.cookies} cookies${s.lastUsed ? ` · used ${relativeTime(s.lastUsed).toLowerCase()}` : ""}`}>
+          <Row key={s.host} title={<span class="mono">{s.host}</span>} detail={`${formatBytes(s.bytes)} · ${s.cookies} cookies${s.lastUsed ? ` · used ${inlineTime(s.lastUsed)}` : ""}`}>
             <button type="button" class="btn" aria-label={`Forget ${s.host}`} onClick={() => setForget(s)}>Forget</button>
           </Row>
         ))}

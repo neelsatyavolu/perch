@@ -8,10 +8,10 @@
 html, body { margin: 0; height: 100%; background: var(--canvas); color: var(--body); }
 body { font: 14px/1.55 var(--sans); -webkit-font-smoothing: antialiased; }
 #app { height: 100%; }
-::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); color: var(--ink); }
+::selection { background: var(--accent-soft); color: var(--ink); }
 button, input, select, textarea { font: inherit; color: inherit; }
-button { cursor: pointer; }
-button:disabled { cursor: default; }
+/* Buttons keep the arrow, as in a native Mac app; only links show the pointing hand. */
+button { cursor: default; }
 [hidden] { display: none !important; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -22,13 +22,15 @@ svg.i { stroke: currentColor; fill: none; stroke-width: 1.5; stroke-linecap: rou
 
 /* Icon buttons, buttons, pills */
 .ib { width: 28px; height: 28px; display: inline-grid; place-items: center; flex: none; border-radius: var(--r-control); color: var(--mute); border: 0; background: none; padding: 0;
-  transition: background var(--t-hover) var(--ease), color var(--t-hover) var(--ease); }
+  transition: background var(--t-hover) var(--ease), color var(--t-hover) var(--ease), transform var(--t-hover) var(--ease); }
 .ib:hover:not(:disabled), .ib[aria-pressed="true"] { background: var(--hover); color: var(--ink); }
 /* Panel toggles in a header read as plain icons, as in Aside; pressed shows as ink, not a filled box. */
 .fc-h > .ib[aria-pressed="true"]:not(:hover) { background: none; }
 .ib:disabled { opacity: 0.4; }
 .btn { height: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; border-radius: var(--r-control); font-weight: 500; font-size: 13px; line-height: 1;
-  border: 0; background: var(--fill); color: var(--ink); transition: background var(--t-hover) var(--ease), color var(--t-hover) var(--ease); white-space: nowrap; }
+  border: 0; background: var(--fill); color: var(--ink); transition: background var(--t-hover) var(--ease), color var(--t-hover) var(--ease), transform var(--t-hover) var(--ease); white-space: nowrap; }
+/* A press sinks a button a little (hover already steps its fill). */
+:is(.btn, .ib, .pill):active:not(:disabled) { transform: scale(0.97); }
 .btn.small { height: 28px; padding: 0 10px; font-size: 12px; }
 .btn:hover:not(:disabled) { background: var(--fill-hover); }
 /* Outline: for buttons that sit on a filled surface (the approval card, the delete bar). */
@@ -38,12 +40,15 @@ svg.i { stroke: currentColor; fill: none; stroke-width: 1.5; stroke-linecap: rou
 .btn.quiet:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
 .btn.primary, .btn.primary:hover:not(:disabled) { background: var(--btn-bg); color: var(--btn-fg); }
 .btn.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--btn-bg) 88%, var(--canvas)); }
-.btn.primary.danger, .btn.danger-text { color: var(--danger); }
+/* On the primary fill the danger word uses the other theme's red, which keeps 4.5:1 on that fill. */
+.btn.primary.danger { color: var(--btn-danger); }
+.btn.danger-text { color: var(--danger); }
 .btn:disabled { opacity: 0.5; }
 .link-btn { border: 0; background: none; color: var(--mute); font-size: 12px; padding: 0 4px; }
 .link-btn:hover { color: var(--ink); }
 .pill { height: 28px; display: inline-flex; align-items: center; gap: 4px; padding: 0 8px; border-radius: var(--r-control); background: var(--fill); color: var(--body);
-  border: 0; font-size: 12px; font-weight: 500; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; transition: color var(--t-hover) var(--ease); }
+  border: 0; font-size: 12px; font-weight: 500; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+  transition: background var(--t-hover) var(--ease), color var(--t-hover) var(--ease), transform var(--t-hover) var(--ease); }
 .pill:hover { color: var(--ink); }
 .pill.mono { font-family: var(--mono); }
 /* The label shrinks with an ellipsis in a narrow sidebar; the chevron always shows. */
@@ -71,13 +76,18 @@ header .menu { top: calc(100% + 6px); bottom: auto; }
 /* The list takes focus so arrow keys work, but the highlighted option is the only focus mark. */
 .menu:focus, .menu:focus-visible { outline: none; }
 @keyframes menu-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-.menu li[role="option"] { min-height: 32px; display: flex; gap: 8px; align-items: center; padding: 0 8px; border-radius: var(--r-control); cursor: pointer; }
+.menu li[role="option"] { min-height: 28px; display: flex; gap: 8px; align-items: center; padding: 0 8px; border-radius: var(--r-control); }
+/* A leading column for the check, as in a macOS menu, so labels line up whether or not a row is chosen. */
+.menu .opt-check { flex: none; width: 14px; height: 14px; display: inline-grid; place-items: center; }
 .menu .opt-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .menu li.active { background: var(--hover); color: var(--ink); }
 .menu li[aria-selected="true"] { color: var(--ink); }
 .menu .opt-hint { flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--mute); font-size: 12px; font-family: var(--sans); }
 .menu .opt-label > .pmark { vertical-align: -2px; margin-right: 8px; color: var(--ink); }
 svg.pmark { flex: none; }
+/* A menu whose hints are sentences puts each under its label instead of cutting it off (the permission modes). */
+.menu.stacked li[role="option"] { flex-wrap: wrap; row-gap: 0; padding: 4px 8px; }
+.menu.stacked .opt-hint { flex: 1 0 100%; max-width: none; padding-left: 22px; white-space: normal; line-height: 16px; }
 .menu-group { color: var(--mute); font-size: 12px; padding: 8px 8px 2px; }
 .menu li.menu-empty { color: var(--mute); cursor: default; }
 /* The model picker (model-menu.tsx): search on top, providers that open their models, Settings last. */
@@ -106,19 +116,24 @@ svg.pmark { flex: none; }
 :root[data-theme="paper"] .me, :root[data-theme="contrast"] .me { box-shadow: inset 0 0 0 1px var(--hair); }
 .reply { color: var(--body); display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .reply .meta-row { opacity: 0; transition: opacity var(--t-hover) var(--ease); }
-.reply:hover .meta-row, .reply:focus-within .meta-row, .reply:last-child .meta-row { opacity: 1; }
-.meta-row { display: flex; align-items: center; gap: 2px; color: var(--mute); font-size: 12px; }
+/* The latest reply keeps its actions showing (the thread ends in a spacer, so not :last-child). */
+.reply:hover .meta-row, .reply:focus-within .meta-row, .reply:nth-last-child(1 of .reply) .meta-row { opacity: 1; }
+/* The copy glyph, not its 24px box, sits on the reply's text edge. */
+.meta-row { display: flex; align-items: center; gap: 2px; color: var(--mute); font-size: 12px; margin-left: -4px; }
 .meta-row .ib { width: 24px; height: 24px; }
 .note { color: var(--mute); font-size: 13px; }
 .note.error { color: var(--danger); }
 .empty { margin: auto; max-width: 320px; text-align: center; color: var(--mute); display: grid; justify-items: center; gap: 12px; font-size: 13px; }
-.empty p { margin: 0; }
+.empty p { margin: 0; text-wrap: balance; }
+/* A flex column so the inline button adds no line-box descender below it. */
+.steps-wrap { display: flex; flex-direction: column; }
+.steps-wrap > .steps { align-self: flex-start; }
 .steps { display: inline-flex; align-items: center; gap: 8px; color: var(--mute); font-size: 13px; background: none; border: 0; padding: 0; text-align: left; max-width: 100%; }
 .steps span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .steps:hover { color: var(--ink); }
-.steps svg.i { transition: transform var(--t-hover) var(--ease); }
+.steps svg.i { margin-left: -2px; transition: transform var(--t-hover) var(--ease); }
 .steps[aria-expanded="true"] svg.i { transform: rotate(90deg); }
-.steplist { display: grid; gap: 4px; margin: 6px 0 0; padding: 0 0 0 22px; list-style: none; color: var(--mute); font-size: 13px; }
+.steplist { display: grid; gap: 4px; margin: 6px 0 0; padding: 0 0 0 20px; list-style: none; color: var(--mute); font-size: 13px; }
 .work { display: flex; align-items: center; gap: 8px; color: var(--mute); font-size: 13px; font-variant-numeric: tabular-nums; }
 .steplist.now { margin: 0; padding: 0 0 0 14px; border-left: 1px solid var(--hair-strong); gap: 6px; }
 .steplist.now li.current { color: var(--ink); }
@@ -146,15 +161,18 @@ svg.pmark { flex: none; }
 .md ul, .md ol { padding-left: 20px; display: grid; gap: 6px; }
 .md blockquote { border-left: 2px solid var(--hair-strong); padding-left: 12px; color: var(--mute); }
 .md hr { border: 0; border-top: 1px solid var(--hair); width: 100%; }
-.md code { font-family: var(--mono); font-size: 0.9em; background: var(--fill); border-radius: 4px; padding: 1px 4px; }
+.md code { font-family: var(--mono); font-size: 12px; background: color-mix(in srgb, var(--ink) 6%, transparent); border-radius: 4px; padding: 1px 4px; }
 .code { margin: 0; border: 1px solid var(--hair); border-radius: var(--r-control); background: var(--card); overflow: hidden; }
 .code figcaption { display: flex; justify-content: space-between; align-items: center; height: 28px; padding: 0 8px 0 12px; color: var(--mute); font-size: 12px; border-bottom: 1px solid var(--hair); }
-.code pre, .art-code { margin: 0; padding: 12px; overflow-x: auto; font: 12.5px/1.6 var(--mono); color: var(--ink); }
+.code pre, .art-code { margin: 0; padding: 12px; overflow-x: auto; font: 12px/18px var(--mono); color: var(--ink); }
 .code pre code, .art-code code { background: none; padding: 0; font-size: inherit; }
 .md-table { overflow-x: auto; }
 .md-table table { border-collapse: collapse; font-size: 13px; min-width: 100%; }
-.md-table th, .md-table td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--hair); font-variant-numeric: tabular-nums; }
+.md-table th, .md-table td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--hair); font-variant-numeric: tabular-nums; }
 .md-table th { color: var(--ink); font-weight: 500; }
+/* The first and last columns sit on the reply's text edges. */
+.md-table :is(th, td):first-child { padding-left: 0; }
+.md-table :is(th, td):last-child { padding-right: 0; }
 
 /* Artifacts in the thread */
 .artifact-card { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: 1px solid var(--hair); border-radius: var(--r-panel); background: var(--fill);
@@ -168,28 +186,32 @@ button.artifact-card:hover { background: var(--fill-hover); }
 
 /* Approval card: a filled surface with a hairline and no shadow while it sits in the thread */
 .approve { border: 1px solid var(--hair); border-radius: var(--r-panel); background: var(--fill); container-type: inline-size; }
-.approve .ah { padding: 14px 14px 0; color: var(--ink); font-weight: 500; font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
-.approve .meta { padding: 2px 14px 0; color: var(--mute); font-size: 12px; }
-.approve .body { margin: 12px 14px; padding: 10px 12px; border-radius: var(--r-control); background: var(--card); color: var(--ink); font-size: 13px; line-height: 20px;
+.approve .ah { padding: 16px 16px 0; color: var(--ink); font-weight: 500; font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
+.approve .meta { padding: 2px 16px 0; color: var(--mute); font-size: 12px; }
+.approve .body { margin: 12px 16px; padding: 12px; border-radius: var(--r-control); background: var(--card); color: var(--ink); font-size: 13px; line-height: 20px;
   white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow-y: auto; }
-.approve .fields { margin: 12px 14px; padding: 10px 12px; border-radius: var(--r-control); background: var(--card); display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; font-size: 13px; }
+.approve .fields { margin: 12px 16px; padding: 12px; border-radius: var(--r-control); background: var(--card); display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; font-size: 13px; }
 /* Each row's label and value sit in the shared columns, so labels line up at their widest. */
 .approve .fields div { display: contents; }
 .approve .fields dt, .approve .fields dd { min-width: 0; }
 /* A narrow card puts each label above its value rather than squeezing the value. */
 @container (max-width: 360px) {
   .approve .fields { grid-template-columns: minmax(0, 1fr); gap: 0; }
-  .approve .fields dt:not(:first-of-type) { margin-top: 6px; }
+  /* Each pair sits in its own div, so the gap goes on every pair after the first (not dt:first-of-type, which every dt is). */
+  .approve .fields div + div dt { margin-top: 8px; }
 }
 .approve .fields dt { color: var(--mute); }
 .approve .fields dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
-.approve .act { display: flex; flex-wrap: wrap; gap: 8px; padding: 2px 14px 14px; }
+.approve .act { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 16px 16px; }
+/* On Paper the card is white, so its wells (and the composer's context chip) step down to raised instead of the near-white card. */
+:root[data-theme="paper"] .approve .body, :root[data-theme="paper"] .approve .fields, :root[data-theme="paper"] .composer .chip { background: var(--raised); }
 
 /* Composer: one filled box with a hairline ring and no shadow; 28px controls inside its bottom edge. */
 .composer-block { flex: none; }
-.composer { margin: 0 12px 12px; border-radius: var(--r-composer); background: var(--fill); box-shadow: inset 0 0 0 1px var(--hair); padding: 12px 12px 8px;
+.composer { margin: 0 12px 12px; border-radius: var(--r-composer); background: var(--fill); box-shadow: inset 0 0 0 1px var(--hair); padding: 12px 8px 8px 12px;
   display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; container-type: inline-size; }
-.composer:focus-within { box-shadow: inset 0 0 0 1px var(--hair-strong); }
+/* Typing in the composer shows the same accent focus ring as every other field. */
+.composer:has(.field:focus) { outline: 2px solid var(--accent); outline-offset: 2px; }
 .composer .chip { background: var(--card); }
 .composer .pill { background: none; color: var(--mute); padding: 0 6px; }
 .composer .pill:hover, .composer .pill[aria-expanded="true"] { background: var(--fill-hover); color: var(--ink); }
@@ -205,10 +227,13 @@ button.artifact-card:hover { background: var(--fill-hover); }
   .eff-t { display: none; }
   .eff-i { display: inline-flex; vertical-align: middle; }
   .crow .pill:has(.eff-t) > svg:last-child { display: none; }
+  .crow .pill:has(.eff-t) { width: 28px; padding: 0; justify-content: center; }
 }
 @container (max-width: 320px) {
   .mode-t { display: none; }
   .crow .pill:has(.mode-t) > svg:last-child { display: none; }
+  .crow .pill:has(.mode-t) { width: 28px; padding: 0; justify-content: center; }
+  .crow .pill:has(.mode-t) .pill-t > svg { margin-right: 0; }
 }
 .crow > .menu-wrap { flex: none; }
 /* The model name is the last thing to give way: everything else folds before it truncates. */
@@ -217,12 +242,13 @@ button.artifact-card:hover { background: var(--fill-hover); }
 .chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; height: 24px; padding: 0 8px 0 5px; border-radius: var(--r-chip); background: var(--fill); color: var(--body);
   font-size: 12px; justify-self: start; min-width: 0; }
 .chip img.fav { object-fit: contain; background: none; border-radius: 3px; }
-.chip .fav { width: 14px; height: 14px; border-radius: 4px; display: grid; place-items: center; font: 500 8px/1 var(--sans); background: var(--card); color: var(--ink); flex: none; }
+.chip .fav { width: 14px; height: 14px; border-radius: 3px; display: grid; place-items: center; font: 500 9px/1 var(--sans); background: var(--fill-hover); color: var(--ink); flex: none; }
 .chip-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chip .d { color: var(--mute); font-family: var(--mono); }
-.field { width: 100%; resize: none; border: 0; outline: none; background: none; color: var(--ink); font-size: 14px; line-height: 20px; padding: 2px 4px; min-height: 24px; max-height: 200px; }
+.field { width: 100%; resize: none; border: 0; outline: none; background: none; color: var(--ink); font-size: 14px; line-height: 20px; padding: 2px 0; min-height: 24px; max-height: 200px; }
 .field::placeholder { color: var(--mute); }
-.crow { display: flex; align-items: center; gap: 2px; }
+/* Pulled left so the + glyph, not its 28px box, sits on the chip and text edge. */
+.crow { display: flex; align-items: center; gap: 2px; margin-left: -6px; }
 .ib.send:not(:disabled) { background: var(--btn-bg); color: var(--btn-fg); }
 .ib.send[aria-pressed="true"] { background: var(--accent); color: var(--btn-fg); }
 .ib.send:hover:not(:disabled) { background: color-mix(in srgb, var(--btn-bg) 88%, var(--canvas)); color: var(--btn-fg); }
@@ -260,12 +286,12 @@ button.artifact-card:hover { background: var(--fill-hover); }
 /* Full-page chat: the window frame is the lifted side colour; the conversation and the artifact pane
    are inset panels on the card colour with a hairline ring, as in settings. */
 .full { height: 100%; display: flex; min-height: 0; background: var(--side); }
-.chats { position: relative; width: 280px; flex: none; padding: 8px 6px 16px 8px; display: flex; flex-direction: column; overflow-y: auto; background: var(--side); }
+.chats { position: relative; width: 200px; flex: none; padding: 8px 6px 16px 8px; display: flex; flex-direction: column; overflow-y: auto; background: var(--side); }
 .chats .lbl { color: var(--mute); font-size: 13px; line-height: 16px; padding: 12px 10px 4px; margin: 12px 0 0; user-select: none; }
 .chats .empty-note { color: var(--mute); font-size: 13px; padding: 4px 10px; margin: 0; }
 .chats-search { display: flex; align-items: center; gap: 8px; height: 32px; flex: none; padding: 0 10px; margin-bottom: 12px; border-radius: var(--r-control); color: var(--mute); background: var(--fill); }
 .chats-search:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
-.chats-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: var(--ink); font: inherit; font-size: 13px; }
+.chats-search input { flex: 1; min-width: 0; padding: 0; border: 0; outline: 0; background: none; color: var(--ink); font: inherit; font-size: 13px; }
 .chats-search input::placeholder { color: var(--mute); }
 .chats-search input::-webkit-search-cancel-button { display: none; }
 .row { height: 32px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 10px; border-radius: var(--r-control); color: var(--body); background: none; border: 0;
@@ -275,9 +301,12 @@ button.artifact-card:hover { background: var(--fill-hover); }
 .row:hover { background: var(--hover); }
 .row.sel { background: var(--nav-on); color: var(--ink); box-shadow: inset 0 0 0 1px var(--nav-ring); }
 .row.act { color: var(--ink); font-weight: 500; }
-.row .mark { flex: none; width: 6px; height: 6px; border-radius: 50%; }
-.row .mark.new { background: var(--accent); }
-.row .mark.err { width: 14px; height: 14px; background: var(--danger); color: #FFFFFF; font-size: 10px; font-weight: 600; line-height: 14px; text-align: center; }
+/* A row's state is a word at its end (DESIGN.md: no dot stands alone). */
+.row .row-s { flex: none; color: var(--mute); font-size: 12px; font-weight: 400; }
+.row .row-s.err { color: color-mix(in srgb, var(--danger) 80%, var(--ink)); }
+/* On the hover and current-row fills the mute word and the red drop below 4.5:1, so they lift toward ink. */
+.row:is(:hover, .sel) .row-s { color: var(--body); }
+.row:is(:hover, .sel) .row-s.err { color: color-mix(in srgb, var(--danger) 55%, var(--ink)); }
 /* The hover card is a popup, so it is glass like the menus (no shadow). */
 .chat-tip { position: fixed; z-index: 20; width: 240px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; pointer-events: none;
   background: color-mix(in srgb, var(--raised) 72%, transparent); -webkit-backdrop-filter: blur(28px) saturate(1.5); backdrop-filter: blur(28px) saturate(1.5);
@@ -287,7 +316,7 @@ button.artifact-card:hover { background: var(--fill-hover); }
 .center { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--card); margin: 6px; border-radius: var(--r-panel); box-shadow: inset 0 0 0 1px var(--hair); overflow: hidden; }
 .chats + .center { margin-left: 0; }
 .fc-h { padding: 0 8px; gap: 2px; }
-.fc-h .title { flex: 0 1 auto; min-width: 0; text-align: left; background: none; border: 0; padding: 4px 8px; border-radius: var(--r-control); color: var(--ink); font-weight: 500; font-size: 14px;
+.fc-h .title { flex: 0 1 auto; min-width: 0; text-align: left; background: none; border: 0; height: 28px; padding: 0 8px; line-height: 28px; border-radius: var(--r-control); color: var(--ink); font-weight: 500; font-size: 14px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fc-h .title:hover:not(:disabled) { background: var(--hover); }
 .fc-h .dot { margin: 0 4px; }
@@ -305,13 +334,18 @@ button.artifact-card:hover { background: var(--fill-hover); }
 .art { position: relative; flex: none; margin: 6px 6px 6px 0; border-radius: var(--r-panel); box-shadow: inset 0 0 0 1px var(--hair); display: flex; flex-direction: column; background: var(--card); min-height: 0; }
 .art-h { padding: 0 8px 0 16px; }
 .art-h .ver { color: var(--mute); font-size: 12px; background: none; border: 0; }
+/* The version picker is a control, so it gets the 28px height and hover step every header control has. */
+select.ver { height: 28px; padding: 0 4px; border-radius: var(--r-control); transition: background var(--t-hover) var(--ease), color var(--t-hover) var(--ease); }
+select.ver:hover { background: var(--hover); color: var(--ink); }
 .art-b { flex: 1; min-height: 0; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
 .art-frame { flex: 1; width: 100%; min-height: 320px; border: 1px solid var(--hair); border-radius: var(--r-control); background: #FFFFFF; }
 .art-img { max-width: 100%; border-radius: var(--r-control); }
 .art-code { background: var(--fill); border-radius: var(--r-control); }
 .cap { color: var(--mute); font-size: 12px; margin: 0; }
 .resize { position: absolute; left: -3px; top: 0; bottom: 0; width: 6px; cursor: col-resize; z-index: 2; touch-action: none; }
-.resize:hover, .resize:focus-visible { background: var(--hair-strong); outline: none; }
+.resize:hover { background: var(--hair-strong); }
+/* Keyboard focus shows as the accent, like every other focus ring. */
+.resize:focus-visible { background: var(--accent); outline: none; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

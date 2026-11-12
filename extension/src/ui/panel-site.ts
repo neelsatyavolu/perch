@@ -28,7 +28,6 @@ export async function renderSite(root: HTMLElement, tab: chrome.tabs.Tab | undef
     toolsSection(tabId, status),
     await permissionsSection(url.href),
     await cookiesSection(url, tabId),
-    h("div", { class: "section" }, [status]),
   );
 }
 
@@ -48,7 +47,7 @@ async function protectionSection(host: string, tabId: number): Promise<HTMLEleme
     ? "Perch cannot turn protections off for this address."
     : state.offBy && state.offBy !== host
       ? `Off for ${state.offBy} and its subdomains. Turning them on applies to all of it.`
-      : "Blocking, cookie banners and tracking parameters";
+      : "Blocking, cookie banners, tracking parameters";
   return h("div", { class: "section" }, [
     h("div", { class: "row" }, [
       h("div", { class: "grow" }, [
@@ -65,13 +64,14 @@ async function blockedSection(tabId: number, url: URL): Promise<HTMLElement> {
   const counts = await matchedCounts(tabId).catch(() => null);
   const state = await ask<TabState>({ type: "tab-state", tabId }).catch(() => null);
   const banner = state?.banner && new URL(state.banner.url).hostname === url.hostname ? `Rejected (${state.banner.cmp})` : "None seen";
-  const row = (label: string, value: string, id: string) =>
-    h("div", { class: "row" }, [h("span", { class: "grow", text: label }), h("span", { class: "value", text: value, attrs: { "data-stat": id } })]);
-  return h("div", { class: "section" }, [
+  // Counts are numbers and set in mono; the banner result is words and stays in the sans.
+  const row = (label: string, value: string, id: string, numeric = true) =>
+    h("div", { class: "row" }, [h("span", { class: "grow", text: label }), h("span", { class: numeric ? "value mono" : "value", text: value, attrs: { "data-stat": id } })]);
+  return h("div", { class: "section stats" }, [
     h("div", { class: "section-title", text: "On this page" }),
     row("Ads and trackers blocked", counts ? String(counts.blocked) : "–", "blocked"),
     row("Tracking parameters removed", counts ? String(counts.params) : "–", "params"),
-    row("Cookie banner", banner, "banner"),
+    row("Cookie banner", banner, "banner", false),
   ]);
 }
 
@@ -91,12 +91,13 @@ function toolsSection(tabId: number, status: HTMLElement): HTMLElement {
     });
   return h("div", { class: "section" }, [
     h("div", { class: "section-title", text: "Tools" }),
-    h("div", { class: "tools" }, [
-      run("Reader view", () => ask({ type: "reader", tabId }), true),
-      run("Full-page screenshot", () => ask({ type: "screenshot", tabId }), false),
+    h("div", { class: "tools site-tools" }, [
+      run("Reader", () => ask({ type: "reader", tabId }), true),
+      run("Screenshot", () => ask({ type: "screenshot", tabId }), false),
       // Called here, not through the service worker, so the click's user gesture reaches the page.
-      run("Picture in picture", () => pictureInPicture(tabId), false),
+      run("Pop out video", () => pictureInPicture(tabId), false),
     ]),
+    status,
   ]);
 }
 
@@ -118,32 +119,36 @@ async function permissionsSection(url: string): Promise<HTMLElement> {
       return h("div", { class: "row" }, [h("label", { class: "grow", text: p.label }), select]);
     }),
   );
-  return h("div", { class: "section" }, [h("div", { class: "section-title", text: "Permissions" }), ...rows]);
+  return h("div", { class: "section permissions" }, [h("div", { class: "section-title", text: "Permissions" }), ...rows]);
 }
 
 async function cookiesSection(url: URL, tabId: number): Promise<HTMLElement> {
   const count = await cookieCount(url.href).catch(() => 0);
   const section = h("div", { class: "section" });
-  const idle = () =>
+  // Swapping the row removes the focused button, so focus moves to the button that takes its place.
+  const idle = (focus = false) => {
+    const forget = h("button", { class: "danger", text: "Forget this site", on: { click: confirm } });
     section.replaceChildren(
       h("div", { class: "section-title", text: "Cookies and site data" }),
-      h("div", { class: "row" }, [
-        h("span", { class: "grow", text: count === 1 ? "1 cookie" : `${count} cookies` }),
-        h("button", { class: "danger", text: "Forget this site", on: { click: confirm } }),
-      ]),
+      h("div", { class: "row" }, [h("span", { class: "grow", text: count === 1 ? "1 cookie" : `${count} cookies` }), forget]),
     );
-  const confirm = () =>
+    if (focus) forget.focus();
+  };
+  function confirm() {
+    const cancel = h("button", { class: "quiet", text: "Cancel", on: { click: () => idle(true) } });
     section.replaceChildren(
       h("p", { text: `Forget ${url.hostname}? This clears its cookies and stored data and signs you out of it.` }),
       h("div", { class: "row", attrs: { style: "justify-content: flex-end; margin-top: 8px" } }, [
-        h("button", { class: "quiet", text: "Cancel", on: { click: idle } }),
+        cancel,
         h("button", {
-          class: "primary",
+          class: "danger",
           text: "Forget",
           on: { click: () => void forgetSite(url.href).then(() => chrome.tabs.reload(tabId)).then(() => window.close()) },
         }),
       ]),
     );
+    cancel.focus();
+  }
   idle();
   return section;
 }

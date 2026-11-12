@@ -1,59 +1,44 @@
 /* New tab page: 680px column, collapsible 270px chat rail on the lifted side surface (DESIGN.md, aside-parity spec 3). */
 
-/* Surface steps. The shared tokens (--side, --fill, --fill-hover, --nav-on) win once tokens.ts defines them;
-   until then these page-local mixes give the same values per theme. */
+/* Surface steps come from tokens.ts (--side, --fill, --fill-hover, --nav-on). */
 .ntp-wrap {
-  --nt-side: var(--side, color-mix(in srgb, var(--ink) 6%, var(--canvas)));
-  --nt-fill: var(--fill, color-mix(in srgb, var(--ink) 6%, var(--card)));
-  --nt-fill-hover: var(--fill-hover, color-mix(in srgb, var(--ink) 10%, var(--card)));
-  --nt-nav-on: var(--nav-on, color-mix(in srgb, var(--ink) 13%, var(--nt-side)));
   /* A faint ring so dark cards keep an edge against the main area. */
   --nt-card-line: color-mix(in srgb, var(--ink) 4%, transparent);
 }
-:root[data-theme="paper"] .ntp-wrap {
-  --nt-side: var(--side, var(--raised));
-  --nt-fill: var(--fill, #FFFFFF);
-  --nt-fill-hover: var(--fill-hover, color-mix(in srgb, var(--ink) 4%, #FFFFFF));
-  --nt-nav-on: var(--nav-on, color-mix(in srgb, var(--ink) 9%, var(--nt-side)));
-  --nt-card-line: var(--hair);
-}
-:root[data-theme="contrast"] .ntp-wrap {
-  --nt-side: var(--side, #000000);
-  --nt-fill: var(--fill, #141414);
-  --nt-fill-hover: var(--fill-hover, #1F1F1F);
-  --nt-nav-on: var(--nav-on, #262626);
-  --nt-card-line: var(--hair);
-}
+:root[data-theme="paper"] .ntp-wrap, :root[data-theme="contrast"] .ntp-wrap { --nt-card-line: var(--hair); }
 
 .ntp-wrap { display: flex; min-height: 100vh; background: var(--card); }
+/* Native Mac: controls keep the arrow; only links take the pointing hand (controls.css sets pointer for the web pages). */
+.ntp-wrap :is(button, select, [role="option"]) { cursor: default; }
 
 /* Rail */
 .rail {
   width: 270px; flex: none; padding: 8px 8px 16px; display: flex; flex-direction: column;
-  background: var(--nt-side); position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  background: var(--side); position: sticky; top: 0; z-index: 2; height: 100vh; overflow-y: auto;
 }
 :root[data-theme="paper"] .rail, :root[data-theme="contrast"] .rail { box-shadow: inset -1px 0 0 var(--hair); }
 .rail .row { height: 32px; min-height: 32px; border-radius: 8px; padding: 0 10px; gap: 8px; font-size: 13px; }
 .rail .row:hover { background: var(--hover); }
 .rail .act { color: var(--ink); font-weight: 500; display: flex; align-items: center; }
 .rail .act svg { color: var(--mute); }
-.rail-search { display: flex; align-items: center; gap: 8px; height: 32px; flex: none; padding: 0 10px; margin-bottom: 12px; border-radius: 8px; color: var(--mute); background: var(--nt-fill); box-shadow: inset 0 0 0 1px var(--hair); }
+.rail-search { display: flex; align-items: center; gap: 8px; height: 32px; flex: none; padding: 0 10px; margin-bottom: 12px; border-radius: 8px; color: var(--mute); background: var(--fill); box-shadow: inset 0 0 0 1px var(--hair); }
 .rail-search:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 .rail-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: var(--ink); font: inherit; font-size: 13px; }
 .rail-search input:focus-visible { outline: none; }
 .rail-search input::placeholder { color: var(--mute); }
 .rail-search input::-webkit-search-cancel-button { display: none; }
-.rail-lbl { color: var(--mute); font-size: 13px; font-weight: 400; line-height: 16px; margin: 0; padding: 16px 10px 6px; user-select: none; }
+/* 40px tall (16 + 16 + 8) so the chat rows below stay on the 4px grid. */
+.rail-lbl { color: var(--mute); font-size: 13px; font-weight: 400; line-height: 16px; margin: 0; padding: 16px 10px 8px; user-select: none; }
 .rail-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; min-width: 0; }
 .rail-list .row { display: flex; align-items: center; width: 100%; color: var(--body); font-weight: 400; }
 .rail-list .row:hover { color: var(--ink); }
-.rail-list .row[aria-current="page"] { background: var(--nt-nav-on); color: var(--ink); box-shadow: none; }
+.rail-list .row[aria-current="page"] { background: var(--nav-on); color: var(--ink); box-shadow: none; }
 .rail-list .row svg { flex: none; color: var(--mute); }
 .rail-t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
 .rail-mark { flex: none; width: 6px; height: 6px; border-radius: 50%; }
-.rail-mark.new { background: var(--accent); }
-.rail-mark.live { background: var(--accent); animation: rail-breathe 1.6s var(--ease, ease) infinite; }
-.rail-mark.err { width: 14px; height: 14px; background: var(--danger); color: #FFFFFF; font-size: 10px; font-weight: 600; line-height: 14px; text-align: center; }
+.rail-mark.new { background: var(--mute); }
+.rail-mark.live { background: var(--accent); animation: rail-breathe 2.4s var(--ease, ease) infinite; }
+.rail-mark.err { width: 14px; height: 14px; background: var(--danger); color: #FFFFFF; font-size: 10px; font-weight: 500; line-height: 14px; text-align: center; }
 @keyframes rail-breathe { 50% { opacity: 0.35; } }
 @media (prefers-reduced-motion: reduce) { .rail-mark.live { animation: none; } }
 .rail-empty { color: var(--mute); padding: 4px 10px; font-size: 13px; }
@@ -70,22 +55,22 @@
 
 /* Main column */
 .ntp-main { flex: 1; min-width: 0; display: flex; justify-content: center; position: relative; padding: 0 24px; }
-.ntp-bar { position: absolute; top: 0; left: 0; right: 0; height: 44px; display: flex; align-items: center; padding: 0 8px; pointer-events: none; }
+.ntp-bar { position: absolute; top: 0; left: 0; right: 0; height: 48px; display: flex; align-items: center; padding: 0 8px; pointer-events: none; }
 .ntp-bar > * { pointer-events: auto; }
-.ntp-bar .ib { width: 28px; height: 28px; border-radius: 8px; }
-.ntp { width: 680px; max-width: 100%; padding: 96px 0 64px; display: grid; gap: 40px; align-content: start; }
+.ntp-bar .ib { width: 32px; height: 32px; border-radius: 8px; }
+.ntp { width: 680px; max-width: 100%; padding: 96px 0 64px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 40px; align-content: start; container: ntp / inline-size; }
 .ntp .mark { justify-self: center; margin-bottom: -16px; }
 
 /* Address box: input row, then the task pickers along its bottom edge, as in the chat composer. */
 /* 14px: the box is autofocused, so the hints are measured from its 2px ring, not its edge. */
-.addr { display: grid; gap: 14px; }
+.addr { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
 .box {
-  width: 100%; display: flex; flex-direction: column; gap: 4px; padding: 6px 8px 6px 16px; border-radius: 16px;
-  background: var(--nt-fill); border: 1px solid var(--hair); color: var(--mute);
+  width: 100%; display: flex; flex-direction: column; gap: 4px; padding: 8px 8px 8px 16px; border-radius: 16px;
+  background: var(--fill); border: 1px solid var(--hair); color: var(--mute);
 }
 /* The input itself has no ring (it would sit inside the box); the box carries DESIGN.md's 2px accent ring. */
 .box:has(input:focus) { outline: 2px solid var(--accent); outline-offset: 2px; }
-.box-row { display: flex; align-items: center; gap: 12px; height: 44px; }
+.box-row { display: flex; align-items: center; gap: 12px; height: 32px; }
 .box input {
   flex: 1; min-width: 0; height: 100%; border: 0; background: none; color: var(--ink); font: inherit; font-size: 15px; outline: none;
 }
@@ -93,56 +78,66 @@
 .box input::-webkit-search-cancel-button { display: none; }
 .box .mode { flex: none; }
 .box .seg { height: 32px; border-radius: 8px; border: 0; background: transparent; box-shadow: inset 0 0 0 1px var(--hair); align-items: center; }
-.box .seg button { height: 28px; border-radius: 6px; font-size: 12px; font-weight: 500; padding: 0 10px; }
-.box .seg button[aria-checked="true"] { background: var(--nt-fill-hover); }
+.box .seg button { height: 28px; border-radius: 6px; font-size: 13px; font-weight: 500; padding: 0 10px; }
+.box .seg button[aria-checked="true"] { background: var(--fill-hover); box-shadow: inset 0 0 0 1px var(--hair-strong); }
 :root[data-theme="paper"] .box .seg { background: var(--raised); }
-:root[data-theme="paper"] .box .seg button[aria-checked="true"] { background: #FFFFFF; }
-.box-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 28px; margin-left: -10px; }
+:root[data-theme="paper"] .box .seg button[aria-checked="true"] { background: var(--fill); }
+.box-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 28px; min-width: 0; margin-left: -8px; }
 .composer-mode { display: flex; }
 .composer-model { display: flex; gap: 2px; min-width: 0; }
+.box-foot .mm-wrap, .box-foot .mm-pill { min-width: 0; }
+.box-foot .mm-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .box-foot .picker.quiet { height: 28px; border-radius: 8px; border-color: transparent; background-color: transparent; color: var(--mute); font-size: 12px; font-weight: 500; padding: 0 26px 0 8px; background-position: right 6px center; field-sizing: content; min-width: 0; }
-.box-foot .picker.quiet:hover { color: var(--ink); background-color: var(--nt-fill-hover); }
-.box-foot .picker.quiet:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.box-foot .picker.quiet:hover { color: var(--ink); background-color: var(--fill-hover); }
+.box-foot .picker.quiet:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .box-foot .mm-pill { border-radius: 8px; font-weight: 500; }
-.box-foot .mm-pill:hover, .box-foot .mm-pill[aria-expanded="true"] { background: var(--nt-fill-hover); }
+.box-foot .mm-pill:hover, .box-foot .mm-pill[aria-expanded="true"] { background: var(--fill-hover); }
 .engine-chip {
   height: 22px; padding: 0 8px; border-radius: 6px; background: var(--accent-soft); color: var(--ink); font-size: 12px; font-weight: 500;
   display: inline-flex; align-items: center; flex: none;
 }
 .hints { color: var(--mute); font-size: 12px; display: flex; gap: 6px; align-items: center; justify-content: center; margin: 0; }
-.key { font-family: var(--mono); font-size: 11px; padding: 1px 5px; border-radius: 4px; border: 1px solid var(--hair-strong); color: var(--mute); }
+.key { font-family: var(--mono); font-size: 12px; line-height: 14px; padding: 1px 5px; border-radius: 4px; border: 1px solid var(--hair-strong); color: var(--mute); }
 
 /* Sections: one header style for Recent and Suggested, flush with the card edge. */
 .ntp-sec { display: grid; gap: 12px; }
 .sec-h { display: flex; align-items: center; gap: 4px; min-height: 28px; }
-.sec-h .hide-btn { margin-left: auto; }
+.sec-h .hide-btn, .sec-h .all-btn { margin-left: auto; }
+/* "All routines" is an action, not a third tab: it sits at the right end beside Hide. */
+.sec-h .all-btn + .hide-btn { margin-left: 0; }
 .sec-h .btn.sm { height: 28px; padding: 0 10px; font-size: 12px; border-radius: 8px; }
 .sec-t { color: var(--mute); font-weight: 500; font-size: 13px; line-height: 28px; margin: 0; padding-left: 10px; }
 .sec-h .tabs { gap: 2px; }
 .sec-h .tabs button { height: 28px; border-radius: 8px; font-size: 13px; padding: 0 10px; }
-.sec-h .tabs button[aria-selected="true"] { background: var(--nt-fill); }
+.sec-h .tabs button[aria-selected="true"] { background: var(--fill); }
 .sec-h .tabs button:hover { color: var(--ink); }
 :root[data-theme="paper"] .sec-h .tabs button[aria-selected="true"], :root[data-theme="contrast"] .sec-h .tabs button[aria-selected="true"] { box-shadow: inset 0 0 0 1px var(--hair); }
 
 .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .cards-empty { grid-column: 1 / -1; color: var(--mute); font-size: 13px; padding: 16px 2px; margin: 0; }
 .ccard {
-  background: var(--nt-fill); border: 1px solid var(--nt-card-line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 6px;
-  align-content: start; min-height: 104px; cursor: pointer; text-align: left; font: inherit; color: inherit;
+  background: var(--fill); border: 1px solid var(--nt-card-line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 6px;
+  align-content: start; min-height: 104px; text-align: left; font: inherit; color: inherit;
   transition: background 120ms var(--ease);
 }
-.ccard:hover { background: var(--nt-fill-hover); }
-.ccard .when { color: var(--mute); font-size: 12px; display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; }
+/* Recent: a fixed 112px (1 + 12 + 16 + 6 + 40 + 6 + 18 + 12 + 1) so Chats and Routines match and switching tabs moves nothing. */
+.ccard:not(.sug) { height: 112px; padding: 12px 16px; }
+.ccard:hover { background: var(--fill-hover); }
+.ccard .when { color: var(--mute); font-size: 12px; line-height: 16px; display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; }
 .ccard .when > span:last-child { overflow: hidden; text-overflow: ellipsis; }
-.ccard .when .mono { flex: none; font-family: var(--mono); word-spacing: -0.25em; }
+.ccard .when .w { flex: none; }
+.ccard .when .mono { font-family: var(--mono); }
 .ccard .tt { color: var(--ink); font-weight: 500; font-size: 14px; line-height: 20px; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-/* One line in the card grid so a two-line title keeps the card near 104px; two when cards stack. */
+/* One line in the card grid so a two-line title keeps the card at 112px; two when cards stack. */
 .ccard .sn { color: var(--mute); font-size: 13px; line-height: 18px; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
 /* Suggested: the tile sits beside the text, so the card matches Recent's height. */
-.ccard.sug { grid-template-columns: 32px minmax(0, 1fr); column-gap: 12px; row-gap: 4px; }
+/* 40px on the right keeps the title clear of the dismiss button (28px + 8px inset + 4px). */
+.ccard.sug { grid-template-columns: 32px minmax(0, 1fr); column-gap: 12px; row-gap: 4px; padding: 12px 40px 12px 16px; }
+/* The detail is the reason to act, so it gets two lines; one cut most of them to a word or two. */
+.ccard.sug .sn { -webkit-line-clamp: 2; }
 .ccard.sug .tile {
   grid-row: 1 / span 2; width: 32px; height: 32px; border-radius: 8px; margin-bottom: 0; display: inline-flex; align-items: center; justify-content: center;
-  background: var(--card); color: var(--mute);
+  background: var(--nav-on); color: var(--mute);
 }
 :root[data-theme="paper"] .ccard.sug .tile { background: var(--raised); }
 .hidden-note { display: flex; justify-content: center; gap: 8px; margin: 0; }
@@ -151,6 +146,12 @@
 .sug-x { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; border-radius: 8px; opacity: 0; transition: opacity 120ms var(--ease); }
 .sug-wrap:hover .sug-x, .sug-x:focus-visible { opacity: 1; }
 @media (hover: none) { .sug-x { opacity: 1; } }
+
+/* The column narrows with the rail open in a small window (761 to ~890px wide); three cards would
+   cut every title and detail to a word, so they go to two columns, as in the narrow layout. */
+@container ntp (max-width: 599px) {
+  .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 
 @media (max-width: 1100px) {
   .rail { width: 240px; }
@@ -172,4 +173,6 @@
 @media (max-width: 520px) {
   .cards { grid-template-columns: minmax(0, 1fr); }
   .ccard .sn { -webkit-line-clamp: 2; }
+  .ccard:not(.sug) { height: auto; min-height: 112px; }
+  .box-foot { flex-wrap: wrap; }
 }

@@ -9,7 +9,7 @@
   --hair: rgba(242,240,234,0.08); --hair-strong: rgba(242,240,234,0.18);
   --accent: #4C8DFF; --accent-soft: color-mix(in srgb, #4C8DFF 22%, #1A1A18);
   --side: #1C1C1A; --fill: #212120; --fill-hover: #2A2A29; --nav-on: #383835;
-  --btn-bg: #F2F0EA; --btn-fg: #0E0E0D; --ok: #4FBF85; --warn: #D9A23A; --danger: #EE5A4B;
+  --btn-bg: #F2F0EA; --btn-fg: #0E0E0D; --field: rgba(242,240,234,0.42); --scrim: rgba(9,9,8,0.70); --ok: #4FBF85; --warn: #D9A23A; --danger: #EE5A4B; --danger-text: #EF786B;
   --pop: none;
   --sans: "Geist", "Geist Sans", ui-sans-serif, -apple-system, system-ui, sans-serif;
   --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;

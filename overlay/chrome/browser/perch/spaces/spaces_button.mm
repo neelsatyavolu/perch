@@ -132,9 +132,9 @@ class SpacesButton : public views::LabelButton {
     SetBorder(views::CreateEmptyBorder(gfx::Insets(0)));
     SetMinSize(gfx::Size(28, 28));
     SetMaxSize(gfx::Size(28, 28));
-    // An 8 px rounded fill on hover and press, like the strip's other
+    // A 4 px rounded fill on hover and press, like the strip's other
     // controls.
-    views::InstallRoundRectHighlightPathGenerator(this, gfx::Insets(), 8);
+    views::InstallRoundRectHighlightPathGenerator(this, gfx::Insets(), 4);
     views::InkDrop::Get(this)->SetMode(
         views::InkDropHost::InkDropMode::ON_NO_ANIMATE);
     views::InkDrop::Get(this)->SetBaseColor(

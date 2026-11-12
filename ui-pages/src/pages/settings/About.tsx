@@ -45,7 +45,7 @@ export function About() {
                 {status.state === "ready" ? "Restart Perch" : "Install update"}
               </button>
             ) : (
-              <button type="button" class="btn sm" disabled={status?.state === "checking"} onClick={check}>Check for updates</button>
+              <button type="button" class="btn" disabled={status?.state === "checking"} onClick={check}>Check for updates</button>
             )}
           </Row>
           <Row id="auto-update" title="Update automatically" detail={locked("auto-update") ? MANAGED_NOTE : "Checks once a day on GitHub and installs signed updates when you restart"}>

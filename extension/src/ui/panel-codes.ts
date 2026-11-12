@@ -82,7 +82,7 @@ function codeRow(entry: VaultEntry, tab: chrome.tabs.Tab | undefined, url: URL |
   });
 
   const node = h("div", { class: "code-row" }, [
-    h("div", { class: "grow" }, [h("div", { class: "code-name", text: entry.issuer || entry.account }), h("div", { class: "code-account", text: entry.issuer ? entry.account : "" })]),
+    h("div", { class: "grow" }, [h("div", { class: "code-name", text: entry.issuer || entry.account }), entry.issuer ? h("div", { class: "code-account", text: entry.account }) : null]),
     h("div", {}, [code, time]),
     h("div", { class: "code-actions" }, [copy, fill]),
   ]);

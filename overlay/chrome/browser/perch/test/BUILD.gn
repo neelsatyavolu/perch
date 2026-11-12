@@ -15,10 +15,13 @@ test("perch_unittests") {
     "//chrome/browser/perch/keys/recovery_key.h",
     "//chrome/browser/perch/perch_update_policy.h",
     "//chrome/browser/perch/perch_update_policy.mm",
+    "//chrome/browser/perch/webkit_tab/webkit_tab_rules.cc",
+    "//chrome/browser/perch/webkit_tab/webkit_tab_rules.h",
     "backup_unittest.cc",
     "perch_update_policy_unittest.cc",
     "recovery_key_unittest.cc",
     "sleep_rules_unittest.cc",
+    "webkit_tab_rules_unittest.cc",
   ]
   frameworks = [ "Foundation.framework" ]
   deps = [

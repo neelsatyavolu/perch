@@ -1,5 +1,6 @@
 /** The agent loop: model turn, tool calls with permission checks, results back, until done. */
 
+import { clip, OUTPUT_LIMIT, stepDetail } from "./steps";
 import { agentToolSpecs } from "../apps/index";
 import type { Browser } from "../browser/browser";
 import { actExtra, type ExtraTools } from "../mcp-client/extra-tools";
@@ -18,7 +19,9 @@ import { newToolContext, TOOL_SPECS, type ToolContext } from "./tools";
 export type { ApprovalRequest } from "./session";
 
 export type StepEvent =
-  | { type: "step"; label: string }
+  | { type: "step"; label: string; detail?: string }
+  /** What the latest step returned. */
+  | { type: "step_output"; output: string }
   | { type: "approval"; request: ApprovalRequest }
   | { type: "text"; delta: string }
   | { type: "final"; text: string }
@@ -180,7 +183,11 @@ async function* act(ctx: ToolContext, task: TaskOptions, call: ToolCall, progres
   // Batches and scripts run each action through callTool, which asks for approval as it goes.
   if (call.name === BATCH || call.name === SCRIPT) {
     const result = await callTool(ctx, opts, call);
-    if (!result.isError) yield { type: "step", label: call.name === SCRIPT ? "Run a script" : "Run several actions" };
+    if (!result.isError) {
+      const title = typeof call.args.title === "string" && call.args.title.trim() ? call.args.title.trim().slice(0, 60) : null;
+      yield { type: "step", label: title ?? (call.name === SCRIPT ? "Run a script" : "Run several actions"), ...withDetail(call) };
+      yield* stepOutput(result.content);
+    }
     return reply(result.content, result.image);
   }
   const prepared = await prepareCall(ctx, opts, call);
@@ -193,8 +200,22 @@ async function* act(ctx: ToolContext, task: TaskOptions, call: ToolCall, progres
   }
   const result = await finishCall(ctx, opts, prepared, approved);
   if (result.done) return { final: result.content, message: reply(result.content).message };
-  if (!result.isError && approved !== false) yield { type: "step", label: label(call, prepared.target, prepared.site) };
+  if (!result.isError && approved !== false) {
+    const title = call.name === "repl" && typeof call.args.title === "string" && call.args.title.trim() ? call.args.title.trim().slice(0, 60) : null;
+    yield { type: "step", label: title ?? label(call, prepared.target, prepared.site), ...withDetail(call) };
+    yield* stepOutput(result.content);
+  }
   return reply(result.content, result.image);
+}
+
+function withDetail(call: ToolCall): { detail?: string } {
+  const detail = stepDetail(call.name, call.args);
+  return detail ? { detail } : {};
+}
+
+function* stepOutput(content: string): Generator<StepEvent> {
+  const output = content.trim();
+  if (output) yield { type: "step_output", output: clip(output, OUTPUT_LIMIT) };
 }
 
 /** Keeps only the newest page snapshot and screenshot in full; older ones become one line. */

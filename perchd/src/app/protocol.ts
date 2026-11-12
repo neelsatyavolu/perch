@@ -28,6 +28,12 @@ export type TabRef = { id: string; windowId: string };
 
 export type ChatSettings = { mode: Mode; model: string; effort: Effort; scope: Scope };
 
+/**
+ * One thing the agent did in a run. `detail`: the code, query or URL the step ran (never what was
+ * typed into a page); `output`: what came back, shortened.
+ */
+export type Step = { label: string; detail?: string; output?: string };
+
 export type ChatMessage = {
   id: string;
   role: "user" | "assistant";
@@ -40,7 +46,7 @@ export type ChatMessage = {
   attachments?: { id: string; name: string }[];
   /** Tabs the user named with @. */
   mentions?: TabInfo[];
-  steps?: string[];
+  steps?: Step[];
   /** A message the chat sent itself at a scheduled time (scheduled.ts), not typed just now. */
   scheduled?: true;
   artifacts?: string[];
@@ -134,7 +140,9 @@ export type AppEvent =
   | { type: "chat.removed"; chatId: string }
   | { type: "run.started"; chatId: string; runId: string; message: ChatMessage }
   | { type: "run.text"; chatId: string; runId: string; delta: string }
-  | { type: "run.step"; chatId: string; runId: string; label: string }
+  | { type: "run.step"; chatId: string; runId: string; label: string; detail?: string }
+  /** What the run's latest step returned. */
+  | { type: "run.step.output"; chatId: string; runId: string; output: string }
   | { type: "run.approval"; chatId: string; runId: string; card: ApprovalCard }
   | { type: "run.approval.resolved"; chatId: string; runId: string; approvalId: string; approved: boolean }
   | { type: "run.finished"; chatId: string; runId: string; message: ChatMessage }
@@ -147,4 +155,4 @@ export type AppEvent =
 
 /** A run in progress, for a page that opens while it runs. */
 /** `startedAt`: when the run began, for the chat's "Working for…" clock. */
-export type RunSnapshot = { runId: string; chatId: string; text: string; steps: string[]; approval: ApprovalCard | null; startedAt?: string };
+export type RunSnapshot = { runId: string; chatId: string; text: string; steps: Step[]; approval: ApprovalCard | null; startedAt?: string };

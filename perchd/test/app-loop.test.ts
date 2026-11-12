@@ -71,8 +71,8 @@ test("a Send click waits for approval through the API, then runs and is audited"
   await app.runs.idle();
   const reply = app.chats.get(chat.id)!.messages.at(-1)!;
   expect(reply.text).toBe("Sent to Maya.");
-  expect(reply.steps).toContain("Opened 127.0.0.1");
-  expect(reply.steps).toContain('Clicked button "Send"');
+  expect(reply.steps?.map((s) => s.label)).toContain("Opened 127.0.0.1");
+  expect(reply.steps?.map((s) => s.label)).toContain('Clicked button "Send"');
   const audit = readFileSync(join(dir, "audit.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
   expect(audit.find((e) => e.action === "click" && e.approved === true)).toMatchObject({ detail: expect.stringContaining('button "Send"'), result: "ok", client: "sidebar" });
   ws.close();

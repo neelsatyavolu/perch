@@ -12,7 +12,7 @@ import type { ApprovalRequest } from "../agent/session";
 import { describeApproval } from "./approval-card";
 import { parseArtifactBlocks, type ArtifactRecord, type ArtifactStore } from "./artifacts";
 import type { ChatStore } from "./chats";
-import type { AppEvent, ApprovalCard, ArtifactMeta, Chat, ChatMessage, ChatSettings, ChatStatus, ChatSummary, RunSnapshot, ScheduledMessage, TabInfo } from "./protocol";
+import type { AppEvent, ApprovalCard, ArtifactMeta, Chat, ChatMessage, ChatSettings, ChatStatus, ChatSummary, RunSnapshot, ScheduledMessage, Step, TabInfo } from "./protocol";
 import { buildTask } from "./transcript";
 
 export type RunnerInput = {
@@ -63,7 +63,7 @@ export class AppError extends Error {
 
 type Pending = { card: ApprovalCard; resolve: (approved: boolean) => void; done?: Promise<void> };
 /** `holdBack`: the user asked for the work without the final submit or send ("complete it without submitting"). */
-type Run = { runId: string; chatId: string; controller: AbortController; text: string; steps: string[]; pending: Pending | null; done: Promise<void>; startedAt: string; holdBack?: boolean };
+type Run = { runId: string; chatId: string; controller: AbortController; text: string; steps: Step[]; pending: Pending | null; done: Promise<void>; startedAt: string; holdBack?: boolean };
 
 /** "without submitting", "don't send it", "do not turn it in": the user wants the last step left to them. */
 const HOLD_BACK = /\b(without|don'?t|do not|never|not|no)\b[^.\n]{0,24}?\b(submit(ting)?|turn(ing)? (it |this |them )?in|hand(ing)? (it |this |them )?in|send(ing)?|post(ing)?|publish(ing)?)\b/i;
@@ -263,7 +263,7 @@ export class RunManager {
       // The user said not to submit: that step is left for them, without a card.
       if (run.holdBack && request.kind !== "read" && FINAL_STEP.test(`${request.target?.name ?? ""} ${request.summary}`)) {
         const label = `Left "${request.target?.name || "the final step"}" for you`;
-        run.steps = [...run.steps, label];
+        run.steps = [...run.steps, { label }];
         this.deps.emit({ type: "run.step", chatId: run.chatId, runId: run.runId, label });
         return Promise.resolve(false);
       }
@@ -297,8 +297,15 @@ export class RunManager {
           run.text += event.delta;
           if (event.delta) this.deps.emit({ type: "run.text", chatId: run.chatId, runId: run.runId, delta: event.delta });
         } else if (event.type === "step") {
-          run.steps = [...run.steps, event.label];
-          this.deps.emit({ type: "run.step", chatId: run.chatId, runId: run.runId, label: event.label });
+          const step: Step = { label: event.label, ...(event.detail ? { detail: event.detail } : {}) };
+          run.steps = [...run.steps, step];
+          this.deps.emit({ type: "run.step", chatId: run.chatId, runId: run.runId, label: step.label, ...(step.detail ? { detail: step.detail } : {}) });
+        } else if (event.type === "step_output") {
+          const last = run.steps.at(-1);
+          if (last && event.output) {
+            run.steps = [...run.steps.slice(0, -1), { ...last, output: event.output }];
+            this.deps.emit({ type: "run.step.output", chatId: run.chatId, runId: run.runId, output: event.output });
+          }
         } else if (event.type === "final") {
           final = event.text;
         } else if (event.type === "error") {

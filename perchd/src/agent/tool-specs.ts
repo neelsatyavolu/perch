@@ -11,6 +11,8 @@ function spec(name: string, description: string, properties: Record<string, Prop
 }
 
 const ref: Prop = { type: "string", description: "Element ref from the snapshot, like e12" };
+/** What a script-like step is for, shown to the user in the chat's step list. */
+const title: Prop = { type: "string", description: "A few words saying what this step is for, shown to the user, e.g. \"Read each pen's reviews\"" };
 
 export const TOOL_SPECS: ToolSpec[] = [
   spec("navigate", "Open a URL in the current agent tab. Returns the page snapshot.", { url: { type: "string" } }, ["url"]),
@@ -28,14 +30,14 @@ export const TOOL_SPECS: ToolSpec[] = [
   spec("back", "Go back one page in the current tab.", {}),
   spec("screenshot", "See the visible page as an image. Use when the snapshot cannot describe it, as on canvas, maps and charts.", {}),
   spec("click_at", "Click at x, y in the last screenshot's pixels.", { x: { type: "number" }, y: { type: "number" } }, ["x", "y"]),
-  spec("repl", "Run JavaScript in the page and return the result as JSON. Use return in multi-line code. Secret fields cannot be read.", { code: { type: "string" } }, ["code"]),
+  spec("repl", "Run JavaScript in the page and return the result as JSON. Use return in multi-line code. Secret fields cannot be read.", { code: { type: "string" }, title }, ["code"]),
   spec("type_text", "Type text at the keyboard focus, without a ref: for editors drawn on canvas such as Google Sheets and Docs. Click the cell or spot first; press Enter or Tab after to move on.", { text: { type: "string" } }, ["text"]),
   spec("save_pdf", "Save the current page as a PDF in the user's Downloads folder. Returns its path.", { name: { type: "string", description: "File name, without .pdf" } }),
   spec("downloads", "List files downloaded in the last hour (newest first), with their paths, so a download can be found or uploaded.", {}),
   spec(
     "batch",
     "Run actions you already know in a row (fill a form: type, type, select, click). Each is approved as usual; stops at the first that fails or needs a change of plan. Returns the page after the last.",
-    { actions: { type: "array", description: "Up to 10 of: click, type, select, press, scroll, hover, drag, type_text, wait_for", items: { type: "object", properties: { name: { type: "string" }, args: { type: "object" } }, required: ["name"] } } },
+    { actions: { type: "array", description: "Up to 10 of: click, type, select, press, scroll, hover, drag, type_text, wait_for", items: { type: "object", properties: { name: { type: "string" }, args: { type: "object" } }, required: ["name"] } }, title },
     ["actions"],
   ),
   spec(
@@ -47,6 +49,7 @@ export const TOOL_SPECS: ToolSpec[] = [
         description:
           "Body of an async function; use await, and return or log() only what you need. Functions: navigate(url), snapshot({full}), click(ref), type(ref, text, {submit}), select(ref, value), press(key), scroll(dy), hover(ref), wait_for({text, seconds}), back(), tabs(), open_tab(url), switch_tab(id), js(code) (runs code in the page, returns its JSON result), sleep(s), log(...). Each returns what the tool of that name returns; a failed call throws. No network, fetch or DOM here: use js() for the page.",
       },
+      title,
     },
     ["code"],
   ),

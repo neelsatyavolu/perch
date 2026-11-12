@@ -10,13 +10,29 @@
 import { readdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { ensurePrivateDir, KeyedQueue, UUID, writePrivate } from "./files";
-import type { Chat, ChatSettings, TabRef } from "./protocol";
+import type { Chat, ChatMessage, ChatSettings, Step, TabRef } from "./protocol";
 import type { Vault } from "./vault";
 
 export const DEFAULT_SETTINGS: ChatSettings = Object.freeze({ mode: "guard", model: "", effort: "medium", scope: "current" });
 const EXT = ".chat";
 /** How many chats `addAll` seals and writes at once. */
 const ADD_BATCH = 32;
+
+/** Steps saved before they carried details were plain labels; they load as `{ label }`. */
+export function normalizeSteps(steps: readonly unknown[] | undefined): Step[] | undefined {
+  if (!steps) return undefined;
+  return steps.flatMap((s): Step[] => {
+    if (typeof s === "string") return [{ label: s }];
+    if (s && typeof s === "object" && typeof (s as Step).label === "string") return [s as Step];
+    return [];
+  });
+}
+
+/** A chat as saved, with every message's steps in the current shape. */
+export function normalizeChat(chat: Chat): Chat {
+  if (!chat.messages.some((m) => m.steps?.some((s) => typeof s === "string"))) return chat;
+  return { ...chat, messages: chat.messages.map((m): ChatMessage => (m.steps ? { ...m, steps: normalizeSteps(m.steps) ?? [] } : m)) };
+}
 
 /** `incognito`: a private chat, kept in memory only (spec 5.8). */
 export type NewChat = { title?: string; tab?: TabRef | null; settings?: Partial<ChatSettings>; incognito?: boolean; origin?: string };
@@ -38,7 +54,7 @@ export class ChatStore {
       try {
         const chat = await vault.openJson<Chat>(id, new Uint8Array(await readFile(join(dir, name))));
         if (chat.id !== id) throw new Error("id mismatch");
-        store.chats.set(id, chat);
+        store.chats.set(id, normalizeChat(chat));
       } catch {
         store.problems.push(name);
       }

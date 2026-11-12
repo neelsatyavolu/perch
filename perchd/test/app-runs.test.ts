@@ -60,7 +60,7 @@ test("text streams, steps collect and the reply is saved", async () => {
   expect(of("run.step").map((e) => e.label)).toEqual(["Opened mail.example"]);
   const finished = of("run.finished")[0]!;
   expect(finished.runId).toBe(runId);
-  expect(finished.message).toMatchObject({ role: "assistant", text: "You have 3 unread emails.", steps: ["Opened mail.example"] });
+  expect(finished.message).toMatchObject({ role: "assistant", text: "You have 3 unread emails.", steps: [{ label: "Opened mail.example" }] });
   const saved = chats.get(chat.id)!;
   expect(saved.messages.map((m) => m.role)).toEqual(["user", "assistant"]);
   expect(saved.title).toBe("How many unread emails?");

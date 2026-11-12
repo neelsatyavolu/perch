@@ -10,6 +10,7 @@ import { sidebarExtras, type SidebarExtras } from "./sidebar-extras";
 import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import type { StepEvent } from "../agent/loop";
+import { clip, OUTPUT_LIMIT, stepDetail } from "../agent/steps";
 import type { MemoryAccess } from "../memory/agent";
 import { CHAT_SESSION_PREFIX, SIDEBAR_CLIENT, type SidebarRun } from "../daemon/server";
 import { claudeBinary, codexBinary, runClaudeCode, runCodex, type AsideEvent, type McpServer } from "../external";
@@ -92,30 +93,53 @@ const STEP_NAMES: Record<string, string> = {
 
 const quoted = (value: unknown, max = 40) => (typeof value === "string" && value.trim() ? ` "${value.trim().length > max ? `${value.trim().slice(0, max)}…` : value.trim()}"` : "");
 
+const host = (url: string): string | null => {
+  try {
+    return new URL(url.includes("://") ? url : `https://${url}`).host;
+  } catch {
+    return null;
+  }
+};
+
+/** "WebSearch" → "Web search", "switch_tab" → "Switch tab". */
+function words(tool: string): string {
+  const spaced = tool.replace(/_/g, " ").replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase().trim();
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
 /** A short line for the chat's step list, like "Open example.com" or "Press Enter". What is typed is never shown. */
 export function stepLabel(tool: string, args: unknown): string {
   const a = (args && typeof args === "object" ? args : {}) as Record<string, unknown>;
-  const name = tool.replace(/_/g, " ");
-  const verb = name.charAt(0).toUpperCase() + name.slice(1);
+  // The model's own few words on what a script or batch is for beat a generic name.
+  if (typeof a.title === "string" && a.title.trim()) {
+    const t = a.title.trim().replace(/\s+/g, " ");
+    return t.length > 60 ? `${t.slice(0, 59)}…` : t;
+  }
   if (STEP_NAMES[tool]) return STEP_NAMES[tool];
+  if (tool === "WebSearch") return typeof a.query === "string" && a.query.trim() ? `Search the web for${quoted(a.query, 60)}` : "Search the web";
+  if (tool === "WebFetch") return typeof a.url === "string" && host(a.url) ? `Read ${host(a.url)}` : "Read a web page";
   if (tool === "batch" && Array.isArray(a.actions)) return `Do ${a.actions.length} actions`;
   if (tool === "press" && typeof a.key === "string") return `Press ${a.key}`;
   if (tool === "wait_for") return a.text ? `Wait for${quoted(a.text)}` : "Wait";
   if (tool === "select") return `Choose${quoted(a.value)}`;
+  const verb = words(tool);
   if (typeof a.url === "string") {
-    try {
-      return `${tool === "navigate" || tool === "open_tab" ? "Open" : verb} ${new URL(a.url.includes("://") ? a.url : `https://${a.url}`).host}`;
-    } catch {
-      return verb;
-    }
+    const h = host(a.url);
+    return h ? `${tool === "navigate" || tool === "open_tab" ? "Open" : verb} ${h}` : verb;
   }
-  if (tool === "type" && typeof a.text === "string") return "Type";
   return verb;
 }
 
-/** What the chat shows while the agent works: each tool call as a step, and what the agent says between them. */
-function toStep(event: AsideEvent): StepEvent | null {
-  if (event.type === "tool_execution_start") return { type: "step", label: stepLabel(event.toolName, event.args) };
+/** What the chat shows while the agent works: each tool call as a step, its result, and what the agent says between them. */
+export function toStep(event: AsideEvent): StepEvent | null {
+  if (event.type === "tool_execution_start") {
+    const detail = stepDetail(event.toolName, event.args);
+    return { type: "step", label: stepLabel(event.toolName, event.args), ...(detail ? { detail } : {}) };
+  }
+  if (event.type === "message_end" && event.message.role === "toolResult") {
+    const output = event.message.content.map((c) => c.text).join("\n").trim();
+    return output ? { type: "step_output", output: clip(output, OUTPUT_LIMIT) } : null;
+  }
   if (event.type === "message_end" && event.message.role === "assistant") {
     const said = event.message.content.map((c) => c.text).join("\n").trim();
     if (said) return { type: "text", delta: `${said}\n\n` };

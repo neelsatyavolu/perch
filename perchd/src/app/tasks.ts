@@ -176,7 +176,7 @@ export class Tasks {
       createdAt: chat.createdAt,
       updatedAt: chat.updatedAt,
       answer: live ? live.text : answered ? last!.text : "",
-      steps: live ? live.steps : answered ? last!.steps ?? [] : [],
+      steps: (live ? live.steps : answered ? last!.steps ?? [] : []).map((s) => s.label),
       waitingFor: live?.approval ? `${live.approval.title} on ${live.approval.site}` : null,
       turns: chat.messages.filter((m) => m.role === "user").length,
     };

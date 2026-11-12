@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, openSync } from "node:fs";
 import { basename } from "node:path";
 import { SESSION_ID, type ApproveAsk } from "../daemon/protocol";
 import { ClientRegistry } from "../daemon/clients";
-import { CLIENT_NAME, MacKeychain, type Keychain } from "../daemon/keychain";
+import { CLIENT_NAME, FileKeychain, type Keychain } from "../daemon/keychain";
 import { perchPaths, type PerchPaths } from "../daemon/paths";
 import { connect, DaemonNotRunning, type DaemonClient } from "./client";
 import { selfCommand } from "./self";
@@ -79,11 +79,11 @@ async function startDaemon(io: CliIO, attempt: () => Promise<DaemonClient>): Pro
 /** Connects to perchd as a client, starting it first when allowed. */
 export async function openDaemon(io: CliIO, opts: SessionOptions = {}): Promise<DaemonClient> {
   const paths = pathsFor(io);
-  // Nothing to talk to: say so before touching the Keychain.
+  // Nothing to talk to: say so before making a token.
   if (io.autostart === false && !existsSync(paths.socket)) throw new DaemonNotRunning();
   const client = opts.client ?? defaultClient(io.env);
-  // A sidebar run's agent gets a one-off token from perchd itself, never one from the Keychain.
-  const token = io.env.PERCH_TOKEN || (await new ClientRegistry(paths.clientsFile, io.keychain ?? new MacKeychain()).token(client));
+  // A sidebar run's agent gets a one-off token from perchd itself, never one from the token folder.
+  const token = io.env.PERCH_TOKEN || (await new ClientRegistry(paths.clientsFile, io.keychain ?? new FileKeychain(paths.clientTokensDir)).token(client));
   const ask = io.ask;
   const attempt = () =>
     connect({

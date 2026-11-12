@@ -3,7 +3,7 @@
 import { mkdirSync } from "node:fs";
 import { Browser } from "../browser/browser";
 import { browserExecutable, startDaemon } from "../daemon/daemon";
-import { MacKeychain } from "../daemon/keychain";
+import { FileKeychain, MacKeychain } from "../daemon/keychain";
 import { startPolicyWatcher } from "../policy/watch";
 import { parseArgs } from "./args";
 import { pathsFor, type CliIO } from "./io";
@@ -22,7 +22,7 @@ export async function serve(argv: string[], io: CliIO): Promise<number> {
   const daemon = await startDaemon({
     policy,
     paths,
-    keychain: io.keychain ?? new MacKeychain(),
+    keychain: io.keychain ?? new FileKeychain(paths.clientTokensDir),
     sealKeychain: io.keychain ? undefined : new MacKeychain("Perch registry"),
     launch: () => Browser.launch({ userDataDir: paths.profileDir, executable, headless: a.flags.has("--headless") }),
   });

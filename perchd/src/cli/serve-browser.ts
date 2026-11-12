@@ -33,7 +33,7 @@ const SIGN_IN_CHECK_MS = 60_000;
 const CATALOG_TTL_MS = 10 * 60_000;
 import { BrowserLink } from "../app/browser-link";
 import { PerchDomain } from "../browser/perch-domain";
-import { MacKeychain } from "../daemon/keychain";
+import { FileKeychain, MacKeychain } from "../daemon/keychain";
 import { perchPaths } from "../daemon/paths";
 import { parseBrowserSettings as parseSettingsObject, readKeyChannel, type BrowserSettings } from "../secure/key-channel";
 import { loopEffort } from "../app/effort";
@@ -66,7 +66,8 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
   const browser = await Browser.adopt(conn);
   const base = join(settings.dataDir, "Perch Agent");
   const secrets = io.keychain ? null : await browserSecrets(channel, { profile: PROFILE, dataDir: settings.dataDir, clientsFile: perchPaths(io.env).clientsFile, log: io.stderr });
-  const keychain = io.keychain ?? secrets?.clients() ?? new MacKeychain();
+  // Outside clients' tokens are files the perch command can read too; the sealed store needs the profile key, which only the browser has.
+  const keychain = io.keychain ?? new FileKeychain(perchPaths(io.env).clientTokensDir);
   const runs = new SidebarRuns();
   // Company policy (spec 12.2) and the profile's one audit log, shared by the daemon, the sidebar and routines.
   const policy = startPolicyWatcher();

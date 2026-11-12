@@ -1,8 +1,11 @@
 /**
- * Client tokens live in the macOS Keychain (spec 11.1). The `security` tool is driven in its
- * interactive mode with commands on stdin, so a token never appears in a process list.
+ * Secret stores for perchd. Outside clients' tokens live in FileKeychain (one 0600 file each), which
+ * the perch command and perchd share. MacKeychain drives the `security` tool in its interactive
+ * mode with commands on stdin, so a secret never appears in a process list.
  */
 
+import { chmodSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { ownService } from "../secure/service-name";
 
 export interface Keychain {
@@ -60,6 +63,41 @@ export class MacKeychain implements Keychain {
     checkAccount(account);
     const r = await this.run(["delete-generic-password", "-s", this.service, "-a", account]);
     if (r.code !== 0 && r.code !== NOT_FOUND) throw new Error(`The Keychain item could not be removed (security exited ${r.code})`);
+  }
+}
+
+/**
+ * Outside clients' tokens, one file each in a folder only the user can open (0700, files 0600).
+ * The perch command and perchd both use it, so a token the command makes is the one perchd
+ * checks; neither needs the Keychain, so no Keychain prompt can come from a client connecting.
+ * The same user could read these through `security` before; a 0600 file is no weaker.
+ */
+export class FileKeychain implements Keychain {
+  constructor(readonly dir: string) {}
+
+  async get(account: string): Promise<string | null> {
+    checkAccount(account);
+    try {
+      return readFileSync(join(this.dir, account), "utf8").trim() || null;
+    } catch {
+      return null;
+    }
+  }
+
+  async set(account: string, secret: string): Promise<void> {
+    checkAccount(account);
+    if (!SECRET.test(secret)) throw new Error("A client token must be 16 to 128 URL-safe characters");
+    mkdirSync(this.dir, { recursive: true, mode: 0o700 });
+    chmodSync(this.dir, 0o700);
+    const file = join(this.dir, account);
+    const temp = `${file}.${process.pid}.tmp`;
+    writeFileSync(temp, secret, { mode: 0o600 });
+    renameSync(temp, file);
+  }
+
+  async delete(account: string): Promise<void> {
+    checkAccount(account);
+    rmSync(join(this.dir, account), { force: true });
   }
 }
 

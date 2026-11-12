@@ -5,6 +5,7 @@ import type { ApprovalCard as Card, ChatMessage, ChatSettings, ModelInfo } from 
 import { ApprovalCard } from "../src/components/approval";
 import { clampWidth, parseCsv, PANE } from "../src/components/artifact-pane";
 import { ago, ChatList } from "../src/components/chat-list";
+import { chatChoices, chatGroup } from "../src/components/chat-menu";
 import { Composer, PLACEHOLDER } from "../src/components/composer";
 import { fitEffort, matchModels } from "../src/components/model-menu";
 import { PerchDot } from "../src/components/icon";
@@ -368,4 +369,31 @@ test("the user's message has a copy button beside it", () => {
 test("saved chats with plain-text steps still show them", () => {
   const el = mount(<Steps steps={["Opened x"]} open />);
   expect(el.querySelector(".steplist li")?.textContent).toBe("Opened x");
+});
+
+test("past chats group as Pinned, Today, Previous 7 days, Previous 30 days, then by month", () => {
+  const now = new Date("2026-11-12T15:00:00").getTime();
+  const at = (iso: string) => ({ updatedAt: new Date(iso).toISOString() });
+  expect(chatGroup(at("2026-11-12T00:30:00"), now)).toBe("Today");
+  expect(chatGroup(at("2026-11-11T23:30:00"), now)).toBe("Previous 7 days");
+  expect(chatGroup(at("2026-11-05T09:00:00"), now)).toBe("Previous 7 days");
+  expect(chatGroup(at("2026-11-04T09:00:00"), now)).toBe("Previous 30 days");
+  expect(chatGroup(at("2026-10-13T09:00:00"), now)).toBe("Previous 30 days");
+  expect(chatGroup(at("2026-10-12T09:00:00"), now)).toBe("October");
+  expect(chatGroup(at("2025-12-24T09:00:00"), now)).toBe("December 2025");
+  expect(chatGroup({ ...at("2025-12-24T09:00:00"), pinned: true }, now)).toBe("Pinned");
+});
+
+test("the past chats menu lists pinned chats first with a pin, newest first, and dots unread replies", () => {
+  const now = new Date("2026-11-12T15:00:00").getTime();
+  const chat = (id: string, iso: string, more: object = {}) => ({ id, title: id, updatedAt: new Date(iso).toISOString(), tab: null, status: "idle" as const, preview: "", ...more });
+  const choices = chatChoices(
+    [chat("old", "2026-09-01T09:00:00"), chat("today", "2026-11-12T09:00:00", { unread: true }), chat("week", "2026-11-10T09:00:00"), chat("pinned", "2026-08-01T09:00:00", { pinned: true })],
+    now,
+  );
+  expect(choices.map((c) => [c.value, c.group])).toEqual([["pinned", "Pinned"], ["today", "Today"], ["week", "Previous 7 days"], ["old", "September"]]);
+  const marks = mount(<ul>{choices.map((c) => <li key={c.value}>{c.mark}</li>)}</ul>).querySelectorAll("li");
+  expect(marks[0]!.querySelector("svg")).not.toBeNull();
+  expect(marks[1]!.querySelector('.opt-dot[aria-label="New reply"]')).not.toBeNull();
+  expect(marks[2]!.innerHTML).toBe("");
 });

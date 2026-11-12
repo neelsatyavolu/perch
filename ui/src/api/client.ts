@@ -38,6 +38,8 @@ export function createClient(api: string, token: string, deps: Deps = {}) {
 
   return {
     info: () => call<AppInfo>("GET", "/api/info"),
+    /** Sets the model and effort every new chat starts with; perchd keeps them across restarts. */
+    setDefaults: (patch: Partial<Pick<ChatSettings, "model" | "effort">>) => call<ChatSettings>("PATCH", "/api/defaults", patch),
     chats: () => call<ChatSummary[]>("GET", "/api/chats"),
     createChat: (init: { title?: string; settings?: Partial<ChatSettings> } = {}) => call<Chat>("POST", "/api/chats", init),
     chat: (id: string) => call<ChatPayload>("GET", `/api/chats/${encodeURIComponent(id)}`),

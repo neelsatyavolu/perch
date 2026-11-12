@@ -20,6 +20,8 @@ export type RouteContext = {
   info: () => AppInfo;
   models: string[];
   readonly defaults: ChatSettings;
+  /** Sets the model and effort every new chat starts with. */
+  setDefaults: (patch: Partial<Pick<ChatSettings, "model" | "effort">>) => Promise<ChatSettings>;
   /** Perch's own pages (pages-api.ts); null when this app does not serve them. */
   pages: PagesApi | null;
   /** Files the user attached through the browser's open panel. */
@@ -127,6 +129,11 @@ export function exportMarkdown(ctx: RouteContext, chat: Chat): string {
 
 export const ROUTES: Route[] = [
   route("GET", "/api/info", (ctx) => ctx.info()),
+  route("PATCH", "/api/defaults", (ctx, _, body) => {
+    const o = v.object(body);
+    v.onlyKeys(o, ["model", "effort"]);
+    return ctx.setDefaults(v.settingsPatch(o, ctx.models));
+  }),
   route("GET", "/api/chats", (ctx) => ctx.chats.list().map((c) => ctx.runs.summary(c))),
   route("POST", "/api/chats", async (ctx, _, body) => {
     const o = v.object(body ?? {});

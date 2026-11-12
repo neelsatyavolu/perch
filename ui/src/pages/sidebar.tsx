@@ -10,6 +10,7 @@ import type { ChatPayload, Client } from "../api/client";
 import type { AppInfo, ArtifactMeta, ChatSettings, ChatSummary, TabInfo } from "../api/types";
 import { Composer } from "../components/composer";
 import { Icon, PerchDot } from "../components/icon";
+import { chatChoices } from "../components/chat-menu";
 import { Menu } from "../components/menu";
 import { Thread } from "../components/thread";
 import { applyToList } from "../state/chat";
@@ -33,6 +34,11 @@ export function Sidebar({ client, windowId, fallbackTab = null, host }: Props) {
   const [tab, setTab] = useState<TabInfo | null>(null);
   const [recent, setRecent] = useState<ChatSummary[]>([]);
   const [pending, setPending] = useState<Partial<ChatSettings>>({});
+  // A pick in any composer: new chats start with it, and an unsent pick here gives way to it.
+  const followDefaults = (defaults: ChatSettings) => {
+    setInfo((i) => (i ? { ...i, defaults } : i));
+    setPending(({ model: _model, effort: _effort, ...rest }) => rest);
+  };
   /** False until the first tab's chat is known, so the empty state never flashes before it. */
   const [loaded, setLoaded] = useState(false);
   const tabRef = useRef<string | null>(null);
@@ -106,6 +112,7 @@ export function Sidebar({ client, windowId, fallbackTab = null, host }: Props) {
       (event) => {
         setRecent((l) => applyToList(l, event));
         chat.onEvent(event);
+        if (event.type === "defaults") followDefaults(event.defaults);
         if (event.type === "chat.removed" && scroll.current.chatId === event.chatId) {
           clearTimeout(scroll.current.timer);
           scroll.current = { chatId: null, top: 0, saved: 0 };
@@ -143,18 +150,24 @@ export function Sidebar({ client, windowId, fallbackTab = null, host }: Props) {
 
   const status = view.run ? (view.run.approval ? "waiting" : "running") : "idle";
   const settings: ChatSettings = view.chat?.settings ?? { ...(info?.defaults ?? { mode: "guard", model: "", effort: "medium", scope: "current" }), ...pending };
-  const others = recent.filter((c) => c.id !== view.chat?.id).slice(0, 12);
+  const others = recent.filter((c) => c.id !== view.chat?.id);
+  // A tab with no chat yet reads New chat, as does a chat before its first reply names it.
+  const title = view.chat?.title ?? "New chat";
 
   return (
     <aside class="side" aria-label="Perch" data-ready={info ? "true" : undefined}>
       {/* The panel's only header: the browser draws none above it, so close lives here too. */}
       <header class="side-h">
-        <h1 class="title">{loaded ? view.chat?.title ?? "New chat" : ""}</h1>
+        {/* The title opens the past chats, as on Aside. */}
+        <h1 class="title title-menu">
+          {loaded && (
+            <Menu label="Recent chats" pill={{ class: "title-btn", name: `${title}, recent chats` }} listClass="chats-menu" choices={chatChoices(others, Date.now())} selected={[]} empty="No other chats yet" onPick={(c) => void chat.run(() => attach(c.value))}>
+              {title}
+            </Menu>
+          )}
+        </h1>
         <PerchDot status={status} title={STATE_WORDS[status]} />
         {status !== "idle" && <span class="state">{STATE_WORDS[status]}</span>}
-        <Menu label="Recent chats" align="end" choices={others.map((c) => ({ value: c.id, label: c.title, hint: c.tab ? "In another tab" : undefined }))} selected={[]} empty="No other chats yet" onPick={(c) => void chat.run(() => attach(c.value))}>
-          <Icon name="history" />
-        </Menu>
         <button type="button" class="ib" aria-label="New chat" title="New chat" disabled={!view.chat} onClick={() => void chat.run(() => attach())}>
           <Icon name="pen" />
         </button>

@@ -2,6 +2,7 @@
 
 import { EFFORTS, fitEffort } from "../effort";
 import type { ChatSummary, Composer, NtpSection, OnboardingStep, PermissionMode, Suggestion } from "../../../../ui-pages/src/api";
+import { isProviderId } from "../../models/ids";
 import { aboveCap, capMode } from "../../policy/policy";
 import { managed, policyOf } from "./common";
 import type { Chat } from "../protocol";
@@ -60,6 +61,13 @@ export function ntpPages(deps: PagesDeps): Methods<
     const wanted = s.chatEffort ?? info?.defaults.effort ?? "medium";
     return { models, model, effort: fitEffort(models.find((m) => m.id === model)?.efforts, wanted), mode: capMode(s.mode, policyOf(deps)) };
   }
+  /** Settings → Models' Default model follows the pick, when it is a model the registry knows. */
+  async function noteDefault(model: string) {
+    const at = model.indexOf(":");
+    const provider = model.slice(0, at);
+    if (at <= 0 || !isProviderId(provider)) return;
+    await deps.models.registry().then((r) => r.noteUsed({ provider, model: model.slice(at + 1) })).catch(() => undefined);
+  }
   async function setup(): Promise<Setup> {
     const { imported } = await deps.state.get();
     const data = await deps.data().catch(() => null);
@@ -78,6 +86,7 @@ export function ntpPages(deps: PagesDeps): Methods<
       if (mode && aboveCap(mode, policyOf(deps))) managed();
       await deps.state.update((s) => ({ ...s, ...(model ? { chatModel: model } : {}), ...(effort ? { chatEffort: effort } : {}), ...(mode ? { mode } : {}) }));
       deps.setDefaults?.({ ...(model ? { model } : {}), ...(effort ? { effort } : {}), ...(mode ? { mode } : {}) });
+      if (model) await noteDefault(model);
       return composer();
     },
     async getNtpLayout() {

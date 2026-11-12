@@ -111,6 +111,7 @@ export function createDemoClient(windowId: string): Client {
 
   const client: Client = {
     info: () => ok(INFO),
+    setDefaults: (patch) => ok({ ...DEFAULTS, ...patch }),
     chats: () => ok(chats.map(summary)),
     createChat: (init = {}) => ok(newChat({ ...(init.title ? { title: init.title } : {}), settings: { ...DEFAULTS, ...init.settings } })),
     chat: (id) => ok(payload(chats.find((c) => c.id === id))),

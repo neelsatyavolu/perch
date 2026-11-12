@@ -181,7 +181,7 @@ beforeAll(async () => {
     runner: async function* () {
       yield { type: "final", text: "Done." };
     },
-    models: [{ id: "fake", label: "Fake", provider: "test", efforts: ["medium"] }, { id: "fake-2", label: "Fake 2", provider: "test", efforts: ["low", "medium", "high"] }],
+    models: [{ id: "fake", label: "Fake", provider: "test", efforts: ["medium"] }, { id: "fake-2", label: "Fake 2", provider: "test", efforts: ["low", "medium", "high"] }, { id: "claude-code:claude-sonnet-5-5", label: "Claude Sonnet 5.5", provider: "Claude Code", efforts: ["low", "medium", "high", "xhigh", "max"] }],
     allowedOrigins: ["chrome://perch-settings"],
     token: TOKEN,
     browserToken: BROWSER_TOKEN,
@@ -266,12 +266,50 @@ test("onboarding", async () => {
 
 test("the new tab composer picks the model, effort and mode the next chat starts with", async () => {
   const first = await api.getComposer();
-  expect(first.models.map((m) => m.id)).toEqual(["fake", "fake-2"]);
+  expect(first.models.map((m) => m.id)).toEqual(["fake", "fake-2", "claude-code:claude-sonnet-5-5"]);
   const next = await api.setComposer({ model: "fake-2", effort: "high", mode: "ask" });
   expect(next).toMatchObject({ model: "fake-2", effort: "high", mode: "ask" });
   expect(app.info().defaults).toMatchObject({ model: "fake-2", effort: "high", mode: "ask" });
   await expect(api.setComposer({ model: "nope" })).rejects.toThrow();
   await api.setComposer({ model: "fake", effort: "medium", mode: "guard" });
+});
+
+async function patchDefaults(body: unknown): Promise<{ status: number; body: Record<string, unknown> }> {
+  const res = await fetch(`${app.server.url}/api/defaults`, { method: "PATCH", headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" }, body: JSON.stringify(body) });
+  return { status: res.status, body: (await res.json()) as Record<string, unknown> };
+}
+
+test("a model and effort picked in a chat's composer become what every new chat starts with, and are kept", async () => {
+  const told: unknown[] = [];
+  const listen = (m: MessageEvent) => {
+    const e = JSON.parse(String(m.data)) as { type: string; defaults?: unknown };
+    if (e.type === "defaults") told.push(e.defaults);
+  };
+  ws.addEventListener("message", listen);
+  const before = await app.chats.create({ title: "Earlier", settings: app.info().defaults });
+
+  const saved = await patchDefaults({ model: "fake-2", effort: "high" });
+  expect(saved.status).toBe(200);
+  expect(saved.body).toMatchObject({ model: "fake-2", effort: "high" });
+  expect(app.info().defaults).toMatchObject({ model: "fake-2", effort: "high" });
+  // Kept with the new tab page's pick, which perchd reads back when it starts.
+  expect(await api.getComposer()).toMatchObject({ model: "fake-2", effort: "high" });
+  const created = await fetch(`${app.server.url}/api/chats`, { method: "POST", headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" }, body: "{}" });
+  expect(((await created.json()) as { settings: unknown }).settings).toMatchObject({ model: "fake-2", effort: "high" });
+  expect(app.chats.get(before.id)!.settings.model).toBe(before.settings.model);
+  await Bun.sleep(20);
+  expect(told.at(-1)).toMatchObject({ model: "fake-2", effort: "high" });
+
+  // The new tab page's pick tells open chats too.
+  await api.setComposer({ effort: "low" });
+  await Bun.sleep(20);
+  expect(told.at(-1)).toMatchObject({ model: "fake-2", effort: "low" });
+
+  expect((await patchDefaults({ model: "nope" })).status).toBe(400);
+  expect((await patchDefaults({ mode: "skip" })).status).toBe(400);
+  expect((await patchDefaults({ effort: "loud" })).status).toBe(400);
+  ws.removeEventListener("message", listen);
+  await patchDefaults({ model: "fake", effort: "medium" });
 });
 
 test("Claude signs in by opening its page and taking the pasted code", async () => {
@@ -313,6 +351,24 @@ test("models: keys go in and only a hint comes out; roles and models", async () 
   expect(await api.signOut("anthropic")).toMatchObject({ id: "anthropic", state: "signed-out" });
   expect((await fails(api.signOut("aol" as never))).status).toBe(400);
   expect((await raw("listProviders", ["x"])).status).toBe(400);
+});
+
+// After the models test, which signs in to Claude Code.
+test("Settings → Models' Default model follows the chat pick, and picking it there sets the chat default", async () => {
+  await patchDefaults({ model: "claude-code:claude-sonnet-5-5" });
+  expect((await api.getTaskModels()).find((t) => t.role === "default")?.modelId).toBe("claude-code:claude-sonnet-5-5");
+  await patchDefaults({ model: "fake" });
+  // A chat model the registry doesn't know leaves the Default role as it was.
+  expect((await api.getTaskModels()).find((t) => t.role === "default")?.modelId).toBe("claude-code:claude-sonnet-5-5");
+
+  await api.setTaskModel("default", { modelId: "claude-code:claude-sonnet-5-5" });
+  expect(app.info().defaults.model).toBe("claude-code:claude-sonnet-5-5");
+  expect((await api.getComposer()).model).toBe("claude-code:claude-sonnet-5-5");
+  // A role model that isn't a chat model leaves the chat default alone.
+  await api.setTaskModel("default", { modelId: "claude-code:claude-opus-5-5" });
+  expect(app.info().defaults.model).toBe("claude-code:claude-sonnet-5-5");
+  await api.setTaskModel("default", { modelId: null });
+  await patchDefaults({ model: "fake" });
 });
 
 test("MCP: imports and new servers keep secrets in the Keychain and return names only", async () => {

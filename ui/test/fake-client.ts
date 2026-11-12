@@ -1,12 +1,12 @@
 /** An in-memory stand-in for the app API, for page tests. It records calls and lets tests push events. */
 
 import type { ChatPayload, Client } from "../src/api/client";
-import type { AppEvent, AppInfo, Chat, ChatSettings, TabInfo, WindowState } from "../src/api/types";
+import type { AppEvent, AppInfo, Chat, ChatSettings, ChatSummary, TabInfo, WindowState } from "../src/api/types";
 
-export type FakeClient = Client & { calls: { name: string; args: unknown[] }[]; emit(event: AppEvent): void; status(connected: boolean): void; chatsById: Map<string, Chat>; windows: Map<string, WindowState> };
+export type FakeClient = Client & { calls: { name: string; args: unknown[] }[]; emit(event: AppEvent): void; status(connected: boolean): void; chatsById: Map<string, Chat>; windows: Map<string, WindowState>; marks: Map<string, Partial<ChatSummary>> };
 
-const info: AppInfo = {
-  models: [{ id: "fake", label: "Scripted", provider: "Perch", efforts: ["medium"] }],
+const startInfo: AppInfo = {
+  models: [{ id: "fake", label: "Scripted", provider: "Perch", efforts: ["low", "medium", "high"] }],
   defaults: { mode: "guard", model: "fake", effort: "medium", scope: "current" },
   artifactOrigin: "http://127.0.0.1:1",
 };
@@ -14,10 +14,13 @@ const info: AppInfo = {
 export function fakeClient(): FakeClient {
   const chatsById = new Map<string, Chat>();
   const windows = new Map<string, WindowState>();
+  /** List marks a chat carries in the chat list, such as pinned or unread. */
+  const marks = new Map<string, Partial<ChatSummary>>();
   const listeners: ((e: AppEvent) => void)[] = [];
   const statusListeners: ((connected: boolean) => void)[] = [];
   const calls: { name: string; args: unknown[] }[] = [];
   let n = 0;
+  let info = startInfo;
   const record = <T>(name: string, args: unknown[], value: T): Promise<T> => {
     calls.push({ name, args });
     return Promise.resolve(value);
@@ -33,10 +36,16 @@ export function fakeClient(): FakeClient {
     calls,
     chatsById,
     windows,
+    marks,
     emit: (event: AppEvent) => listeners.forEach((l) => l(event)),
     status: (connected: boolean) => statusListeners.forEach((l) => l(connected)),
     info: () => record("info", [], info),
-    chats: () => record("chats", [], [...chatsById.values()].map((c) => ({ id: c.id, title: c.title, updatedAt: c.updatedAt, tab: c.tab, status: "idle" as const, preview: "" }))),
+    setDefaults: (patch: Partial<ChatSettings>) => {
+      info = { ...info, defaults: { ...info.defaults, ...patch } };
+      listeners.forEach((l) => l({ type: "defaults", defaults: info.defaults }));
+      return record("setDefaults", [patch], info.defaults);
+    },
+    chats: () => record("chats", [], [...chatsById.values()].map((c) => ({ id: c.id, title: c.title, updatedAt: c.updatedAt, tab: c.tab, status: "idle" as const, preview: "", ...marks.get(c.id) }))),
     createChat: (init: { settings?: Partial<ChatSettings> } = {}) => record("createChat", [init], newChat({ settings: { ...info.defaults, ...init.settings } })),
     chat: (id: string) => record("chat", [id], payload(chatsById.get(id))),
     patchChat: (id: string, patch: Partial<Chat>) => {

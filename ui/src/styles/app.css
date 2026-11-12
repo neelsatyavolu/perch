@@ -276,6 +276,17 @@ button.artifact-card:hover { background: var(--fill-hover); }
   .side-h .state { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); margin: 0; }
 }
 .side-h .title, .art-h .title { margin: 0; flex: 1; min-width: 0; color: var(--ink); font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The side chat's title opens its past chats (chat-menu.tsx); the h1 must not clip the list. */
+.side-h .title-menu { overflow: visible; display: flex; }
+.title-menu > .menu-wrap { max-width: 100%; }
+.title-btn { height: 28px; max-width: 100%; display: inline-flex; align-items: center; gap: 4px; margin-left: -6px; padding: 0 6px; border: 0; border-radius: var(--r-control);
+  background: none; color: var(--ink); font-weight: 500; transition: background var(--t-hover) var(--ease); }
+.title-btn:hover, .title-btn[aria-expanded="true"] { background: var(--hover); }
+.title-btn > svg { color: var(--mute); }
+.menu.chats-menu { width: 280px; max-width: calc(100vw - 24px); }
+.chats-menu .opt-check { display: none; }
+.menu .opt-mark { flex: none; display: inline-flex; align-items: center; gap: 6px; color: var(--mute); }
+.menu .opt-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
 .side-h > .menu-wrap .pill, .fc-h > .menu-wrap .pill { background: none; width: 28px; height: 28px; padding: 0; justify-content: center; color: var(--mute); }
 .side-h > .menu-wrap .pill > svg:last-child, .fc-h > .menu-wrap .pill > svg:last-child { display: none; }
 /* The history icon sits alone in its 28px button: drop the gap the pill keeps for a label. */

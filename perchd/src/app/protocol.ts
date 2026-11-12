@@ -148,6 +148,8 @@ export type AppEvent =
   | { type: "run.finished"; chatId: string; runId: string; message: ChatMessage }
   | { type: "artifact.saved"; chatId: string; artifact: ArtifactMeta }
   | { type: "window.active"; state: WindowState }
+  /** What new chats start with changed: a pick in any composer, or Settings → Models. */
+  | { type: "defaults"; defaults: ChatSettings }
   /** For Perch's own pages (ui-pages): `job:<id>` carries a job's progress; `appearance` the theme. */
   | { type: "pages.event"; event: string; data: unknown };
 

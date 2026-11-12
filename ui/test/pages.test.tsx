@@ -56,7 +56,7 @@ test("the side chat's own header is the panel header: history, new chat and clos
   const header = el.querySelectorAll("header");
   expect(header.length).toBe(1);
   expect(header[0]!.querySelector("h1.title")!.textContent).toBe("New chat");
-  expect(header[0]!.querySelector('[aria-label="Recent chats"]')).not.toBeNull();
+  expect(header[0]!.querySelector('h1.title button[title="Recent chats"]')).not.toBeNull();
   expect(header[0]!.querySelector('[aria-label="New chat"]')).not.toBeNull();
   await act(async () => (header[0]!.querySelector('[aria-label="Close side chat"]') as HTMLElement).click());
   expect(closed).toBe(1);
@@ -336,7 +336,7 @@ test("the recent chats menu says when there are none, and Escape puts focus back
   const client = fakeClient();
   client.windows.set("w1", { windowId: "w1", tab: tabA, chatId: null });
   const el = await mount(<Sidebar client={client} windowId="w1" />);
-  const button = el.querySelector('[aria-label="Recent chats"]') as HTMLElement;
+  const button = el.querySelector('[title="Recent chats"]') as HTMLElement;
   await act(async () => button.click());
   const list = el.querySelector(".menu") as HTMLElement;
   expect(list.textContent).toBe("No other chats yet");
@@ -373,4 +373,93 @@ test("a failed delete in the full-page chat says so instead of failing silently"
   await act(async () => (el.querySelector(".confirm .danger-text") as HTMLElement).click());
   await settle();
   expect(el.querySelector(".note.error")!.textContent).toContain("500");
+});
+
+const pickEffort = async (el: HTMLElement, label: string) => {
+  await act(async () => (el.querySelector('[aria-label="Effort"]') as HTMLElement).click());
+  await act(async () => ([...el.querySelectorAll('[role="option"]')].find((o) => o.textContent!.startsWith(label)) as HTMLElement).click());
+  await settle();
+};
+
+test("a model or effort picked in a new side chat becomes what every new chat starts with, the full-page chat too", async () => {
+  const client = fakeClient();
+  client.windows.set("w1", { windowId: "w1", tab: tabA, chatId: null });
+  const side = await mount(<Sidebar client={client} windowId="w1" />);
+  await pickEffort(side, "High");
+  expect(client.calls.find((c) => c.name === "setDefaults")!.args[0]).toEqual({ effort: "high" });
+  act(() => render(null, root));
+  root.remove();
+  const full = await mount(<FullChat client={client} />);
+  expect(full.querySelector(".eff-t")!.textContent).toBe("High");
+});
+
+test("a pick in a chat that already started changes that chat and the default for new ones", async () => {
+  const client = fakeClient();
+  const chat = await client.createChat();
+  client.windows.set("w1", { windowId: "w1", tab: tabA, chatId: chat.id });
+  client.chatsById.set(chat.id, { ...chat, tab: { id: tabA.id, windowId: "w1" } });
+  const el = await mount(<Sidebar client={client} windowId="w1" />);
+  await pickEffort(el, "Low");
+  expect(client.calls.find((c) => c.name === "patchChat" && (c.args[1] as { settings?: unknown }).settings)!.args[1]).toEqual({ settings: { effort: "low" } });
+  expect(client.calls.find((c) => c.name === "setDefaults")!.args[0]).toEqual({ effort: "low" });
+});
+
+test("an open side chat with no messages yet follows a pick made in another composer", async () => {
+  const client = fakeClient();
+  client.windows.set("w1", { windowId: "w1", tab: tabA, chatId: null });
+  const el = await mount(<Sidebar client={client} windowId="w1" />);
+  expect(el.querySelector(".eff-t")!.textContent).toBe("Medium");
+  await act(async () => void client.setDefaults({ effort: "high" }));
+  expect(el.querySelector(".eff-t")!.textContent).toBe("High");
+});
+
+test("the side chat's title opens its past chats, grouped by day, and a row opens that chat in this tab", async () => {
+  const client = fakeClient();
+  const day = 86_400_000;
+  const econ = await client.createChat();
+  client.chatsById.set(econ.id, { ...econ, title: "Econ class status", updatedAt: new Date().toISOString() });
+  const trip = await client.createChat();
+  client.chatsById.set(trip.id, { ...trip, title: "Lisbon trip", updatedAt: new Date(Date.now() - 3 * day).toISOString() });
+  client.marks.set(trip.id, { unread: true });
+  const notes = await client.createChat();
+  client.chatsById.set(notes.id, { ...notes, title: "Reading notes", updatedAt: new Date(Date.now() - 90 * day).toISOString() });
+  client.marks.set(notes.id, { pinned: true });
+  client.windows.set("w1", { windowId: "w1", tab: tabA, chatId: null });
+  const el = await mount(<Sidebar client={client} windowId="w1" />);
+  // An empty chat reads New chat.
+  const button = el.querySelector('.side-h .title button[title="Recent chats"]') as HTMLElement;
+  expect(button.textContent).toBe("New chat");
+  expect(button.getAttribute("aria-haspopup")).toBe("listbox");
+  await act(async () => button.click());
+  const menu = el.querySelector(".menu.chats-menu") as HTMLElement;
+  expect([...menu.querySelectorAll(".menu-group")].map((g) => g.textContent)).toEqual(["Pinned", "Today", "Previous 7 days"]);
+  const rows = [...menu.querySelectorAll('[role="option"]')];
+  expect(rows.map((r) => r.querySelector(".opt-label")!.textContent)).toEqual(["Reading notes", "Econ class status", "Lisbon trip"]);
+  expect(rows[0]!.querySelector("svg")).not.toBeNull();
+  expect(rows[2]!.querySelector(".opt-dot")).not.toBeNull();
+  expect(rows[1]!.querySelector(".opt-dot")).toBeNull();
+  await act(async () => (rows[1] as HTMLElement).click());
+  await settle();
+  expect(client.calls.find((c) => c.name === "openSideChat")!.args.slice(0, 3)).toEqual(["tA", "w1", econ.id]);
+  expect(el.querySelector(".menu")).toBeNull();
+  expect(el.querySelector(".side-h .title")!.textContent).toBe("Econ class status");
+});
+
+test("the past chats menu works from the keyboard: arrows move, Enter opens", async () => {
+  const client = fakeClient();
+  const a = await client.createChat();
+  client.chatsById.set(a.id, { ...a, title: "First", messages: [{ id: "m1", role: "user", text: "hi", time: new Date().toISOString() }] });
+  const b = await client.createChat();
+  client.chatsById.set(b.id, { ...b, title: "Second", updatedAt: new Date(Date.now() - 1000).toISOString() });
+  client.windows.set("w1", { windowId: "w1", tab: tabA, chatId: null });
+  const el = await mount(<Sidebar client={client} windowId="w1" />);
+  const button = el.querySelector('[title="Recent chats"]') as HTMLElement;
+  await act(async () => void button.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+  await act(async () => button.click());
+  const list = el.querySelector(".menu") as HTMLElement;
+  const key = (k: string) => act(async () => void list.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true })));
+  await key("ArrowDown");
+  await key("Enter");
+  await settle();
+  expect(client.calls.find((c) => c.name === "openSideChat")!.args[2]).toBe(b.id);
 });

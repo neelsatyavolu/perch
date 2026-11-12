@@ -112,6 +112,13 @@ export function modelsPages(deps: PagesDeps): Methods<"listProviders" | "signIn"
     throw new AppError(`The ${PROVIDERS[id].label} sign-in didn't finish. Try again, and finish signing in on the page that opens.`, 408);
   }
 
+  /** The Default model is also what new chats start with, when it is one of the chat models. */
+  async function followDefault(id: string) {
+    if (!deps.chatInfo?.().models.some((m) => m.id === id)) return;
+    await deps.state.update((s) => ({ ...s, chatModel: id }));
+    deps.setDefaults?.({ model: id });
+  }
+
   async function connected(): Promise<ProviderId[]> {
     return (await (await registry()).listProviders()).filter((s) => s.connected).map((s) => s.id);
   }
@@ -220,6 +227,7 @@ export function modelsPages(deps: PagesDeps): Methods<"listProviders" | "signIn"
         const f = fast ?? kept?.fast;
         const choice: RoleChoice = { provider: picked.provider, model: picked.model, ...(e ? { effort: e } : {}), ...(f !== undefined ? { fast: f } : {}) };
         await registryCall(() => r.setRole(role, choice));
+        if (role === "default") await followDefault(modelId(choice.provider, choice.model));
       }
       return (await taskModels()).find((t) => t.role === role)!;
     },

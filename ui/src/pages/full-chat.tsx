@@ -38,6 +38,11 @@ export function FullChat({ client, initialChat = null, initialAsk = null, onNavi
   const [artifact, setArtifact] = useState<ArtifactMeta | null>(null);
   const [width, setWidth] = useState(() => readPref("chat.paneWidth", PANE.initial));
   const [pending, setPending] = useState<Partial<ChatSettings>>({});
+  // A pick in any composer: new chats start with it, and an unsent pick here gives way to it.
+  const followDefaults = (defaults: ChatSettings) => {
+    setInfo((i) => (i ? { ...i, defaults } : i));
+    setPending(({ model: _model, effort: _effort, ...rest }) => rest);
+  };
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   /** The delete bar's safe button: it takes focus when the bar opens, so a keyboard user lands in it. */
@@ -70,6 +75,7 @@ export function FullChat({ client, initialChat = null, initialAsk = null, onNavi
       (event) => {
         setList((l) => applyToList(l, event));
         chat.onEvent(event);
+        if (event.type === "defaults") followDefaults(event.defaults);
       },
       (connected) => {
         if (!connected) dropped = true;

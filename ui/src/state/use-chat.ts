@@ -106,9 +106,14 @@ export function useChat(client: Client) {
   const decide = (approvalId: string, approved: boolean) => guard(() => client.decide(approvalId, approved));
   const setSettings = (patch: Partial<ChatSettings>, apply: (patch: Partial<ChatSettings>) => void = () => {}) =>
     guard(async () => {
-      if (!view.chat) return apply(patch);
-      const chat = await client.patchChat(view.chat.id, { settings: patch });
-      setView((v) => (v.chat?.id === chat.id ? { ...v, chat: { ...v.chat, settings: chat.settings, title: chat.title } } : v));
+      if (!view.chat) apply(patch);
+      else {
+        const chat = await client.patchChat(view.chat.id, { settings: patch });
+        setView((v) => (v.chat?.id === chat.id ? { ...v, chat: { ...v.chat, settings: chat.settings, title: chat.title } } : v));
+      }
+      // The model and effort picked here are what every new chat starts with, in any composer.
+      const pick = { ...(patch.model ? { model: patch.model } : {}), ...(patch.effort ? { effort: patch.effort } : {}) };
+      if (Object.keys(pick).length) await client.setDefaults(pick);
     });
 
   useEffect(() => () => void saveDraft(), [saveDraft]);

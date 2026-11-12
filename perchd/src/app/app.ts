@@ -163,13 +163,15 @@ export async function startApp(opts: AppOptions): Promise<App> {
   const models = typeof opts.models === "function" ? opts.models : () => opts.models as ModelInfo[];
   let defaults: ChatSettings = { ...DEFAULT_SETTINGS, model: models()[0]?.id ?? "", ...opts.defaults };
   const info = (): AppInfo => ({ models: models(), defaults, artifactOrigin: artifactServer.origin });
+  const applyDefaults = (patch: Partial<ChatSettings>) => {
+    defaults = { ...defaults, ...patch };
+    publish({ type: "defaults", defaults });
+  };
   const pages = opts.pages?.({
     chats,
     runs,
     emit: (event, data) => publish({ type: "pages.event", event, data }),
-    setDefaults: (patch) => {
-      defaults = { ...defaults, ...patch };
-    },
+    setDefaults: applyDefaults,
     info: () => info(),
   }) ?? null;
   const files = new FileRegistry();
@@ -186,6 +188,12 @@ export async function startApp(opts: AppOptions): Promise<App> {
         return models().map((m) => m.id);
       },
       get defaults() {
+        return defaults;
+      },
+      // The pages keep the pick with the new tab page's, so it outlasts a restart.
+      setDefaults: async (patch) => {
+        if (pages) await pages.call("setComposer", [patch]);
+        else applyDefaults(patch);
         return defaults;
       },
     },

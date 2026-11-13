@@ -113,6 +113,9 @@ export function Privacy() {
           <Row id="third-party-cookies" title="Block third-party cookies" detail="Sites can't follow you across other sites with cookies">
             <Switch label="Block third-party cookies" describedBy="third-party-cookies-d" checked={p.thirdPartyCookies === "block"} onChange={(v) => patch({ thirdPartyCookies: v ? "block" : "allow" })} />
           </Row>
+          <Row id="forget-on-quit" title="Forget cookies and site data when Perch quits" detail="Every site starts fresh next time, as in LibreWolf. You'll be signed out of sites each time you quit">
+            <Switch label="Forget cookies and site data when Perch quits" describedBy="forget-on-quit-d" checked={p.forgetOnQuit} onChange={(v) => patch({ forgetOnQuit: v })} />
+          </Row>
         </div>
       </Group>
 
@@ -128,6 +131,11 @@ export function Privacy() {
             )}
             <Switch label="Encrypted DNS" describedBy="doh-d" checked={p.dnsOverHttps} onChange={(v) => patch({ dnsOverHttps: v })} />
           </Row>
+          {p.dnsOverHttps && (
+            <Row id="strict-dns" sub title="Never use your network's DNS" detail="Sites won't load if the resolver can't be reached, and some Wi-Fi sign-in pages may not open">
+              <Switch label="Never use your network's DNS" describedBy="strict-dns-d" checked={p.strictDns} onChange={(v) => patch({ strictDns: v })} />
+            </Row>
+          )}
           {p.dnsOverHttps && resolver === "custom" && (
             <form class="add-rule" style={{ gridTemplateColumns: "1fr auto" }} onSubmit={(e) => { e.preventDefault(); saveDohUrl(); }}>
               {pendingCustom && <p class="note" style={{ gridColumn: "1 / -1" }}>Lookups keep using {DOH[p.dohProvider]} until you save an address.</p>}

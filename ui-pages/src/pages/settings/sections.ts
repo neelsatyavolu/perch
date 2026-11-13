@@ -62,6 +62,8 @@ export const SEARCH_INDEX: readonly SearchEntry[] = [
   { section: "privacy", anchor: "cookie-banners", title: "Reject cookie banners", words: "consent gdpr" },
   { section: "privacy", anchor: "tracking-params", title: "Remove tracking parameters", words: "utm fbclid gclid links" },
   { section: "privacy", anchor: "https-only", title: "HTTPS-only", words: "secure connections" },
+  { section: "privacy", anchor: "forget-on-quit", title: "Forget cookies and site data when Perch quits", words: "clear on exit cookies session" },
+  { section: "privacy", anchor: "strict-dns", title: "Never use your network's DNS", words: "strict secure doh dns fallback" },
   { section: "privacy", anchor: "search-suggestions", title: "Search suggestions", words: "autocomplete typing address bar" },
   { section: "privacy", anchor: "doh", title: "Encrypted DNS", words: "dns over https doh cloudflare quad9 mullvad" },
   { section: "privacy", anchor: "fingerprinting", title: "Block fingerprinting", words: "fingerprinting canvas webgl audio noise farbling topics protected audience fledge ad measurement privacy sandbox" },

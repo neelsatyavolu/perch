@@ -270,6 +270,10 @@ export type PrivacySettings = {
   readonly fingerprinting: boolean;
   /** Whether the address bar sends what you type to the search engine for suggestions (off by default). */
   readonly searchSuggestions: boolean;
+  /** Encrypted DNS only, never falling back to the network's resolver ("secure" mode). */
+  readonly strictDns: boolean;
+  /** Cookies and site data last only until Perch quits. */
+  readonly forgetOnQuit: boolean;
   readonly thirdPartyCookies: "block" | "allow";
   /** Sites where the content blocker is off. */
   readonly blockerExceptions: readonly string[];

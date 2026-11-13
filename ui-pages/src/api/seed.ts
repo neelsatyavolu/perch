@@ -101,6 +101,8 @@ export const PRIVACY: PrivacySettings = {
   trackingParams: true,
   httpsOnly: true,
   searchSuggestions: false,
+  strictDns: false,
+  forgetOnQuit: false,
   dnsOverHttps: true,
   dohProvider: "cloudflare",
   dohCustomUrl: "",

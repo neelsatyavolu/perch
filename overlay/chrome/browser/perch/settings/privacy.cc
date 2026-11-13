@@ -12,12 +12,14 @@
 #include "base/time/time.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browsing_data/chrome_browsing_data_remover_constants.h"
+#include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/perch/extensions/perch_component_extensions.h"
 #include "chrome/browser/perch/perch_pref_names.h"
 #include "chrome/browser/perch/privacy/allowed_connections.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/pref_names.h"
 #include "components/content_settings/core/browser/cookie_settings.h"
+#include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/content_settings/core/common/pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "components/privacy_sandbox/privacy_sandbox_prefs.h"
@@ -152,6 +154,13 @@ base::DictValue Snapshot(Profile* profile,
     provider = "cloudflare";
   }
   result.Set("dnsOverHttps", mode != "off");
+  // Strict: only the encrypted resolver, never the network's own DNS.
+  result.Set("strictDns", mode == "secure");
+  // Cookies and site data last until Perch quits (LibreWolf's default).
+  result.Set("forgetOnQuit",
+             HostContentSettingsMapFactory::GetForProfile(profile)
+                     ->GetDefaultContentSetting(ContentSettingsType::COOKIES) ==
+                 CONTENT_SETTING_SESSION_ONLY);
   result.Set("dohProvider", provider);
   result.Set("dohCustomUrl", provider == "custom" ? templates : std::string());
 
@@ -172,7 +181,8 @@ base::DictValue Snapshot(Profile* profile,
 std::optional<std::string> Validate(const base::DictValue& patch) {
   for (const auto [key, value] : patch) {
     bool is_bool_field = key == "httpsOnly" || key == "dnsOverHttps" ||
-                         key == "fingerprinting" || key == "searchSuggestions";
+                         key == "fingerprinting" || key == "searchSuggestions" ||
+                         key == "strictDns" || key == "forgetOnQuit";
     for (const auto& [field, unused] : kBlockerFields) {
       is_bool_field |= key == field;
     }
@@ -249,8 +259,22 @@ void ApplyPrefs(Profile* profile, const base::DictValue& patch) {
                        std::string(*TemplateFor("cloudflare")));
     }
     // Automatic mode uses the resolver when it answers and falls back to the
-    // system's otherwise (spec 5.9).
-    local->SetString(::prefs::kDnsOverHttpsMode, *on ? "automatic" : "off");
+    // system's otherwise (spec 5.9); strict ("secure") never falls back.
+    const bool strict = patch.FindBool("strictDns").value_or(
+        local->GetString(::prefs::kDnsOverHttpsMode) == "secure");
+    local->SetString(::prefs::kDnsOverHttpsMode,
+                     !*on ? "off" : strict ? "secure" : "automatic");
+  } else if (std::optional<bool> strict = patch.FindBool("strictDns")) {
+    if (local->GetString(::prefs::kDnsOverHttpsMode) != "off") {
+      local->SetString(::prefs::kDnsOverHttpsMode,
+                       *strict ? "secure" : "automatic");
+    }
+  }
+  if (std::optional<bool> forget = patch.FindBool("forgetOnQuit")) {
+    HostContentSettingsMapFactory::GetForProfile(profile)
+        ->SetDefaultContentSetting(ContentSettingsType::COOKIES,
+                                   *forget ? CONTENT_SETTING_SESSION_ONLY
+                                           : CONTENT_SETTING_ALLOW);
   }
 }
 

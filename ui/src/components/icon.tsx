@@ -33,20 +33,42 @@ export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
   return <svg class="i" width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" dangerouslySetInnerHTML={{ __html: PATHS[name] }} />;
 }
 
-/** The Perch mark: a flat single-colour glyph, never a sparkle (spec 6.5). `bare` drops the tile and draws only the perch, `size` wide. */
+/** One cherry petal, 16 units tall and notched at its tip; the same shape as ui-pages' Sakura.tsx. */
+export const PETAL_PATH = "M8 16C0.6 13 -0.8 5.2 3.4 0.9C5 0.4 6.6 1.3 8 3.3C9.4 1.3 11 0.4 12.6 0.9C16.8 5.2 15.4 13 8 16Z";
+
+/** Sakura mode's blossom (DESIGN.md): five petals round (0, 0), `r` to the tips. Shown only under data-sakura. */
+function Blossom({ r }: { r: number }) {
+  const s = r / 16;
+  return (
+    <g class="blossom">
+      {[0, 72, 144, 216, 288].map((deg) => (
+        <path key={deg} d={PETAL_PATH} transform={`rotate(${deg}) translate(${-8 * s} ${-16 * s}) scale(${s})`} />
+      ))}
+      <circle class="blossom-centre" r={r * 0.2} />
+    </g>
+  );
+}
+
+/** The Perch mark: a flat single-colour glyph, never a sparkle (spec 6.5); in Sakura mode the dot is a blossom. `bare` drops the tile and draws only the perch, `size` wide. */
 export function PerchMark({ size = 48, bare = false }: { size?: number; bare?: boolean }) {
   if (bare)
     return (
       <svg class="mark" width={size} height={Math.round((size * 264) / 480)} viewBox="272 384 480 264" aria-hidden="true">
         <rect x="272" y="560" width="480" height="88" rx="12" style="fill:var(--mute)" />
-        <circle cx="632" cy="472" r="88" style="fill:var(--accent)" />
+        <circle class="mark-dot" cx="632" cy="472" r="88" style="fill:var(--accent)" />
+        <g transform="translate(632 478)">
+          <Blossom r={94} />
+        </g>
       </svg>
     );
   return (
     <svg class="mark" width={size} height={size} viewBox="0 0 1024 1024" aria-hidden="true">
       <rect width="1024" height="1024" rx="228" style="fill:var(--raised)" />
       <rect x="272" y="560" width="480" height="88" rx="12" style="fill:var(--ink)" />
-      <circle cx="632" cy="472" r="88" style="fill:var(--accent)" />
+      <circle class="mark-dot" cx="632" cy="472" r="88" style="fill:var(--accent)" />
+      <g transform="translate(632 440)">
+        <Blossom r={150} />
+      </g>
     </svg>
   );
 }

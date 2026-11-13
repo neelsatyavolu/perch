@@ -26,7 +26,7 @@
 .sec { display: grid; gap: 32px; }
 .spage .card { margin: 0 -14px; }
 /* Paper and Contrast draw a 1px card border, so the bleed grows by 1px to keep row text on the title's column. */
-:root[data-theme="paper"] .spage .card, :root[data-theme="contrast"] .spage .card { margin: 0 -15px; }
+:root[data-tone="light"] .spage .card, :root[data-theme="contrast"] .spage .card { margin: 0 -15px; }
 /* A card inside a dialog sits on the dialog's own 20px inset, not the page bleed. */
 dialog.dlg .card { margin: 0; }
 .spage .group > .note, .spage .group > .err-note { max-width: 60ch; }
@@ -99,7 +99,7 @@ legend.cand-src { padding: 6px 0 0; }
   .snav a.row { width: auto; }
   .spage-panel { margin: 0; border-radius: 0; box-shadow: none; overflow: visible; }
   .spage { padding: 24px 16px 64px; }
-  .spage .card, :root[data-theme="paper"] .spage .card, :root[data-theme="contrast"] .spage .card { margin: 0; }
+  .spage .card, :root[data-tone="light"] .spage .card, :root[data-theme="contrast"] .spage .card { margin: 0; }
 }
 
 /* Activity log (spec 7.4): Geist Mono for times and sites. */

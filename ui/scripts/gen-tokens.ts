@@ -25,7 +25,7 @@ export type Accent = { name: string; dark: string; light: string };
 export type Design = { themes: Theme[]; accents: Accent[]; ok: string; warn: string; danger: { dark: string; light: string } };
 
 /** Hover fills are not in DESIGN.md's table; these come from the approved preview. */
-const HOVER: Record<string, number> = { ink: 0.08, graphite: 0.06, dusk: 0.05, paper: 0.04, contrast: 0.1 };
+const HOVER: Record<string, number> = { ink: 0.08, graphite: 0.06, dusk: 0.05, paper: 0.04, contrast: 0.1, sakura: 0.04, yozakura: 0.06 };
 
 /**
  * The surface steps above the theme table (aside-parity spec 1): a lifted sidebar (`--side`), filled
@@ -65,6 +65,12 @@ function table(text: string): string[][] {
 const HEX = /`(#[0-9A-Fa-f]{6})`/g;
 const hexes = (cell: string) => [...cell.matchAll(HEX)].map((m) => m[1]!.toUpperCase());
 
+/** Perceived brightness of an opaque hex colour, 0 (black) to 1 (white). */
+function brightness(hex: string): number {
+  const n = Number.parseInt(hex.slice(1), 16);
+  return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+}
+
 function rgba(hex: string, alpha: number): string {
   const n = Number.parseInt(hex.slice(1), 16);
   return `rgba(${n >> 16}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
@@ -95,7 +101,8 @@ export function parseDesign(md: string): Design {
     const canvas = hexes(row("canvas")[i]!)[0]!;
     return {
       name,
-      dark: name !== "paper",
+      // A theme is dark when its canvas is; Paper and Sakura are the light ones.
+      dark: brightness(canvas) < 0.5,
       canvas,
       card: hexes(row("card")[i]!)[0]!,
       raised: hexes(row("elevated")[i]!)[0]!,

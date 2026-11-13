@@ -7,6 +7,7 @@ import "@fontsource/geist-mono/latin-500.css";
 import "../styles/base.css";
 import "../styles/controls.css";
 import "../styles/frame.css";
+import "../styles/sakura.css";
 import type { ComponentType } from "preact";
 import { render } from "preact";
 import { applyAppearance, readCachedAppearance, readSystemPrefs } from "../theme/apply";

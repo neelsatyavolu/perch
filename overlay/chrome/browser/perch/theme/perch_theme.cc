@@ -79,9 +79,11 @@ void AddPerchMixer(ui::ColorProvider* provider,
   const Appearance& now = Current();
   std::string name = now.theme;
   if (now.match_system) {
+    // Match system's light side: Sakura for Yozakura (Sakura mode), Paper for
+    // every other dark theme (DESIGN.md).
     name = key.color_mode == ui::ColorProviderKey::ColorMode::kDark
                ? now.dark_theme
-               : std::string("paper");
+               : std::string(now.dark_theme == "yozakura" ? "sakura" : "paper");
   }
   // Incognito windows (ThemeService gives them a grayscale key): Graphite
   // with the mono accent, so a private window looks different at a glance.

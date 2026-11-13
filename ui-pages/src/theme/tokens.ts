@@ -1,15 +1,27 @@
 /**
- * Perch's one token file: five themes and five accents, values from DESIGN.md.
+ * Perch's one token file: seven themes and six accents, values from DESIGN.md.
+ * Sakura and Yozakura are Sakura mode's light and dark themes (DESIGN.md, Sakura mode).
  * A theme sets every surface and text colour; the accent is picked separately and
  * works on every theme. Layout, type and spacing never change with the theme.
  */
 
-export const THEME_NAMES = ["ink", "graphite", "dusk", "paper", "contrast"] as const;
-export const ACCENT_NAMES = ["blue", "teal", "amber", "rose", "mono"] as const;
+export const THEME_NAMES = ["ink", "graphite", "dusk", "paper", "contrast", "sakura", "yozakura"] as const;
+export const ACCENT_NAMES = ["blue", "teal", "amber", "rose", "mono", "sakura"] as const;
 
 export type ThemeName = (typeof THEME_NAMES)[number];
 export type AccentName = (typeof ACCENT_NAMES)[number];
-export type DarkThemeName = Exclude<ThemeName, "paper">;
+/** The light themes; every other theme is dark. */
+export const LIGHT_THEMES = ["paper", "sakura"] as const;
+export type LightThemeName = (typeof LIGHT_THEMES)[number];
+export type DarkThemeName = Exclude<ThemeName, LightThemeName>;
+
+export const isLightTheme = (name: string): name is LightThemeName => (LIGHT_THEMES as readonly string[]).includes(name);
+
+/** Match system's light side for a dark theme: Sakura for Yozakura, Paper for the rest. */
+export const lightPartner = (dark: DarkThemeName): LightThemeName => (dark === "yozakura" ? "sakura" : "paper");
+
+/** Sakura mode: petals, the branch and the blossom mark show while one of these themes does. */
+export const isSakura = (name: string): boolean => name === "sakura" || name === "yozakura";
 
 export type Theme = {
   readonly label: string;
@@ -60,6 +72,18 @@ export const THEMES: Readonly<Record<ThemeName, Theme>> = Object.freeze({
     hair: "rgba(255,255,255,0.28)", hairStrong: "rgba(255,255,255,0.5)", hover: "rgba(255,255,255,0.1)",
     btnBg: "#FFFFFF", btnFg: "#000000", scrim: "rgba(0,0,0,0.75)",
   },
+  sakura: {
+    label: "Sakura", dark: false, canvas: "#FAF2F4", card: "#FDF7F8", raised: "#F3E2E7",
+    ink: "#2A1A1F", body: "rgba(42,26,31,0.86)", mute: "#765C64",
+    hair: "rgba(42,26,31,0.10)", hairStrong: "rgba(42,26,31,0.22)", hover: "rgba(42,26,31,0.04)",
+    btnBg: "#2A1A1F", btnFg: "#FAF2F4", scrim: "rgba(42,26,31,0.40)",
+  },
+  yozakura: {
+    label: "Yozakura", dark: true, canvas: "#150F12", card: "#1C1418", raised: "#261B20",
+    ink: "#F8E9ED", body: "rgba(248,233,237,0.86)", mute: "#A88E96",
+    hair: "rgba(248,233,237,0.08)", hairStrong: "rgba(248,233,237,0.18)", hover: "rgba(255,255,255,0.06)",
+    btnBg: "#F8E9ED", btnFg: "#150F12", scrim: "rgba(9,6,7,0.70)",
+  },
 });
 
 export type Accent = { readonly label: string; readonly dark: string; readonly light: string };
@@ -70,6 +94,7 @@ export const ACCENTS: Readonly<Record<AccentName, Accent>> = Object.freeze({
   amber: { label: "Amber", dark: "#F5A524", light: "#9C5A00" },
   rose: { label: "Rose", dark: "#FF6B8A", light: "#C93558" },
   mono: { label: "Mono", dark: "#E6E8EB", light: "#2A2C30" },
+  sakura: { label: "Sakura", dark: "#F5A3BC", light: "#B03762" },
 });
 
 export const STATE_COLOURS = Object.freeze({ ok: "#4FBF85", warn: "#D9A23A", dangerDark: "#EE5A4B", dangerLight: "#BC2E23" });
@@ -94,7 +119,7 @@ export type Steps = { readonly side: string; readonly fill: string; readonly fil
  */
 export function surfaceSteps(theme: ThemeName): Steps {
   const t = THEMES[theme];
-  if (theme === "paper") {
+  if (!t.dark) {
     return { side: t.raised, fill: "#FFFFFF", fillHover: mix(t.ink, 4, "#FFFFFF"), navOn: mix(t.ink, 9, t.raised) };
   }
   if (theme === "contrast") return { side: "#000000", fill: "#141414", fillHover: "#1F1F1F", navOn: "#262626" };

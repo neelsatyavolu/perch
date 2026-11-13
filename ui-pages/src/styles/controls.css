@@ -53,7 +53,7 @@ a.btn { cursor: pointer; }
 .switch[aria-checked="true"] { background: var(--btn-bg); }
 .switch[aria-checked="true"]:hover:not(:disabled) { background: color-mix(in srgb, var(--btn-bg) 88%, var(--btn-fg)); }
 .switch[aria-checked="true"]::after { transform: translateX(16px); background: var(--btn-fg); }
-:root[data-theme="paper"] .switch::after { background: #FFFFFF; box-shadow: 0 0 0 1px rgba(0,0,0,0.12); }
+:root[data-tone="light"] .switch::after { background: #FFFFFF; box-shadow: 0 0 0 1px rgba(0,0,0,0.12); }
 .switch:disabled { opacity: 0.5; cursor: default; }
 
 /* Segmented control (radio group). */
@@ -63,7 +63,7 @@ a.btn { cursor: pointer; }
   font-weight: 500; font-size: 12px; cursor: default; transition: background 120ms var(--ease), color 120ms var(--ease);
 }
 .seg button[aria-checked="true"] { background: var(--fill-hover); color: var(--ink); box-shadow: inset 0 0 0 1px var(--hair-strong); }
-:root[data-theme="paper"] .seg button[aria-checked="true"] { background: var(--raised); }
+:root[data-tone="light"] .seg button[aria-checked="true"] { background: var(--raised); }
 .seg button:hover { color: var(--ink); }
 /* In a form grid the control keeps its own width instead of stretching across the dialog. */
 .label > .seg, .dlg-b > .seg { justify-self: start; }
@@ -113,8 +113,8 @@ textarea.field { height: auto; min-height: 88px; padding: 8px 10px; resize: vert
 .card > * { background: var(--fill); }
 .card + .card { margin-top: 8px; }
 .group > .card + .card { margin-top: 0; }
-:root[data-theme="paper"] .card, :root[data-theme="contrast"] .card { gap: 0; border: 1px solid var(--hair); }
-:root[data-theme="paper"] .card > * + *, :root[data-theme="contrast"] .card > * + * { border-top: 1px solid var(--hair); }
+:root[data-tone="light"] .card, :root[data-theme="contrast"] .card { gap: 0; border: 1px solid var(--hair); }
+:root[data-tone="light"] .card > * + *, :root[data-theme="contrast"] .card > * + * { border-top: 1px solid var(--hair); }
 .srow {
   display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center;
   min-height: 52px; padding: 10px 14px;
@@ -137,7 +137,7 @@ textarea.field { height: auto; min-height: 88px; padding: 8px 10px; resize: vert
   width: 32px; height: 32px; border-radius: 8px; background: var(--card); color: var(--ink);
   display: grid; place-items: center; font-weight: 500; font-size: 13px; flex: none;
 }
-:root[data-theme="paper"] .tile { background: var(--raised); }
+:root[data-tone="light"] .tile { background: var(--raised); }
 /* A row that opens something: the whole row is the button, with a leading icon where other rows have tiles. */
 .more-row {
   display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 10px 14px; color: var(--ink);

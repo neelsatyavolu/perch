@@ -28,9 +28,9 @@
 .pick:hover { background: var(--hover); }
 .pick.on, .pick:has(input[type="radio"]:checked) { background: var(--fill-hover); color: var(--ink); box-shadow: inset 0 0 0 1px var(--hair); }
 /* One step above the panel's fill: lighter on the dark themes, the raised tone on Paper (as .seg). */
-:root[data-theme="paper"] .pick.on, :root[data-theme="paper"] .pick:has(input[type="radio"]:checked) { background: var(--raised); }
+:root[data-tone="light"] .pick.on, :root[data-tone="light"] .pick:has(input[type="radio"]:checked) { background: var(--raised); }
 /* Paper's tiles are the raised tone too, so on the picked row the tile takes the card colour and stays visible. */
-:root[data-theme="paper"] .pick.on .tile, :root[data-theme="paper"] .pick:has(input[type="radio"]:checked) .tile { background: var(--card); }
+:root[data-tone="light"] .pick.on .tile, :root[data-tone="light"] .pick:has(input[type="radio"]:checked) .tile { background: var(--card); }
 /* Mute falls under 4.5:1 on the stepped-up fill; the picked row's caption uses body. */
 .pick.on .cap, .pick:has(input[type="radio"]:checked) .cap { color: var(--body); }
 /* Checkbox rows (what to bring) are mostly all ticked, so the box itself carries the state, not a fill. */

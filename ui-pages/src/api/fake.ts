@@ -9,7 +9,7 @@ import type {
   MemoryDoc, MemorySaverSettings, SyncStatus, MemorySettings, NtpLayout, Onboarding, PerchApi, PermissionMode, Permissions, PolicyProblem, PrivacySettings, Provider, Routine, RoutineInput,
   RoutineProposal, SecurityInfo, SiteData, SleepRule, Skill, SystemAccess, TaskModel, Composer } from "../api";
 import { DEFAULT_APPEARANCE } from "../theme/apply";
-import { ACCENT_NAMES, THEME_NAMES } from "../theme/tokens";
+import { ACCENT_NAMES, THEME_NAMES, isLightTheme } from "../theme/tokens";
 import { IMPORT_KINDS, countOf, sleepRuleText } from "../lib/labels";
 import { fitEffort } from "../lib/effort";
 import { redactTarget } from "../lib/redact";
@@ -269,7 +269,7 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     },
     async setAppearance(patch) {
       if (patch.theme && !THEME_NAMES.includes(patch.theme)) throw new Error("Unknown theme");
-      if (patch.darkTheme && (!THEME_NAMES.includes(patch.darkTheme) || patch.darkTheme === ("paper" as string))) throw new Error("Unknown theme");
+      if (patch.darkTheme && (!THEME_NAMES.includes(patch.darkTheme) || isLightTheme(patch.darkTheme))) throw new Error("Unknown theme");
       if (patch.accent && !ACCENT_NAMES.includes(patch.accent)) throw new Error("Unknown accent");
       set({ appearance: { ...state.appearance, ...patch } });
       return state.appearance;

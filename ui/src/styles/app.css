@@ -113,7 +113,7 @@ svg.pmark { flex: none; }
 .me-row:hover .me-actions, .me-row:focus-within .me-actions { opacity: 1; }
 .me { min-width: 0; background: var(--fill); color: var(--ink); padding: 8px 12px; border-radius: var(--r-panel); line-height: 20px; white-space: pre-wrap; overflow-wrap: anywhere; }
 /* On the light and high-contrast canvases white fill alone barely shows: ring it like the approval card. */
-:root[data-theme="paper"] .me, :root[data-theme="contrast"] .me { box-shadow: inset 0 0 0 1px var(--hair); }
+:root[data-tone="light"] .me, :root[data-theme="contrast"] .me { box-shadow: inset 0 0 0 1px var(--hair); }
 .reply { color: var(--body); display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .reply .meta-row { opacity: 0; transition: opacity var(--t-hover) var(--ease); }
 /* The latest reply keeps its actions showing (the thread ends in a spacer, so not :last-child). */
@@ -204,7 +204,7 @@ button.artifact-card:hover { background: var(--fill-hover); }
 .approve .fields dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
 .approve .act { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 16px 16px; }
 /* On Paper the card is white, so its wells (and the composer's context chip) step down to raised instead of the near-white card. */
-:root[data-theme="paper"] .approve .body, :root[data-theme="paper"] .approve .fields, :root[data-theme="paper"] .composer .chip { background: var(--raised); }
+:root[data-tone="light"] .approve .body, :root[data-tone="light"] .approve .fields, :root[data-tone="light"] .composer .chip { background: var(--raised); }
 
 /* Composer: one filled box with a hairline ring and no shadow; 28px controls inside its bottom edge. */
 .composer-block { flex: none; }
@@ -361,3 +361,14 @@ select.ver:hover { background: var(--hover); color: var(--ink); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* Sakura mode (DESIGN.md): the mark's dot is a blossom, and sending lets petals fall (petals.ts). */
+.mark .blossom { display: none; }
+:root[data-sakura] .mark .blossom { display: inline; }
+:root[data-sakura] .mark .mark-dot { display: none; }
+.mark .blossom path { fill: var(--accent); }
+.mark .blossom .blossom-centre { fill: color-mix(in srgb, var(--accent) 45%, var(--ink)); }
+.petal-burst { position: fixed; z-index: 50; pointer-events: none; }
+.petal-burst.tint-0 path { fill: var(--accent); }
+.petal-burst.tint-1 path { fill: color-mix(in srgb, var(--accent) 62%, var(--card)); }
+.petal-burst.tint-2 path { fill: color-mix(in srgb, var(--accent) 34%, var(--card)); }

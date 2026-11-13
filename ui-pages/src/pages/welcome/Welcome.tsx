@@ -5,6 +5,7 @@ import type { OnboardingStep, Provider } from "../../api";
 import { ACCENTS, ACCENT_NAMES, THEMES, THEME_NAMES } from "../../theme/tokens";
 import { errorText, useAction, useApi, useAppearance, useLoad } from "../../ui/frame";
 import { PerchMark } from "../../ui/PerchMark";
+import { Blossom, Petals } from "../../ui/Sakura";
 import { PasteCode } from "../../ui/PasteCode";
 import { ProviderMark } from "../../ui/ProviderMark";
 import { ImportWizard } from "../import/ImportWizard";
@@ -89,6 +90,7 @@ type Mute = { readonly muted: boolean; readonly toggle: () => void };
 function Stage({ step, mute, children }: { readonly step?: number; readonly mute?: Mute; readonly children: preact.ComponentChildren }) {
   return (
     <div class="wl-stage">
+      <Petals />
       <header class="wl-top">
         <span class="wl-brand"><PerchMark size={20} />Perch</span>
         {step !== undefined && (
@@ -110,6 +112,12 @@ function LandingMark() {
     <svg class="wl-mark" viewBox="0 0 240 120" width="240" height="120" aria-hidden="true">
       <rect class="wl-mark-bar" x="24" y="78" width="192" height="14" rx="4" />
       <circle class="wl-mark-dot" cx="158" cy="58" r="20" />
+      {/* Sakura mode: a blossom falls onto the bar instead, turning as it lands. */}
+      <g transform="translate(158 54)">
+        <g class="wl-mark-blossom">
+          <Blossom r={30} />
+        </g>
+      </g>
     </svg>
   );
 }

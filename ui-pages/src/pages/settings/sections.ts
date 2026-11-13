@@ -36,6 +36,7 @@ export type SearchEntry = { readonly section: SectionId; readonly anchor: string
 export const SEARCH_INDEX: readonly SearchEntry[] = [
   { section: "appearance", anchor: "theme", title: "Theme", words: "ink graphite dusk paper contrast dark light colour color" },
   { section: "appearance", anchor: "accent", title: "Accent colour", words: "blue teal amber rose mono color" },
+  { section: "appearance", anchor: "sakura-mode", title: "Sakura mode", words: "cherry blossom pink petals spring yozakura theme flowers cute" },
   { section: "appearance", anchor: "match-system", title: "Match system", words: "dark mode light mode automatic macos" },
   { section: "appearance", anchor: "hide-chrome", title: "Hide tab strip and bookmarks bar", words: "chrome bars fullscreen minimal" },
   { section: "appearance", anchor: "reveal-on-hover", title: "Show the bars at the top edge", words: "hover reveal" },

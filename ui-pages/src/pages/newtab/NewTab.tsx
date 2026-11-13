@@ -3,6 +3,7 @@ import type { ChatSummary, NtpLayout, NtpSection, Routine, Suggestion } from "..
 import { useAction, useApi } from "../../ui/frame";
 import { Icon, PanelLeft, PanelLeftClose } from "../../ui/icons";
 import { PerchMark } from "../../ui/PerchMark";
+import { Branch, Petals } from "../../ui/Sakura";
 import { AddressBox } from "./AddressBox";
 import { ChatRail } from "./ChatRail";
 import { Recent } from "./Recent";
@@ -103,9 +104,11 @@ export function NewTab() {
 
   return (
     <div class="ntp-wrap">
+      <Petals />
       {railOpen && narrow && <div class="rail-scrim" aria-hidden="true" onClick={() => setDrawer(false)} />}
       {railOpen && <ChatRail chats={data?.chats ?? null} drawer={narrow} />}
       <main class="ntp-main">
+        <Branch />
         <div class="ntp-bar">
           <button
             ref={toggleRef}

@@ -1,7 +1,7 @@
 /** Puts the theme tokens on a page, following Match system and macOS Increase Contrast. */
 
 import type { Appearance } from "../api";
-import { ACCENT_NAMES, THEMES, THEME_NAMES, type ThemeName, tokenVars } from "./tokens";
+import { ACCENT_NAMES, THEMES, THEME_NAMES, isLightTheme, isSakura, lightPartner, type ThemeName, tokenVars } from "./tokens";
 
 export type SystemPrefs = { readonly prefersDark: boolean; readonly prefersMoreContrast: boolean };
 
@@ -17,7 +17,7 @@ export const DEFAULT_APPEARANCE: Appearance = Object.freeze({
 
 export function resolveTheme(appearance: Appearance, prefs: SystemPrefs): ThemeName {
   if (prefs.prefersMoreContrast) return "contrast";
-  if (appearance.matchSystem) return prefs.prefersDark ? appearance.darkTheme : "paper";
+  if (appearance.matchSystem) return prefs.prefersDark ? appearance.darkTheme : lightPartner(appearance.darkTheme);
   return appearance.theme;
 }
 
@@ -26,6 +26,10 @@ export function applyAppearance(root: HTMLElement, appearance: Appearance, prefs
   for (const [name, value] of Object.entries(tokenVars(theme, appearance.accent))) root.style.setProperty(name, value);
   root.style.colorScheme = THEMES[theme].dark ? "dark" : "light";
   root.dataset.theme = theme;
+  // Light-theme rules key on the tone, so Sakura gets Paper's treatment without repeating it.
+  root.dataset.tone = THEMES[theme].dark ? "dark" : "light";
+  if (isSakura(theme)) root.dataset.sakura = "";
+  else delete root.dataset.sakura;
   root.dataset.accent = appearance.accent;
   root.dataset.density = appearance.density;
   return theme;
@@ -80,7 +84,7 @@ export function isAppearance(value: unknown): value is Appearance {
     (THEME_NAMES as readonly string[]).includes(String(v.theme)) &&
     (ACCENT_NAMES as readonly string[]).includes(String(v.accent)) &&
     (THEME_NAMES as readonly string[]).includes(String(v.darkTheme)) &&
-    String(v.darkTheme) !== "paper" &&
+    !isLightTheme(String(v.darkTheme)) &&
     typeof v.matchSystem === "boolean" &&
     typeof v.hideChrome === "boolean" &&
     typeof v.revealOnHover === "boolean" &&

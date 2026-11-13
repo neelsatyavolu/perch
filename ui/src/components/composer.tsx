@@ -5,6 +5,7 @@
  */
 
 import { useEffect, useRef, useState } from "preact/hooks";
+import { petalBurst } from "./petals";
 import type { ChatSettings, Effort, Mode, ModelInfo, TabInfo } from "../api/types";
 import type { PageHost } from "../host/frame-host";
 import type { AttachedFile } from "../host/protocol";
@@ -98,6 +99,7 @@ export function Composer(p: ComposerProps) {
     const text = p.draft.trim();
     if (!text || p.running) return;
     if (dictating) void stopDictation();
+    petalBurst(document.querySelector(".composer .send"));
     const sentFiles = files;
     const sentPicks = picked;
     void Promise.resolve(p.onSend(text, { files: sentFiles, mentions: keptMentions(text, sentPicks) })).then((ok) => {

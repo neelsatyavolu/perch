@@ -1,12 +1,29 @@
 import type { Density } from "../../api";
-import { ACCENTS, ACCENT_NAMES, type DarkThemeName, THEMES, THEME_NAMES } from "../../theme/tokens";
+import type { Appearance as AppearanceSettings } from "../../api";
+import { ACCENTS, ACCENT_NAMES, type DarkThemeName, THEMES, THEME_NAMES, isLightTheme, isSakura, lightPartner } from "../../theme/tokens";
 import { useAppearance } from "../../ui/frame";
 import { Group, Row } from "../../ui/Row";
 import { Segmented } from "../../ui/Segmented";
 import { Swatches } from "../../ui/Swatches";
 import { Switch } from "../../ui/Switch";
 
-const DARK_THEMES = THEME_NAMES.filter((t): t is DarkThemeName => t !== "paper");
+const DARK_THEMES = THEME_NAMES.filter((t): t is DarkThemeName => !isLightTheme(t));
+
+/** Sakura mode on: Sakura (or Yozakura, from a dark theme) with the Sakura accent. Off: back to Paper or Ink with Blue. */
+export function sakuraMode(a: AppearanceSettings, on: boolean): Partial<AppearanceSettings> {
+  if (on) {
+    return {
+      theme: THEMES[a.theme].dark ? "yozakura" : "sakura",
+      accent: "sakura",
+      ...(a.matchSystem ? { darkTheme: "yozakura" as const } : {}),
+    };
+  }
+  return {
+    ...(isSakura(a.theme) ? { theme: a.theme === "sakura" ? ("paper" as const) : ("ink" as const) } : {}),
+    ...(a.darkTheme === "yozakura" ? { darkTheme: "ink" as const } : {}),
+    ...(a.accent === "sakura" ? { accent: "blue" as const } : {}),
+  };
+}
 
 export function Appearance() {
   const { appearance: a, update } = useAppearance();
@@ -32,7 +49,10 @@ export function Appearance() {
             </div>
             <Swatches label="Accent" value={a.accent} options={accents} onChange={(accent) => update({ accent })} />
           </div>
-          <Row id="match-system" title="Match system" detail="Use Paper when macOS is light and your dark theme when it's dark">
+          <Row id="sakura-mode" title="Sakura mode" detail="Cherry-blossom colours, petals drifting down the new tab page and a blossom in the Perch mark">
+            <Switch label="Sakura mode" describedBy="sakura-mode-d" checked={isSakura(a.theme) || (a.matchSystem && a.darkTheme === "yozakura")} onChange={(on) => update(sakuraMode(a, on))} />
+          </Row>
+          <Row id="match-system" title="Match system" detail={`Use ${THEMES[lightPartner(a.darkTheme)].label} when macOS is light and your dark theme when it's dark`}>
             <Switch label="Match system" describedBy="match-system-d" checked={a.matchSystem} onChange={(matchSystem) => update({ matchSystem })} />
           </Row>
           {a.matchSystem && (

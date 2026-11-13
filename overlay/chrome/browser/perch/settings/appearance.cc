@@ -14,10 +14,12 @@ namespace perch {
 
 namespace {
 
-constexpr std::array<std::string_view, 5> kThemes = {"ink", "graphite", "dusk",
-                                                     "paper", "contrast"};
-constexpr std::array<std::string_view, 5> kAccents = {"blue", "teal", "amber",
-                                                      "rose", "mono"};
+constexpr std::array<std::string_view, 7> kThemes = {
+    "ink", "graphite", "dusk", "paper", "contrast", "sakura", "yozakura"};
+// The light themes, which Match system's dark theme can't be.
+constexpr std::array<std::string_view, 2> kLightThemes = {"paper", "sakura"};
+constexpr std::array<std::string_view, 6> kAccents = {"blue", "teal",  "amber",
+                                                      "rose", "mono",  "sakura"};
 constexpr std::array<std::string_view, 2> kDensities = {"comfortable",
                                                         "compact"};
 
@@ -43,7 +45,9 @@ constexpr StringField kStrings[] = {
     {"accent", prefs::kAppearanceAccent,
      [](std::string_view v) { return OneOf(kAccents, v); }},
     {"darkTheme", prefs::kAppearanceDarkTheme,
-     [](std::string_view v) { return OneOf(kThemes, v) && v != "paper"; }},
+     [](std::string_view v) {
+       return OneOf(kThemes, v) && !OneOf(kLightThemes, v);
+     }},
     {"density", prefs::kAppearanceDensity,
      [](std::string_view v) { return OneOf(kDensities, v); }},
 };

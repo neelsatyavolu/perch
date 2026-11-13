@@ -81,8 +81,38 @@
   --accent: var(--accent-dark);
   --accent-soft: color-mix(in srgb, var(--accent) 22%, var(--raised));
 }
+:root[data-theme="sakura"] {
+  color-scheme: light;
+  --canvas: #FAF2F4; --card: #FDF7F8; --raised: #F3E2E7;
+  --ink: #2A1A1F; --body: rgba(42, 26, 31, 0.86); --mute: #765C64;
+  --hair: rgba(42, 26, 31, 0.1); --hair-strong: rgba(42, 26, 31, 0.22); --hover: rgba(0, 0, 0, 0.04);
+  --btn-bg: #2A1A1F; --btn-fg: #FAF2F4;
+  --side: var(--raised); --fill: #FFFFFF; --fill-hover: color-mix(in srgb, var(--ink) 4%, #FFFFFF);
+  --nav-on: color-mix(in srgb, var(--ink) 9%, var(--side)); --nav-ring: var(--hair);
+  --danger: #BC2E23;
+  --btn-danger: #EE5A4B;
+  --pop: none;
+  --accent: var(--accent-light);
+  --accent-soft: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+:root[data-theme="yozakura"] {
+  color-scheme: dark;
+  --canvas: #150F12; --card: #1C1418; --raised: #261B20;
+  --ink: #F8E9ED; --body: rgba(248, 233, 237, 0.86); --mute: #A88E96;
+  --hair: rgba(248, 233, 237, 0.08); --hair-strong: rgba(248, 233, 237, 0.18); --hover: rgba(255, 255, 255, 0.06);
+  --btn-bg: #F8E9ED; --btn-fg: #150F12;
+  --side: color-mix(in srgb, var(--ink) 6%, var(--canvas)); --fill: color-mix(in srgb, var(--ink) 6%, var(--card));
+  --fill-hover: color-mix(in srgb, var(--ink) 10%, var(--card));
+  --nav-on: color-mix(in srgb, var(--ink) 13%, var(--side)); --nav-ring: var(--hair);
+  --danger: #EE5A4B;
+  --btn-danger: #BC2E23;
+  --pop: none;
+  --accent: var(--accent-dark);
+  --accent-soft: color-mix(in srgb, var(--accent) 22%, var(--raised));
+}
 :root[data-accent="blue"] { --accent-dark: #4C8DFF; --accent-light: #2A63CC; }
 :root[data-accent="teal"] { --accent-dark: #2EC4B6; --accent-light: #0B7C73; }
 :root[data-accent="amber"] { --accent-dark: #F5A524; --accent-light: #9C5A00; }
 :root[data-accent="rose"] { --accent-dark: #FF6B8A; --accent-light: #C93558; }
 :root[data-accent="mono"] { --accent-dark: #E6E8EB; --accent-light: #2A2C30; }
+:root[data-accent="sakura"] { --accent-dark: #F5A3BC; --accent-light: #B03762; }

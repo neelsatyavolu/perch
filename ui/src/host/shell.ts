@@ -8,6 +8,7 @@
  */
 
 import { THEMES } from "../theme/names.gen";
+import { shownTheme } from "../theme/theme";
 import { chatIdArg, isAppearance, type HostAppearance, FRAME_ORIGINS, HOST_EVENT, HOST_METHODS, HOST_REPLY, HOST_REQUEST, openableUrl, type HostMethod } from "./protocol";
 
 type Send = (message: string, args: unknown[]) => void;
@@ -99,6 +100,6 @@ const APPEARANCE_ID = "shell-appearance";
 
 /** The canvas colour of the theme an Appearance shows now (see applyAppearance in theme.ts). */
 export function shellCanvas(a: HostAppearance, matches: (query: string) => boolean): string {
-  const id = matches("(prefers-contrast: more)") ? "contrast" : !a.matchSystem ? a.theme : matches("(prefers-color-scheme: dark)") ? a.darkTheme : "paper";
+  const id = shownTheme(a, matches);
   return (THEMES.find((t) => t.id === id) ?? THEMES[0]).canvas;
 }

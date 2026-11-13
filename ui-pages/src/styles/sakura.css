@@ -1,0 +1,83 @@
+/* Sakura mode (DESIGN.md): shown only while the Sakura or Yozakura theme is. Only transform and
+   opacity animate; Reduce Motion stills everything. */
+
+.sakura-only { display: none; }
+:root[data-sakura] .sakura-only { display: block; }
+
+/* The pages that carry decorations form their own stacking context, so petals and the branch can
+   sit at z-index -1: above the page's background, below every piece of content and control. */
+:root[data-sakura] :is(.ntp-wrap, .wl-stage) { isolation: isolate; }
+
+/* The three blush tints every decoration draws from: the accent, and two softer mixes of it. */
+:root[data-sakura] {
+  --sakura-0: var(--accent);
+  --sakura-1: color-mix(in srgb, var(--accent) 62%, var(--card));
+  --sakura-2: color-mix(in srgb, var(--accent) 34%, var(--card));
+}
+
+/* ---- The blossom in the Perch mark ---- */
+.mark .blossom { display: none; }
+:root[data-sakura] .mark .blossom { display: inline; }
+:root[data-sakura] .mark .mark-dot { display: none; }
+.mark .blossom path { fill: var(--accent); }
+.mark .blossom .blossom-centre { fill: color-mix(in srgb, var(--accent) 45%, var(--ink)); }
+
+/* ---- Falling petals ---- */
+.sakura-petals {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: -1;
+}
+.sakura-petal {
+  position: absolute;
+  left: var(--x);
+  top: -24px;
+  width: var(--size);
+  height: var(--size);
+  opacity: 0;
+  animation: sakura-fall var(--fall) linear var(--delay) infinite;
+}
+.sakura-petal svg {
+  display: block;
+  animation: sakura-sway var(--sway) ease-in-out var(--delay) infinite alternate;
+}
+.sakura-petal.tint-0 path { fill: var(--sakura-0); }
+.sakura-petal.tint-1 path { fill: var(--sakura-1); }
+.sakura-petal.tint-2 path { fill: var(--sakura-2); }
+
+@keyframes sakura-fall {
+  0% { transform: translate3d(0, 0, 0); opacity: 0; }
+  8% { opacity: 0.55; }
+  85% { opacity: 0.5; }
+  100% { transform: translate3d(calc(var(--drift) * -1.5), calc(100vh + 48px), 0); opacity: 0; }
+}
+@keyframes sakura-sway {
+  from { transform: translateX(calc(var(--drift) * -1)) rotate(0deg); }
+  to { transform: translateX(var(--drift)) rotate(var(--spin)); }
+}
+
+/* ---- The branch on the new tab page ---- */
+.sakura-branch {
+  position: absolute;
+  top: 0;
+  right: 0;
+  pointer-events: none;
+  z-index: -1;
+}
+.sakura-branch .twig { fill: none; stroke: color-mix(in srgb, var(--mute) 70%, var(--card)); stroke-width: 2; stroke-linecap: round; }
+.sakura-branch .twig.main { stroke-width: 3.5; }
+.sakura-branch .flower.tint-0 path, .sakura-branch .bud.tint-0 { fill: var(--sakura-0); }
+.sakura-branch .flower.tint-1 path, .sakura-branch .bud.tint-1 { fill: var(--sakura-1); }
+.sakura-branch .flower.tint-2 path, .sakura-branch .bud.tint-2 { fill: var(--sakura-2); }
+.sakura-branch .blossom-centre { fill: color-mix(in srgb, var(--accent) 40%, var(--ink)); }
+@media (max-width: 899px) {
+  :root[data-sakura] .sakura-branch { display: none; }
+}
+
+/* ---- Reduce Motion: the petals rest where they are ---- */
+@media (prefers-reduced-motion: reduce) {
+  .sakura-petal { animation: none; top: var(--y); opacity: 0.45; }
+  .sakura-petal svg { animation: none; transform: rotate(var(--spin)); }
+}

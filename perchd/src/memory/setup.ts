@@ -13,7 +13,7 @@ import { summarizeBookmarks, summarizeChats, summarizeHistory, summarizeTabs, ty
 import type { AddResult, MemoryStore } from "./store";
 import { DEFAULT_TAXONOMY } from "./taxonomy";
 
-export type SourceId = "history" | "bookmarks" | "tabs" | "chats" | "questionnaire" | "webSearch";
+export type SourceId = "history" | "bookmarks" | "tabs" | "chats" | "questionnaire" | "webSearch" | "research";
 export type SetupSources = Record<SourceId, boolean>;
 export type SourceInfo = { id: SourceId; label: string; description: string; available: boolean };
 
@@ -24,8 +24,10 @@ export const SOURCES: readonly SourceInfo[] = [
   { id: "chats", label: "Chats", description: "The first message of your recent Perch chats.", available: true },
   { id: "questionnaire", label: "A few questions", description: "Five short questions you answer yourself.", available: true },
   { id: "webSearch", label: "Web search on your name", description: "Not available yet. Off by default.", available: false },
+  // What "Build my memory" found: the agent researching in a chat (memory_propose), not a source to pick.
+  { id: "research", label: "Perch's research", description: "Found by the agent in a Build my memory chat.", available: false },
 ];
-export const DEFAULT_SOURCES: SetupSources = { history: true, bookmarks: true, tabs: true, chats: true, questionnaire: true, webSearch: false };
+export const DEFAULT_SOURCES: SetupSources = { history: true, bookmarks: true, tabs: true, chats: true, questionnaire: true, webSearch: false, research: false };
 
 export const QUESTIONS = [
   { id: "name", text: "What should Perch call you?" },
@@ -151,6 +153,41 @@ export async function buildProfile(opts: { model: Model; sources: SetupSources; 
     return { error: message(error) };
   }
 }
+
+/** The draft waiting for review, shared by the Memory page and the agent's memory_propose. */
+export type DraftHolder = { current: ProfileDraft | null };
+
+/**
+ * Adds what the agent found (Build my memory) to the review draft, starting one when there is
+ * none. Nothing is saved: the user reviews the draft on the Memory page. Items that fail the
+ * checks (no text, a secret) or repeat one already in the draft come back as rejected.
+ */
+export function proposeToDraft(draft: ProfileDraft | null, items: readonly { category?: unknown; title?: unknown; text?: unknown }[], now: Date): { draft: ProfileDraft; added: number; rejected: { text: string; reason: string }[] } {
+  let next = draft ?? withItems({ id: newId(), createdAt: now.toISOString(), sources: ["research"], items: [], gaps: [] }, []);
+  if (!next.sources.includes("research")) next = { ...next, sources: [...next.sources, "research"] };
+  const seen = new Set(next.items.map((i) => i.text.toLowerCase()));
+  const rejected: { text: string; reason: string }[] = [];
+  let added = 0;
+  for (const raw of items.slice(0, MAX_ITEMS)) {
+    const category = str(raw.category) as Category;
+    const group = GROUPS.find((g) => g.categories.includes(category))?.id ?? "about";
+    try {
+      const item = makeItem({ group, category, title: raw.title, text: raw.text, sources: ["research"] });
+      if (seen.has(item.text.toLowerCase())) {
+        rejected.push({ text: item.text, reason: "already in the draft" });
+        continue;
+      }
+      seen.add(item.text.toLowerCase());
+      next = withItems(next, [...next.items, item]);
+      added++;
+    } catch (error) {
+      rejected.push({ text: str(raw.text), reason: message(error) });
+    }
+  }
+  if (next.items.length > MAX_DRAFT) throw new Error(`the draft is full (${MAX_DRAFT} facts); ask the user to review it first`);
+  return { draft: next, added, rejected };
+}
+const MAX_DRAFT = 500;
 
 export function editItem(draft: ProfileDraft, itemId: string, patch: { group?: Group; title?: string; text?: string }): ProfileDraft {
   const item = draft.items.find((i) => i.id === itemId);

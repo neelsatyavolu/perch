@@ -67,3 +67,14 @@
 /* Small text on a panel's fill uses ink, not the accent (DESIGN.md; the accent failed 4.5:1 on Graphite). */
 .link-btn:hover { text-decoration-color: currentColor; }
 .link-btn:disabled { color: var(--mute); cursor: default; text-decoration: none; }
+
+/* Build my memory, search hits and history */
+.mem-empty-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.mem .note .link-btn { margin-top: 0; font-size: inherit; line-height: inherit; }
+.mem-list .mem-hit { display: grid; gap: 2px; line-height: 18px; padding-top: 6px; padding-bottom: 6px; height: auto; }
+.mem-hit .cap { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mem-history { list-style: none; margin: 0; padding: 0; display: grid; max-height: min(60vh, 520px); overflow-y: auto; }
+.mem-history li { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--hair); }
+.mem-history li:last-child { border-bottom: 0; }
+.mh-text { display: grid; gap: 2px; min-width: 0; color: var(--body); }
+.mh-detail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

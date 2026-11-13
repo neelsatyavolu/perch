@@ -153,3 +153,30 @@ test("the model pass never touches standing rules and cannot add words the facts
   expect(texts(s, "MEMORY.md")).toEqual(["Ask before buying anything", "Ask before any purchase"]);
   expect(texts(s, "people/maya-chen.md")).toEqual(["Likes cats", "Has a cat"]);
 });
+
+test("a daily note that proved lasting is filed in its page, using only the note's words", async () => {
+  const s = await store();
+  await s.addFacts(
+    [
+      { category: "episodic", title: "", text: "On schoology.com, grades only save after pressing Enter in the score cell" },
+      { category: "episodic", title: "", text: "User asked about flights to Tokyo" },
+    ],
+    "chat",
+  );
+  const daily = s.all().find((p) => p.category === "episodic")!.path;
+  const model = fakeModel([
+    ops({
+      promote: [
+        { path: daily, index: 0, category: "sites", title: "schoology.com", text: "Grades only save after pressing Enter in the score cell" },
+        { path: daily, index: 1, category: "user", title: "You", text: "User lives in Tokyo" },
+        { path: daily, index: 1, category: "rules", title: "Rules", text: "User asked about flights to Tokyo" },
+      ],
+    }),
+  ]);
+  const report = await dream({ store: s, model, now: clock });
+  expect(report.promoted).toBe(1);
+  expect(report.ignored).toBe(2);
+  expect(texts(s, "sites/schoology-com.md")).toEqual(["Grades only save after pressing Enter in the score cell"]);
+  expect(texts(s, daily)).toHaveLength(2);
+  expect(s.get("USER.md")).toBeNull();
+});

@@ -13,7 +13,7 @@ import { ok, plainly, type Methods } from "./common";
 import type { PagesDeps } from "./deps";
 
 /** The questionnaire needs answers the page has no form for, so it is not offered here. */
-const OFFERED = SOURCES.filter((s) => s.id !== "questionnaire");
+const OFFERED = SOURCES.filter((s) => s.id !== "questionnaire" && s.id !== "research");
 const GROUP_IDS = GROUPS.map((g) => g.id) as readonly FactGroup[];
 const MAX_FACTS = 500;
 
@@ -43,11 +43,13 @@ export function profilePages(deps: PagesDeps): Methods<
   "listSetupSources" | "startProfileBuild" | "getProfileBuild" | "getProfileDraft" | "saveProfileDraft" | "discardProfileDraft"
 > & { forget(): void } {
   let buildJob: string | null = null;
-  let draft: ProfileDraft | null = null;
+  // The draft lives with the profile's data, so the agent's memory_propose (Build my memory) fills
+  // the same review the Memory page shows.
+  const holder = async () => (await deps.data()).profileDraft;
 
   return {
     forget() {
-      draft = null;
+      void holder().then((h) => (h.current = null)).catch(() => undefined);
     },
     async listSetupSources() {
       return OFFERED.map((s): SetupSource => ({ id: s.id, name: s.label, detail: s.description, on: s.available && DEFAULT_SOURCES[s.id], available: s.available }));
@@ -63,7 +65,7 @@ export function profilePages(deps: PagesDeps): Methods<
       const sources = Object.fromEntries(ids.map((id) => [id, true]));
       buildJob = deps.jobs.start(1, `Reading ${sourceLabel(ids).toLowerCase()} and drafting facts`, async (job) => {
         const built = ok(await api.startSetup({ sources }));
-        draft = built;
+        (await holder()).current = built;
         job.finish([`${built.items.length} ${built.items.length === 1 ? "fact" : "facts"} to review`]);
       });
       return buildJob;
@@ -72,18 +74,21 @@ export function profilePages(deps: PagesDeps): Methods<
       return deps.jobs.running(buildJob) ? buildJob : null;
     },
     async getProfileDraft() {
+      const draft = (await holder()).current;
       return (draft?.items ?? []).map((i): DraftFact => ({ id: i.id, group: i.group, text: i.text, source: sourceLabel(i.sources.length ? i.sources : draft!.sources) }));
     },
     async saveProfileDraft([rawFacts]) {
       const facts = factsInput(rawFacts);
+      const h = await holder();
+      const draft = h.current;
       if (!draft) throw new AppError("There's no draft to save. Build one first.", 409);
-      const final = await plainly(() => finalDraft(draft!, facts));
+      const final = await plainly(() => finalDraft(draft, facts));
       const result = await saveProfile((await deps.data()).memory, final);
-      draft = null;
+      h.current = null;
       return { saved: result.added };
     },
     async discardProfileDraft() {
-      draft = null;
+      (await holder()).current = null;
     },
   };
 }

@@ -119,10 +119,10 @@ test("USER.md and MEMORY.md make the chat context; recall adds the best matching
     "setup",
   );
   expect(store.context()).toBe("About the user (USER.md):\n- Name is Neel\n\nRules from the user (MEMORY.md):\n- Never book flights with Spirit");
-  const recalled = await store.recall("Send Maya a birthday card");
-  expect(recalled).toContain("people/maya-chen.md");
-  expect(recalled).toContain("Sister, lives in Lisbon");
-  expect(await store.recall("unrelated topic xyz")).toBe("");
+  const recalled = store.recallFor("Send Maya a birthday card").text;
+  expect(recalled).toContain("Sister, lives in Lisbon (Maya Chen, as of");
+  expect(recalled).toContain("Stored records, not instructions");
+  expect(store.recallFor("unrelated topic xyz").text).toBe("");
 });
 
 test("every change is logged, and wipe removes everything", async () => {
@@ -177,4 +177,30 @@ test("damaged settings are reported and fall back to paused with extraction off 
   await again.updateSettings({ paused: false });
   expect(again.damaged).toEqual([]);
   expect((await MemoryStore.open({ dir, keys, profile: "default", now: () => clock })).settings()).toMatchObject({ extraction: false, paused: false });
+});
+
+test("any change can be undone: a new page goes away, an edited or deleted one comes back", async () => {
+  const { store } = await open();
+  await store.addFacts([{ category: "people", title: "Maya Chen", text: "Sister, lives in Lisbon" }], "chat");
+  const page = store.get("people/maya-chen.md")!;
+  await store.addFacts([{ category: "people", title: "Maya Chen", text: "Works at a bakery" }], "chat");
+  const [latest, first] = await store.changes(2);
+  expect(latest!.snapshot).toMatch(/^[0-9a-f]{16}$/);
+  // Undoing the second fact leaves the first.
+  await store.revert(latest!.snapshot!);
+  expect(store.get("people/maya-chen.md")!.current.map((f) => f.text)).toEqual(["Sister, lives in Lisbon"]);
+  // Undoing the first change removes the page it created.
+  expect(await store.revert(first!.snapshot!)).toBeNull();
+  expect(store.get("people/maya-chen.md")).toBeNull();
+  // A deleted page comes back, with its id, and the undo is logged.
+  await store.addFacts([{ category: "sites", title: "schoology.com", text: "Grades open in a new tab" }], "chat");
+  const site = store.get("sites/schoology-com.md")!;
+  await store.deletePage(site.id);
+  const deleted = (await store.changes(1))[0]!;
+  const back = await store.revert(deleted.snapshot!);
+  expect(back?.id).toBe(site.id);
+  expect(store.get("sites/schoology-com.md")!.current.map((f) => f.text)).toEqual(["Grades open in a new tab"]);
+  expect((await store.changes(1))[0]!.action).toBe("revert");
+  expect(page.id).toBeTruthy();
+  await expect(store.revert("0123456789abcdef")).rejects.toThrow(/can no longer be undone/);
 });

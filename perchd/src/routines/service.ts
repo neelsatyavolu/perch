@@ -12,6 +12,7 @@ import type { AuditLog } from "../agent/audit";
 import type { StepEvent, TaskOptions } from "../agent/loop";
 import type { Browser } from "../browser/browser";
 import { chatMemory } from "../memory/agent";
+import type { DraftHolder } from "../memory/setup";
 import { createMemoryApi } from "../memory/api";
 import { dream, type DreamReport } from "../memory/dream";
 import { macKeychain, type KeyStore } from "../memory/keychain";
@@ -84,8 +85,12 @@ export async function openPerchData(opts: PerchDataOptions) {
     return dream({ store: memory, model, now: t });
   }
 
+  /** The profile draft waiting for review, filled by "Set up your memory" or by Build my memory. */
+  const profileDraft: DraftHolder = { current: null };
+
   return {
     memory,
+    profileDraft,
     routines,
     scheduler,
     dreamIfDue,
@@ -99,7 +104,15 @@ export async function openPerchData(opts: PerchDataOptions) {
       runAttended: (approve) => (routine, trigger, scheduledFor) => runRoutine(routine, trigger, runner, { approve, scheduledFor }),
     }),
     /** Memory for a sidebar chat; undefined for incognito. Extraction uses the fast model. */
-    chatMemory: async (chat: { incognito?: boolean } = {}) => !memoryOn() ? undefined : chatMemory(memory, { incognito: chat.incognito, extractWith: chat.incognito ? undefined : await opts.models.fast().catch(() => undefined) }),
+    chatMemory: async (chat: { incognito?: boolean } = {}) =>
+      !memoryOn()
+        ? undefined
+        : chatMemory(memory, {
+            incognito: chat.incognito,
+            extractWith: chat.incognito ? undefined : await opts.models.fast().catch(() => undefined),
+            draft: profileDraft,
+            history: () => opts.setupInputs().history?.() ?? Promise.resolve([]),
+          }),
     start(): void {
       scheduler.start();
       dreamTimer ??= setInterval(() => void dreamIfDue().catch(() => null), DREAM_CHECK_MS);

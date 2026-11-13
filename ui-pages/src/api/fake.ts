@@ -665,6 +665,21 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     async listDreamLogs(limit) {
       return seed.DREAM_LOGS.slice(0, limit);
     },
+    async listMemoryChanges(limit) {
+      return state.docs.slice(0, limit).map((d, i) => ({ id: i.toString(16).padStart(16, "0"), at: d.updatedAt, action: "add" as const, path: d.path, detail: d.body.split("\n").find((l) => l.startsWith("- "))?.slice(2) ?? d.title, source: "chat" }));
+    },
+    async undoMemoryChange(id) {
+      const doc = state.docs[Number.parseInt(id, 16)];
+      if (!doc) throw new Error("That change can no longer be undone");
+      set({ docs: state.docs.filter((d) => d !== doc) });
+    },
+    async searchMemory(query) {
+      const q = query.trim().toLowerCase();
+      if (!q) return [];
+      return state.docs
+        .filter((d) => `${d.title} ${d.body}`.toLowerCase().includes(q))
+        .map((d) => ({ path: d.path, title: d.title, snippet: d.body.split("\n").find((l) => l.toLowerCase().includes(q))?.replace(/^- /, "") ?? "" }));
+    },
     async listSetupSources() {
       return seed.SETUP_SOURCES;
     },

@@ -32,8 +32,19 @@ export function MemorySection() {
           <Row id="memory-extraction" title="Learn from chats" detail={locked("memory-extraction") ? MANAGED_NOTE : "After each chat, your Fast model saves lasting facts to memory"}>
             <Switch label="Learn from chats" describedBy="memory-extraction-d" checked={s.extraction} disabled={locked("memory-extraction")} onChange={(extraction) => patch({ extraction })} />
           </Row>
-          <Row id="dreaming" title="Tidy memory overnight" detail={locked("dreaming") ? MANAGED_NOTE : s.lastDream ? `Merges duplicates and moves old facts to history. Last ran ${inlineTime(s.lastDream)}.` : "Merges duplicates and moves old facts to history"}>
+          <Row id="dreaming" title="Tidy memory overnight" detail={locked("dreaming") ? MANAGED_NOTE : s.lastDream ? `Files daily notes into lasting pages, merges duplicates and moves old facts to history. Last ran ${inlineTime(s.lastDream)}.` : "Files daily notes into lasting pages, merges duplicates and moves old facts to history"}>
             <Switch label="Tidy memory overnight" describedBy="dreaming-d" checked={s.dreaming} disabled={locked("dreaming")} onChange={(dreaming) => patch({ dreaming })} />
+          </Row>
+          <Row id="daily-notes" title="Keep daily notes" detail="Notes from chats that the overnight tidy hasn't filed yet">
+            <select class="picker" aria-label="Keep daily notes" value={String(s.episodicRetentionDays ?? "always")}
+              onChange={(e) => {
+                const v = (e.currentTarget as HTMLSelectElement).value;
+                void patch({ episodicRetentionDays: v === "always" ? null : (Number(v) as 30 | 90) });
+              }}>
+              <option value="30">30 days</option>
+              <option value="90">90 days</option>
+              <option value="always">Always</option>
+            </select>
           </Row>
           <Row id="dream-log" sub title="Overnight tidy log" detail="What each pass merged, updated and moved, by date">
             <button type="button" class="btn" onClick={() => setReading(true)}>Read the log</button>

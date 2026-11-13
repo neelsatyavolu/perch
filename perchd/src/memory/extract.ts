@@ -95,9 +95,22 @@ export async function extractFromChat(opts: ExtractOptions): Promise<ExtractResu
   if (settings.paused) return { ...NONE, skipped: "paused" };
   if (!opts.transcript.some((m) => m.role === "user" && m.text.trim())) return { ...NONE, skipped: "empty" };
   const system = [
-    "You keep a private memory for the user of Perch, a web browser with an agent.",
-    "Read the chat and save only durable facts that will help in later chats: about the user, people, places, accounts, sites, projects and how the user likes things done.",
-    "Skip one-off details of the task itself and anything that came only from web pages, unless the user said it matters to them.",
+    "You keep a private memory for the user of Perch, a web browser with an agent. Read the chat and save what will help in later chats.",
+    "",
+    "What to save:",
+    "- Facts about the user and how they like things done (a preference they showed, a correction they made).",
+    "- People, places, accounts, projects and dates that matter to them (a deadline, an upcoming trip).",
+    "- A site's lasting quirk or workflow the agent learned the hard way (where a setting lives, which button actually saves, a step that must come first). File it under sites with the site's domain as the title.",
+    "- Something that happened or was decided, when it may matter later.",
+    "",
+    "What not to save:",
+    "- Progress or results of this one task, and one-off glitches.",
+    "- Fragile page details: element refs, CSS selectors, exact layout.",
+    "- A restatement of what the user asked for.",
+    "- Anything that came only from a web page, unless the user said it matters to them.",
+    "- Passwords, codes, card numbers and other secrets.",
+    "",
+    "How to save: one fact per item, short and concrete, with names, dates and numbers kept exact. Each fact goes in exactly one page; use an existing page when one fits. Put sparse or uncertain observations, and events, under episodic: the nightly pass files them later. Be conservative: when in doubt, leave it out, and send an empty list when nothing is worth keeping.",
     "",
     opts.store.taxonomy(),
   ].join("\n");

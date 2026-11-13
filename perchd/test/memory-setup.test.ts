@@ -59,7 +59,7 @@ test("bookmarks are read with their folders", async () => {
 });
 
 test("the source list has switches; web search and unbuilt sources start off", () => {
-  expect(DEFAULT_SOURCES).toEqual({ history: true, bookmarks: true, tabs: true, chats: true, questionnaire: true, webSearch: false });
+  expect(DEFAULT_SOURCES).toEqual({ history: true, bookmarks: true, tabs: true, chats: true, questionnaire: true, webSearch: false, research: false });
   expect(SOURCES.find((s) => s.id === "webSearch")).toMatchObject({ available: false });
   expect(SOURCES.find((s) => s.id === "history")).toMatchObject({ available: true, label: "Browsing history" });
   expect(QUESTIONS.length).toBeGreaterThanOrEqual(4);

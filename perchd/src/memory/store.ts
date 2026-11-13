@@ -6,10 +6,12 @@
 
 import type { KeyStore } from "./keychain";
 import { factKey, newPage, parsePage, renderPage, type Fact, type FactSource, type Page } from "./page";
+import { randomBytes } from "node:crypto";
 import { RecordFolder } from "./records";
 import { categoryOf, cleanText, FILEABLE, isCategory, looksSecret, pagePath, type Category } from "./sanitize";
 import { cosine, fuse, MemoryIndex, pageText, type Embedder, type SearchHit, type SearchOptions } from "./search";
 import { DEFAULT_TAXONOMY, MAX_TAXONOMY, TAXONOMY_PATH } from "./taxonomy";
+import { RECALL_LIMIT, renderRecall, scoreFacts, siteFacts, sitePageFor } from "./recall";
 
 export type NewFact = { category: Category; title: string; text: string; expires?: string };
 export type AddResult = { added: number; duplicates: number; rejected: { text: string; reason: string }[]; paths: string[] };
@@ -20,13 +22,19 @@ export type PageSummary ={ id: string; path: string; title: string; category: Ca
 export type RetentionDays = 30 | 90 | null;
 /** `dreaming`: the nightly tidy (spec 8) runs; it never runs while extraction is off or memory is paused. */
 export type MemorySettings = { extraction: boolean; paused: boolean; dreaming: boolean; episodicRetentionDays: RetentionDays };
-export type ChangeAction = "add" | "edit" | "delete" | "wipe" | "dream" | "setup";
-export type Change = { time: string; action: ChangeAction; path: string; detail: string; source: FactSource };
+export type ChangeAction = "add" | "edit" | "delete" | "wipe" | "dream" | "setup" | "revert";
+/** `snapshot` names the page as it was before this change, kept so the change can be undone. */
+export type Change = { time: string; action: ChangeAction; path: string; detail: string; source: FactSource; snapshot?: string };
+/** A page as it was before a change: null when the change created it. */
+type Snapshot = { pageId: string; path: string; before: string | null };
 
 const PAGES = "pages";
 const SETTINGS_KIND = "settings";
 const SETTINGS_ID = "0000000000000001";
 const CHANGES = "changes";
+const SNAPSHOTS = "snapshots";
+/** Larger pages are not kept for undo (a page's limit is far below this). */
+const MAX_SNAPSHOT = 400_000;
 const TAXONOMY_KIND = "taxonomy";
 const DEFAULT_SETTINGS: MemorySettings = { extraction: true, paused: false, dreaming: true, episodicRetentionDays: null };
 /** Used when saved settings cannot be read: never turn memory back on that the user may have turned off. */
@@ -200,16 +208,21 @@ export class MemoryStore {
     return [part("USER.md", "About the user (USER.md):"), part("MEMORY.md", "Rules from the user (MEMORY.md):")].filter(Boolean).join("\n\n");
   }
 
-  /** The pages that best match a task, as short text for the system prompt. Empty when nothing matches. */
-  async recall(task: string, limit = 4): Promise<string> {
+  /**
+   * What memory brings in for one user message (recall.ts): the facts that match it well, and the
+   * site page for the tab the user is on. `exclude` holds facts already shown in this chat; the
+   * keys of what this call shows come back so the caller can add them.
+   */
+  recallFor(message: string, opts: { url?: string; exclude?: ReadonlySet<string>; now?: number } = {}): { text: string; keys: string[] } {
+    const exclude = opts.exclude ?? new Set<string>();
     const categories = FILEABLE.filter((c) => c !== "user" && c !== "rules");
-    const hits = await this.search(task, { limit, categories });
-    return hits
-      .map((h) => {
-        const facts = this.pages.get(h.id)?.current.slice(0, 12) ?? [];
-        return `${h.path} (${h.title}):\n${facts.map((f) => `- ${f.text}`).join("\n")}`;
-      })
-      .join("\n\n");
+    const sitePage = opts.url ? sitePageFor([...this.pages.values()], opts.url) : undefined;
+    const site = sitePage ? { host: new URL(opts.url!).hostname.replace(/^www\./, ""), page: sitePage, items: siteFacts(sitePage, exclude) } : undefined;
+    const siteKeys = new Set(site?.items.map((i) => i.key) ?? []);
+    const items = scoreFacts(this.index.searchFacts(message, { categories, limit: 40 }), message, opts.now ?? Date.now())
+      .filter((i) => !exclude.has(i.key) && !siteKeys.has(i.key))
+      .slice(0, RECALL_LIMIT);
+    return { text: renderRecall(items, site), keys: [...items.map((i) => i.key), ...siteKeys] };
   }
 
   private pathFor(item: NewFact): string {
@@ -337,6 +350,7 @@ export class MemoryStore {
     return this.exclusive(async () => {
       const page = this.pages.get(id);
       if (!page || (expectedUpdated !== undefined && page.updated !== expectedUpdated)) return false;
+      await this.snapshot(id, page.path);
       await this.folder.remove(PAGES, id);
       this.pages.delete(id);
       this.index.remove(id);
@@ -351,6 +365,7 @@ export class MemoryStore {
     return this.exclusive(async () => {
       await this.folder.removeKind(PAGES);
       await this.folder.removeKind(CHANGES);
+      await this.folder.removeKind(SNAPSHOTS);
       this.pages.clear();
       this.index.clear();
       this.vectors.clear();
@@ -359,8 +374,56 @@ export class MemoryStore {
   }
 
   private async write(page: Page): Promise<void> {
+    await this.snapshot(page.id, page.path);
     await this.folder.put(PAGES, page.id, renderPage(page));
     this.remember(page);
+  }
+
+  /** Pages changed in the current operation and their snapshots, attached to its log entries. */
+  private pendingSnapshots = new Map<string, string>();
+
+  /** Keeps the page as it is now (or that it didn't exist) before the first change in an operation. */
+  private async snapshot(pageId: string, path: string): Promise<void> {
+    if (this.pendingSnapshots.has(path)) return;
+    const current = this.pages.get(pageId);
+    const before = current ? renderPage(current) : null;
+    if (before && before.length > MAX_SNAPSHOT) return;
+    const id = randomBytes(8).toString("hex");
+    const snap: Snapshot = { pageId, path, before };
+    await this.folder.put(SNAPSHOTS, id, JSON.stringify(snap));
+    this.pendingSnapshots.set(path, id);
+  }
+
+  /**
+   * Undoes one change: the page goes back to how it was before it, or away if the change created
+   * it. The undo is itself logged, so it can be undone too.
+   */
+  revert(snapshotId: string): Promise<Page | null> {
+    return this.exclusive(async () => {
+      if (!/^[0-9a-f]{16}$/.test(snapshotId)) throw new Error("no such change");
+      const text = await this.folder.get(SNAPSHOTS, snapshotId).catch(() => null);
+      if (!text) throw new Error("this change can no longer be undone");
+      const snap = JSON.parse(text) as Snapshot;
+      const current = this.pages.get(snap.pageId);
+      if (snap.before === null) {
+        if (current) {
+          await this.snapshot(current.id, current.path);
+          await this.folder.remove(PAGES, current.id);
+          this.pages.delete(current.id);
+          this.index.remove(current.id);
+          this.vectors.delete(current.id);
+        }
+        await this.log([{ time: this.stamp(), action: "revert", path: snap.path, detail: "Undid a change: the page is gone again", source: "user" }]);
+        return null;
+      }
+      const restored = parsePage(snap.before);
+      const other = this.get(restored.path);
+      if (other && other.id !== snap.pageId) throw new Error(`another page now lives at ${restored.path}`);
+      const page: Page = { ...restored, id: snap.pageId, updated: this.stamp() };
+      await this.write(page);
+      await this.log([{ time: this.stamp(), action: "revert", path: page.path, detail: "Undid a change", source: "user" }]);
+      return page;
+    });
   }
 
   /** The change log, newest first. One encrypted record per day. */
@@ -375,6 +438,10 @@ export class MemoryStore {
   }
 
   private async log(changes: Change[]): Promise<void> {
+    // Each change points at the snapshot taken before its page first changed in this operation.
+    const pending = this.pendingSnapshots;
+    this.pendingSnapshots = new Map();
+    changes = changes.map((c) => (pending.has(c.path) && !c.snapshot ? { ...c, snapshot: pending.get(c.path)! } : c));
     if (!changes.length) return;
     const id = this.stamp().slice(0, 10).replace(/-/g, "").padStart(16, "0");
     const existing = await this.folder.get(CHANGES, id).catch(() => null);

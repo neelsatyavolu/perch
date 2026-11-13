@@ -16,6 +16,13 @@ import { skillExtraTools } from "../skills/tool";
 /** ExtraTools plus the calls that ask whatever the chat's mode is. */
 export type SidebarExtras = ExtraTools & { mustAsk(call: ToolCall): boolean };
 
+const MEMORY_LABELS: Record<string, string> = {
+  memory_search: "Searched memory",
+  memory_save: "Saved to memory",
+  memory_propose: "Added findings to the memory draft",
+  browsing_history: "Searched browsing history",
+};
+
 /** Memory as ExtraTools; memory_save asks when MemoryAccess says it must (USER.md, MEMORY.md). */
 export function memoryExtraTools(memory: MemoryAccess): ExtraTools {
   return {
@@ -28,7 +35,7 @@ export function memoryExtraTools(memory: MemoryAccess): ExtraTools {
       site: "memory",
       summary: memory.summary(call),
       detail: call.name,
-      label: call.name === "memory_search" ? "Searched memory" : "Saved to memory",
+      label: MEMORY_LABELS[call.name] ?? "Used memory",
     }),
     run: (call) => memory.run(call),
   };

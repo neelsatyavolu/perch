@@ -480,8 +480,8 @@ test("permissions: default mode reaches new chats, site rules, outside clients, 
 });
 
 test("memory: settings, pages as markdown, the tidy's log, wipe", async () => {
-  expect(await api.getMemorySettings()).toEqual({ extraction: true, historyExtraction: false, dreaming: true });
-  expect(await api.setMemorySettings({ dreaming: false })).toEqual({ extraction: true, historyExtraction: false, dreaming: false });
+  expect(await api.getMemorySettings()).toEqual({ extraction: true, historyExtraction: false, dreaming: true, episodicRetentionDays: null });
+  expect(await api.setMemorySettings({ dreaming: false })).toEqual({ extraction: true, historyExtraction: false, dreaming: false, episodicRetentionDays: null });
   expect((await fails(api.setMemorySettings({ historyExtraction: true }))).status).toBe(501);
   expect((await fails(api.setMemorySettings({ extraction: "yes" as never }))).status).toBe(400);
 

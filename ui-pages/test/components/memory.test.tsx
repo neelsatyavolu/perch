@@ -22,13 +22,44 @@ describe("Memory page", () => {
 
   test("filters pages and deletes one after asking", async () => {
     const r = renderWithApi(<MemoryPage />);
-    fireEvent.input(await r.findByRole("searchbox", { name: "Filter memory" }), { target: { value: "jordan" } });
+    fireEvent.input(await r.findByRole("searchbox", { name: "Search memory" }), { target: { value: "jordan" } });
     const list = r.getByRole("navigation", { name: "Memory pages" });
     await waitFor(() => expect(within(list).getAllByRole("button").map((b) => b.textContent)).toEqual(["Jordan Patel"]));
     fireEvent.click(within(list).getByRole("button", { name: "Jordan Patel" }));
     fireEvent.click(await r.findByRole("button", { name: "Delete page" }));
     fireEvent.click(within(await r.findByRole("dialog", { name: "Delete Jordan Patel?" })).getByRole("button", { name: "Delete page" }));
     await waitFor(async () => expect((await r.api.listMemoryPages()).some((p) => p.title === "Jordan Patel")).toBe(false));
+  });
+
+  test("search finds pages by what they say, not only their titles", async () => {
+    const r = renderWithApi(<MemoryPage />);
+    fireEvent.input(await r.findByRole("searchbox", { name: "Search memory" }), { target: { value: "watch parties" } });
+    const list = r.getByRole("navigation", { name: "Memory pages" });
+    await waitFor(() => expect(within(list).getByRole("heading", { name: "Mentioned in" })).toBeTruthy());
+    expect(within(list).getByRole("button", { name: /Jordan Patel/ }).textContent).toContain("watch parties on Saturdays");
+  });
+
+  test("history lists changes, and Undo takes one back", async () => {
+    const r = renderWithApi(<MemoryPage />);
+    fireEvent.click(await r.findByRole("button", { name: "History" }));
+    const dialog = await r.findByRole("dialog", { name: "Memory history" });
+    const before = (await r.api.listMemoryPages()).length;
+    fireEvent.click((await within(dialog).findAllByRole("button", { name: "Undo" }))[0]!);
+    await waitFor(async () => expect((await r.api.listMemoryPages()).length).toBe(before - 1));
+  });
+
+  test("Build my memory asks Perch to research the user, with review before saving", async () => {
+    const r = renderWithApi(<MemoryPage />);
+    const asked: string[] = [];
+    const submit = r.api.submitQuery.bind(r.api);
+    r.api.submitQuery = async (q) => {
+      asked.push(q.mode === "ask" ? q.text : "");
+      return submit(q);
+    };
+    fireEvent.click(await r.findByRole("button", { name: "Build my memory" }));
+    await waitFor(() => expect(asked).toHaveLength(1));
+    expect(asked[0]).toContain("memory_propose");
+    expect(asked[0]).toContain("perch://memory#review");
   });
 
   test("pausing learning is one switch", async () => {

@@ -81,6 +81,7 @@ export const SEARCH_INDEX: readonly SearchEntry[] = [
   { section: "builtin", anchor: "built-in-caveatly", title: "Caveatly", words: "extension terms of service privacy policy" },
   { section: "memory", anchor: "memory-extraction", title: "Learn from chats", words: "memory extraction facts" },
   { section: "memory", anchor: "dreaming", title: "Tidy memory overnight", words: "dreaming consolidate" },
+  { section: "memory", anchor: "daily-notes", title: "Keep daily notes", words: "episodic retention forget days" },
   { section: "memory", anchor: "dream-log", title: "Overnight tidy log", words: "dreaming dream log merged" },
   { section: "memory", anchor: "memory-wipe", title: "Delete all memory", words: "wipe erase" },
   { section: "routines", anchor: "routines-list", title: "Routines", words: "schedule automate recurring" },

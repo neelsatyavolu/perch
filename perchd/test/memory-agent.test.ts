@@ -61,7 +61,7 @@ test("the chat starts with USER.md and the pages that match the task, and has th
   const { model } = await run(store, [tool("done", { answer: "Lisbon" })]);
   const req = model.requests[0]!;
   expect(req.system).toContain("- Name is Neel");
-  expect(req.system).toContain("people/maya-chen.md (Maya Chen):\n- Sister, lives in Lisbon");
+  expect(req.system).toContain("- Sister, lives in Lisbon (Maya Chen, as of");
   expect(req.tools.map((t) => t.name)).toEqual(expect.arrayContaining(["memory_search", "memory_save", "navigate", "done"]));
 });
 

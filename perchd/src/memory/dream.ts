@@ -11,7 +11,7 @@ import type { Model, ToolSpec } from "../models/types";
 import { askForTool, message, str } from "./model-call";
 import { factKey, newPage, type Fact, type Page } from "./page";
 import { cleanText, looksSecret } from "./sanitize";
-import type { MemoryStore } from "./store";
+import type { MemoryStore, NewFact } from "./store";
 
 export type DreamReport = {
   date: string;
@@ -21,6 +21,8 @@ export type DreamReport = {
   merged: number;
   retired: number;
   pagesMerged: number;
+  /** Notes from the daily pages (episodic) filed into lasting pages. */
+  promoted: number;
   ignored: number;
   /** Pages left alone because they changed while dreaming ran. */
   skipped: string[];
@@ -35,6 +37,9 @@ const DAY = 86_400_000;
 /** Joining words a merged fact may add; every other word must come from the facts it merges. */
 const JOINERS = new Set(["a", "an", "and", "also", "as", "at", "both", "for", "in", "is", "of", "on", "the", "to", "with"]);
 
+/** Where a daily note may be filed. Standing rules (MEMORY.md) are only ever saved with the user's approval. */
+const PROMOTE_TO = ["user", "people", "companies", "places", "sites", "projects", "routines", "concepts", "writing"];
+
 export const CONSOLIDATE_TOOL: ToolSpec = {
   name: "consolidate",
   description: "Tidy the memory pages. Refer to facts by page path and the numbers shown. Leave lists empty when nothing needs changing.",
@@ -47,6 +52,21 @@ export const CONSOLIDATE_TOOL: ToolSpec = {
       },
       retire: { type: "array", items: { type: "object", properties: { path: { type: "string" }, indexes: { type: "array", items: { type: "number" } } }, required: ["path", "indexes"] } },
       merge_pages: { type: "array", items: { type: "object", properties: { from: { type: "string" }, into: { type: "string" } }, required: ["from", "into"] } },
+      promote: {
+        type: "array",
+        description: "Notes on daily pages (episodic/…) that turned out to be lasting: file each in the page it belongs to.",
+        items: {
+          type: "object",
+          properties: {
+            path: { type: "string", description: "The episodic page" },
+            index: { type: "number" },
+            category: { type: "string", enum: PROMOTE_TO },
+            title: { type: "string", description: "The page it belongs in: a person's name, a site's domain, a project's name" },
+            text: { type: "string", description: "The fact as it should read there, using only words from the note" },
+          },
+          required: ["path", "index", "category", "title", "text"],
+        },
+      },
     },
   },
 };
@@ -78,7 +98,7 @@ function plural(n: number, word: string): string {
 export async function dream(opts: DreamOptions): Promise<DreamReport> {
   const { store } = opts;
   const date = opts.now.toISOString().slice(0, 10);
-  const report: DreamReport = { date, duplicates: 0, expired: 0, episodicRemoved: 0, merged: 0, retired: 0, pagesMerged: 0, ignored: 0, skipped: [], logPath: null };
+  const report: DreamReport = { date, duplicates: 0, expired: 0, episodicRemoved: 0, merged: 0, retired: 0, pagesMerged: 0, promoted: 0, ignored: 0, skipped: [], logPath: null };
   const log: string[] = [];
 
   const retention = store.settings().episodicRetentionDays;
@@ -103,9 +123,10 @@ export async function dream(opts: DreamOptions): Promise<DreamReport> {
     drafts.set(p.path, { page: t.page, base: p.updated, notes });
   }
 
+  let promotions: NewFact[] = [];
   if (opts.model) {
     try {
-      await modelPass(opts.model, drafts, report, opts.now.toISOString(), opts.signal);
+      promotions = await modelPass(opts.model, drafts, report, opts.now.toISOString(), opts.signal);
     } catch (error) {
       report.error = message(error);
     }
@@ -122,6 +143,13 @@ export async function dream(opts: DreamOptions): Promise<DreamReport> {
     const deleted = !report.skipped.includes(draft.into!) && (await store.deletePage(draft.page.id, "dreaming", draft.base));
     if (deleted) log.push(...draft.notes.map((n) => `${path}: ${n}`));
     else report.skipped.push(path);
+  }
+
+  // Daily notes that proved lasting go to their pages; the note itself stays as the evidence.
+  if (promotions.length) {
+    const added = await store.addFacts(promotions, "dreaming");
+    report.promoted = added.added;
+    log.push(...promotions.filter((p) => !added.rejected.some((r) => r.text === p.text)).map((p) => `promoted "${p.text}" to ${p.category}: ${p.title}`));
   }
 
   if (log.length) report.logPath = await writeLog(store, date, opts.now.toISOString(), log);
@@ -165,19 +193,30 @@ function usesOnlySourceWords(text: string, sources: readonly Fact[]): boolean {
   return words(text).every((w) => known.has(w) || JOINERS.has(w));
 }
 
-async function modelPass(model: Model, allDrafts: Map<string, Draft>, report: DreamReport, now: string, signal?: AbortSignal): Promise<void> {
+async function modelPass(model: Model, allDrafts: Map<string, Draft>, report: DreamReport, now: string, signal?: AbortSignal): Promise<NewFact[]> {
   const drafts = new Map([...allDrafts].filter(([, d]) => d.page.category !== "rules"));
   const shown = renderForModel(drafts);
-  if (!shown) return;
+  if (!shown) return [];
   const system = [
     "You tidy a private memory of facts about the user. Facts are numbered per page.",
     "merge_facts: combine facts on one page that say the same thing into one sentence, using only words from those facts.",
     "retire: move facts that a newer fact on the same page replaces (an old job, an old address) to History.",
     "merge_pages: two pages of the same kind about the same subject; facts move into the second.",
-    "Change only what is clearly redundant or out of date. Never add new information.",
+    "promote: a note on a daily page (episodic/…) that has turned out to be lasting: a preference seen more than once, a person or place that keeps coming up, a site's workflow, a project's deadline. File it where it belongs, using only the note's words. Leave sparse, one-off or uncertain notes where they are. Only clearly stable, important facts about the user go under user.",
+    "Change only what is clearly redundant, out of date or ready to file. Never add new information.",
   ].join("\n");
   const answer = await askForTool(model, { system, user: shown, tool: CONSOLIDATE_TOOL }, signal);
-  if (!answer.args) return;
+  if (!answer.args) return [];
+  const promotions: NewFact[] = [];
+  for (const raw of arrayOf(answer.args.promote)) {
+    const draft = drafts.get(str(raw.path));
+    const index = Number(raw.index);
+    const note = draft && draft.page.category === "episodic" && Number.isInteger(index) ? draft.page.current[index] : undefined;
+    const text = cleanText(str(raw.text));
+    const category = str(raw.category);
+    if (!note || !text || !str(raw.title).trim() || !PROMOTE_TO.includes(category) || looksSecret(text) || !usesOnlySourceWords(text, [note])) report.ignored++;
+    else promotions.push({ category: category as NewFact["category"], title: str(raw.title).trim(), text });
+  }
   const used = new Map<string, Set<number>>();
   const take = (path: string, list: number[]) => {
     const set = used.get(path) ?? new Set<number>();
@@ -225,6 +264,7 @@ async function modelPass(model: Model, allDrafts: Map<string, Draft>, report: Dr
     destinations.add(into);
     report.pagesMerged++;
   }
+  return promotions;
 }
 
 function applyFactOps(draft: Draft, merges: { list: number[]; text: string }[], retires: { list: number[] }[], now: string, report: DreamReport): void {

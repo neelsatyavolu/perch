@@ -9,6 +9,8 @@ import type { Page } from "./page";
 import type { Category } from "./sanitize";
 
 export type SearchHit = { id: string; path: string; title: string; category: Category; snippet: string; score: number };
+/** One fact that matched, with its bm25 rank (lower is better) and whether it is an older record. */
+export type FactHit = { pageId: string; path: string; title: string; category: Category; text: string; added: string; history: boolean; rank: number };
 export type SearchOptions = { limit?: number; categories?: readonly Category[] };
 
 /** A local text embedding model. None ships yet; see the plan's deferral note. */
@@ -24,10 +26,15 @@ const TITLE_WEIGHT = 4;
 const BODY_WEIGHT = 1;
 const HISTORY_WEIGHT = 0.3;
 
+/** The words of free text that a search uses: lowercased, stopwords dropped, at most 16. */
+export function queryWords(text: string): string[] {
+  const words = text.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 1 && !STOP.has(w));
+  return [...new Set(words)].slice(0, 16);
+}
+
 /** Words from free text as an FTS5 query: each quoted, prefix-matched and ORed. Null when nothing is left. */
 export function ftsQuery(text: string): string | null {
-  const words = text.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 1 && !STOP.has(w));
-  const unique = [...new Set(words)].slice(0, 16);
+  const unique = queryWords(text);
   return unique.length ? unique.map((w) => `"${w}"*`).join(" OR ") : null;
 }
 
@@ -61,20 +68,42 @@ export class MemoryIndex {
     this.db.run(
       "CREATE VIRTUAL TABLE pages USING fts5(id UNINDEXED, path UNINDEXED, category UNINDEXED, title, body, history, tokenize = 'porter unicode61 remove_diacritics 2')",
     );
+    // Each fact on its own, for recall: a short match beats a long page that mentions a word once.
+    this.db.run(
+      "CREATE VIRTUAL TABLE facts USING fts5(page UNINDEXED, path UNINDEXED, category UNINDEXED, added UNINDEXED, part UNINDEXED, title, text, tokenize = 'porter unicode61 remove_diacritics 2')",
+    );
   }
 
   upsert(page: Page): void {
     const { body, history } = pageText(page);
-    this.db.run("DELETE FROM pages WHERE id = ?", [page.id]);
+    this.remove(page.id);
     this.db.run("INSERT INTO pages (id, path, category, title, body, history) VALUES (?, ?, ?, ?, ?, ?)", [page.id, page.path, page.category, `${page.title} ${page.path}`, body, history]);
+    const add = this.db.prepare("INSERT INTO facts (page, path, category, added, part, title, text) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    for (const f of page.current) add.run(page.id, page.path, page.category, f.added, "current", `${page.title} ${page.path}`, f.text);
+    for (const f of page.history) add.run(page.id, page.path, page.category, f.added, "history", `${page.title} ${page.path}`, f.text);
   }
 
   remove(id: string): void {
     this.db.run("DELETE FROM pages WHERE id = ?", [id]);
+    this.db.run("DELETE FROM facts WHERE page = ?", [id]);
   }
 
   clear(): void {
     this.db.run("DELETE FROM pages");
+    this.db.run("DELETE FROM facts");
+  }
+
+  /** Facts that match `text`, best first; the title counts twice the fact's own words. */
+  searchFacts(text: string, opts: SearchOptions = {}): FactHit[] {
+    const query = ftsQuery(text);
+    if (!query) return [];
+    const limit = Math.max(1, Math.min(100, opts.limit ?? 40));
+    const cats = opts.categories?.length ? opts.categories : null;
+    const filter = cats ? ` AND category IN (${cats.map(() => "?").join(",")})` : "";
+    const rows = this.db
+      .query(`SELECT page, path, category, added, part, title, text, bm25(facts, 0, 0, 0, 0, 0, 2, 1) AS rank FROM facts WHERE facts MATCH ?${filter} ORDER BY rank LIMIT ?`)
+      .all(query, ...(cats ?? []), limit) as { page: string; path: string; category: Category; added: string; part: string; title: string; text: string; rank: number }[];
+    return rows.map((r) => ({ pageId: r.page, path: r.path, category: r.category, title: r.title.slice(0, r.title.length - r.path.length - 1), text: r.text, added: r.added, history: r.part === "history", rank: r.rank }));
   }
 
   search(text: string, opts: SearchOptions = {}): SearchHit[] {

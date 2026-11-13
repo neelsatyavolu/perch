@@ -5,6 +5,7 @@ import { Progress } from "../../ui/Progress";
 import { useJob } from "../../ui/useJob";
 import { FactReview } from "./FactReview";
 import { SourceList } from "./SourceList";
+import { BUILD_MEMORY_PROMPT } from "./build-prompt";
 
 type Outcome = { readonly kind: "saved"; readonly count: number } | { readonly kind: "discarded" } | null;
 
@@ -85,6 +86,9 @@ export function SetupMemory({ onOpenMemory }: { readonly onOpenMemory: () => voi
         <p class="lead">
           Perch reads the sources you switch on and drafts a profile, so it can write in your voice, fill forms and know who people are.
           You review every fact before anything is saved. Memory stays on this Mac, encrypted.
+        </p>
+        <p class="note">
+          For a fuller profile, <button type="button" class="link-btn" onClick={() => act(() => api.submitQuery({ text: BUILD_MEMORY_PROMPT, mode: "ask", engine: "brave" }))}>let Perch research you in a chat</button>: it reads your email, accounts and AI services the way you would, and what it finds lands here for review.
         </p>
       </div>
       <div class="mem-grid">

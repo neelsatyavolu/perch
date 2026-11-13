@@ -15,7 +15,7 @@ import { gone, managed, notYet, ok, plainly, policyOf, type Methods } from "./co
 import type { PagesDeps } from "./deps";
 import { editedPage, pageBody, pageBytes } from "./memory-doc";
 
-const FOLDERS: readonly MemoryFolder[] = ["users", "people", "companies", "sites", "projects", "routines", "concepts", "episodic"];
+const FOLDERS: readonly MemoryFolder[] = ["users", "people", "companies", "places", "writing", "sites", "projects", "routines", "concepts", "episodic", "log"];
 const MAX_BODY = 200_000;
 const MAX_LOG_LINES = 20;
 const CHANGES_READ = 2000;
@@ -44,6 +44,7 @@ export function dreamLogs(changes: readonly Change[], limit: number): DreamLog[]
 
 export function memoryPages(deps: PagesDeps, onWipe: () => void): Methods<
   "getMemorySettings" | "setMemorySettings" | "listMemoryPages" | "readMemoryPage" | "writeMemoryPage" | "deleteMemoryPage" | "wipeMemory" | "listDreamLogs"
+  | "listMemoryChanges" | "undoMemoryChange" | "searchMemory"
 > {
   const data = () => deps.data();
   const now = () => (deps.now ?? (() => new Date()))().toISOString();
@@ -59,14 +60,17 @@ export function memoryPages(deps: PagesDeps, onWipe: () => void): Methods<
     const lastDream = (await d.memory.changes(CHANGES_READ)).find((c) => c.source === "dreaming")?.time;
     // With memory off by policy the page shows it off, whatever the person chose before.
     const on = memoryAllowed(policyOf(deps));
-    return { extraction: on && s.extraction && !s.paused, historyExtraction: false, dreaming: on && s.dreaming, ...(lastDream ? { lastDream } : {}) };
+    return { extraction: on && s.extraction && !s.paused, historyExtraction: false, dreaming: on && s.dreaming, episodicRetentionDays: s.episodicRetentionDays, ...(lastDream ? { lastDream } : {}) };
   }
 
   return {
     getMemorySettings: () => settings(),
     async setMemorySettings([rawPatch]) {
       const o = v.object(rawPatch, '"patch"');
-      v.onlyKeys(o, ["extraction", "historyExtraction", "dreaming"]);
+      v.onlyKeys(o, ["extraction", "historyExtraction", "dreaming", "episodicRetentionDays"]);
+      const raw = o.episodicRetentionDays;
+      if (raw !== undefined && raw !== null && raw !== 30 && raw !== 90) throw new AppError("Keep daily notes for 30 days, 90 days, or always");
+      const retention = raw as 30 | 90 | null | undefined;
       const extraction = o.extraction === undefined ? undefined : v.bool(o.extraction, "extraction");
       const dreaming = o.dreaming === undefined ? undefined : v.bool(o.dreaming, "dreaming");
       const history = o.historyExtraction === undefined ? undefined : v.bool(o.historyExtraction, "historyExtraction");
@@ -74,7 +78,11 @@ export function memoryPages(deps: PagesDeps, onWipe: () => void): Methods<
       if ((extraction || dreaming || history) && !memoryAllowed(policy)) managed();
       if (history && !historyExtractionAllowed(policy)) managed();
       if (o.historyExtraction !== undefined && v.bool(o.historyExtraction, "historyExtraction")) notYet("Perch can't learn from your browsing history yet.");
-      const patch = { ...(extraction === undefined ? {} : { extraction, ...(extraction ? { paused: false } : {}) }), ...(dreaming === undefined ? {} : { dreaming }) };
+      const patch = {
+        ...(extraction === undefined ? {} : { extraction, ...(extraction ? { paused: false } : {}) }),
+        ...(dreaming === undefined ? {} : { dreaming }),
+        ...(retention === undefined ? {} : { episodicRetentionDays: retention }),
+      };
       ok(await (await data()).memoryApi.updateSettings(patch));
       return settings();
     },
@@ -102,6 +110,20 @@ export function memoryPages(deps: PagesDeps, onWipe: () => void): Methods<
     async wipeMemory() {
       ok(await (await data()).memoryApi.wipe({ confirm: WIPE_CONFIRMATION }));
       onWipe();
+    },
+    async listMemoryChanges([limit]) {
+      const n = v.integer(limit, "limit", 1, 1000);
+      return (await (await data()).memory.changes(n)).map((c) => ({ id: c.snapshot ?? "", at: c.time, action: c.action, path: c.path, detail: c.detail, source: c.source }));
+    },
+    async undoMemoryChange([id]) {
+      const snapshot = v.text(id, "id", 16);
+      if (!/^[0-9a-f]{16}$/.test(snapshot)) throw new AppError("That change can't be undone");
+      await plainly(() => data().then((d) => d.memory.revert(snapshot)));
+    },
+    async searchMemory([query]) {
+      const q = v.text(query, "query", 300).trim();
+      if (!q) return [];
+      return (await (await data()).memory.search(q, { limit: 20 })).map((h) => ({ path: h.path, title: h.title, snippet: h.snippet }));
     },
     async listDreamLogs([limit]) {
       const n = v.integer(limit, "limit", 0, 365);

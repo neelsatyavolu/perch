@@ -307,7 +307,7 @@ export type CommandBarItem = { readonly kind: CommandBarKind | "command"; readon
 
 /* ---------- Memory (spec 8) ---------- */
 
-export type MemoryFolder = "" | "users" | "people" | "companies" | "sites" | "projects" | "routines" | "concepts" | "episodic";
+export type MemoryFolder = "" | "users" | "people" | "companies" | "places" | "writing" | "sites" | "projects" | "routines" | "concepts" | "episodic" | "log";
 export type MemoryPage = { readonly path: string; readonly title: string; readonly folder: MemoryFolder; readonly updatedAt: Iso; readonly bytes: number };
 export type MemoryDoc = { readonly path: string; readonly title: string; readonly body: string; readonly updatedAt: Iso };
 export type MemorySettings = {
@@ -315,7 +315,19 @@ export type MemorySettings = {
   readonly historyExtraction: boolean;
   readonly dreaming: boolean;
   readonly lastDream?: Iso;
+  /** How long daily notes (episodic) are kept; null keeps them. */
+  readonly episodicRetentionDays?: 30 | 90 | null;
 };
+/** One change to memory, newest first. `id` undoes it with undoMemoryChange; "" when it can't be undone. */
+export type MemoryChange = {
+  readonly id: string;
+  readonly at: Iso;
+  readonly action: "add" | "edit" | "delete" | "wipe" | "dream" | "setup" | "revert";
+  readonly path: string;
+  readonly detail: string;
+  readonly source: string;
+};
+export type MemoryHit = { readonly path: string; readonly title: string; readonly snippet: string };
 /**
  * What a source needs before it can be read. "full-disk-access": the page offers
  * `openFullDiskAccess` and lists sources again when the person comes back. "export-file": the page
@@ -580,6 +592,12 @@ export interface PerchApi {
   wipeMemory(): Promise<void>;
   /** Newest first. */
   listDreamLogs(limit: number): Promise<readonly DreamLog[]>;
+  /** Every change to memory, newest first, each with what undoes it. */
+  listMemoryChanges(limit: number): Promise<readonly MemoryChange[]>;
+  /** Puts the page back as it was before the change (or removes it, if the change created it). */
+  undoMemoryChange(id: string): Promise<void>;
+  /** Searches what memory says, not only page titles. */
+  searchMemory(query: string): Promise<readonly MemoryHit[]>;
   listSetupSources(): Promise<readonly SetupSource[]>;
   /**
    * `files` maps a source id to a `chooseFile("memory-export")` id; every switched-on source whose
@@ -656,7 +674,7 @@ export const API_METHODS = [
   "getSync", "startSyncPairing", "checkSyncPairing", "syncNow", "removeSyncDevice", "turnOffSync", "revealRecoveryKey",
   "getSecurity", "exportBackup", "restoreFromRecoveryKey", "startFresh",
   "getMemorySettings", "setMemorySettings", "listMemoryPages", "readMemoryPage", "writeMemoryPage", "deleteMemoryPage", "wipeMemory",
-  "listDreamLogs", "listSetupSources", "startProfileBuild", "getProfileBuild", "getProfileDraft", "saveProfileDraft", "discardProfileDraft",
+  "listDreamLogs", "listMemoryChanges", "undoMemoryChange", "searchMemory", "listSetupSources", "startProfileBuild", "getProfileBuild", "getProfileDraft", "saveProfileDraft", "discardProfileDraft",
   "listRoutines", "saveRoutine", "setRoutineEnabled", "deleteRoutine", "runRoutine", "findRoutineProposals", "acceptProposal", "dismissProposal",
   "detectBrowsers", "getSystemAccess", "openFullDiskAccess", "startImport", "getJob",
   "getOnePassword", "setOnePassword", "listOnePasswordVaults",

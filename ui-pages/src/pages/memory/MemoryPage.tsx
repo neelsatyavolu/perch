@@ -1,18 +1,77 @@
 import { useEffect, useState } from "preact/hooks";
-import type { MemoryDoc, MemoryFolder, MemoryPage as Page } from "../../api";
+import type { MemoryChange, MemoryDoc, MemoryFolder, MemoryHit, MemoryPage as Page } from "../../api";
 import { inlineTime } from "../../lib/time";
 import { useAction, useApi, useLoad } from "../../ui/frame";
 import { Dialog } from "../../ui/Dialog";
-import { ArrowLeft, Icon, Search, User } from "../../ui/icons";
+import { ArrowLeft, Brain, History, Icon, Search, User } from "../../ui/icons";
+import { BUILD_MEMORY_PROMPT } from "./build-prompt";
 import { Switch } from "../../ui/Switch";
 import { SetupMemory } from "./SetupMemory";
 import "./memory.css";
 
 const FOLDERS: readonly { id: MemoryFolder; label: string }[] = [
   { id: "", label: "Core" }, { id: "users", label: "You" }, { id: "people", label: "People" }, { id: "companies", label: "Companies" },
-  { id: "sites", label: "Sites" }, { id: "projects", label: "Projects" }, { id: "routines", label: "Routines" },
-  { id: "concepts", label: "Concepts" }, { id: "episodic", label: "Daily notes" },
+  { id: "places", label: "Places" }, { id: "writing", label: "Writing style" }, { id: "sites", label: "Sites" },
+  { id: "projects", label: "Projects" }, { id: "routines", label: "Routines" }, { id: "concepts", label: "Concepts" },
+  { id: "episodic", label: "Daily notes" }, { id: "log", label: "Overnight tidy" },
 ];
+
+const ACTION_LABEL: Record<MemoryChange["action"], string> = {
+  add: "Added", edit: "Edited", delete: "Deleted", wipe: "Wiped", dream: "Tidied", setup: "Set up", revert: "Undid",
+};
+const SOURCE_LABEL: Record<string, string> = { chat: "from a chat", user: "by you", agent: "by the agent", setup: "from setup", dreaming: "overnight", import: "imported" };
+
+/** Every change to memory, newest first, each with Undo. */
+function HistoryDialog({ open, onClose, onChanged }: { readonly open: boolean; readonly onClose: () => void; readonly onChanged: () => void }) {
+  const api = useApi();
+  const act = useAction();
+  const changes = useLoad((a) => (open ? a.listMemoryChanges(200) : Promise.resolve([] as readonly MemoryChange[])), [open]);
+  const list = changes.data ?? [];
+  return (
+    <Dialog open={open} title="Memory history" onClose={onClose} footer={<button type="button" class="btn" onClick={onClose}>Done</button>}>
+      {list.length === 0 ? (
+        <p class="mute">{changes.error ?? "No changes yet."}</p>
+      ) : (
+        <ol class="mem-history">
+          {list.map((c, i) => (
+            <li key={`${c.at}-${i}`}>
+              <div class="mh-text">
+                <span>{ACTION_LABEL[c.action]} <span class="mono">{c.path || "memory"}</span> {SOURCE_LABEL[c.source] ?? ""}</span>
+                {c.detail && <span class="cap mh-detail" title={c.detail}>{c.detail}</span>}
+              </div>
+              <span class="cap mono">{inlineTime(c.at)}</span>
+              {c.id ? (
+                <button type="button" class="btn small" onClick={async () => {
+                  if (await act(() => api.undoMemoryChange(c.id).then(() => true), "Undone")) {
+                    changes.reload();
+                    onChanged();
+                  }
+                }}>Undo</button>
+              ) : <span />}
+            </li>
+          ))}
+        </ol>
+      )}
+    </Dialog>
+  );
+}
+
+/** Pages whose facts match the filter, not just their titles. */
+function useContentSearch(query: string): readonly MemoryHit[] {
+  const api = useApi();
+  const [hits, setHits] = useState<readonly MemoryHit[]>([]);
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) return setHits([]);
+    let live = true;
+    const t = setTimeout(() => api.searchMemory(q).then((h) => live && setHits(h), () => live && setHits([])), 150);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [query]);
+  return hits;
+}
 
 function Editor({ path, onDeleted }: { readonly path: string; readonly onDeleted: (path: string) => void }) {
   const api = useApi();
@@ -63,9 +122,12 @@ function Browser({ onSetup }: { readonly onSetup: () => void }) {
   const settings = useLoad((a) => a.getMemorySettings());
   const [filter, setFilter] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const all: readonly Page[] = pages.data ?? [];
   const q = filter.trim().toLowerCase();
   const shown = q ? all.filter((p) => `${p.title} ${p.path}`.toLowerCase().includes(q)) : all;
+  const found = useContentSearch(filter).filter((h) => !shown.some((p) => p.path === h.path));
+  const buildWithAgent = () => act(() => api.submitQuery({ text: BUILD_MEMORY_PROMPT, mode: "ask", engine: "brave" }));
 
   return (
     <div class="mem-browse">
@@ -81,20 +143,26 @@ function Browser({ onSetup }: { readonly onSetup: () => void }) {
             }} />
           </label>
         )}
+        <button type="button" class="btn" onClick={() => setHistoryOpen(true)}><Icon of={History} />History</button>
         <button type="button" class="btn" onClick={onSetup}><Icon of={User} />Set up your memory</button>
+        <button type="button" class="btn primary" onClick={buildWithAgent} title="Perch researches you in a chat and drafts facts for you to review"><Icon of={Brain} />Build my memory</button>
       </div>
+      <HistoryDialog open={historyOpen} onClose={() => setHistoryOpen(false)} onChanged={() => pages.reload()} />
       {pages.data && all.length === 0 ? (
         <div class="mem-empty">
           <h2 class="serif-title">Nothing in memory yet</h2>
-          <p class="mute">Perch saves lasting facts from your chats here, or you can build a profile now from sources you choose.</p>
-          <button type="button" class="btn primary" onClick={onSetup}>Set up your memory</button>
+          <p class="mute">Perch saves lasting facts from your chats here. Or have Perch research you now, using your email, accounts and browsing history, and review what it finds before anything is saved.</p>
+          <div class="mem-empty-actions">
+            <button type="button" class="btn primary" onClick={buildWithAgent}><Icon of={Brain} />Build my memory</button>
+            <button type="button" class="btn" onClick={onSetup}>Set up from sources you choose</button>
+          </div>
         </div>
       ) : (
         <div class="mem-split">
           <nav class="mem-list" aria-label="Memory pages">
             <div class="snav-search">
               <Icon of={Search} size={14} />
-              <input type="search" aria-label="Filter memory" placeholder="Filter" value={filter} onInput={(e) => setFilter((e.currentTarget as HTMLInputElement).value)} />
+              <input type="search" aria-label="Search memory" placeholder="Search" value={filter} onInput={(e) => setFilter((e.currentTarget as HTMLInputElement).value)} />
             </div>
             {FOLDERS.map((f) => {
               const items = shown.filter((p) => p.folder === f.id);
@@ -110,7 +178,18 @@ function Browser({ onSetup }: { readonly onSetup: () => void }) {
                 </section>
               );
             })}
-            {shown.length === 0 && <p class="rail-empty">No pages match</p>}
+            {found.length > 0 && (
+              <section aria-labelledby="mf-found">
+                <h3 class="rail-lbl" id="mf-found">Mentioned in</h3>
+                {found.map((h) => (
+                  <button key={h.path} type="button" class="row mem-hit" aria-current={h.path === selected ? "page" : undefined} onClick={() => setSelected(h.path)}>
+                    <span>{h.title}</span>
+                    {h.snippet && <span class="cap">{h.snippet}</span>}
+                  </button>
+                ))}
+              </section>
+            )}
+            {shown.length === 0 && found.length === 0 && <p class="rail-empty">No pages match</p>}
           </nav>
           {selected ? (
             <Editor key={selected} path={selected} onDeleted={(path) => {
@@ -126,7 +205,8 @@ function Browser({ onSetup }: { readonly onSetup: () => void }) {
   );
 }
 
-const viewFromHash = () => (window.location.hash.startsWith("#setup") ? "setup" : "browse");
+// #review opens the draft that Build my memory (or a setup build) left for review.
+const viewFromHash = () => (/^#(setup|review)/.test(window.location.hash) ? "setup" : "browse");
 
 /** perch://memory: browse and edit memory, and the "Set up your memory" flow at #setup. */
 export function MemoryPage() {

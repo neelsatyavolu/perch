@@ -39,7 +39,7 @@ test("a scheduled routine runs through the real agent loop with memory, under it
   clock = new Date("2026-11-05T08:00:10Z");
   const [run] = await data.scheduler.tick();
   expect(run).toMatchObject({ status: "ok", trigger: "schedule", answer: "No new mail from teachers." });
-  expect(routineModel.requests[0]!.system).toContain("people/ms-lee.md (Ms Lee)");
+  expect(routineModel.requests[0]!.system).toContain("(Ms Lee, as of");
   const log = readFileSync(audit.path, "utf8").trim().split("\n").map((l) => JSON.parse(l));
   expect(log.map((l) => [l.action, l.client])).toEqual([
     ["memory_search", `routine:${created.data.id}`],

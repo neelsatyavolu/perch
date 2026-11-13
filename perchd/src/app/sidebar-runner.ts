@@ -11,7 +11,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import type { StepEvent } from "../agent/loop";
 import { clip, OUTPUT_LIMIT, stepDetail } from "../agent/steps";
-import type { MemoryAccess } from "../memory/agent";
+import type { MemoryAccess, MemoryHints } from "../memory/agent";
 import { CHAT_SESSION_PREFIX, SIDEBAR_CLIENT, type SidebarRun } from "../daemon/server";
 import { claudeBinary, codexBinary, runClaudeCode, runCodex, type AsideEvent, type McpServer } from "../external";
 import { AGENT_OFF, agentAllowed, allowsModel, capMode, MODEL_NOT_ALLOWED, type Policy, type PolicyView } from "../policy/policy";
@@ -87,6 +87,8 @@ const STEP_NAMES: Record<string, string> = {
   load_skill: "Read a skill",
   memory_search: "Search memory",
   memory_save: "Save to memory",
+  memory_propose: "Add findings to the memory draft",
+  browsing_history: "Search browsing history",
   read_attachment: "Read an attachment",
   schedule_message: "Schedule a message",
 };
@@ -213,7 +215,7 @@ export function sidebarRunner(opts: SidebarRunnerOptions): Runner {
     }
     // A private chat (spec 5.8) neither reads nor teaches memory.
     const memory = input.incognito ? undefined : await opts.memory?.().catch(() => undefined);
-    const known = memory ? await memory.context(input.ask ?? input.task).catch(() => "") : "";
+    const known = memory ? await memory.context(input.task, memoryHints(input)).catch(() => "") : "";
     // One session per chat, so a follow-up continues in the tabs the last turn opened. A private
     // chat's tabs never outlive its turn.
     const session = input.chatId && !input.incognito ? `${CHAT_SESSION_PREFIX}${input.chatId}` : `sidebar-${randomBytes(12).toString("hex")}`;
@@ -235,6 +237,8 @@ export function sidebarRunner(opts: SidebarRunnerOptions): Runner {
       env: { PERCH_HOME: opts.home, PERCH_CLIENT: SIDEBAR_CLIENT, PERCH_SESSION: session, PERCH_TOKEN: token },
     };
     const queue: StepEvent[] = [];
+    /** What the agent did, for memory: a site quirk is learned from the steps, not just the answer. */
+    const did: string[] = [];
     let wake: (() => void) | null = null;
     const push = (event: StepEvent) => {
       queue.push(event);
@@ -253,6 +257,7 @@ export function sidebarRunner(opts: SidebarRunnerOptions): Runner {
       onEvent: (event) => {
         const step = toStep(event);
         if (step) push(step);
+        if (step?.type === "step" && did.length < MAX_STEPS_REMEMBERED) did.push(step.label);
       },
     }).then(
       (result) => ({ result }),
@@ -274,7 +279,11 @@ export function sidebarRunner(opts: SidebarRunnerOptions): Runner {
       if ("error" in f) {
         yield { type: "error", message: f.error };
       } else if (f.result.answer.trim()) {
-        memory?.chatEnded([{ role: "user", text: input.ask ?? input.task }, { role: "assistant", text: f.result.answer.trim(), toolCalls: [] }]);
+        memory?.chatEnded([
+          { role: "user", text: input.ask ?? input.task },
+          { role: "assistant", text: "", toolCalls: did.map((label, i) => ({ id: `step-${i}`, name: label, args: {} })) },
+          { role: "assistant", text: f.result.answer.trim(), toolCalls: [] },
+        ]);
         yield { type: "final", text: f.result.answer.trim() };
       } else if (!input.signal.aborted) {
         const why = f.result.timedOut ? "it ran out of time" : `it stopped (exit ${f.result.exitCode})`;
@@ -287,6 +296,17 @@ export function sidebarRunner(opts: SidebarRunnerOptions): Runner {
   };
 }
 
+const MAX_STEPS_REMEMBERED = 80;
+
+/** What recall matches for this turn: the user's own message, the tab they're on, and the chat. */
+export function memoryHints(input: RunnerInput): MemoryHints {
+  return {
+    ...(input.ask ? { message: input.ask } : {}),
+    ...(input.tab?.url ? { url: input.tab.url } : {}),
+    ...(input.chatId ? { chatId: input.chatId } : {}),
+  };
+}
+
 /** A chat on a model Perch calls itself: the same session, memory, skills and policy as a CLI agent gets. */
 async function* runOwnLoop(opts: SidebarRunnerOptions, ownLoop: OwnLoop, input: RunnerInput, provider: string, model: string): AsyncIterable<StepEvent> {
   const policy = opts.policy?.current() ?? {};
@@ -295,7 +315,9 @@ async function* runOwnLoop(opts: SidebarRunnerOptions, ownLoop: OwnLoop, input: 
     yield { type: "error", message: refused };
     return;
   }
-  const memory = input.incognito ? undefined : await opts.memory?.().catch(() => undefined);
+  const raw = input.incognito ? undefined : await opts.memory?.().catch(() => undefined);
+  // Perch's own loop asks for memory with the whole task; recall should match this turn's message.
+  const memory: MemoryAccess | undefined = raw ? { ...raw, context: (task) => raw.context(task, memoryHints(input)) } : undefined;
   const catalog = await opts.skills?.().catch(() => undefined);
   const extras = sidebarExtras(catalog, memory, input.files, input.incognito ? undefined : input.schedule);
   const session = input.chatId && !input.incognito ? `${CHAT_SESSION_PREFIX}${input.chatId}` : `sidebar-${randomBytes(12).toString("hex")}`;

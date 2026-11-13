@@ -386,15 +386,20 @@ export type SystemAccess = { readonly fullDiskAccess: boolean };
 /* ---------- 1Password (the agent's sign_in and fill_code) ---------- */
 
 export type OnePasswordAccount = { readonly id: string; readonly email: string; readonly url: string };
+export type OnePasswordVault = { readonly id: string; readonly name: string };
+/** An account the agent may use, and the vaults in it (null: every vault). */
+export type OnePasswordChoice = { readonly account: string; readonly vaults: readonly string[] | null };
 /**
- * `installed`: 1Password's command-line tool is on this Mac. `account`: the account the agent
- * may read logins from, or null when 1Password is off. `problem`: why it can't be used yet.
+ * `installed`: 1Password's command-line tool is on this Mac. `accounts`: what the 1Password app
+ * has. `chosen`: what the agent may use; empty while 1Password is off. `problem`: why it can't be
+ * used yet, and `detail`: what 1Password itself said, when it said something.
  */
 export type OnePasswordSettings = {
   readonly installed: boolean;
   readonly accounts: readonly OnePasswordAccount[];
-  readonly account: string | null;
+  readonly chosen: readonly OnePasswordChoice[];
   readonly problem?: string;
+  readonly detail?: string;
 };
 
 /* ---------- Welcome and About ---------- */
@@ -592,8 +597,10 @@ export interface PerchApi {
   startImport(request: ImportRequest): Promise<JobId>;
   // 1Password
   getOnePassword(): Promise<OnePasswordSettings>;
-  /** Turns 1Password on for an account (1Password asks for Touch ID now), or off with null. */
-  setOnePassword(account: string | null): Promise<OnePasswordSettings>;
+  /** The accounts and vaults the agent may use; [] turns 1Password off. A newly added account asks for Touch ID now. */
+  setOnePassword(chosen: readonly OnePasswordChoice[]): Promise<OnePasswordSettings>;
+  /** An account's vaults, for picking which the agent may use. 1Password may ask for Touch ID. */
+  listOnePasswordVaults(account: string): Promise<readonly OnePasswordVault[]>;
 
   // Jobs (profile build, import)
   /** The job's latest progress; null when perchd doesn't know the id (for example after a restart). */
@@ -634,6 +641,6 @@ export const API_METHODS = [
   "listDreamLogs", "listSetupSources", "startProfileBuild", "getProfileBuild", "getProfileDraft", "saveProfileDraft", "discardProfileDraft",
   "listRoutines", "saveRoutine", "setRoutineEnabled", "deleteRoutine", "runRoutine", "findRoutineProposals", "acceptProposal", "dismissProposal",
   "detectBrowsers", "getSystemAccess", "openFullDiskAccess", "startImport", "getJob",
-  "getOnePassword", "setOnePassword",
+  "getOnePassword", "setOnePassword", "listOnePasswordVaults",
   "getOnboarding", "completeOnboardingStep", "finishOnboarding", "getAbout", "checkForUpdates", "installUpdate", "setAutoUpdate",
 ] as const satisfies readonly Exclude<keyof PerchApi, "watchJob">[];

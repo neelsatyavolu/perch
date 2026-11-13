@@ -48,7 +48,7 @@ const ARITY: Partial<Record<PerchdMethod, number>> = {
   setMemorySettings: 1, readMemoryPage: 1, writeMemoryPage: 2, deleteMemoryPage: 1, listDreamLogs: 1,
   startProfileBuild: 2, saveProfileDraft: 1,
   saveRoutine: 1, setRoutineEnabled: 2, deleteRoutine: 1, runRoutine: 1, acceptProposal: 1, dismissProposal: 1,
-  startImport: 1, getJob: 1, completeOnboardingStep: 1, setOnePassword: 1,
+  startImport: 1, getJob: 1, completeOnboardingStep: 1, setOnePassword: 1, listOnePasswordVaults: 1,
   checkSyncPairing: 1, removeSyncDevice: 1,
 };
 

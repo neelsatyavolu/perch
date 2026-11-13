@@ -141,3 +141,9 @@ legend.cand-src { padding: 6px 0 0; }
 .pairing-text { display: grid; gap: 10px; justify-items: start; }
 .pairing-code, .recovery { font-size: 18px; letter-spacing: 0.06em; user-select: all; }
 @media (max-width: 560px) { .pairing { grid-template-columns: 1fr; } }
+
+/* 1Password: the vaults an account may use, as a short list of ticks under its row. */
+.op-vaults { border: 0; margin: 0; padding: 4px 14px 12px 40px; display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.op-vault { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--body); }
+.op-problem { display: grid; gap: 6px; }
+.op-problem p { margin: 0; }

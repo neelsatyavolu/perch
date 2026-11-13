@@ -29,7 +29,19 @@ export const SETUP_HELP =
   "In the 1Password app, open Settings › Developer and turn on Integrate with 1Password CLI. Then try again.";
 const INSTALL_HELP = "Install 1Password's command-line tool (brew install 1password-cli), then try again.";
 
-export class OnePasswordError extends Error {}
+/** A reason for the person, and what `op` itself said (its error output, which never holds a secret). */
+export class OnePasswordError extends Error {
+  constructor(message: string, readonly detail?: string) {
+    super(message);
+  }
+}
+
+/** `op`'s own words: its first error line, without the "[ERROR] 2026/11/12 17:40:51" prefix, kept short. */
+export function opSaid(result: OpResult): string | undefined {
+  const line = result.stderr.split("\n").map((l) => l.trim()).find(Boolean);
+  if (!line) return undefined;
+  return line.replace(/^\[(ERROR|WARN)\]\s*\d{4}\/\d{2}\/\d{2}\s+\d{2}:\d{2}:\d{2}\s*/, "").slice(0, 240);
+}
 
 /** Where `op` is: the PATH first, then the places Homebrew and the installer put it (an app's PATH is short). */
 export function findOp(env: Readonly<Record<string, string | undefined>>, exists: (path: string) => boolean = existsSync): string | null {
@@ -66,7 +78,7 @@ export function explain(result: OpResult): string {
 }
 
 function parse<T>(result: OpResult): T {
-  if (result.code !== 0) throw new OnePasswordError(explain(result));
+  if (result.code !== 0) throw new OnePasswordError(explain(result), opSaid(result));
   try {
     return JSON.parse(result.stdout) as T;
   } catch {
@@ -75,7 +87,11 @@ function parse<T>(result: OpResult): T {
 }
 
 export async function listAccounts(run: OpRun): Promise<OpAccount[]> {
-  const raw = parse<unknown>(await run(["account", "list", "--format", "json"], { timeoutMs: STATUS_TIMEOUT_MS }));
+  return accountsFrom(await run(["account", "list", "--format", "json"], { timeoutMs: STATUS_TIMEOUT_MS }));
+}
+
+function accountsFrom(result: OpResult): OpAccount[] {
+  const raw = parse<unknown>(result);
   if (!Array.isArray(raw)) return [];
   return raw.flatMap((a) => {
     const o = a as Record<string, unknown>;
@@ -117,11 +133,25 @@ export function fillablePage(pageUrl: string): URL | null {
   }
 }
 
-type ListedItem = { id?: unknown; title?: unknown; urls?: unknown; additional_information?: unknown; updated_at?: unknown };
+type ListedItem = { id?: unknown; title?: unknown; urls?: unknown; additional_information?: unknown; updated_at?: unknown; vault?: { id?: unknown } };
 type ItemField = { purpose?: unknown; type?: unknown; value?: unknown; totp?: unknown };
 
+export type OpVault = { readonly id: string; readonly name: string };
+
+/** The account's vaults. Asks 1Password, so may show Touch ID. */
+export async function listVaults(run: OpRun, account: string): Promise<OpVault[]> {
+  if (!ACCOUNT_ID.test(account)) throw new OnePasswordError("That isn't a 1Password account.");
+  const raw = parse<unknown>(await run(["vault", "list", "--account", account, "--format", "json"]));
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((v) => {
+    const o = v as Record<string, unknown>;
+    return typeof o.id === "string" && ITEM_ID.test(o.id) && typeof o.name === "string" ? [{ id: o.id, name: o.name.slice(0, 120) }] : [];
+  });
+}
+
 export class OnePassword {
-  constructor(private readonly run: OpRun, readonly account: string) {
+  /** `vaults`: the vault ids the agent may use in this account; null for every vault. */
+  constructor(private readonly run: OpRun, readonly account: string, private readonly vaults: readonly string[] | null = null) {
     if (!ACCOUNT_ID.test(account)) throw new OnePasswordError("That isn't a 1Password account.");
   }
 
@@ -131,8 +161,10 @@ export class OnePassword {
     if (!page) return [];
     const items = parse<unknown>(await this.run(["item", "list", "--categories", "Login", "--account", this.account, "--format", "json"]));
     if (!Array.isArray(items)) return [];
+    const allowed = this.vaults ? new Set(this.vaults) : null;
     const ranked = (items as ListedItem[]).flatMap((item) => {
       if (typeof item.id !== "string" || !ITEM_ID.test(item.id)) return [];
+      if (allowed && !(typeof item.vault?.id === "string" && allowed.has(item.vault.id))) return [];
       const urls = Array.isArray(item.urls) ? (item.urls as { href?: unknown }[]) : [];
       const rank = Math.max(0, ...urls.map((u) => (typeof u.href === "string" ? hostRank(u.href, page.hostname) : 0)));
       if (rank === 0) return [];
@@ -165,16 +197,21 @@ export class OnePassword {
   }
 }
 
-export type OnePasswordStatus = { readonly installed: boolean; readonly accounts: readonly OpAccount[]; readonly error?: string };
+export type OnePasswordStatus = { readonly installed: boolean; readonly accounts: readonly OpAccount[]; readonly error?: string; readonly detail?: string };
 
 /** Whether `op` is installed and which accounts the 1Password app has. Shows no prompt. */
 export async function onePasswordStatus(run: OpRun | null): Promise<OnePasswordStatus> {
   if (!run) return { installed: false, accounts: [], error: INSTALL_HELP };
   try {
-    const accounts = await listAccounts(run);
-    return accounts.length ? { installed: true, accounts } : { installed: true, accounts, error: SETUP_HELP };
+    const result = await run(["account", "list", "--format", "json"], { timeoutMs: STATUS_TIMEOUT_MS });
+    const accounts = accountsFrom(result);
+    if (accounts.length) return { installed: true, accounts };
+    // No accounts: 1Password's own note on why (an app integration that is off, say) goes along.
+    const detail = opSaid(result);
+    return { installed: true, accounts, error: SETUP_HELP, ...(detail ? { detail } : {}) };
   } catch (error) {
-    return { installed: true, accounts: [], error: error instanceof Error ? error.message : SETUP_HELP };
+    const detail = error instanceof OnePasswordError ? error.detail : error instanceof Error ? error.message : undefined;
+    return { installed: true, accounts: [], error: error instanceof OnePasswordError ? error.message : SETUP_HELP, ...(detail ? { detail } : {}) };
   }
 }
 
@@ -182,4 +219,52 @@ export async function onePasswordStatus(run: OpRun | null): Promise<OnePasswordS
 export async function verifyAccount(run: OpRun, account: string): Promise<void> {
   if (!ACCOUNT_ID.test(account)) throw new OnePasswordError("That isn't a 1Password account.");
   parse<unknown>(await run(["vault", "list", "--account", account, "--format", "json"]));
+}
+
+/** An account the agent may use, and in it the vault ids it may read (null for every vault). */
+export type OpChoice = { readonly account: string; readonly vaults: readonly string[] | null };
+
+/**
+ * Logins and codes across every account the person chose. Accounts are asked one after another, so
+ * 1Password shows one prompt at a time; an account that fails is skipped when another answers.
+ * A login's id carries its account ("<account>/<item>"), so its secrets are read from the right one.
+ */
+export class OnePasswordAccounts {
+  private readonly clients: readonly OnePassword[];
+
+  constructor(run: OpRun, choices: readonly OpChoice[]) {
+    this.clients = choices.map((c) => new OnePassword(run, c.account, c.vaults));
+  }
+
+  async logins(pageUrl: string): Promise<OpLogin[]> {
+    const found: OpLogin[] = [];
+    let failure: unknown = null;
+    for (const client of this.clients) {
+      try {
+        for (const login of await client.logins(pageUrl)) found.push({ ...login, id: `${client.account}/${login.id}` });
+      } catch (error) {
+        failure ??= error;
+      }
+    }
+    if (found.length === 0 && failure) throw failure;
+    // Stable sort: best match first, and among equals the order the person listed their accounts.
+    return found.sort((a, b) => b.rank - a.rank);
+  }
+
+  async credentials(id: string): Promise<OpCredentials> {
+    const [client, item] = this.split(id);
+    return client.credentials(item);
+  }
+
+  async otp(id: string): Promise<string | null> {
+    const [client, item] = this.split(id);
+    return client.otp(item);
+  }
+
+  private split(id: string): [OnePassword, string] {
+    const slash = id.indexOf("/");
+    const client = this.clients.find((c) => c.account === id.slice(0, slash));
+    if (slash < 0 || !client) throw new OnePasswordError("That 1Password item is gone.");
+    return [client, id.slice(slash + 1)];
+  }
 }

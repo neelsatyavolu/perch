@@ -55,3 +55,9 @@ svg.i { width: 16px; height: 16px; flex: none; }
 .frame-msg { min-height: 100vh; display: grid; place-content: center; gap: 8px; text-align: center; padding: 32px; }
 .frame-msg h1 { font-size: 15px; }
 .frame-msg p { color: var(--mute); max-width: 48ch; }
+
+/* No scrollbar track anywhere in Perch's own pages: macOS shows classic bars when a mouse is
+   connected, and a wide grey bar beside a panel is noise. A thin thumb in the hairline colour shows
+   while the pointer is over the area that scrolls, so it can still be grabbed. */
+* { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+*:hover { scrollbar-color: var(--hair-strong) transparent; }

@@ -123,12 +123,15 @@ function write(path: string, text: string): void {
 }
 
 const OP_ACCOUNT = "E3OXZANXQRDOBNXQMPXZ6YBHTY";
+const VAULT_PRIVATE = "pppppppppppppppppppppppppp";
+const VAULT_WORK = "wwwwwwwwwwwwwwwwwwwwwwwwww";
 const opCalls: (readonly string[])[] = [];
 let opRefuses = false;
 const fakeOp = async (args: readonly string[]) => {
   opCalls.push(args);
   if (args[0] === "account") return { code: 0, stdout: JSON.stringify([{ url: "my.1password.com", email: "grace@example.com", user_uuid: OP_ACCOUNT }]), stderr: "" };
-  if (opRefuses) return { code: 1, stdout: "", stderr: "[ERROR] authorization prompt dismissed" };
+  if (opRefuses) return { code: 1, stdout: "", stderr: "[ERROR] 2026/11/12 17:40:51 authorization prompt dismissed, please try again" };
+  if (args[0] === "vault") return { code: 0, stdout: JSON.stringify([{ id: VAULT_PRIVATE, name: "Private" }, { id: VAULT_WORK, name: "Work" }]), stderr: "" };
   return { code: 0, stdout: "[]", stderr: "" };
 };
 
@@ -670,18 +673,29 @@ test("import: Safari's passwords come from the CSV the person exported", async (
   rmSync(join(home, "Library", "Safari"), { recursive: true, force: true });
 });
 
-test("1Password: pick an account, which 1Password checks right away, then turn it off", async () => {
-  expect(await api.getOnePassword()).toEqual({ installed: true, accounts: [{ id: OP_ACCOUNT, email: "grace@example.com", url: "my.1password.com" }], account: null });
-  expect((await fails(api.setOnePassword("SOMEONEELSE"))).message).toBe("That account isn't in the 1Password app");
-  opCalls.length = 0;
+test("1Password: pick accounts and vaults, checked with 1Password right away, then turn it off", async () => {
+  const account = { id: OP_ACCOUNT, email: "grace@example.com", url: "my.1password.com" };
+  expect(await api.getOnePassword()).toEqual({ installed: true, accounts: [account], chosen: [] });
+  expect(await api.listOnePasswordVaults(OP_ACCOUNT)).toEqual([{ id: VAULT_PRIVATE, name: "Private" }, { id: VAULT_WORK, name: "Work" }]);
+
+  expect((await fails(api.setOnePassword([{ account: "SOMEONEELSE", vaults: null }]))).message).toBe("That account isn't in the 1Password app");
+  expect((await fails(api.setOnePassword([{ account: OP_ACCOUNT, vaults: ["zzzzzzzzzzzzzzzzzzzzzzzzzz"] }]))).message).toBe("One of those vaults isn't in that 1Password account");
+  expect((await fails(api.setOnePassword([{ account: OP_ACCOUNT, vaults: [] }]))).message).toBe("Pick at least one vault, or turn the account off");
+  expect((await fails(api.setOnePassword([{ account: OP_ACCOUNT, vaults: null }, { account: OP_ACCOUNT, vaults: null }]))).message).toBe("Each 1Password account goes in once");
+
+  // A refusal says what 1Password itself said, without op's timestamp.
   opRefuses = true;
-  expect((await fails(api.setOnePassword(OP_ACCOUNT))).message).toBe("1Password didn't allow Perch this time.");
-  expect((await api.getOnePassword()).account).toBeNull();
+  expect((await fails(api.setOnePassword([{ account: OP_ACCOUNT, vaults: null }]))).message).toBe(
+    "1Password didn't allow Perch this time. 1Password said: authorization prompt dismissed, please try again",
+  );
+  expect((await api.getOnePassword()).chosen).toEqual([]);
   opRefuses = false;
-  expect((await api.setOnePassword(OP_ACCOUNT)).account).toBe(OP_ACCOUNT);
+
+  opCalls.length = 0;
+  expect((await api.setOnePassword([{ account: OP_ACCOUNT, vaults: [VAULT_WORK] }])).chosen).toEqual([{ account: OP_ACCOUNT, vaults: [VAULT_WORK] }]);
   expect(opCalls).toContainEqual(["vault", "list", "--account", OP_ACCOUNT, "--format", "json"]);
-  expect((await api.getOnePassword()).account).toBe(OP_ACCOUNT);
-  expect((await api.setOnePassword(null)).account).toBeNull();
+  expect((await api.getOnePassword()).chosen).toEqual([{ account: OP_ACCOUNT, vaults: [VAULT_WORK] }]);
+  expect((await api.setOnePassword([])).chosen).toEqual([]);
   expect((await raw("setOnePassword", [42])).status).toBe(400);
 });
 

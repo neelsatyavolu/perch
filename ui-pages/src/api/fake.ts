@@ -177,7 +177,11 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     routines: seed.ROUTINES,
     proposals: seed.PROPOSALS,
     browsers: seed.BROWSERS,
-    onePassword: { installed: true, accounts: [{ id: "FAKEUSER0000000000000001", email: "you@example.com", url: "my.1password.com" }], account: null },
+    onePassword: {
+      installed: true,
+      accounts: [{ id: "FAKEUSER0000000000000001", email: "you@example.com", url: "my.1password.com" }, { id: "FAKEUSER0000000000000002", email: "you@work.example", url: "work.1password.com" }],
+      chosen: [],
+    },
     onboarding: options.onboarding ?? { finished: false, done: [] },
     about: { ...seed.ABOUT, ...options.about },
     files: [],
@@ -762,10 +766,17 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     async getOnePassword() {
       return state.onePassword;
     },
-    async setOnePassword(account) {
-      if (account !== null && !state.onePassword.accounts.some((a) => a.id === account)) throw new Error("That account isn't in the 1Password app");
-      state.onePassword = { ...state.onePassword, account };
+    async setOnePassword(chosen) {
+      for (const c of chosen) {
+        if (!state.onePassword.accounts.some((a) => a.id === c.account)) throw new Error("That account isn't in the 1Password app");
+        if (c.vaults && c.vaults.length === 0) throw new Error("Pick at least one vault, or turn the account off");
+      }
+      state.onePassword = { ...state.onePassword, chosen };
       return state.onePassword;
+    },
+    async listOnePasswordVaults(account) {
+      if (!state.onePassword.accounts.some((a) => a.id === account)) throw new Error("That account isn't in the 1Password app");
+      return [{ id: "privatevault00000000000000", name: "Private" }, { id: "workvault00000000000000000", name: "Work" }];
     },
 
     async getJob(id) {

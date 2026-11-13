@@ -35,7 +35,8 @@ import type { Model } from "../../models/types";
 import { openPerchData, type PerchData } from "../../routines/service";
 import type { MemoryApi } from "../../memory/api";
 import { MacKeychain, type SecretStore } from "../../secure/keychain";
-import { findOp, OnePassword, opRunner } from "../../secure/onepassword";
+import { findOp, OnePasswordAccounts, opRunner } from "../../secure/onepassword";
+import { chosenOf } from "./onepassword";
 import { setPasswordManager } from "../../agent/fill-tools";
 import { SkillStore } from "../../skills/store";
 import { startBrowserSync } from "../../sync/browser-sync";
@@ -172,10 +173,10 @@ export function openPageServices(opts: PageServicesOptions): PageServices {
   };
   // sign_in and fill_code in every chat use the 1Password account picked in Settings, if any.
   setPasswordManager(async () => {
-    const account = (await pagesState.get()).onePasswordAccount;
-    const run = account ? opRun() : null;
-    if (!account || !run) return null;
-    const op = new OnePassword(run, account);
+    const chosen = chosenOf(await pagesState.get());
+    const run = chosen.length ? opRun() : null;
+    if (!run) return null;
+    const op = new OnePasswordAccounts(run, chosen);
     return { name: "1Password", logins: (url) => op.logins(url), credentials: (id) => op.credentials(id), otp: (id) => op.otp(id) };
   });
 

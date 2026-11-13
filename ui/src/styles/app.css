@@ -379,3 +379,9 @@ select.ver:hover { background: var(--hover); color: var(--ink); }
 .petal-burst.tint-0 path { fill: #FAD6DF; }
 .petal-burst.tint-1 path { fill: #F4B4C6; }
 .petal-burst.tint-2 path { fill: #E98FAA; }
+
+/* No scrollbar track anywhere in Perch's own pages: macOS shows classic bars when a mouse is
+   connected, and a wide grey bar beside a panel is noise. A thin thumb in the hairline colour shows
+   while the pointer is over the area that scrolls, so it can still be grabbed. */
+* { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+*:hover { scrollbar-color: var(--hair-strong) transparent; }

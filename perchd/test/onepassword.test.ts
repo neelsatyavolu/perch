@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { explain, fillablePage, findOp, hostRank, listAccounts, OnePassword, onePasswordStatus, SETUP_HELP, verifyAccount, type OpResult, type OpRun } from "../src/secure/onepassword";
+import { explain, fillablePage, findOp, hostRank, listAccounts, listVaults, OnePassword, OnePasswordAccounts, onePasswordStatus, opSaid, SETUP_HELP, verifyAccount, type OpResult, type OpRun } from "../src/secure/onepassword";
 
 const ID_A = "aaaaaaaaaaaaaaaaaaaaaaaaaa";
 const ID_B = "bbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -98,4 +98,52 @@ test("status: not installed, no accounts yet, or the accounts to pick from", asy
   expect(await onePasswordStatus(fakeOp(() => ok([])).run)).toEqual({ installed: true, accounts: [], error: SETUP_HELP });
   const accounts = [{ url: "my.1password.com", email: "grace@example.com", user_uuid: ACCOUNT, account_uuid: "ACC" }, { email: "bad", user_uuid: "--evil" }];
   expect(await listAccounts(fakeOp(() => ok(accounts)).run)).toEqual([{ id: ACCOUNT, email: "grace@example.com", url: "my.1password.com" }]);
+});
+
+const VAULT_A = "vaaaaaaaaaaaaaaaaaaaaaaaaa";
+const VAULT_B = "vbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+test("op's own words come along, without its timestamp", () => {
+  expect(opSaid({ code: 1, stdout: "", stderr: "[ERROR] 2026/11/12 17:40:51 connecting to desktop app: read: connection reset\nmore" })).toBe("connecting to desktop app: read: connection reset");
+  expect(opSaid({ code: 0, stdout: "", stderr: "" })).toBeUndefined();
+});
+
+test("status with no accounts keeps what 1Password said about why", async () => {
+  const status = await onePasswordStatus(fakeOp(() => ({ code: 0, stdout: "[]", stderr: "[WARN] 2026/11/12 17:40:51 app integration is off" })).run);
+  expect(status).toEqual({ installed: true, accounts: [], error: SETUP_HELP, detail: "app integration is off" });
+  const failed = await onePasswordStatus(fakeOp(() => ({ code: 1, stdout: "", stderr: "[ERROR] 2026/11/12 17:40:51 error initializing client: connecting to desktop app: timeout" })).run);
+  expect(failed).toMatchObject({ error: SETUP_HELP, detail: "error initializing client: connecting to desktop app: timeout" });
+});
+
+test("vaults list, and logins come only from the vaults picked", async () => {
+  const items = ITEMS.map((item, i) => ({ ...item, vault: { id: i % 2 ? VAULT_B : VAULT_A } }));
+  const op = fakeOp((args) => ok(args[0] === "vault" ? [{ id: VAULT_A, name: "Private" }, { id: "bad", name: "x" }] : items));
+  expect(await listVaults(op.run, ACCOUNT)).toEqual([{ id: VAULT_A, name: "Private" }]);
+  const onlyB = await new OnePassword(op.run, ACCOUNT, [VAULT_B]).logins("https://github.com/login");
+  expect(onlyB.map((l) => l.id)).toEqual([ID_B]);
+  const all = await new OnePassword(op.run, ACCOUNT, null).logins("https://github.com/login");
+  expect(all.map((l) => l.id)).toEqual([ID_B, ID_A]);
+});
+
+test("several accounts: logins from each, secrets from the right one, a failing account skipped", async () => {
+  const OTHER = "OTHERACCOUNT00000000000000";
+  const calls: (readonly string[])[] = [];
+  const run: OpRun = async (args) => {
+    calls.push(args);
+    const account = args[args.indexOf("--account") + 1];
+    if (args[0] === "item" && args[1] === "list") return account === ACCOUNT ? ok([ITEMS[1]]) : ok([{ ...ITEMS[0], id: ID_C }]);
+    return ok({ fields: [{ purpose: "USERNAME", value: `${account}-user` }, { purpose: "PASSWORD", value: "pw" }] });
+  };
+  const both = new OnePasswordAccounts(run, [{ account: ACCOUNT, vaults: null }, { account: OTHER, vaults: null }]);
+  const logins = await both.logins("https://github.com/");
+  expect(logins.map((l) => l.id)).toEqual([`${ACCOUNT}/${ID_B}`, `${OTHER}/${ID_C}`]);
+  expect((await both.credentials(`${OTHER}/${ID_C}`)).username).toBe(`${OTHER}-user`);
+  expect(calls.at(-1)).toEqual(["item", "get", ID_C, "--account", OTHER, "--reveal", "--format", "json"]);
+  await expect(both.credentials(`NOBODY/${ID_C}`)).rejects.toThrow("That 1Password item is gone.");
+
+  const halfBroken: OpRun = async (args) => (args.includes(OTHER) ? { code: 1, stdout: "", stderr: "[ERROR] locked" } : ok([ITEMS[1]]));
+  const partly = new OnePasswordAccounts(halfBroken, [{ account: ACCOUNT, vaults: null }, { account: OTHER, vaults: null }]);
+  expect((await partly.logins("https://github.com/")).map((l) => l.id)).toEqual([`${ACCOUNT}/${ID_B}`]);
+  const broken = new OnePasswordAccounts(async () => ({ code: 1, stdout: "", stderr: "[ERROR] authorization denied" }), [{ account: ACCOUNT, vaults: null }]);
+  await expect(broken.logins("https://github.com/")).rejects.toThrow("didn't allow");
 });

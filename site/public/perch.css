@@ -394,3 +394,95 @@ code, .pmono { font-family: var(--font-mono); font-size: 0.92em; }
   #everything .index > .ix { grid-column: span 6; }
   #everything .figs > div { grid-column: span 6; }
 }
+
+/* ---- Sections are as tall as what they hold ----
+   The kit sizes every section to one screen (two for .g2) and lets a .fill take what is left. Perch's
+   sections hold less than a screen at many window sizes, which left tall empty bands under them, so
+   here a section is its content plus a steady rhythm of space. The hero keeps its screen. */
+main > :is(section, .section):not(.hero, .section--hero), footer.closing {
+  height: auto !important;
+  min-height: 0 !important;
+  padding-top: clamp(72px, 9vw, 120px);
+  padding-bottom: clamp(56px, 7vw, 96px);
+}
+main > :is(section, .section):not(.hero, .section--hero) > :is(.wrap, .container), footer.closing > .wrap { height: auto; }
+main > :is(section, .section) > .wrap > .fill, .group > .fill { flex: 0 0 auto; }
+main > :is(section, .section).g2 > :is(.wrap, .container) { grid-template-rows: auto auto; row-gap: clamp(64px, 8vw, 104px); }
+main > :is(section, .section).g2 > .wrap > .grid:last-child,
+main > :is(section, .section).g2 > .wrap > .group > .grid:last-child { flex: 0 0 auto; }
+/* The hero's words sit level with the middle of its picture, not stranded at the top. */
+.hero__grid { align-items: center; }
+/* ---- Frames wrap their piece ----
+   A frame held its piece absolutely at a fixed 600px, so a short piece (the speed table) floated in an
+   empty panel and a frame that took its height from the section (the terminal) collapsed once sections
+   stopped being a screen tall. The piece is in flow now, at the frame's top left inside the frame's own
+   padding: the frame is the piece plus even padding, up to 600px, past which a tall piece is cropped
+   under the fade as before. Wide pieces still run off the frame's right edge. */
+@media (min-width: 0px) {
+  main > section:not(.hero) .pframe { height: auto; max-height: 600px; align-items: flex-start; justify-content: flex-start; }
+  main > section:not(.hero) .pframe > :is(.piece, .term, .cmd, .cmd-page) { position: relative; inset: auto; left: auto; top: auto; margin: 0; flex: 1 1 auto; }
+  main > section:not(.hero) .pframe--wide > .piece, main > section:not(.hero) .pframe > .term {
+    width: auto; max-width: none; margin-right: calc(-1 * clamp(var(--s-4), 4vw, var(--s-7)) - 2px);
+  }
+}
+/* The terminal shows whole now, so it ends with the same space it starts with. */
+.term pre { padding-bottom: 24px; }
+@media (max-width: 639px) { .term pre { padding-bottom: 16px; } }
+/* The provider panels hold two rows each: as tall as those, not a fixed 360px. */
+#models .panel { --p-h: auto; height: auto; min-height: 0; padding: var(--s-6) var(--s-6) calc(var(--s-6) + var(--c-pad, 24px)); }
+#models .panel > .prov { position: relative; inset: auto; }
+@media (max-width: 639px) { #models .panel { padding: var(--s-4) var(--s-4) calc(var(--s-4) + var(--c-pad, 20px)); } }
+
+/* ---- The agent demo's page: a GitHub issue (light theme colours, no GitHub logo) ---- */
+.site.gh { display: block; --gh-ink: #1F2328; --gh-mute: #59636E; --gh-line: #D1D9E0; --gh-soft: #F6F8FA; --gh-blue: #0969DA; --gh-green: #1F883D; background: #FFFFFF; color: var(--gh-ink); font-size: 13px; }
+.fav-gh { background: #1F2328 !important; border-radius: 50% !important; }
+.gh-repo { background: var(--gh-soft); border-bottom: 1px solid var(--gh-line); padding: 12px 18px 0; display: grid; gap: 10px; }
+.gh-crumb { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--gh-blue); }
+.gh-crumb svg { width: 16px; height: 16px; fill: var(--gh-mute); }
+.gh-crumb b { font-weight: 600; }
+.gh-pub { margin-left: 6px; padding: 0 7px; border: 1px solid var(--gh-line); border-radius: 999px; font-size: 11px; color: var(--gh-mute); line-height: 18px; }
+.gh-tabs { display: flex; gap: 2px; }
+.gh-tabs span { padding: 6px 10px 9px; color: var(--gh-ink); border-bottom: 2px solid transparent; white-space: nowrap; }
+.gh-tabs span.on { border-bottom-color: #FD8C73; font-weight: 600; }
+.gh-tabs em { font-style: normal; font-size: 11px; background: rgba(129, 139, 152, 0.2); border-radius: 999px; padding: 0 6px; margin-left: 4px; }
+.gh-issue { padding: 16px 18px 18px; display: grid; gap: 12px; }
+.gh-title { font-size: 20px; font-weight: 400; line-height: 1.3; }
+.gh-title span { color: var(--gh-mute); font-weight: 300; }
+.gh-meta { display: flex; align-items: center; gap: 8px; color: var(--gh-mute); flex-wrap: wrap; padding-bottom: 12px; border-bottom: 1px solid var(--gh-line); }
+.gh-meta b { color: var(--gh-ink); font-weight: 600; }
+.gh-open { display: inline-flex; align-items: center; gap: 4px; background: var(--gh-green); color: #FFFFFF; border-radius: 999px; padding: 3px 10px; font-weight: 500; }
+.gh-open svg { width: 14px; height: 14px; fill: #FFFFFF; }
+.gh-comment, .gh-compose { border: 1px solid var(--gh-line); border-radius: 6px; overflow: hidden; }
+.gh-c-head { display: flex; align-items: center; gap: 8px; background: var(--gh-soft); border-bottom: 1px solid var(--gh-line); padding: 7px 12px; color: var(--gh-mute); }
+.gh-c-head b { color: var(--gh-ink); font-weight: 600; }
+.gh-av { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 9px; font-weight: 600; color: #FFFFFF; background: #8250DF; }
+.gh-av2 { background: #BF8700; }
+.gh-c-body { padding: 10px 12px; line-height: 1.5; }
+.gh-tab { padding: 2px 10px; border-radius: 6px 6px 0 0; color: var(--gh-mute); }
+.gh-tab.on { color: var(--gh-ink); background: #FFFFFF; border: 1px solid var(--gh-line); border-bottom-color: #FFFFFF; margin-bottom: -8px; }
+.gh-box { margin: 10px 12px 0; padding: 8px 10px; min-height: 72px; border: 1px solid var(--gh-blue); border-radius: 6px; box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.15); line-height: 1.5; }
+.gh-btns { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 12px; }
+.gh-btn { padding: 5px 12px; border: 1px solid var(--gh-line); border-radius: 6px; background: var(--gh-soft); font-weight: 500; }
+.gh-btn.gh-go { background: var(--gh-green); color: #FFFFFF; border-color: rgba(31, 35, 40, 0.15); }
+
+/* The side chat ends with its composer, as the real one does. */
+.side-compose { margin-top: auto; margin-bottom: 4px; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 16px; border: 1px solid var(--pc-hair2); background: var(--pc-elev); color: var(--pc-mute); }
+.side-plus { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--pc-hair2); color: var(--pc-mute); font-size: 14px; }
+.side-ctrls { margin-left: auto; display: flex; gap: 6px; }
+.side-ctrls span { height: 22px; display: inline-flex; align-items: center; padding: 0 8px; border-radius: 8px; background: var(--pc-card); font-size: 12px; color: var(--pc-body); }
+
+/* ---- The hero, side by side and stacked ----
+   Side by side, the words sit level with the middle of the window picture (the collage pinned them to
+   the top, leaving an empty half column under them). Stacked, the hero grows to hold the picture at a
+   real height instead of squeezing it into what one screen leaves under the words. */
+.hero--collage .hero__text { align-self: center; }
+@media (max-width: 1023px) {
+  main > .hero { height: auto; min-height: 0; }
+  main > .hero > .wrap { height: auto; }
+  .hero--collage .hero__text { align-self: start; }
+  .hero__art { height: clamp(460px, 72vw, 620px); flex: none; }
+  /* The whole window shows when stacked, so its new tab page is centred, as the real one is. */
+  .hero__art .ntp { justify-items: center; padding-inline: 32px; }
+  .hero__art .ntp > * { width: min(100%, 460px); }
+  .hero__art .ntp > .ntp-mark { width: auto; }
+}

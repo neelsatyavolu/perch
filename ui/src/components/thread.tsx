@@ -10,6 +10,26 @@ import type { Client } from "../api/client";
 import { FileCard } from "./files";
 import { LiveRun, Message, dayLabel, newDay } from "./message";
 
+/**
+ * How much of the final answer the live run already showed. The live text can start with what the
+ * agent said while it worked ("Checking the page…"), so the answer is looked for inside it, not
+ * only at its start; the finished reply then types on from there instead of starting over.
+ */
+export function shownAlready(live: string, answer: string): number {
+  // The answer's opening, as long as it was shown: 40 characters down to 8 (shorter is chance).
+  let base = 0;
+  for (let len = Math.min(40, answer.length); len >= 8; len--) {
+    const at = live.lastIndexOf(answer.slice(0, len));
+    if (at >= 0) {
+      base = at;
+      break;
+    }
+  }
+  let i = 0;
+  while (i < answer.length && base + i < live.length && live[base + i] === answer[i]) i++;
+  return i;
+}
+
 type ThreadProps = {
   client: Client;
   view: ChatView;
@@ -48,12 +68,7 @@ export function Thread({ client, view, onDecide, onOpenArtifact, onBranch, selec
     liveText.current = run.text.replace(/^\s*\**\s*title\s*:[^\n]*\n+/i, "").trim();
     ranFor.current = chatId;
   } else if (ranFor.current !== null) {
-    if (ranFor.current === chatId && last?.role === "assistant") {
-      let i = 0;
-      const was = liveText.current;
-      while (i < was.length && was[i] === last.text[i]) i++;
-      fresh.current = { id: last.id, from: i };
-    }
+    if (ranFor.current === chatId && last?.role === "assistant") fresh.current = { id: last.id, from: shownAlready(liveText.current, last.text) };
     ranFor.current = null;
   }
 

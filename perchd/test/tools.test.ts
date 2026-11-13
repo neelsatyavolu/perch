@@ -74,6 +74,18 @@ test("repl, screenshot, wait_for and tabs", async () => {
   await ctx.close();
 });
 
+test("switch_tab takes a word from the tab when the model has no id", async () => {
+  const ctx = await newToolContext(env.browser);
+  await runTool(ctx, call("navigate", { url: env.site.url("/shop.html") }));
+  await runTool(ctx, call("open_tab", { url: env.site.url("/mail.html") }));
+  expect((await runTool(ctx, call("switch_tab", { id: "northwind" }))).content).toContain("Travel adapter");
+  const missing = await runTool(ctx, call("switch_tab", { id: "reddit" }));
+  expect(missing.isError).toBe(true);
+  expect(missing.content).toContain('no tab has the id "reddit". Pass one of these ids:');
+  expect(missing.content).toMatch(/Mailroom/);
+  await ctx.close();
+});
+
 test("done returns the final answer", async () => {
   const ctx = await newToolContext(env.browser);
   expect(await runTool(ctx, call("done", { answer: "Sent the reply." }))).toEqual({ content: "Sent the reply.", done: true });

@@ -524,10 +524,25 @@ export async function releaseBorrowed(ctx: ToolContext, ids: string[]): Promise<
   await Promise.all(release.map((t) => t.detach()));
 }
 
-async function switchTab(ctx: ToolContext, id: string): Promise<ToolResult> {
-  const known = ctx.owned.find((t) => t.id === id && !t.closed);
+/**
+ * Switches by id. Models sometimes pass a word from the tab instead ("reddit"): a single tab whose
+ * title or address contains it is taken; otherwise the open tabs are listed so the next call can
+ * use a real id without a separate tabs call.
+ */
+async function switchTab(ctx: ToolContext, wanted: string): Promise<ToolResult> {
   const tabs = await ctx.browser.tabs();
-  if (!known && !tabs.some((t) => t.id === id)) return { content: `no tab with id ${id}; call tabs to list them`, isError: true };
+  let id = wanted;
+  if (!ctx.owned.some((t) => t.id === id && !t.closed) && !tabs.some((t) => t.id === id)) {
+    const word = wanted.trim().toLowerCase();
+    const matches = word ? tabs.filter((t) => `${t.title} ${t.url}`.toLowerCase().includes(word)) : [];
+    const list = (shown: typeof tabs) => shown.map((t) => `${t.id} ${t.title} (${t.url})`).join("\n");
+    if (matches.length !== 1) {
+      const why = matches.length ? `${matches.length} tabs match "${wanted}"` : `no tab has the id "${wanted}"`;
+      return { content: `${why}. Pass one of these ids:\n${list(matches.length ? matches : tabs) || "(no tabs are open)"}`, isError: true };
+    }
+    id = matches[0]!.id;
+  }
+  const known = ctx.owned.find((t) => t.id === id && !t.closed);
   ctx.tab = known ?? (await attachBorrowed(ctx, id));
   return { content: `switched tabs\n\n${await page(ctx, ctx.tab)}` };
 }

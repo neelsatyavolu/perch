@@ -112,10 +112,9 @@ function LandingMark() {
     <svg class="wl-mark" viewBox="160 290 700 450" width="240" height="154" aria-hidden="true">
       <rect class="wl-mark-bar" x="176" y="686" width="672" height="30" rx="15" />
       <g class="wl-mark-bird">
-        <path transform="translate(40 -69) rotate(-40 512 512)" d="M352 236 L352 676 L462 580 L546 760 L614 732 L532 556 L680 556 Z" />
-        <circle class="wl-mark-dot" cx="373" cy="408" r="40" />
-        {/* Sakura mode: the bird's eye is a blossom. */}
-        <g transform="translate(373 408)">
+        <path transform="translate(40 -45) rotate(-40 512 512)" fill-rule="evenodd" d="M352.0 258.0 L352.0 654.0 Q352 676 368.6 661.5 L445.4 594.5 Q462 580 471.3 599.9 L536.7 740.1 Q546 760 566.3 751.6 L593.7 740.4 Q614 732 604.7 712.1 L541.3 575.9 Q532 556 554.0 556.0 L658.0 556.0 Q680 556 664.3 540.6 L367.7 251.4 Q352 236 352.0 258.0 Z M444 382 A42 42 0 1 0 360 382 A42 42 0 1 0 444 382 Z" />
+        {/* Sakura mode: a blossom in the bird's eye. */}
+        <g transform="translate(384 438)">
           <g class="wl-mark-blossom">
             <Blossom r={64} />
           </g>

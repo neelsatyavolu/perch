@@ -55,7 +55,7 @@ html:has(.wl-stage), body:has(.wl-stage) { background: var(--card); }
 .wl-mark { display: block; overflow: visible; }
 .wl-mark-bar { fill: var(--ink); opacity: 0.45; transform-origin: 512px 701px; }
 .wl-mark-bird { transform-origin: 512px 600px; }
-.wl-mark-bird path { fill: var(--ink); stroke: var(--ink); stroke-width: 28; stroke-linejoin: round; }
+.wl-mark-bird path { fill: var(--ink); }
 .wl-mark-dot { fill: var(--accent); }
 @media (prefers-reduced-motion: no-preference) {
   .wl-mark-bar { animation: wl-bar 600ms var(--ease) 150ms backwards; }

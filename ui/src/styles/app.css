@@ -347,7 +347,7 @@ button.artifact-card:hover { background: var(--fill-hover); }
 /* Full-page chat: the window frame is the lifted side colour; the conversation and the artifact pane
    are inset panels on the card colour with a hairline ring, as in settings. */
 .full { height: 100%; display: flex; min-height: 0; background: var(--side); }
-.chats { position: relative; width: 200px; flex: none; padding: 8px 6px 16px 8px; display: flex; flex-direction: column; overflow-y: auto; background: var(--side); }
+.chats { position: relative; width: 264px; flex: none; padding: 8px 6px 16px 8px; display: flex; flex-direction: column; overflow-y: auto; background: var(--side); }
 .chats .lbl { color: var(--mute); font-size: 13px; line-height: 16px; padding: 12px 10px 4px; margin: 12px 0 0; user-select: none; }
 .chats .empty-note { color: var(--mute); font-size: 13px; padding: 4px 10px; margin: 0; }
 .chats-search { display: flex; align-items: center; gap: 8px; height: 32px; flex: none; padding: 0 10px; margin-bottom: 12px; border-radius: var(--r-control); color: var(--mute); background: var(--fill); }

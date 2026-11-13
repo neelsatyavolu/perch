@@ -1,5 +1,5 @@
 /**
- * The full-page chat (spec 7.6, perch://chat): chat list 200px, the conversation, and the
+ * The full-page chat (spec 7.6, perch://chat): chat list 264px, the conversation, and the
  * artifact pane 360px and resizable. The list collapses below 1100px.
  */
 

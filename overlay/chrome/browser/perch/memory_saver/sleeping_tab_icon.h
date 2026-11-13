@@ -19,6 +19,14 @@ void PaintSleepingMoon(gfx::Canvas* canvas,
                        const gfx::Rect& favicon_bounds,
                        SkColor color);
 
+// A sleeping pinned tab keeps its favicon, since a pinned tab has no title to
+// tell it by; this paints a 7 px moon over the favicon's bottom right corner,
+// on a disc of `ring` (the tab strip's colour) so it reads on any favicon.
+void PaintSleepingBadge(gfx::Canvas* canvas,
+                        const gfx::Rect& favicon_bounds,
+                        SkColor color,
+                        SkColor ring);
+
 }  // namespace perch
 
 #endif  // CHROME_BROWSER_PERCH_MEMORY_SAVER_SLEEPING_TAB_ICON_H_

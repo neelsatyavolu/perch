@@ -59,6 +59,8 @@ export type FakeOptions = {
   /** Records navigation calls (submitQuery, openPage, …) so tests and the dev build can show them. */
   readonly onNavigate?: (what: string, detail: unknown) => void;
   readonly permissions?: Partial<Permissions>;
+  /** Overrides for Settings › About, such as an update already downloaded. */
+  readonly about?: Partial<AboutInfo>;
   /** Whether this Mac already syncs; on by default, with two devices. */
   readonly sync?: "on" | "off";
   /** What revealRecoveryKey does: show the key (default), or refuse as a build without the key helper. */
@@ -177,7 +179,7 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     browsers: seed.BROWSERS,
     onePassword: { installed: true, accounts: [{ id: "FAKEUSER0000000000000001", email: "you@example.com", url: "my.1password.com" }], account: null },
     onboarding: options.onboarding ?? { finished: false, done: [] },
-    about: seed.ABOUT,
+    about: { ...seed.ABOUT, ...options.about },
     files: [],
     buildJob: null,
     security: { available: true, protected: true, needsRestore: false, ...options.security },
@@ -800,6 +802,10 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
       return { state: "up-to-date", version: state.about.version };
     },
     async installUpdate() {
+      if (state.about.updateReady) {
+        navigate("restart", state.about.updateReady);
+        return { state: "ready", version: state.about.updateReady };
+      }
       return { state: "up-to-date", version: state.about.version };
     },
     async setAutoUpdate(on) {

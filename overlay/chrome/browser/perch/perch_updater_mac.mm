@@ -23,19 +23,54 @@
 @protocol PerchSparkleAppcastItem <NSObject>
 @property(nonatomic, readonly) NSDate* date;
 @property(nonatomic, readonly) NSString* channel;
+@property(nonatomic, readonly) NSString* displayVersionString;
 @end
 
 @protocol PerchSparkleAppcast <NSObject>
 @property(nonatomic, readonly) NSArray* items;
 @end
 
-// Applies the update policies to what Sparkle offers (enterprise task 9).
+// Applies the update policies to what Sparkle offers (enterprise task 9), and
+// keeps a downloaded update ready to install on Restart (Settings › About and
+// the app menu), since a browser can stay open for weeks between quits.
 @interface PerchUpdaterDelegate : NSObject
 - (instancetype)initWithPolicy:(const perch::UpdatePolicy&)policy;
+// The version that has downloaded and waits to install; nil until one has.
+@property(nonatomic, readonly, copy) NSString* readyVersion;
+// Installs the downloaded update and relaunches Perch. NO when none is ready.
+- (BOOL)installNow;
+- (void)installNow:(id)sender;
 @end
 
 @implementation PerchUpdaterDelegate {
   perch::UpdatePolicy _policy;
+  void (^_installHandler)(void);
+}
+
+@synthesize readyVersion = _readyVersion;
+
+// Sparkle has downloaded an update and will install it when Perch quits.
+// Returning YES keeps the immediate-install block for Restart; Sparkle still
+// installs the update on quit if it is never used.
+- (BOOL)updater:(id)updater
+       willInstallUpdateOnQuit:(id<PerchSparkleAppcastItem>)item
+    immediateInstallationBlock:(void (^)(void))installHandler {
+  _installHandler = [installHandler copy];
+  _readyVersion = [item.displayVersionString copy] ?: @"";
+  perch::ShowRestartToUpdateItem();
+  return YES;
+}
+
+- (BOOL)installNow {
+  if (!_installHandler) {
+    return NO;
+  }
+  _installHandler();
+  return YES;
+}
+
+- (void)installNow:(id)sender {
+  [self installNow];
 }
 
 - (instancetype)initWithPolicy:(const perch::UpdatePolicy&)policy {
@@ -83,6 +118,9 @@ namespace {
 
 id<PerchSparkleUpdaterController> g_updater_controller = nil;
 PerchUpdaterDelegate* g_updater_delegate = nil;
+// The app menu's "Check for Updates…", which becomes "Restart to Update Perch"
+// once an update is ready.
+NSMenuItem* g_update_item = nil;
 
 void AddCheckForUpdatesItem(id<PerchSparkleUpdaterController> controller) {
   NSMenu* main_menu = NSApp.mainMenu;
@@ -98,6 +136,7 @@ void AddCheckForUpdatesItem(id<PerchSparkleUpdaterController> controller) {
                                  action:@selector(checkForUpdates:)
                           keyEquivalent:@""];
   item.target = controller;
+  g_update_item = item;
   [app_menu insertItem:item atIndex:MIN(1, app_menu.numberOfItems)];
 }
 
@@ -158,6 +197,9 @@ UpdaterInfo GetUpdaterInfo() {
   if (NSDate* last = updater.lastUpdateCheckDate) {
     info.last_checked = base::Time::FromNSDate(last);
   }
+  if (NSString* ready = g_updater_delegate.readyVersion) {
+    info.ready_version = base::SysNSStringToUTF8(ready);
+  }
   return info;
 }
 
@@ -167,6 +209,19 @@ bool SetAutoUpdate(bool on) {
   }
   g_updater_controller.updater.automaticallyChecksForUpdates = on;
   return true;
+}
+
+void ShowRestartToUpdateItem() {
+  if (!g_update_item || !g_updater_delegate.readyVersion) {
+    return;
+  }
+  g_update_item.title = @"Restart to Update Perch";
+  g_update_item.target = g_updater_delegate;
+  g_update_item.action = @selector(installNow:);
+}
+
+bool InstallReadyUpdate() {
+  return g_updater_delegate && [g_updater_delegate installNow];
 }
 
 bool CheckForUpdatesNow() {

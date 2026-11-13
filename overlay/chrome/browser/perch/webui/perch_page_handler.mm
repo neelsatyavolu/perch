@@ -94,6 +94,9 @@ base::DictValue About() {
     about.Set("lastChecked",
               base::TimeFormatAsIso8601(*updates.last_checked));
   }
+  if (updates.ready_version) {
+    about.Set("updateReady", *updates.ready_version);
+  }
   return about;
 }
 
@@ -614,6 +617,10 @@ void PerchPageHandler::Dispatch(const std::string& method,
         openURL:[NSURL URLWithString:@"x-apple.systempreferences:com.apple."
                                      @"preference.security?Privacy_AllFiles"]];
     Resolve(std::move(id), base::Value());
+  } else if (method == "installUpdate" && InstallReadyUpdate()) {
+    // Perch quits and relaunches into the new version.
+    Resolve(std::move(id),
+            base::Value(base::DictValue().Set("state", "ready")));
   } else if (method == "checkForUpdates" || method == "installUpdate") {
     if (!CheckForUpdatesNow()) {
       Resolve(std::move(id),

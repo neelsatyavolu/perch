@@ -4,6 +4,7 @@
 #define CHROME_BROWSER_PERCH_PERCH_UPDATER_MAC_H_
 
 #include <optional>
+#include <string>
 
 #include "base/time/time.h"
 
@@ -22,6 +23,8 @@ struct UpdaterInfo {
   // The company decides; the switch is locked.
   bool managed = false;
   std::optional<base::Time> last_checked;
+  // A downloaded update waiting for Perch to restart, by version.
+  std::optional<std::string> ready_version;
 };
 UpdaterInfo GetUpdaterInfo();
 // Turns scheduled checks on or off. False when Sparkle isn't there or a
@@ -29,6 +32,12 @@ UpdaterInfo GetUpdaterInfo();
 bool SetAutoUpdate(bool on);
 // Checks now, in Sparkle's window, which also installs. False without Sparkle.
 bool CheckForUpdatesNow();
+// Installs the downloaded update now and relaunches Perch. False when no update
+// is ready.
+bool InstallReadyUpdate();
+// Turns the app menu's "Check for Updates…" into "Restart to Update Perch"
+// once an update is ready (called by the updater; safe to call any time).
+void ShowRestartToUpdateItem();
 
 }  // namespace perch
 

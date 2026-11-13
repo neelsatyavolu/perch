@@ -29,6 +29,8 @@ export function About() {
   const [status, setStatus] = useState<UpdateStatus | null>(null);
   const a = about.data;
   if (!a) return <p class="mute">{about.error ?? ""}</p>;
+  // An update Perch already downloaded in the background shows as ready until a check says otherwise.
+  const shown: UpdateStatus | null = status ?? (a.updateReady ? { state: "ready", version: a.updateReady } : null);
   const check = async () => {
     setStatus({ state: "checking" });
     const s = await act(() => api.checkForUpdates());
@@ -39,16 +41,16 @@ export function About() {
       <Group label="Version">
         <div class="card">
           <Row id="version" title={`Perch ${a.version}`} detail={`${a.channel === "beta" ? "Beta" : "Stable"} channel`} icon={<span class="tile" aria-hidden="true"><PerchMark size={32} tile={false} /></span>}>
-            <span class="status" role="status">{statusWords(status, a.lastChecked)}</span>
-            {status?.state === "available" || status?.state === "ready" ? (
-              <button type="button" class="btn primary" onClick={async () => setStatus((await act(() => api.installUpdate())) ?? status)}>
-                {status.state === "ready" ? "Restart Perch" : "Install update"}
+            <span class="status" role="status">{statusWords(shown, a.lastChecked)}</span>
+            {shown?.state === "available" || shown?.state === "ready" ? (
+              <button type="button" class="btn primary" onClick={async () => setStatus((await act(() => api.installUpdate())) ?? shown)}>
+                {shown.state === "ready" ? "Restart Perch" : "Install update"}
               </button>
             ) : (
               <button type="button" class="btn" disabled={status?.state === "checking"} onClick={check}>Check for updates</button>
             )}
           </Row>
-          <Row id="auto-update" title="Update automatically" detail={locked("auto-update") ? MANAGED_NOTE : "Checks once a day on GitHub and installs signed updates when you restart"}>
+          <Row id="auto-update" title="Update automatically" detail={locked("auto-update") ? MANAGED_NOTE : "Checks GitHub every few hours, downloads signed updates in the background and installs them when you restart"}>
             <Switch label="Update automatically" describedBy="auto-update-d" checked={a.autoUpdate} disabled={locked("auto-update")} onChange={async (on) => {
               const next = await act(() => api.setAutoUpdate(on));
               if (next) about.set(next);

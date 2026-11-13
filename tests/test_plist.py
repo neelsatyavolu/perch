@@ -8,7 +8,7 @@ def test_sparkle_keys():
         "SUFeedURL": "https://x/appcast.xml",
         "SUPublicEDKey": "PUB",
         "SUEnableAutomaticChecks": True,
-        "SUScheduledCheckInterval": 86400,
+        "SUScheduledCheckInterval": 14400,
         "SUAutomaticallyUpdate": True,
     }
 

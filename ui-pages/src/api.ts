@@ -413,6 +413,8 @@ export type AboutInfo = {
   readonly channel: "stable" | "beta";
   readonly autoUpdate: boolean;
   readonly lastChecked?: Iso;
+  /** A downloaded update waiting for a restart, by version (Sparkle downloads in the background). */
+  readonly updateReady?: string;
 };
 
 /* ---------- The interface ---------- */

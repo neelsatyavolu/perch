@@ -6,7 +6,9 @@ import plistlib
 from collections.abc import Mapping
 from pathlib import Path
 
-CHECK_INTERVAL_SECONDS = 86400
+# Every four hours, like Chrome: a browser stays open for days, so a daily
+# check can leave a fix waiting a long time.
+CHECK_INTERVAL_SECONDS = 4 * 60 * 60
 
 
 def sparkle_keys(feed_url: str, public_key: str) -> dict[str, object]:

@@ -1,0 +1,42 @@
+Perch: a sleeping pinned tab keeps its favicon, with a small moon badge, since a pinned tab has no title to tell it by.
+diff --git a/chrome/browser/ui/views/tabs/tab/tab_icon.cc b/chrome/browser/ui/views/tabs/tab/tab_icon.cc
+index 4b5c094075..a361991389 100644
+--- a/chrome/browser/ui/views/tabs/tab/tab_icon.cc
++++ b/chrome/browser/ui/views/tabs/tab/tab_icon.cc
+@@ -129,6 +129,7 @@ void TabIcon::SetData(const tabs::TabData& data) {
+   SetIcon(data.favicon, data.should_themify_favicon);
+   SetNetworkState(data.network_state);
+   SetCrashed(data.is_crashed);
++  perch_pinned_ = data.pinned;
+   // Perch: every sleeping tab shows the moon, however it went to sleep.
+   SetDiscarded(data.should_show_discard_status || data.is_tab_discarded);
+   if (perch_task_running_ != data.perch_task_running) {
+@@ -257,6 +258,15 @@ void TabIcon::OnPaint(gfx::Canvas* canvas) {
+   if (!GetShowingLoadingAnimation() && GetShowingAttentionIndicator() &&
+       !should_display_crashed_favicon_) {
+     PaintAttentionIndicatorAndIcon(canvas, GetIconToPaint(), icon_bounds);
++  } else if (is_discarded_ && !GetShowingLoadingAnimation() &&
++             perch_pinned_) {
++    // Perch: a sleeping pinned tab keeps its favicon, which is all a pinned
++    // tab shows, with a small moon badge so it still reads as asleep.
++    MaybePaintFavicon(canvas, GetIconToPaint(), icon_bounds);
++    perch::PaintSleepingBadge(
++        canvas, icon_bounds,
++        GetColorProvider()->GetColor(kColorTabForegroundInactiveFrameActive),
++        GetColorProvider()->GetColor(kColorTabBackgroundInactiveFrameActive));
+   } else if (is_discarded_ && !GetShowingLoadingAnimation()) {
+     // Perch: a sleeping tab shows a moon in the title's mute colour.
+     perch::PaintSleepingMoon(
+diff --git a/chrome/browser/ui/views/tabs/tab/tab_icon.h b/chrome/browser/ui/views/tabs/tab/tab_icon.h
+index e4ddf6100b..547dbc2294 100644
+--- a/chrome/browser/ui/views/tabs/tab/tab_icon.h
++++ b/chrome/browser/ui/views/tabs/tab/tab_icon.h
+@@ -205,6 +205,8 @@ class TabIcon : public views::View, public views::AnimationDelegateViews {
+   bool is_discarded_ = false;
+   // Perch: draw the perch dot (a running agent task).
+   bool perch_task_running_ = false;
++  // Perch: a pinned tab keeps its favicon while it sleeps, with a moon badge.
++  bool perch_pinned_ = false;
+   bool discard_ring_treatment_enabled_ = true;
+   bool was_discard_indicator_shown_ = false;
+ 

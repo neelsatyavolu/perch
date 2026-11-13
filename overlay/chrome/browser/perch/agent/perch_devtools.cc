@@ -154,7 +154,7 @@ Reply GetInfo() {
         "applyBookmarkChanges", "getHistory", "addHistory", "getOpenTabs",
         "getExtensionTabId", "applyImportBundle", "listLogins", "fillLogin",
         "listCards", "fillCard", "perch-artifact", "getTabs", "tabEvents",
-        "agentTabs"}) {
+        "agentTabs", "adoptAgentTab"}) {
     features.Append(feature);
   }
   result.Set("features", std::move(features));
@@ -297,6 +297,22 @@ Reply CreateAgentTab(const base::DictValue& params) {
   return Ok(base::DictValue().Set("targetId", target_id));
 }
 
+// Moves a tab the agent opened from the user's tab into the agent window and
+// keeps it drawing there. Returns {moved}.
+Reply AdoptAgentTab(const base::DictValue& params) {
+  const std::string* id = params.FindString("targetId");
+  if (!id) {
+    return Fail(kInvalidParams, "targetId is required");
+  }
+  tabs::TabInterface* tab = TabFor(*id);
+  if (!tab) {
+    return Fail(kServerError, "No tab with that target id");
+  }
+  const bool moved = MoveToAgentWindow(tab);
+  ClaimTab(params);
+  return Ok(base::DictValue().Set("moved", moved));
+}
+
 Reply SetTaskStatusCommand(const base::DictValue& params) {
   const std::string* chat = params.FindString("chatId");
   const std::string* status = params.FindString("status");
@@ -370,6 +386,9 @@ Reply Dispatch(std::string_view method, const base::DictValue& params) {
   }
   if (method == "createAgentTab") {
     return CreateAgentTab(params);
+  }
+  if (method == "adoptAgentTab") {
+    return AdoptAgentTab(params);
   }
   if (method == "claimTab") {
     return ClaimTab(params);

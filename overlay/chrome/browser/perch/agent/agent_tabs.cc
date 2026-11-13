@@ -210,6 +210,29 @@ void ShowAgentTab(tabs::TabInterface* tab, BrowserWindowInterface* into) {
   }
 }
 
+bool MoveToAgentWindow(tabs::TabInterface* tab) {
+  BrowserWindowInterface* from = tab ? tab->GetBrowserWindowInterface() : nullptr;
+  if (!from || IsAgentWindow(from)) {
+    return false;
+  }
+  TabStripModel* source = from->GetTabStripModel();
+  const int index = source->GetIndexOfTab(tab);
+  // The window's only tab stays: moving it would close the user's window.
+  if (index == TabStripModel::kNoTab || source->count() < 2) {
+    return false;
+  }
+  BrowserWindowInterface* agent =
+      AgentWindowFor(from->GetProfile(), /*create=*/true);
+  if (!agent || agent == from) {
+    return false;
+  }
+  std::unique_ptr<tabs::TabModel> moved = source->DetachTabAtForInsertion(index);
+  TabStripModel* target = agent->GetTabStripModel();
+  target->InsertDetachedTabAt(target->count(), std::move(moved),
+                              AddTabTypes::ADD_ACTIVE);
+  return true;
+}
+
 void CloseAgentTabs(Profile* profile) {
   if (BrowserWindowInterface* browser =
           AgentWindowFor(profile, /*create=*/false)) {

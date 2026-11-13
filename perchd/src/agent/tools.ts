@@ -1,5 +1,6 @@
 /** Runs the model's tool calls against the browser. Errors come back as text; nothing throws. */
 
+import { pdfPages, pdfSection } from "../page/pdf";
 import { FILL_TOOLS, runFillTool, type FillSites, type PasswordManager } from "./fill-tools";
 import { existsSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
@@ -62,25 +63,9 @@ export async function newToolContext(browser: Browser): Promise<ToolContext> {
   return ctx;
 }
 
-/**
- * A page on the user's own machine (a dev server's preview, a local file) is something to show the
- * user, so it opens as an ordinary tab in their window rather than among the hidden agent tabs.
- */
-export function isLocalUrl(url: string): boolean {
-  try {
-    const u = new URL(url);
-    if (u.protocol === "file:") return true;
-    if (u.protocol !== "http:" && u.protocol !== "https:") return false;
-    const host = u.hostname.replace(/^\[|\]$/g, "").toLowerCase();
-    return host === "localhost" || host.endsWith(".localhost") || host === "::1" || host === "0.0.0.0" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host);
-  } catch {
-    return false;
-  }
-}
-
-async function currentTab(ctx: ToolContext, url?: string): Promise<Tab> {
+async function currentTab(ctx: ToolContext): Promise<Tab> {
   if (ctx.tab && !ctx.tab.closed) return ctx.tab;
-  ctx.tab = await ctx.browser.newTab(undefined, { visible: url !== undefined && isLocalUrl(url) });
+  ctx.tab = await ctx.browser.newTab();
   ctx.owned.push(ctx.tab);
   return ctx.tab;
 }
@@ -124,8 +109,10 @@ async function page(ctx: ToolContext, tab: Tab, full = false): Promise<string> {
   ctx.lastSnapshot.set(tab, snap.text);
   const [title, url] = await Promise.all([tab.title().catch(() => ""), tab.url().catch(() => "")]);
   if (url) shownUrl.set(tab, url);
+  // A PDF's viewer shows only its toolbar to the snapshot: add the document's own text.
+  const pdf = /^https?:|^file:/.test(url) ? await pdfPages(tab, url).catch(() => null) : null;
   // A full snapshot shows everything; otherwise menus repeated from the last one take one line.
-  return `Page: ${title} (${url})\n${full ? snap.text : foldRepeats(snap.text, previous)}`;
+  return `Page: ${title} (${url})\n${full ? snap.text : foldRepeats(snap.text, previous)}${pdf ? pdfSection(pdf, full) : ""}`;
 }
 
 /** Actions after which an unchanged page is worth pointing out: the click or choice did nothing visible. */
@@ -196,9 +183,10 @@ async function followPopup(ctx: ToolContext, tab: Tab): Promise<string | null> {
   if (!popup) return null;
   ctx.owned = [...ctx.owned, popup];
   ctx.tab = popup;
-  // A page an agent tab opened lands beside it in the hidden agent window: keep it drawing too.
-  await ctx.browser.claim(id);
   for (let i = 0; i < 60 && (await popup.url().catch(() => "about:blank")) === "about:blank"; i++) await Bun.sleep(50);
+  // The new page joins the agent's tabs: it opens beside the tab it came from, which may be the
+  // user's, so it moves to the agent window, and keeps drawing there.
+  await ctx.browser.adopt(id);
   await popup.settle();
   return `This opened a new tab, and Perch switched to it. The previous page is still open (switch_tab ${tab.id}).\n\n${await page(ctx, popup)}`;
 }
@@ -364,12 +352,12 @@ async function dispatch(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
   if (call.name === "downloads") return { content: recentDownloads() };
   if (call.name === "switch_tab") return switchTab(ctx, String(a.id));
   if (call.name === "open_tab") {
-    ctx.tab = await ctx.browser.newTab(undefined, { visible: isLocalUrl(normalizeUrl(a.url)) });
+    ctx.tab = await ctx.browser.newTab();
     ctx.owned.push(ctx.tab);
     const note = await openPage(ctx.tab, normalizeUrl(a.url));
     return { content: `opened ${a.url} in a new tab${note ? `\n${note}` : ""}\n\n${await page(ctx, ctx.tab)}` };
   }
-  const tab = await currentTab(ctx, call.name === "navigate" ? normalizeUrl(String(a.url)) : undefined);
+  const tab = await currentTab(ctx);
   const refs = refsFor(tab);
   // Script errors and new tabs are reported for the action that caused them, not for earlier ones.
   tab.takePageErrors();

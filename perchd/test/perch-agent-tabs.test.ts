@@ -7,6 +7,7 @@
 import { expect, test } from "bun:test";
 import { newToolContext, runTool } from "../src/agent/tools";
 import { Browser } from "../src/browser/browser";
+import { Tab } from "../src/browser/tab";
 import { startFixtures } from "./fixtures/server";
 import { tempProfile } from "./helpers";
 
@@ -29,6 +30,32 @@ test.skipIf(!executable)("agent tabs open in Perch's hidden window, take clicks 
     expect(await ctx.tab!.evaluate<boolean>("document.getElementById('dialog').hidden === false")).toBe(true);
     const { tabs } = await launched.conn.send<{ tabs: { url: string }[] }>("Perch.getTabs");
     expect(tabs.some((t) => t.url.includes("grades"))).toBe(false);
+  } finally {
+    await launched.close();
+    site.stop();
+    profile.cleanup();
+  }
+}, 90_000);
+
+test.skipIf(!executable)("a page the agent opens from the user's tab moves into the agent tabs", async () => {
+  const site = startFixtures();
+  const profile = tempProfile();
+  const launched = await Browser.launch({ userDataDir: profile.dir, executable, headless: true, args: ["--no-first-run"] });
+  try {
+    const browser = await Browser.adopt(launched.conn);
+    // The sidebar's agent works in the user's own tab, which has a link that opens a new tab.
+    const { targetId } = await launched.conn.send<{ targetId: string }>("Target.createTarget", { url: site.url("/results.html") });
+    const ctx = await newToolContext(browser);
+    ctx.tab = await Tab.attach(launched.conn, targetId);
+    await ctx.tab.settle();
+    const found = await runTool(ctx, call("find", { role: "link", name: "Open profile" }));
+    const ref = found.content.match(/ref=(e\d+)/)![1];
+    const clicked = await runTool(ctx, call("click", { ref }));
+    expect(clicked.content).toContain("This opened a new tab");
+    expect(clicked.content).toContain("Mailroom");
+    const { tabs } = await launched.conn.send<{ tabs: { url: string }[] }>("Perch.getTabs");
+    expect(tabs.some((t) => t.url.includes("results"))).toBe(true);
+    expect(tabs.some((t) => t.url.includes("mail"))).toBe(false);
   } finally {
     await launched.close();
     site.stop();

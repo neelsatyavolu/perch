@@ -64,6 +64,15 @@ export class Browser {
     return browser;
   }
 
+  /**
+   * A tab the agent opened from one of the user's tabs: moved into the hidden agent window with
+   * the agent's other tabs and kept drawing. Without that window it is only claimed.
+   */
+  async adopt(targetId: string): Promise<void> {
+    if (this.agentTabs && this.features.has("adoptAgentTab")) await this.conn.send("Perch.adoptAgentTab", { targetId }).catch(() => this.claim(targetId));
+    else await this.claim(targetId);
+  }
+
   /** Keeps a tab drawing and awake while it is in the background. Only inside Perch. */
   async claim(targetId: string): Promise<void> {
     if (this.perch) await this.conn.send("Perch.claimTab", { targetId }).catch(() => undefined);
@@ -80,11 +89,9 @@ export class Browser {
    * the tab opens in the background of the user's window instead, held drawing by
    * `Perch.claimTab`, and the session puts it in its tab group.
    */
-  async newTab(url?: string, opts: { visible?: boolean } = {}): Promise<Tab> {
+  async newTab(url?: string): Promise<Tab> {
     let targetId: string;
-    // `visible`: a tab for the user to see (a local preview) opens in their window even when
-    // Perch keeps the agent's other tabs hidden.
-    if (this.agentTabs && !opts.visible) {
+    if (this.agentTabs) {
       // Perch keeps agent tabs in a hidden window of their own, listed under the toolbar's
       // Agent Tabs button, and holds them drawing (agent_tabs.h).
       ({ targetId } = await this.conn.send<{ targetId: string }>("Perch.createAgentTab", { url: "about:blank" }));

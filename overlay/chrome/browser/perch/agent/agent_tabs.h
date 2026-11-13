@@ -49,6 +49,11 @@ bool IsCreatingAgentWindow();
 // The profile's agent tabs, oldest first.
 std::vector<tabs::TabInterface*> AgentTabsFor(Profile* profile);
 
+// Moves a tab the agent opened from one of the user's tabs (a link it
+// clicked, a window.open) into the hidden agent window, beside the agent's
+// other tabs. False when the tab is already there or cannot move.
+bool MoveToAgentWindow(tabs::TabInterface* tab);
+
 // Moves an agent tab into `into`, after its last tab, selects it and opens the
 // sidebar beside it on the chat whose agent works in it.
 void ShowAgentTab(tabs::TabInterface* tab, BrowserWindowInterface* into);

@@ -154,7 +154,7 @@ Reply GetInfo() {
         "applyBookmarkChanges", "getHistory", "addHistory", "getOpenTabs",
         "getExtensionTabId", "applyImportBundle", "listLogins", "fillLogin",
         "listCards", "fillCard", "perch-artifact", "getTabs", "tabEvents",
-        "agentTabs", "adoptAgentTab"}) {
+        "agentTabs", "adoptAgentTab", "showAgentTab"}) {
     features.Append(feature);
   }
   result.Set("features", std::move(features));
@@ -313,6 +313,24 @@ Reply AdoptAgentTab(const base::DictValue& params) {
   return Ok(base::DictValue().Set("moved", moved));
 }
 
+// Shows an agent tab in the window of another tab (`besideTargetId`), as
+// picking it from the Agent Tabs list does: it goes back when the user
+// switches away.
+Reply ShowAgentTabCommand(const base::DictValue& params) {
+  const std::string* id = params.FindString("targetId");
+  const std::string* beside = params.FindString("besideTargetId");
+  if (!id || !beside) {
+    return Fail(kInvalidParams, "targetId and besideTargetId are required");
+  }
+  tabs::TabInterface* tab = TabFor(*id);
+  tabs::TabInterface* anchor = TabFor(*beside);
+  if (!tab || !anchor) {
+    return Fail(kServerError, "No tab with that target id");
+  }
+  ShowAgentTab(tab, anchor->GetBrowserWindowInterface());
+  return Ok();
+}
+
 Reply SetTaskStatusCommand(const base::DictValue& params) {
   const std::string* chat = params.FindString("chatId");
   const std::string* status = params.FindString("status");
@@ -386,6 +404,9 @@ Reply Dispatch(std::string_view method, const base::DictValue& params) {
   }
   if (method == "createAgentTab") {
     return CreateAgentTab(params);
+  }
+  if (method == "showAgentTab") {
+    return ShowAgentTabCommand(params);
   }
   if (method == "adoptAgentTab") {
     return AdoptAgentTab(params);

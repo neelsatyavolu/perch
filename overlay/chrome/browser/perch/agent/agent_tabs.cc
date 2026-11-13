@@ -3,9 +3,11 @@
 
 #include "chrome/browser/perch/agent/agent_tabs.h"
 
+#include <algorithm>
 #include <map>
 #include <memory>
 #include <utility>
+#include <vector>
 
 #include "base/auto_reset.h"
 #include "base/functional/bind.h"
@@ -133,6 +135,71 @@ BrowserWindowInterface* AgentWindowFor(Profile* profile, bool create) {
   return browser;
 }
 
+// A window showing agent tabs the user picked from the Agent Tabs list. Each
+// is only on loan: when the user switches to another tab, it goes back to the
+// agent window, as in Aside. A tab the user moved elsewhere stays there.
+class LoanWatcher : public TabStripModelObserver {
+ public:
+  explicit LoanWatcher(BrowserWindowInterface* browser) : browser_(browser) {
+    browser->GetTabStripModel()->AddObserver(this);
+  }
+  LoanWatcher(const LoanWatcher&) = delete;
+  LoanWatcher& operator=(const LoanWatcher&) = delete;
+  ~LoanWatcher() override = default;
+
+  void Lend(tabs::TabInterface* tab) { loaned_.push_back(tab->GetWeakPtr()); }
+
+  // TabStripModelObserver:
+  void OnTabStripModelChanged(TabStripModel* model,
+                              const TabStripModelChange& change,
+                              const TabStripSelectionChange& selection) override {
+    std::erase_if(loaned_, [](const auto& tab) { return !tab; });
+    if (!selection.active_tab_changed() || !selection.old_tab) {
+      return;
+    }
+    tabs::TabInterface* left = selection.old_tab;
+    auto it = std::find_if(loaned_.begin(), loaned_.end(),
+                           [left](const auto& tab) { return tab.get() == left; });
+    if (it == loaned_.end()) {
+      return;
+    }
+    base::WeakPtr<tabs::TabInterface> tab = *it;
+    loaned_.erase(it);
+    // After the tab strip has finished telling everyone about the switch.
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::BindOnce(
+                       [](base::WeakPtr<tabs::TabInterface> tab,
+                          BrowserWindowInterface* from) {
+                         if (tab && tab->GetBrowserWindowInterface() == from &&
+                             !tab->IsActivated()) {
+                           MoveToAgentWindow(tab.get());
+                         }
+                       },
+                       tab, browser_.get()));
+  }
+  void OnTabStripModelDestroyed(TabStripModel* model) override;
+
+ private:
+  raw_ptr<BrowserWindowInterface> browser_;
+  std::vector<base::WeakPtr<tabs::TabInterface>> loaned_;
+};
+
+std::map<BrowserWindowInterface*, std::unique_ptr<LoanWatcher>>& Loans() {
+  static base::NoDestructor<
+      std::map<BrowserWindowInterface*, std::unique_ptr<LoanWatcher>>>
+      loans;
+  return *loans;
+}
+
+void LoanWatcher::OnTabStripModelDestroyed(TabStripModel* model) {
+  model->RemoveObserver(this);
+  BrowserWindowInterface* browser = browser_;
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE,
+      base::BindOnce([](BrowserWindowInterface* browser) { Loans().erase(browser); },
+                     browser));
+}
+
 }  // namespace
 
 void AddAgentTabsObserver(AgentTabsObserver* observer) {
@@ -202,8 +269,14 @@ void ShowAgentTab(tabs::TabInterface* tab, BrowserWindowInterface* into) {
   }
   std::unique_ptr<tabs::TabModel> moved = source->DetachTabAtForInsertion(index);
   TabStripModel* target = into->GetTabStripModel();
+  tabs::TabInterface* shown = moved.get();
   target->InsertDetachedTabAt(target->count(), std::move(moved),
                               AddTabTypes::ADD_ACTIVE);
+  auto& watcher = Loans()[into];
+  if (!watcher) {
+    watcher = std::make_unique<LoanWatcher>(into);
+  }
+  watcher->Lend(shown);
   // The sidebar opens beside it, on the chat whose agent works in the tab.
   if (SidePanelUI* panel = SidePanelUI::From(into)) {
     panel->Show(SidePanelEntryId::kPerch);

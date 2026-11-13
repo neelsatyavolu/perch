@@ -62,3 +62,28 @@ test.skipIf(!executable)("a page the agent opens from the user's tab moves into 
     profile.cleanup();
   }
 }, 90_000);
+
+test.skipIf(!executable)("an agent tab shown in the user's window goes back when the user switches away", async () => {
+  const site = startFixtures();
+  const profile = tempProfile();
+  const launched = await Browser.launch({ userDataDir: profile.dir, executable, headless: true, args: ["--no-first-run"] });
+  const userTabs = async () => (await launched.conn.send<{ tabs: { url: string }[] }>("Perch.getTabs")).tabs.map((t) => t.url);
+  try {
+    const browser = await Browser.adopt(launched.conn);
+    const { targetId: mine } = await launched.conn.send<{ targetId: string }>("Target.createTarget", { url: site.url("/results.html") });
+    const ctx = await newToolContext(browser);
+    await runTool(ctx, call("navigate", { url: site.url("/mail.html") }));
+    const agent = ctx.tab!.id;
+    expect((await userTabs()).some((u) => u.includes("mail"))).toBe(false);
+    await launched.conn.send("Perch.showAgentTab", { targetId: agent, besideTargetId: mine });
+    expect((await userTabs()).some((u) => u.includes("mail"))).toBe(true);
+    await launched.conn.send("Target.activateTarget", { targetId: mine });
+    for (let i = 0; i < 40 && (await userTabs()).some((u) => u.includes("mail")); i++) await Bun.sleep(50);
+    expect((await userTabs()).some((u) => u.includes("mail"))).toBe(false);
+    expect((await runTool(ctx, call("snapshot"))).content).toContain("Mailroom");
+  } finally {
+    await launched.close();
+    site.stop();
+    profile.cleanup();
+  }
+}, 90_000);

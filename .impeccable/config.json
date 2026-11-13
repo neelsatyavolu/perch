@@ -50,6 +50,15 @@
         ],
         "createdAt": "2026-11-12T18:44:55.483Z",
         "reason": "model triage: the 15-16px h2/h3 are the approval card title and Settings-style index group labels; section h2s render at 28-38px and the hero h1 at 42-68px Newsreader"
+      },
+      {
+        "rule": "pulsing-dot",
+        "value": "*",
+        "files": [
+          "site/public/index.html"
+        ],
+        "createdAt": "2026-11-13T01:00:16.416Z",
+        "reason": "DESIGN.md (Surfaces in the browser): the perch dot breathes, opacity 1 to 0.35 over 2.4s, on a tab the agent is using; the page's window mock shows that tab mid-task, and it rests under Reduce Motion"
       }
     ]
   }

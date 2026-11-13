@@ -1,6 +1,6 @@
 /** Runs the model's tool calls against the browser. Errors come back as text; nothing throws. */
 
-import { documentText, fetchDocument, freeName, makeZip, part } from "./documents";
+import { cachedDocument, cacheDocument, documentText, fetchDocument, forgetDocuments, freeName, makeZip, part } from "./documents";
 import { pdfPages, pdfSection } from "../page/pdf";
 import { FILL_TOOLS, runFillTool, type FillSites, type PasswordManager } from "./fill-tools";
 import { existsSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -59,6 +59,7 @@ export async function newToolContext(browser: Browser): Promise<ToolContext> {
     close: async () => {
       await Promise.all([...ctx.owned.map((t) => t.close()), ...ctx.borrowedTabs.map((t) => t.detach())]);
       rmSync(ctx.workDir, { recursive: true, force: true });
+      forgetDocuments(ctx.workDir);
     },
   };
   return ctx;
@@ -173,12 +174,8 @@ async function withPage(ctx: ToolContext, tab: Tab, result: ActionResult, action
   return { content: `${notes.join("\n")}\n\n${view}` };
 }
 
-/** Documents read in each chat folder, by address, so reading on does not download again. */
-const documents = new Map<string, { path: string; text: string | Error }>();
-
 async function readDocument(ctx: ToolContext, url: string, from: number): Promise<ToolResult> {
-  const key = `${ctx.workDir}\n${url}`;
-  let doc = documents.get(key);
+  let doc = cachedDocument(ctx.workDir, url);
   if (!doc || !existsSync(doc.path)) {
     const tab = await currentTab(ctx);
     const cookies = async (u: string) =>
@@ -189,7 +186,7 @@ async function readDocument(ctx: ToolContext, url: string, from: number): Promis
     writeFileSync(path, fetched.bytes);
     const text = await documentText(fetched.bytes, fetched.name, fetched.type).catch((e: Error) => e);
     doc = { path, text };
-    documents.set(key, doc);
+    cacheDocument(ctx.workDir, url, doc);
   }
   if (doc.text instanceof Error) return { content: `Saved the file as ${doc.path}, but couldn't read its text: ${doc.text.message}.` };
   return { content: `${basename(doc.path)}, saved as ${doc.path}:\n\n${part(doc.text, from)}` };

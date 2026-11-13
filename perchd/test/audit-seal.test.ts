@@ -2,7 +2,11 @@ import { afterAll, expect, test } from "bun:test";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { AuditLog, type AuditEntry } from "../src/agent/audit";
-import { vaultAuditSealer, withoutPageText } from "../src/agent/audit-seal";
+import { vaultAuditSealer } from "../src/agent/audit-seal";
+import { loopRunner } from "../src/app/runner";
+import type { RunnerInput } from "../src/app/runs";
+import type { Browser } from "../src/browser/browser";
+import { fakeModel } from "../src/models/fake";
 import { memoryKeychain } from "../src/app/keychain";
 import { Vault } from "../src/app/vault";
 import { tempProfile } from "./helpers";
@@ -52,10 +56,18 @@ test("a sealed line under another key, or changed, is skipped rather than failin
   expect((await other.entries()).map((e) => e.action)).toEqual(["mine"]);
 });
 
-test("without page text keeps what happened and where, and drops typed text and full addresses", async () => {
-  const seen: AuditEntry[] = [];
-  const writer = withoutPageText({ append: async (e) => void seen.push(e) });
-  await writer.append(entry("2026-11-01T00:00:00.000Z", { url: "https://mail.example/inbox?q=secret" }));
-  expect(seen[0]).toMatchObject({ action: "type", site: "mail.example", url: "https://mail.example", result: "ok" });
-  expect(seen[0]!.detail).toBeUndefined();
+test("a private chat's actions are not written to the audit log; a normal chat's are", async () => {
+  const d = dir();
+  const audit = new AuditLog(join(d, "audit.jsonl"));
+  const runner = loopRunner({
+    browser: async () => ({}) as Browser,
+    model: async () => fakeModel([[{ type: "tool_call", call: { id: "c1", name: "done", args: { answer: "ok" } } }, { type: "done" }]]),
+    audit,
+  });
+  const input = (incognito: boolean) => ({ task: "Look at https://clinic.example/results", settings: { mode: "guard", model: "m", effort: "medium", scope: "current" }, approve: async () => true, signal: new AbortController().signal, incognito }) as unknown as RunnerInput;
+  for await (const _ of runner(input(true)));
+  expect(await audit.entries()).toEqual([]);
+  for await (const _ of runner(input(false)));
+  expect((await audit.entries()).map((e) => e.action)).toEqual(["done"]);
 });
+

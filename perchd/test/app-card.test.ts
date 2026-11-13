@@ -87,7 +87,7 @@ test("the task carries earlier turns, the tab and the artifact format", () => {
   expect(task).toContain(ARTIFACT_FORMAT);
 });
 
-test("every chat is told the tab in view and the other open tabs, whatever scope an old chat stored", () => {
+test("every chat is told the tab in view; only the all-tabs scope lists the other open tabs", () => {
   const tabs = [
     { id: "t1", windowId: "w1", title: "Mail", url: "https://mail.example" },
     { id: "t2", windowId: "w1", title: "Docs", url: "https://docs.example" },
@@ -95,10 +95,26 @@ test("every chat is told the tab in view and the other open tabs, whatever scope
   for (const scope of ["current", "all", "agent"] as const) {
     const task = buildTask({ history: [], text: "Summarise", scope, tab: tabs[0], tabs });
     expect(task).toContain("looking at this tab, which you may open and use:\n- Mail (https://mail.example)");
-    expect(task).toContain("other open tabs, which you may open and use:\n- Docs (https://docs.example)");
+    if (scope === "all") expect(task).toContain("other open tabs, which you may open and use:\n- Docs (https://docs.example/)");
+    else expect(task).not.toContain("Docs");
   }
   const none = buildTask({ history: [], text: "Hello", scope: "current", tabs: [] });
   expect(none.trimEnd().endsWith("Hello")).toBe(true);
+});
+
+test("other tabs never cross between private and normal windows, and lose their query and fragment", () => {
+  const tabs = [
+    { id: "t1", windowId: "w1", title: "Mail", url: "https://mail.example/inbox?token=abc123#msg-9" },
+    { id: "t2", windowId: "w2", title: "Clinic", url: "https://clinic.example/results?patient=42", incognito: true },
+  ];
+  const normal = buildTask({ history: [], text: "Summarise", scope: "all", tabs });
+  expect(normal).toContain("- Mail (https://mail.example/inbox)");
+  expect(normal).not.toContain("token=abc123");
+  expect(normal).not.toContain("msg-9");
+  expect(normal).not.toContain("Clinic");
+  const priv = buildTask({ history: [], text: "Summarise", scope: "all", tabs, incognito: true });
+  expect(priv).toContain("- Clinic (https://clinic.example/results)");
+  expect(priv).not.toContain("Mail");
 });
 
 test("old turns are trimmed so the task stays small", () => {

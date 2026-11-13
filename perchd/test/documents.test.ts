@@ -3,7 +3,9 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { strToU8, unzipSync, zipSync } from "fflate";
-import { documentText, fetchDocument, fileName, makeZip, part } from "../src/agent/documents";
+import { cachedDocument, cacheDocument, documentText, fetchDocument, fileName, makeZip, part, privateAddress } from "../src/agent/documents";
+import { newToolContext } from "../src/agent/tools";
+import type { Browser } from "../src/browser/browser";
 import { handedFile } from "../src/app/handed-files";
 
 const dir = mkdtempSync(join(tmpdir(), "perch-docs-"));
@@ -53,28 +55,62 @@ test("a download gets a safe name with the right extension", () => {
   expect(fileName('attachment; filename="../../etc/passwd"', url, "")).toBe("passwd");
 });
 
-test("documents download with the browser's cookies, through redirects", async () => {
+/** A fake web: each address answers from `pages`; every request is recorded with its cookie. */
+function fakeWeb(pages: Record<string, () => Response>) {
   const seen: string[] = [];
-  const server = Bun.serve({
-    port: 0,
-    fetch(req) {
-      const url = new URL(req.url);
-      seen.push(`${url.pathname} ${req.headers.get("cookie") ?? "-"}`);
-      if (url.pathname === "/start") return Response.redirect("/files/notes.txt", 302);
-      if (req.headers.get("cookie") !== "session=abc") return new Response("sign in", { status: 403 });
-      return new Response("Lecture notes", { headers: { "content-type": "text/plain" } });
-    },
+  const fetch = async (url: string, init: RequestInit) => {
+    const cookie = (init.headers as Record<string, string>).cookie ?? "-";
+    seen.push(`${url} ${cookie}`);
+    const page = pages[url];
+    if (!page) return new Response("not found", { status: 404 });
+    return page();
+  };
+  return { seen, fetch };
+}
+const publicDns = async () => ["93.184.215.14"];
+const redirect = (to: string) => () => new Response(null, { status: 302, headers: { location: to } });
+
+test("documents download with the browser's cookies, through redirects", async () => {
+  const web = fakeWeb({
+    "https://lms.example/start": redirect("/files/notes.txt"),
+    "https://lms.example/files/notes.txt": () => new Response("Lecture notes", { headers: { "content-type": "text/plain" } }),
   });
-  try {
-    const got = await fetchDocument(`http://127.0.0.1:${server.port}/start`, async (u) => (u.includes("/files/") ? "session=abc" : ""), "Perch");
-    expect(new TextDecoder().decode(got.bytes)).toBe("Lecture notes");
-    expect(got.name).toBe("notes.txt");
-    expect(seen).toEqual(["/start -", "/files/notes.txt session=abc"]);
-    await expect(fetchDocument(`http://127.0.0.1:${server.port}/files/x`, async () => "", "Perch")).rejects.toThrow(/403/);
-    await expect(fetchDocument("file:///etc/passwd", async () => "", "Perch")).rejects.toThrow(/http/);
-  } finally {
-    server.stop();
+  const got = await fetchDocument("https://lms.example/start", async (u) => (u.includes("/files/") ? "session=abc" : ""), "Perch", { fetch: web.fetch, resolve: publicDns });
+  expect(new TextDecoder().decode(got.bytes)).toBe("Lecture notes");
+  expect(got.name).toBe("notes.txt");
+  expect(web.seen).toEqual(["https://lms.example/start -", "https://lms.example/files/notes.txt session=abc"]);
+  await expect(fetchDocument("https://lms.example/files/x", async () => "", "Perch", { fetch: web.fetch, resolve: publicDns })).rejects.toThrow(/404/);
+  await expect(fetchDocument("file:///etc/passwd", async () => "", "Perch")).rejects.toThrow(/http/);
+});
+
+test("cookies never go over plain http, even after a redirect from https", async () => {
+  const web = fakeWeb({
+    "https://lms.example/start": redirect("http://lms.example/plain.txt"),
+    "http://lms.example/plain.txt": () => new Response("ok", { headers: { "content-type": "text/plain" } }),
+  });
+  await fetchDocument("https://lms.example/start", async () => "session=abc", "Perch", { fetch: web.fetch, resolve: publicDns });
+  expect(web.seen).toEqual(["https://lms.example/start session=abc", "http://lms.example/plain.txt -"]);
+});
+
+test("read_document refuses this Mac and the local network, at every hop and by every resolved address", async () => {
+  const web = fakeWeb({ "https://lms.example/start": redirect("http://169.254.169.254/latest/meta-data") });
+  const opts = { fetch: web.fetch, resolve: publicDns };
+  for (const url of ["http://127.0.0.1:8080/x", "http://localhost/x", "http://printer.local/x", "https://wiki.corp.internal/x", "http://10.0.0.5/x", "http://[::1]/x", "http://[::ffff:127.0.0.1]/x", "http://2130706433/x"]) {
+    await expect(fetchDocument(url, async () => "", "Perch", opts)).rejects.toThrow(/local network/);
   }
+  await expect(fetchDocument("https://lms.example/start", async () => "", "Perch", opts)).rejects.toThrow(/local network/);
+  expect(web.seen).toEqual(["https://lms.example/start -"]);
+  // A public-looking name that resolves to a private address (DNS rebinding) is refused too.
+  const rebinding = async () => ["93.184.215.14", "192.168.1.1"];
+  await expect(fetchDocument("https://evil.example/x", async () => "", "Perch", { fetch: web.fetch, resolve: rebinding })).rejects.toThrow(/local network/);
+  expect(web.seen).toHaveLength(1);
+});
+
+test("privateAddress covers loopback, private, link-local and unique-local ranges", () => {
+  for (const ip of ["127.0.0.1", "127.9.9.9", "10.1.2.3", "172.16.0.1", "172.31.255.255", "192.168.0.1", "169.254.169.254", "0.0.0.0", "::1", "::", "fc00::1", "fd12:3456::1", "fe80::1", "febf::1", "::ffff:10.0.0.1"]) {
+    expect(privateAddress(ip)).toBe(true);
+  }
+  for (const ip of ["8.8.8.8", "172.15.0.1", "172.32.0.1", "192.169.0.1", "2606:4700::1111", "fec0::1"]) expect(privateAddress(ip)).toBe(false);
 });
 
 test("make_zip bundles the chat folder's files", () => {
@@ -98,4 +134,15 @@ test("only files in a chat folder can be handed to the user", () => {
   expect(handedFile(join(dir, "secret.txt"), dir)).toEqual({ error: "only files in this chat's folder can be handed over" });
   expect(handedFile(join(chat, "..", "secret.txt"), dir)).toEqual({ error: "only files in this chat's folder can be handed over" });
   expect(handedFile(join(chat, "nope.zip"), dir)).toEqual({ error: "it doesn't exist" });
+});
+
+test("closing a chat's tools forgets the documents it read, and only its own", async () => {
+  const ctx = await newToolContext({} as Browser);
+  const other = await newToolContext({} as Browser);
+  cacheDocument(ctx.workDir, "https://lms.example/a.pdf", { path: `${ctx.workDir}/a.pdf`, text: "secret notes" });
+  cacheDocument(other.workDir, "https://lms.example/a.pdf", { path: `${other.workDir}/a.pdf`, text: "other notes" });
+  await ctx.close();
+  expect(cachedDocument(ctx.workDir, "https://lms.example/a.pdf")).toBeUndefined();
+  expect(cachedDocument(other.workDir, "https://lms.example/a.pdf")?.text).toBe("other notes");
+  await other.close();
 });

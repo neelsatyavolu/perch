@@ -10,7 +10,7 @@ import { chmodSync, existsSync, mkdirSync, unlinkSync } from "node:fs";
 import type { Socket, UnixSocketListener } from "bun";
 import type { ApprovalRequest, CallPolicy } from "../agent/session";
 import type { AuditLog } from "../agent/audit";
-import { withoutPageText } from "../agent/audit-seal";
+import { PRIVATE_AUDIT } from "../agent/audit-seal";
 import type { Mode } from "../agent/permissions";
 import { AGENT_OFF, agentAllowed, allowsClient, capMode, CLIENTS_OFF, siteRuleFor, type PolicyView } from "../policy/policy";
 import type { ClientRecord, ClientRegistry } from "./clients";
@@ -39,7 +39,7 @@ export type SidebarRun = {
   tab?: string;
   /** The sidebar chat the run belongs to, for the browser's perch dot on the tabs it works in. */
   chatId?: string;
-  /** A private chat's run (spec 5.8): its actions are logged without page text. */
+  /** A private chat's run (spec 5.8): its actions are not written to the audit log. */
   private?: boolean;
   /** Skills and memory for this run (app/sidebar-extras.ts), offered beside the browser tools. */
   extras?: SidebarExtras;
@@ -108,7 +108,7 @@ export class Connection {
 
   private ownPolicy(): CallPolicy {
     const run = this.hello.client === SIDEBAR_CLIENT ? this.opts.sidebar?.(this.hello.session) : undefined;
-    if (run) return { mode: run.mode, audit: run.private ? withoutPageText(this.opts.audit) : this.opts.audit, client: this.session.key, approve: run.approve };
+    if (run) return { mode: run.mode, audit: run.private ? PRIVATE_AUDIT : this.opts.audit, client: this.session.key, approve: run.approve };
     return {
       mode: this.opts.registry.list().find((c) => c.name === this.client.name)?.mode ?? this.client.mode,
       audit: this.opts.audit,

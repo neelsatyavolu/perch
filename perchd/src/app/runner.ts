@@ -1,7 +1,7 @@
 /** The app's runner: Perch's own agent loop with the chat's model, mode and effort. */
 
 import type { AuditLog } from "../agent/audit";
-import { withoutPageText } from "../agent/audit-seal";
+import { PRIVATE_AUDIT } from "../agent/audit-seal";
 import { runTask, type StepEvent } from "../agent/loop";
 import type { SiteRule } from "../agent/permissions";
 import type { Browser } from "../browser/browser";
@@ -35,7 +35,7 @@ export function loopRunner(opts: LoopRunnerOptions): Runner {
       mode: input.settings.mode,
       effort: loopEffort(input.settings.effort),
       approve: input.approve,
-      audit: input.incognito ? withoutPageText(opts.audit) : opts.audit,
+      audit: input.incognito ? PRIVATE_AUDIT : opts.audit,
       client: "sidebar",
       siteRule: opts.siteRule,
       signal: input.signal,

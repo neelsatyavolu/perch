@@ -19,6 +19,7 @@ const AD_TOGGLES: readonly Toggle[] = [
   { id: "tracking-params", key: "trackingParams", title: "Remove tracking parameters", detail: "Strips utm_, fbclid, gclid and similar from links you open and copy" },
   { id: "fingerprinting", key: "fingerprinting", title: "Block ad-targeting APIs", detail: "Turns off Topics, Protected Audience and ad measurement, which let sites target ads without cookies" },
 ];
+const SEARCH_SUGGESTIONS: Toggle = { id: "search-suggestions", key: "searchSuggestions", title: "Search suggestions", detail: "Sends what you type in the address bar to your search engine as you type, to suggest searches" };
 const HTTPS_ONLY: Toggle = { id: "https-only", key: "httpsOnly", title: "HTTPS-only", detail: "Asks before opening a site that only offers an unencrypted connection" };
 
 function SiteDataCard() {
@@ -118,6 +119,7 @@ export function Privacy() {
       <Group label="Connections">
         <div class="card">
           {toggle(HTTPS_ONLY)}
+          {toggle(SEARCH_SUGGESTIONS)}
           <Row id="doh" title="Encrypted DNS" detail="Looks up site addresses over HTTPS, and falls back to your network's DNS if the resolver is unreachable">
             {p.dnsOverHttps && (
               <select class="picker" aria-label="DNS resolver" value={resolver} onChange={(e) => pickResolver((e.currentTarget as HTMLSelectElement).value as DohProvider)}>

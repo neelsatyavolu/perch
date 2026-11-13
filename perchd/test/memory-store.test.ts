@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mockKeychain, type KeyStore } from "../src/memory/keychain";
 import { ftsQuery, fuse, type Embedder } from "../src/memory/search";
+import { RecordFolder } from "../src/memory/records";
 import { MemoryStore } from "../src/memory/store";
 
 const dirs: string[] = [];
@@ -203,4 +204,38 @@ test("any change can be undone: a new page goes away, an edited or deleted one c
   expect((await store.changes(1))[0]!.action).toBe("revert");
   expect(page.id).toBeTruthy();
   await expect(store.revert("0123456789abcdef")).rejects.toThrow(/can no longer be undone/);
+});
+
+test("undo snapshots go after 30 days and History after 90, when the store opens and when pruned", async () => {
+  const saved = clock;
+  try {
+    const keys = mockKeychain();
+    clock = new Date("2026-08-01T10:00:00Z");
+    const { store, dir } = await open({ keys });
+    await store.addFacts([{ category: "people", title: "Maya Chen", text: "Moved to Lisbon, deleted later" }], "user");
+    const first = (await store.changes())[0]!;
+    clock = new Date("2026-09-10T10:00:00Z");
+    await store.addFacts([{ category: "people", title: "Maya Chen", text: "Vegetarian" }], "user");
+    const second = (await store.changes())[0]!;
+    // A snapshot from an older version (no time) that no change points at can never be undone.
+    const folder = await RecordFolder.open(dir, keys, "default");
+    await folder.put("snapshots", "00000000000000aa", JSON.stringify({ pageId: "x", path: "people/x.md", before: null }));
+
+    expect(await store.prune()).toEqual({ snapshots: 2, changes: 0 });
+    await expect(store.revert(first.snapshot!)).rejects.toThrow(/can no longer be undone/);
+    expect((await store.changes()).map((c) => c.detail)).toContain("Moved to Lisbon, deleted later");
+    await store.revert(second.snapshot!);
+    store.close();
+
+    // 100 days after the first change, opening the store drops that day's History, deleted text and all.
+    clock = new Date("2026-11-09T10:00:00Z");
+    const reopened = await MemoryStore.open({ dir, keys, profile: "default", now: () => clock });
+    const details = (await reopened.changes()).map((c) => c.detail);
+    expect(details).not.toContain("Moved to Lisbon, deleted later");
+    expect(details).toContain("Vegetarian");
+    expect(await folder.ids("snapshots")).toEqual([]);
+    reopened.close();
+  } finally {
+    clock = saved;
+  }
 });

@@ -9,7 +9,10 @@
 #include "base/values.h"
 #include "chrome/browser/perch/perch_pref_names.h"
 #include "chrome/browser/perch/privacy/allowed_connections.h"
+#include "chrome/browser/prefetch/pref_names.h"
+#include "chrome/browser/preloading/preloading_prefs.h"
 #include "chrome/common/pref_names.h"
+#include "third_party/blink/public/common/peerconnection/webrtc_ip_handling_policy.h"
 #include "components/content_settings/core/browser/cookie_settings.h"
 #include "components/content_settings/core/common/pref_names.h"
 #include "components/performance_manager/public/user_tuning/prefs.h"
@@ -96,6 +99,18 @@ void OverrideChromiumDefaults(user_prefs::PrefRegistrySyncable* registry) {
   SetDefault(registry, ::prefs::kTabSearchPinnedToTabstrip, base::Value(false));
   // No Cast menu items, and no Material Privacy Guide card in settings.
   SetDefault(registry, ::prefs::kEnableMediaRouter, base::Value(false));
+  // Privacy defaults matching Brave, Mullvad Browser and LibreWolf (the privacy
+  // audit, 2026-11-13). The address bar doesn't send each keystroke to the
+  // search engine; pages aren't preloaded or connected to before a click;
+  // <a ping> link tracking is off; WebRTC uses only the public interface, so a
+  // site can't learn local addresses or route around a VPN.
+  SetDefault(registry, ::prefs::kSearchSuggestEnabled, base::Value(false));
+  SetDefault(registry, ::prefetch::prefs::kNetworkPredictionOptions,
+             base::Value(static_cast<int>(
+                 ::prefetch::NetworkPredictionOptions::kDisabled)));
+  SetDefault(registry, ::prefs::kEnableHyperlinkAuditing, base::Value(false));
+  SetDefault(registry, ::prefs::kWebRTCIPHandlingPolicy,
+             base::Value(blink::kWebRTCIPHandlingDefaultPublicInterfaceOnly));
   SetDefault(registry, ::prefs::kPrivacyGuideViewed, base::Value(true));
   SetDefault(registry, ::prefs::kEverythingMenuPinnedToTabstrip,
              base::Value(false));

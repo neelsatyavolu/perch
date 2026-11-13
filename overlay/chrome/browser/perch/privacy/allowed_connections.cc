@@ -20,6 +20,8 @@ struct Row {
   const char* id;
   const char* label;
   const char* detail;
+  // What a person who never touched the switch gets.
+  bool on_by_default = true;
 };
 
 constexpr Row kRows[] = {
@@ -37,6 +39,10 @@ constexpr Row kRows[] = {
      "language. Translation then runs on this Mac"},
     {Connection::kPerchUpdates, "perch_updates", "Perch updates",
      "Checks GitHub for new versions of Perch"},
+    {Connection::kPushMessaging, "push_messaging", "Push messaging",
+     "Lets sites send notifications while they're closed. These go through "
+     "Google's servers, which learn which sites you subscribed to",
+     /*on_by_default=*/false},
 };
 
 const Row* RowFor(Connection connection) {
@@ -48,8 +54,8 @@ const Row* RowFor(Connection connection) {
   return nullptr;
 }
 
-bool Allowed(const PrefService& local_state, const char* id) {
-  return local_state.GetDict(kConnectionsPref).FindBool(id).value_or(true);
+bool Allowed(const PrefService& local_state, const Row& row) {
+  return local_state.GetDict(kConnectionsPref).FindBool(row.id).value_or(row.on_by_default);
 }
 
 }  // namespace
@@ -62,7 +68,7 @@ bool IsConnectionAllowed(Connection connection) {
   const PrefService* local_state =
       g_browser_process ? g_browser_process->local_state() : nullptr;
   const Row* row = RowFor(connection);
-  return !local_state || !row || Allowed(*local_state, row->id);
+  return !local_state || !row || Allowed(*local_state, *row);
 }
 
 base::ListValue ListConnections(const PrefService& local_state) {
@@ -72,7 +78,7 @@ base::ListValue ListConnections(const PrefService& local_state) {
                     .Set("id", row.id)
                     .Set("label", row.label)
                     .Set("detail", row.detail)
-                    .Set("enabled", Allowed(local_state, row.id)));
+                    .Set("enabled", Allowed(local_state, row)));
   }
   return rows;
 }

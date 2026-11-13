@@ -153,6 +153,7 @@ export async function dream(opts: DreamOptions): Promise<DreamReport> {
   }
 
   if (log.length) report.logPath = await writeLog(store, date, opts.now.toISOString(), log);
+  await store.prune().catch(() => undefined);
   return report;
 }
 

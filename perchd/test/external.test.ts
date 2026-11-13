@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { claudeArgs, claudeLineToEvents, codexArgs, codexLineToEvents, otherCodexServers } from "../src/external";
+import { claudeArgs, claudeLineToEvents, codexArgs, codexLineToEvents, otherCodexServers, runClaudeCode, runCodex } from "../src/external";
 
 test("Claude Code stream lines become Aside-style events", () => {
   const toolUse = { type: "assistant", message: { content: [{ type: "text", text: "Opening the site." }, { type: "tool_use", id: "t1", name: "mcp__perch__navigate", input: { url: "https://example.com" } }] } };
@@ -18,14 +18,15 @@ test("Claude Code stream lines become Aside-style events", () => {
   expect(claudeLineToEvents({ type: "system", subtype: "init" })).toEqual([]);
 });
 
-test("the Claude Code command only allows Perch's browser tools and web search", () => {
-  const args = claudeArgs({ model: "sonnet", mcpConfig: "/tmp/mcp.json", systemPrompt: "SYS", task: "Find X" });
-  expect(args.slice(0, 2)).toEqual(["-p", "Find X"]);
+test("the Claude Code command only allows Perch's browser tools and web search, and keeps no session", () => {
+  const args = claudeArgs({ model: "sonnet", mcpConfig: "/tmp/mcp.json", systemPrompt: "SYS" });
+  // The task goes in on stdin, never in the arguments.
+  expect(args.slice(0, 2)).toEqual(["-p", "--no-session-persistence"]);
   expect(args).toContain("--strict-mcp-config");
-  expect(args[args.indexOf("--allowedTools") + 1]).toBe("mcp__perch__*,WebSearch,WebFetch");
+  expect(args[args.indexOf("--allowedTools") + 1]).toBe("mcp__perch__*,WebSearch");
   const disallowed = args[args.indexOf("--disallowedTools") + 1]!;
-  for (const tool of ["Bash", "Read", "Write", "Task"]) expect(disallowed).toContain(tool);
-  for (const tool of ["WebFetch", "WebSearch"]) expect(disallowed).not.toContain(tool);
+  for (const tool of ["Bash", "Read", "Write", "Task", "WebFetch"]) expect(disallowed).toContain(tool);
+  expect(disallowed).not.toContain("WebSearch");
   expect(args).not.toContain("--effort");
   expect(args[args.indexOf("--output-format") + 1]).toBe("stream-json");
   expect(args[args.indexOf("--system-prompt") + 1]).toBe("SYS");
@@ -50,12 +51,14 @@ test("Codex JSON items become Aside-style events (shapes recorded from codex-cli
 });
 
 test("the Codex command sets the model and, when given, the reasoning effort", () => {
-  const base = { mcpArgs: ["run", "mcp.ts"], prompt: "Do X", otherServers: [] as string[] };
+  const base = { mcpArgs: ["run", "mcp.ts"], otherServers: [] as string[] };
   const low = codexArgs({ ...base, model: "gpt-6.1-sol", effort: "low" });
   expect(low[low.indexOf("-m") + 1]).toBe("gpt-6.1-sol");
   expect(low).toContain('model_reasoning_effort="low"');
   expect(low[low.indexOf('model_reasoning_effort="low"') - 1]).toBe("-c");
-  expect(low.at(-1)).toBe("Do X");
+  // The prompt goes in on stdin; the session is not kept on disk.
+  expect(low).toContain("--ephemeral");
+  expect(low.at(-1)).toBe('model_reasoning_effort="low"');
   const plain = codexArgs(base);
   expect(plain.some((a) => a.startsWith("model_reasoning_effort"))).toBe(false);
   expect(plain).not.toContain("-m");
@@ -68,7 +71,39 @@ test("other Codex MCP servers are found so they can be switched off", () => {
   expect(otherCodexServers(join(dir, "config.toml"))).toEqual(["parallel", "firecrawl"]);
 });
 test("the Claude Code command passes the chat's reasoning effort and refuses unknown ones", () => {
-  const args = claudeArgs({ model: "sonnet", mcpConfig: "/tmp/mcp.json", systemPrompt: "SYS", task: "Find X", effort: "medium" });
+  const args = claudeArgs({ model: "sonnet", mcpConfig: "/tmp/mcp.json", systemPrompt: "SYS", effort: "medium" });
   expect(args[args.indexOf("--effort") + 1]).toBe("medium");
-  expect(() => claudeArgs({ model: "sonnet", mcpConfig: "/tmp/mcp.json", systemPrompt: "SYS", task: "Find X", effort: "max; rm" })).toThrow(/unknown reasoning effort/);
+  expect(() => claudeArgs({ model: "sonnet", mcpConfig: "/tmp/mcp.json", systemPrompt: "SYS", effort: "max; rm" })).toThrow(/unknown reasoning effort/);
+});
+
+/** A stand-in CLI that records its arguments, environment and stdin, then prints `reply`. */
+function fakeCli(dir: string, reply: string): string {
+  const bin = join(dir, "cli");
+  writeFileSync(bin, `#!/bin/sh\necho "$@" > "${dir}/args"\nenv > "${dir}/env"\ncat > "${dir}/stdin"\necho '${reply}'\n`);
+  chmodSync(bin, 0o755);
+  return bin;
+}
+
+test("Claude Code and Codex get the task on stdin and the session token in the environment, never in their arguments", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "perch-fake-cli-"));
+  const mcp = { command: "/x/perch", args: ["mcp"], env: { PERCH_TOKEN: "tok-secret" } };
+  const task = "Find the dentist's phone number for my-private-task";
+  try {
+    process.env.PERCH_CLAUDE_BIN = fakeCli(dir, JSON.stringify({ type: "result", result: "Done" }));
+    expect((await runClaudeCode({ task, timeoutMs: 10_000, auditPath: join(dir, "audit"), mcp })).answer).toBe("Done");
+    expect(readFileSync(join(dir, "stdin"), "utf8")).toBe(task);
+    expect(readFileSync(join(dir, "args"), "utf8")).not.toContain("my-private-task");
+
+    process.env.PERCH_CODEX_BIN = fakeCli(dir, JSON.stringify({ type: "item.completed", item: { type: "agent_message", text: "Done" } }));
+    expect((await runCodex({ task, timeoutMs: 10_000, auditPath: join(dir, "audit"), mcp })).answer).toBe("Done");
+    expect(readFileSync(join(dir, "stdin"), "utf8")).toContain(task);
+    const args = readFileSync(join(dir, "args"), "utf8");
+    expect(args).not.toContain("my-private-task");
+    expect(args).not.toContain("tok-secret");
+    expect(readFileSync(join(dir, "env"), "utf8")).toContain("PERCH_TOKEN=tok-secret");
+  } finally {
+    delete process.env.PERCH_CLAUDE_BIN;
+    delete process.env.PERCH_CODEX_BIN;
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

@@ -180,3 +180,18 @@ test("a daily note that proved lasting is filed in its page, using only the note
   expect(texts(s, daily)).toHaveLength(2);
   expect(s.get("USER.md")).toBeNull();
 });
+
+test("dreaming prunes undo snapshots older than 30 days", async () => {
+  const saved = clock;
+  try {
+    clock = new Date("2026-09-01T03:00:00Z");
+    const s = await store();
+    await s.addFacts([{ category: "people", title: "Maya Chen", text: "Sister" }], "user");
+    const change = (await s.changes())[0]!;
+    clock = new Date("2026-10-05T03:00:00Z");
+    await dream({ store: s, now: clock });
+    await expect(s.revert(change.snapshot!)).rejects.toThrow(/can no longer be undone/);
+  } finally {
+    clock = saved;
+  }
+});

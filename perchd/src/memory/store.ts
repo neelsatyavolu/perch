@@ -25,8 +25,8 @@ export type MemorySettings = { extraction: boolean; paused: boolean; dreaming: b
 export type ChangeAction = "add" | "edit" | "delete" | "wipe" | "dream" | "setup" | "revert";
 /** `snapshot` names the page as it was before this change, kept so the change can be undone. */
 export type Change = { time: string; action: ChangeAction; path: string; detail: string; source: FactSource; snapshot?: string };
-/** A page as it was before a change: null when the change created it. */
-type Snapshot = { pageId: string; path: string; before: string | null };
+/** A page as it was before a change: null when the change created it. `time`: when it was taken (older snapshots lack it). */
+type Snapshot = { pageId: string; path: string; before: string | null; time?: string };
 
 const PAGES = "pages";
 const SETTINGS_KIND = "settings";
@@ -45,6 +45,10 @@ const MAX_FACTS_PER_PAGE = 200;
 const MAX_PAGES = 5000;
 const CONTEXT_LIMIT = 4000;
 const VECTOR_FLOOR = 0.3;
+const DAY_MS = 24 * 60 * 60_000;
+/** Undo keeps a page's old text for this long; History keeps changes (and the deleted text in them) for longer. */
+const SNAPSHOT_DAYS = 30;
+const CHANGE_DAYS = 90;
 
 export type StoreOptions = { dir: string; keys: KeyStore; profile: string; now?: () => Date; embedder?: Embedder; createKey?: boolean };
 
@@ -89,6 +93,8 @@ export class MemoryStore {
     } catch {
       store.damaged = [...store.damaged, TAXONOMY_KIND];
     }
+    // Old undo copies and History entries hold text the user may have deleted; they do not stay forever.
+    await store.prune().catch(() => undefined);
     return store;
   }
 
@@ -389,7 +395,7 @@ export class MemoryStore {
     const before = current ? renderPage(current) : null;
     if (before && before.length > MAX_SNAPSHOT) return;
     const id = randomBytes(8).toString("hex");
-    const snap: Snapshot = { pageId, path, before };
+    const snap: Snapshot = { pageId, path, before, time: this.stamp() };
     await this.folder.put(SNAPSHOTS, id, JSON.stringify(snap));
     this.pendingSnapshots.set(path, id);
   }
@@ -423,6 +429,46 @@ export class MemoryStore {
       await this.write(page);
       await this.log([{ time: this.stamp(), action: "revert", path: page.path, detail: "Undid a change", source: "user" }]);
       return page;
+    });
+  }
+
+  /**
+   * Removes undo snapshots older than 30 days and change-log days older than 90. A snapshot from
+   * before snapshots had a time is dated by the change that points at it; one that no change
+   * points at can never be undone, so it goes too. Runs when the store opens and after dreaming.
+   */
+  prune(): Promise<{ snapshots: number; changes: number }> {
+    return this.exclusive(async () => {
+      const now = this.now().getTime();
+      const changeCutoff = new Date(now - CHANGE_DAYS * DAY_MS).toISOString().slice(0, 10).replace(/-/g, "");
+      const snapshotCutoff = new Date(now - SNAPSHOT_DAYS * DAY_MS).toISOString();
+      let changes = 0;
+      /** When each snapshot's change happened, from the days that stay. */
+      const changedAt = new Map<string, string>();
+      for (const id of await this.folder.ids(CHANGES)) {
+        if (id.slice(-8) < changeCutoff) {
+          await this.folder.remove(CHANGES, id);
+          changes++;
+          continue;
+        }
+        const text = await this.folder.get(CHANGES, id).catch(() => null);
+        if (!text) continue;
+        for (const c of JSON.parse(text) as Change[]) if (c.snapshot && !changedAt.has(c.snapshot)) changedAt.set(c.snapshot, c.time);
+      }
+      let snapshots = 0;
+      for (const id of await this.folder.ids(SNAPSHOTS)) {
+        let time: string | undefined;
+        try {
+          time = (JSON.parse((await this.folder.get(SNAPSHOTS, id)) ?? "{}") as Partial<Snapshot>).time ?? changedAt.get(id);
+        } catch {
+          // A snapshot that cannot be read is left for the user to see, as damaged records are.
+          continue;
+        }
+        if (time !== undefined && time >= snapshotCutoff) continue;
+        await this.folder.remove(SNAPSHOTS, id);
+        snapshots++;
+      }
+      return { snapshots, changes };
     });
   }
 

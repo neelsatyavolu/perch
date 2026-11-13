@@ -13,6 +13,7 @@ import { existsSync } from "node:fs";
 import { AuditLog } from "../agent/audit";
 import { PolicyAuditMirror } from "../agent/audit-mirror";
 import { TOOL_SPECS } from "../agent/tools";
+import { removeStaleWorkFolders } from "../agent/stale-folders";
 import { Browser } from "../browser/browser";
 import type { Mode } from "../agent/permissions";
 import { ManagedError, type PolicyView } from "../policy/policy";
@@ -89,6 +90,7 @@ const MODE_TEXT: Record<Mode, string> = {
 const DECLINED_HERE = "Not changed: it was not allowed in the Perch dialog.";
 
 export async function startDaemon(opts: DaemonOptions): Promise<Daemon> {
+  removeStaleWorkFolders();
   let browser: Promise<Browser> | null = null;
   const maxMode = () => opts.policy?.current().MaxPermissionMode;
   const registry = new ClientRegistry(opts.paths.clientsFile, opts.keychain, opts.sealKeychain ?? new MemoryKeychain(), maxMode);

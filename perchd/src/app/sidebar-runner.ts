@@ -149,6 +149,13 @@ export function toStep(event: AsideEvent): StepEvent | null {
   return null;
 }
 
+/**
+ * Codex can run commands on this Mac outside Perch's approvals even with its shell tools off
+ * (external.ts codexArgs), so a private chat does not use it. Claude Code runs with its tools
+ * limited to Perch's and without saving a session (claudeArgs), so it may.
+ */
+export const CODEX_NOT_PRIVATE = "Codex can't be used in a private chat, because it can run commands on this Mac outside Perch's approvals. Pick another model for this chat.";
+
 export type SidebarRunnerOptions = {
   runs: SidebarRuns;
   /** How to start `perch mcp`: this perchd binary, or bun with the CLI's source in development. */
@@ -211,6 +218,10 @@ export function sidebarRunner(opts: SidebarRunnerOptions): Runner {
     const refused = sidebarRefusal(agent, model, policy);
     if (refused) {
       yield { type: "error", message: refused };
+      return;
+    }
+    if (input.incognito && agent === "codex") {
+      yield { type: "error", message: CODEX_NOT_PRIVATE };
       return;
     }
     // A private chat (spec 5.8) neither reads nor teaches memory.

@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { bundledModels } from "@neelsatyavolu/shared-ai-auth";
 import type { StepEvent } from "../src/agent/loop";
 import type { RunnerInput } from "../src/app/runs";
-import { SidebarRuns, sidebarModels, sidebarRunner, type OwnLoop } from "../src/app/sidebar-runner";
+import { CODEX_NOT_PRIVATE, SidebarRuns, sidebarModels, sidebarRunner, type OwnLoop } from "../src/app/sidebar-runner";
 
 test("chat models come from shared-ai-auth: CLIs when installed, Claude and Grok when signed in", () => {
   const none = sidebarModels(bundledModels, [], () => false);
@@ -35,4 +35,14 @@ test("a chat on a directly called model runs Perch's own loop in the chat's sess
   expect(seen).toMatchObject({ provider: "claude", model: "claude-opus-5-5", session: "chat-c1", mode: "guard" });
   expect(during).toBeTruthy();
   expect(runs.get("chat-c1")).toBeUndefined();
+});
+
+test("a private chat refuses Codex before anything starts", async () => {
+  const runs = new SidebarRuns();
+  const runner = sidebarRunner({ runs, perch: { command: "perch", args: [] }, home: "/tmp", auditPath: "/tmp/a" });
+  const input = { task: "Find it", settings: { mode: "guard", model: "codex:gpt-6.1-sol", effort: "medium", scope: "current" }, approve: async () => true, signal: new AbortController().signal, chatId: "c1", incognito: true } as unknown as RunnerInput;
+  const events: StepEvent[] = [];
+  for await (const e of runner(input)) events.push(e);
+  expect(events).toEqual([{ type: "error", message: CODEX_NOT_PRIVATE }]);
+  expect(runs.get("sidebar-c1")).toBeUndefined();
 });

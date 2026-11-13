@@ -144,3 +144,22 @@ test("a copy keeps every version under a new id and chat, and survives removing 
   expect(store.content(copy.id)?.content).toBe("v2");
   await expect(store.copy("missing", other)).rejects.toThrow(/no artifact/);
 });
+
+test("artifacts of private chats, and of chats the store does not know, never reach the disk", async () => {
+  const { keptInMemory } = await import("../src/app/app");
+  const [normal, priv, gone]: [string, string, string] = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()];
+  const known = new Map([[normal, { incognito: undefined }], [priv, { incognito: true }]]);
+  const inMemory = keptInMemory({ get: (id: string) => known.get(id) as never });
+  expect([inMemory(normal), inMemory(priv), inMemory(gone)]).toEqual([false, true, true]);
+  const d = mkdtempSync(join(tmpdir(), "perch-art-mem-"));
+  try {
+    const s = await ArtifactStore.load(join(d, "artifacts"), await Vault.open(memoryKeychain(), "Default"), inMemory);
+    await s.save({ chatId: gone, title: "Plan", kind: "markdown", content: "# private" });
+    await s.save({ chatId: priv, title: "Plan", kind: "markdown", content: "# private" });
+    expect(readdirSync(d).flatMap((f) => readdirSync(join(d, f)))).toEqual([]);
+    await s.save({ chatId: normal, title: "Plan", kind: "markdown", content: "# kept" });
+    expect(readdirSync(join(d, "artifacts"))).toHaveLength(1);
+  } finally {
+    rmSync(d, { recursive: true, force: true });
+  }
+});

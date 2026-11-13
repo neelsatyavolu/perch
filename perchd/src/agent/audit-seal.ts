@@ -5,7 +5,7 @@
  * is the one used, with the log's own additional data so a sealed chat record never opens as a line.
  */
 
-import type { AuditEntry, AuditSealer, AuditWriter } from "./audit";
+import type { AuditSealer, AuditWriter } from "./audit";
 import type { Vault } from "../app/vault";
 
 const AAD = "perch/audit/v1";
@@ -17,20 +17,8 @@ export function vaultAuditSealer(vault: Vault): AuditSealer {
   };
 }
 
-function originOf(url: string): string {
-  try {
-    return new URL(url).origin;
-  } catch {
-    return "";
-  }
-}
-
 /**
- * For a private (incognito) chat (spec 5.8): actions are still recorded, but without what was
- * typed or read and with the site's origin instead of the full address.
+ * For a private (incognito) chat (spec 5.8): nothing it does is written to the audit log, so the
+ * log shows no trace of the sites it visited.
  */
-export function withoutPageText(log: AuditWriter): AuditWriter {
-  return {
-    append: ({ detail: _detail, url, ...rest }: AuditEntry) => log.append({ ...rest, ...(url ? { url: originOf(url) } : {}) }),
-  };
-}
+export const PRIVATE_AUDIT: AuditWriter = { append: async () => {} };

@@ -1,0 +1,161 @@
+Perch: download details reach Google only with Enhanced Protection; no background Google account checks while sign-in is off; push subscriptions only with the Push messaging connection on; one common core count, memory size and a full battery for every page.
+diff --git a/chrome/browser/push_messaging/push_messaging_service_impl.cc b/chrome/browser/push_messaging/push_messaging_service_impl.cc
+index 640e36b88b..0689230686 100644
+--- a/chrome/browser/push_messaging/push_messaging_service_impl.cc
++++ b/chrome/browser/push_messaging/push_messaging_service_impl.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "chrome/browser/push_messaging/push_messaging_service_impl.h"
+ 
++#include "chrome/browser/perch/privacy/allowed_connections.h"
++
+ #include <map>
+ #include <sstream>
+ #include <vector>
+@@ -1008,7 +1010,11 @@ void PushMessagingServiceImpl::DoSubscribe(
+     int render_process_id,
+     int render_frame_id,
+     content::PermissionResult permission_result) {
+-  if (permission_result.status != blink::mojom::PermissionStatus::GRANTED) {
++  // Perch: push messages travel through Google's servers (GCM), so a site can
++  // subscribe only when the person turned on "Push messaging" under Settings,
++  // Privacy, Connections Perch makes. Notifications from open pages still work.
++  if (permission_result.status != blink::mojom::PermissionStatus::GRANTED ||
++      !perch::IsConnectionAllowed(perch::Connection::kPushMessaging)) {
+     SubscribeEndWithError(
+         std::move(register_callback),
+         blink::mojom::PushRegistrationStatus::PERMISSION_DENIED);
+diff --git a/chrome/browser/safe_browsing/download_protection/download_protection_delegate_desktop.cc b/chrome/browser/safe_browsing/download_protection/download_protection_delegate_desktop.cc
+index e174a588b3..280ba36958 100644
+--- a/chrome/browser/safe_browsing/download_protection/download_protection_delegate_desktop.cc
++++ b/chrome/browser/safe_browsing/download_protection/download_protection_delegate_desktop.cc
+@@ -51,6 +51,15 @@ bool IsSafeBrowsingEnabledForDownloadProfile(download::DownloadItem* item) {
+   return profile && IsSafeBrowsingEnabled(*profile->GetPrefs());
+ }
+ 
++// Perch: a download's details (address, file name, hash, where it came from)
++// go to Google only when the person turned on Enhanced Protection. The local
++// list check (ShouldCheckDownloadUrl) runs either way.
++bool IsEnhancedProtectionForDownloadProfile(download::DownloadItem* item) {
++  Profile* profile = Profile::FromBrowserContext(
++      content::DownloadItemUtils::GetBrowserContext(item));
++  return profile && IsEnhancedProtectionEnabled(*profile->GetPrefs());
++}
++
+ }  // namespace
+ 
+ DownloadProtectionDelegateDesktop::DownloadProtectionDelegateDesktop()
+@@ -68,7 +77,7 @@ bool DownloadProtectionDelegateDesktop::ShouldCheckDownloadUrl(
+ 
+ bool DownloadProtectionDelegateDesktop::MayCheckClientDownload(
+     download::DownloadItem* item) const {
+-  if (!IsSafeBrowsingEnabledForDownloadProfile(item)) {
++  if (!IsEnhancedProtectionForDownloadProfile(item)) {
+     return false;
+   }
+   return IsSupportedDownload(*item, item->GetTargetFilePath()) !=
+@@ -78,7 +87,8 @@ bool DownloadProtectionDelegateDesktop::MayCheckClientDownload(
+ bool DownloadProtectionDelegateDesktop::MayCheckFileSystemAccessWrite(
+     content::FileSystemAccessWriteItem* item) const {
+   Profile* profile = Profile::FromBrowserContext(item->browser_context);
+-  if (!profile || !IsSafeBrowsingEnabled(*profile->GetPrefs())) {
++  // Perch: as for downloads, only with Enhanced Protection.
++  if (!profile || !IsEnhancedProtectionEnabled(*profile->GetPrefs())) {
+     return false;
+   }
+   DownloadCheckResultReason ignored_reason = REASON_MAX;
+diff --git a/components/signin/internal/identity_manager/gaia_cookie_manager_service.cc b/components/signin/internal/identity_manager/gaia_cookie_manager_service.cc
+index 92b4854771..42c7bc8a87 100644
+--- a/components/signin/internal/identity_manager/gaia_cookie_manager_service.cc
++++ b/components/signin/internal/identity_manager/gaia_cookie_manager_service.cc
+@@ -527,6 +527,13 @@ GaiaCookieManagerService::GetCachedListAccounts() {
+ }
+ 
+ void GaiaCookieManagerService::TriggerListAccounts() {
++  // Perch: with Google sign-in off (Perch's default), the browser never asks
++  // accounts.google.com which Google accounts are signed in; that request
++  // carries the person's Google cookies in the background.
++  if (!signin_client_->GetPrefs()->GetBoolean(prefs::kSigninAllowed)) {
++    list_accounts_stale_ = false;
++    return;
++  }
+   // Callers suspect that a check to Gaia needs to be done, don't rely on the
+   // in progress request, conditions might have changed while the request is
+   // in-flight.
+diff --git a/third_party/blink/renderer/core/frame/navigator_concurrent_hardware.cc b/third_party/blink/renderer/core/frame/navigator_concurrent_hardware.cc
+index f5c0db2d1b..a1a250f690 100644
+--- a/third_party/blink/renderer/core/frame/navigator_concurrent_hardware.cc
++++ b/third_party/blink/renderer/core/frame/navigator_concurrent_hardware.cc
+@@ -4,12 +4,15 @@
+ 
+ #include "third_party/blink/renderer/core/frame/navigator_concurrent_hardware.h"
+ 
+-#include "base/system/sys_info.h"
+ 
+ namespace blink {
+ 
++// Perch: every Mac reports the same common core count, so it can't help tell
++// one person's machine from another's (as Brave and LibreWolf do).
++constexpr unsigned kPerchReportedCores = 8;
++
+ unsigned NavigatorConcurrentHardware::hardwareConcurrency() const {
+-  return static_cast<unsigned>(base::SysInfo::NumberOfProcessors());
++  return kPerchReportedCores;
+ }
+ 
+ }  // namespace blink
+diff --git a/third_party/blink/renderer/core/frame/navigator_device_memory.cc b/third_party/blink/renderer/core/frame/navigator_device_memory.cc
+index 05fa33e456..22afcb8310 100644
+--- a/third_party/blink/renderer/core/frame/navigator_device_memory.cc
++++ b/third_party/blink/renderer/core/frame/navigator_device_memory.cc
+@@ -11,8 +11,9 @@
+ 
+ namespace blink {
+ 
++// Perch: one common value for everyone rather than this Mac's memory size.
+ float NavigatorDeviceMemory::deviceMemory() const {
+-  return ApproximatedDeviceMemory::GetApproximatedDeviceMemory();
++  return 8.0f;
+ }
+ 
+ }  // namespace blink
+diff --git a/third_party/blink/renderer/modules/battery/battery_manager.cc b/third_party/blink/renderer/modules/battery/battery_manager.cc
+index 51cdc75cee..41fe97e825 100644
+--- a/third_party/blink/renderer/modules/battery/battery_manager.cc
++++ b/third_party/blink/renderer/modules/battery/battery_manager.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "third_party/blink/renderer/modules/battery/battery_manager.h"
+ 
++#include <limits>
++
+ #include "third_party/blink/public/mojom/frame/lifecycle.mojom-blink.h"
+ #include "third_party/blink/renderer/core/dom/dom_exception.h"
+ #include "third_party/blink/renderer/core/dom/events/event.h"
+@@ -79,20 +81,22 @@ ScriptPromise<BatteryManager> BatteryManager::StartRequest(
+   return battery_property_->Promise(script_state->World());
+ }
+ 
++// Perch: pages always see a full, charging battery. The real level and timings
++// are a fingerprint (and a privacy leak) with almost no legitimate use.
+ bool BatteryManager::charging() {
+-  return battery_status_.Charging();
++  return true;
+ }
+ 
+ double BatteryManager::chargingTime() {
+-  return battery_status_.charging_time().InSecondsF();
++  return 0;
+ }
+ 
+ double BatteryManager::dischargingTime() {
+-  return battery_status_.discharging_time().InSecondsF();
++  return std::numeric_limits<double>::infinity();
+ }
+ 
+ double BatteryManager::level() {
+-  return battery_status_.Level();
++  return 1.0;
+ }
+ 
+ void BatteryManager::DidUpdateData() {

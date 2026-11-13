@@ -35,6 +35,10 @@ const base::Feature* const kEnabled[] = {
     &features::kRoundedIcons,
     // History's submenu without the "Your devices" sync promo.
     &syncer::kCrossDeviceTabsInAppMenu,
+    // Global Privacy Control: every request says "don't sell or share my
+    // data" (Sec-GPC: 1) and pages can read it, as in Brave and LibreWolf.
+    &blink::features::kGlobalPrivacyControlForce,
+    &blink::features::kGlobalPrivacyControlApi,
 };
 
 // Features Perch turns off (spec 5.1): Gemini in Chrome and Google's AI mode

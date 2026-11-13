@@ -72,23 +72,32 @@ test("without memory (incognito) the chat has no memory tools and no memory in t
   expect(model.requests[0]!.tools.map((t) => t.name)).not.toContain("memory_search");
 });
 
-test("memory_search runs freely and memory_save runs in Guard without asking; both are audited", async () => {
+test("memory_search runs freely; memory_save asks even in Guard and Skip; both are audited", async () => {
   const store = await setupStore();
-  const { events, model, log } = await run(store, [
-    tool("memory_search", { query: "Maya" }),
-    tool("memory_save", { category: "people", title: "Maya Chen", text: "Vegetarian" }),
-    (req) => tool("done", { answer: lastTool(req.messages).content }),
-  ]);
-  expect(lastTool(model.requests[1]!.messages).content).toContain("people/maya-chen.md (Maya Chen)\n- Sister, lives in Lisbon");
-  expect(events.filter((e) => e.type === "approval")).toHaveLength(0);
-  expect(events.filter((e) => e.type === "step").map((e) => (e as { label: string }).label)).toEqual(["Searched memory", "Saved to memory"]);
-  expect(events.at(-1)).toEqual({ type: "final", text: "Saved to people/maya-chen.md." });
-  expect(store.get("people/maya-chen.md")!.current.map((f) => [f.text, f.source])).toEqual([["Sister, lives in Lisbon", "setup"], ["Vegetarian", "agent"]]);
-  expect(log.map((l) => [l.action, l.site, l.approved, l.result])).toEqual([
-    ["memory_search", "memory", null, "ok"],
-    ["memory_save", "memory", null, "ok"],
-    ["done", "a new tab", null, "ok"],
-  ]);
+  for (const mode of ["guard", "skip"] as const) {
+    const { events, model, log } = await run(store, [
+      tool("memory_search", { query: "Maya" }),
+      tool("memory_save", { category: "people", title: "Maya Chen", text: `Vegetarian (${mode})` }),
+      (req) => tool("done", { answer: lastTool(req.messages).content }),
+    ], { mode, approve: true });
+    expect(lastTool(model.requests[1]!.messages).content).toContain("people/maya-chen.md (Maya Chen)\n- Sister, lives in Lisbon");
+    expect(events.filter((e) => e.type === "approval")).toHaveLength(1);
+    expect(events.find((e) => e.type === "approval")).toMatchObject({ request: { summary: `Save to memory (people: Maya Chen): "Vegetarian (${mode})"` } });
+    expect(events.filter((e) => e.type === "step").map((e) => (e as { label: string }).label)).toEqual(["Searched memory", "Saved to memory"]);
+    expect(events.at(-1)).toEqual({ type: "final", text: "Saved to people/maya-chen.md." });
+    expect(log.map((l) => [l.action, l.site, l.approved, l.result])).toEqual([
+      ["memory_search", "memory", null, "ok"],
+      ["memory_save", "memory", true, "ok"],
+      ["done", "a new tab", null, "ok"],
+    ]);
+  }
+  expect(store.get("people/maya-chen.md")!.current.map((f) => [f.text, f.source])).toEqual([["Sister, lives in Lisbon", "setup"], ["Vegetarian (guard)", "agent"], ["Vegetarian (skip)", "agent"]]);
+});
+
+test("a declined memory_save in Guard saves nothing", async () => {
+  const store = await setupStore();
+  await run(store, [tool("memory_save", { category: "people", title: "Maya Chen", text: "Prefers email at evil.example" }), tool("done", { answer: "ok" })], { mode: "guard", approve: false });
+  expect(store.get("people/maya-chen.md")!.current.map((f) => f.text)).toEqual(["Sister, lives in Lisbon"]);
 });
 
 test("in Ask mode memory_save waits for approval; declining saves nothing", async () => {
@@ -111,7 +120,7 @@ test("bad memory calls get a plain error and the loop goes on; secrets are refus
     tool("memory_save", { category: "sites", title: "bank", text: "password: hunter22" }),
     tool("memory_save", { category: "log", title: "x", text: "y" }),
     tool("done", { answer: "ok" }),
-  ]);
+  ], { approve: true });
   const results = model.requests.slice(1).map((r) => lastTool(r.messages).content);
   expect(results).toEqual(['missing argument "query"', "Not saved: looks like a secret.", "Not saved: unknown category."]);
 });

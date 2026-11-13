@@ -12,7 +12,7 @@ import { startDaemon, type Daemon } from "../src/daemon/daemon";
 import { MemoryKeychain } from "../src/daemon/keychain";
 import { perchPaths } from "../src/daemon/paths";
 import { SIDEBAR_CLIENT } from "../src/daemon/server";
-import { codexArgs, tomlTable } from "../src/external";
+import { codexArgs } from "../src/external";
 import { tempProfile } from "./helpers";
 
 const TOKEN = "t".repeat(43);
@@ -44,12 +44,12 @@ test("sidebar steps read as short actions", () => {
   expect(stepLabel("snapshot", {})).toBe("Read the page");
 });
 
-test("Codex gets the sidebar's MCP server with its session in the environment", () => {
-  expect(tomlTable({ PERCH_SESSION: "sidebar-1", PERCH_TOKEN: 'a"b' })).toBe('{PERCH_SESSION="sidebar-1",PERCH_TOKEN="a\\"b"}');
-  expect(() => tomlTable({ "bad key": "x" })).toThrow();
-  const args = codexArgs({ mcpArgs: ["mcp"], command: "/x/perchd", env: { PERCH_SESSION: "s" }, prompt: "p", otherServers: [] });
+test("Codex gets the sidebar's MCP server with its session passed through the environment by name", () => {
+  const args = codexArgs({ mcpArgs: ["mcp"], command: "/x/perchd", envNames: ["PERCH_SESSION", "PERCH_TOKEN"], otherServers: [] });
   expect(args).toContain('mcp_servers.perch.command="/x/perchd"');
-  expect(args).toContain('mcp_servers.perch.env={PERCH_SESSION="s"}');
+  expect(args).toContain('mcp_servers.perch.env_vars=["PERCH_SESSION","PERCH_TOKEN"]');
+  expect(args).toContain('shell_environment_policy.exclude=["PERCH_*"]');
+  expect(() => codexArgs({ mcpArgs: [], envNames: ["BAD NAME"], otherServers: [] })).toThrow();
 });
 
 test("CDP over inherited streams: requests go out framed and replies come back", async () => {

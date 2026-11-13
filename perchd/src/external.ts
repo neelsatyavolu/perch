@@ -20,6 +20,8 @@ const TOOL_RESULT_LIMIT = 20_000;
 const BLOCKED_TOOLS = [
   "Bash", "BashOutput", "KillShell", "Edit", "MultiEdit", "Write", "Read", "Glob", "Grep", "LS", "NotebookEdit",
   "Task", "Agent", "TodoWrite", "Skill", "SlashCommand", "ExitPlanMode",
+  // WebFetch reads any address outside Perch's approvals; read_document and the browser go through them.
+  "WebFetch",
 ];
 
 function text(content: unknown): string {
@@ -49,10 +51,13 @@ export function claudeLineToEvents(line: any): AsideEvent[] {
   return [];
 }
 
-export function claudeArgs(opts: { model: string; mcpConfig: string; systemPrompt: string; task: string; effort?: string }): string[] {
+/** The task itself goes in on stdin (runClaudeCode), not in the arguments, which any process on the Mac can list. */
+export function claudeArgs(opts: { model: string; mcpConfig: string; systemPrompt: string; effort?: string }): string[] {
   if (opts.effort !== undefined && !EFFORT.test(opts.effort)) throw new Error(`unknown reasoning effort "${opts.effort}"`);
   return [
-    "-p", opts.task,
+    "-p",
+    // No transcript under ~/.claude/projects: a chat's pages and answers stay out of Claude Code's files.
+    "--no-session-persistence",
     "--model", opts.model,
     ...(opts.effort ? ["--effort", opts.effort] : []),
     "--output-format", "stream-json",
@@ -62,8 +67,8 @@ export function claudeArgs(opts: { model: string; mcpConfig: string; systemPromp
     "--system-prompt", opts.systemPrompt,
     // The user's own hooks (stop hooks, audits) are for their coding sessions, not browser tasks.
     "--settings", JSON.stringify({ disableAllHooks: true }),
-    // Web search and fetch answer quick lookups without opening a tab, as in Aside.
-    "--allowedTools", "mcp__perch__*,WebSearch,WebFetch",
+    // Web search answers quick lookups without opening a tab, as in Aside.
+    "--allowedTools", "mcp__perch__*,WebSearch",
     "--disallowedTools", BLOCKED_TOOLS.join(","),
   ];
 }
@@ -158,12 +163,12 @@ export async function runClaudeCode(opts: RunOptions): Promise<ExternalResult> {
   const mode = opts.mode ?? "guard";
   const server = mcpServer(opts, "claude-code", work);
   writeFileSync(mcpConfig, JSON.stringify({ mcpServers: { perch: server } }), { mode: 0o600 });
-  const prompt = `${systemPrompt({ mode, now: new Date(), finish: "reply", webSearch: true })}\n\nYour tools are Perch's browser tools (mcp__perch__*), plus WebSearch and WebFetch for quick public lookups. Use the browser for the user's own sites, signed-in pages and anything you act on. When you finish, reply with the answer or the result in your final message, including the specific facts the task asks for.`;
-  const child = Bun.spawn([claudeBinary(), ...claudeArgs({ model: opts.model ?? "claude-sonnet-5-5", mcpConfig, systemPrompt: prompt, task: opts.task, effort: opts.effort })], {
+  const prompt = `${systemPrompt({ mode, now: new Date(), finish: "reply", webSearch: true })}\n\nYour tools are Perch's browser tools (mcp__perch__*), plus WebSearch for quick public lookups. Use the browser for the user's own sites, signed-in pages and anything you act on. When you finish, reply with the answer or the result in your final message, including the specific facts the task asks for.`;
+  const child = Bun.spawn([claudeBinary(), ...claudeArgs({ model: opts.model ?? "claude-sonnet-5-5", mcpConfig, systemPrompt: prompt, effort: opts.effort })], {
     cwd: work,
     stdout: "pipe",
     stderr: "pipe",
-    stdin: "ignore",
+    stdin: Buffer.from(opts.task),
     // ENABLE_TOOL_SEARCH=false: Perch's tools are loaded up front, not found by a search turn first.
     env: { ...process.env, CLAUDE_CODE_ENTRYPOINT: "perch-exec", ENABLE_TOOL_SEARCH: "false" },
   });
@@ -258,27 +263,35 @@ export function otherCodexServers(config = join(homedir(), ".codex", "config.tom
   return [...new Set(names)].filter((n) => n !== "perch");
 }
 
-/** An inline TOML table of strings, for a `-c key={...}` override. JSON strings are valid TOML basic strings. */
-export function tomlTable(values: Record<string, string>): string {
-  const entries = Object.entries(values).map(([k, v]) => {
-    if (!/^[A-Za-z0-9_-]+$/.test(k)) throw new Error(`bad key "${k}"`);
-    return `${k}=${JSON.stringify(v)}`;
-  });
-  return `{${entries.join(",")}}`;
-}
-
 /** Reasoning effort names Codex accepts; anything else is refused before it reaches a -c override. */
 const EFFORT = /^[a-z]+$/;
 
-/** The `codex exec` arguments for one task: only Perch's tools, the model, and its reasoning effort. */
-export function codexArgs(opts: { mcpArgs: string[]; prompt: string; model?: string; effort?: string; otherServers: string[]; command?: string; env?: Record<string, string> }): string[] {
+const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+/**
+ * The `codex exec` arguments for one task: only Perch's tools, the model, and its reasoning effort.
+ * The prompt goes in on stdin (runCodex), and the MCP server's environment (its session token) is
+ * passed through by name from Codex's own environment: arguments are visible to any process on the Mac.
+ *
+ * Codex cannot be fully kept from running commands: with its shell tools off it still has a code
+ * runner and any plugin servers the user installed. So it runs read-only, and is not offered for
+ * private chats (sidebar-runner.ts).
+ */
+export function codexArgs(opts: { mcpArgs: string[]; model?: string; effort?: string; otherServers: string[]; command?: string; envNames?: string[] }): string[] {
   if (opts.effort !== undefined && !EFFORT.test(opts.effort)) throw new Error(`unknown reasoning effort "${opts.effort}"`);
+  const envNames = opts.envNames ?? [];
+  for (const name of envNames) if (!ENV_NAME.test(name)) throw new Error(`bad environment name "${name}"`);
   return [
     "exec", "--json", "--skip-git-repo-check", "-s", "read-only",
+    // No session files under ~/.codex/sessions for a browser task.
+    "--ephemeral",
+    "--disable", "shell_tool", "--disable", "unified_exec",
     "-c", 'approval_policy="never"',
     "-c", `mcp_servers.perch.command=${JSON.stringify(opts.command ?? process.execPath)}`,
     "-c", `mcp_servers.perch.args=${JSON.stringify(opts.mcpArgs)}`,
-    ...(opts.env && Object.keys(opts.env).length ? ["-c", `mcp_servers.perch.env=${tomlTable(opts.env)}`] : []),
+    ...(envNames.length ? ["-c", `mcp_servers.perch.env_vars=${JSON.stringify(envNames)}`] : []),
+    // The token is for Perch's server only, never for a command Codex runs.
+    "-c", 'shell_environment_policy.exclude=["PERCH_*"]',
     "-c", "mcp_servers.perch.tool_timeout_sec=120",
     // Perch applies its own approval rules to every call; Codex's prompt would only block them.
     "-c", 'mcp_servers.perch.default_tools_approval_mode="approve"',
@@ -287,7 +300,6 @@ export function codexArgs(opts: { mcpArgs: string[]; prompt: string; model?: str
     "-c", 'web_search="live"',
     ...(opts.model ? ["-m", opts.model] : []),
     ...(opts.effort ? ["-c", `model_reasoning_effort="${opts.effort}"`] : []),
-    opts.prompt,
   ];
 }
 
@@ -297,8 +309,8 @@ export async function runCodex(opts: RunOptions): Promise<ExternalResult> {
   const mode = opts.mode ?? "guard";
   const server = mcpServer(opts, "codex", work);
   const prompt = `${systemPrompt({ mode, now: new Date(), finish: "reply", webSearch: true })}\n\nYour tools for this task are Perch's browser tools from the "perch" MCP server. Do not run shell commands or read files. Use web search for quick public lookups and the browser for the user's own sites, signed-in pages and anything you act on, then reply with the answer, including the specific facts the task asks for.\n\nTask:\n${opts.task}`;
-  const args = codexArgs({ mcpArgs: server.args, command: server.command, env: server.env, prompt, model: opts.model, effort: opts.effort, otherServers: otherCodexServers() });
-  const child = Bun.spawn([codexBinary(), ...args], { cwd: work, stdout: "pipe", stderr: "pipe", stdin: "ignore" });
+  const args = codexArgs({ mcpArgs: server.args, command: server.command, envNames: Object.keys(server.env), model: opts.model, effort: opts.effort, otherServers: otherCodexServers() });
+  const child = Bun.spawn([codexBinary(), ...args], { cwd: work, stdout: "pipe", stderr: "pipe", stdin: Buffer.from(prompt), env: { ...process.env, ...server.env } });
   const stop = stopper(child, opts);
   const events: AsideEvent[] = [];
   let answer = "";

@@ -30,6 +30,8 @@ export type TaskInput = {
   scope: Scope;
   tab?: TabInfo;
   tabs: TabInfo[];
+  /** A private chat: only private windows' tabs are listed; otherwise only normal ones. */
+  incognito?: boolean;
   /** The agent starts in the user's tab itself rather than having to open it. */
   inTab?: boolean;
   /** Tabs the user named with @ in this message. */
@@ -92,11 +94,16 @@ function earlierTurns(history: ChatMessage[]): string {
   return lines.join("\n");
 }
 
-/** The tab the user is looking at, then every other open tab: a chat always has all of them. */
+/**
+ * The tab the user is looking at and, only when the chat's scope is "all", their other open tabs.
+ * Those never include tabs from the other kind of window (private or normal), and their addresses
+ * lose the query and fragment, which can carry search terms, tokens and session ids.
+ */
 function tabContext(input: TaskInput): string {
-  const line = (t: TabInfo) => `- ${oneLine(t.title) || "(untitled)"} (${oneLine(t.url)})`;
+  const line = (t: TabInfo, url = t.url) => `- ${oneLine(t.title) || "(untitled)"} (${oneLine(url)})`;
   const current = input.tab;
-  const others = input.tabs.filter((t) => !current || t.url !== current.url).slice(0, 50);
+  const samePrivacy = (t: TabInfo) => Boolean(t.incognito) === Boolean(input.incognito);
+  const others = input.scope === "all" ? input.tabs.filter((t) => samePrivacy(t) && (!current || t.url !== current.url)).slice(0, 50) : [];
   const parts: string[] = [];
   if (current) {
     parts.push(
@@ -105,8 +112,20 @@ function tabContext(input: TaskInput): string {
         : `The user is looking at this tab, which you may open and use:\n${line(current)}`,
     );
   }
-  if (others.length) parts.push(`The user's ${current ? "other " : ""}open tabs, which you may open and use:\n${others.map(line).join("\n")}`);
+  if (others.length) parts.push(`The user's ${current ? "other " : ""}open tabs, which you may open and use:\n${others.map((t) => line(t, withoutQuery(t.url))).join("\n")}`);
   return parts.join("\n\n");
+}
+
+/** An address without its query string and fragment. */
+export function withoutQuery(url: string): string {
+  try {
+    const u = new URL(url);
+    u.search = "";
+    u.hash = "";
+    return u.href;
+  } catch {
+    return url.split(/[?#]/)[0]!;
+  }
 }
 
 function mentionContext(tabs: TabInfo[]): string {

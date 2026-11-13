@@ -100,6 +100,7 @@ export const PRIVACY: PrivacySettings = {
   cookieBanners: true,
   trackingParams: true,
   httpsOnly: true,
+  searchSuggestions: false,
   dnsOverHttps: true,
   dohProvider: "cloudflare",
   dohCustomUrl: "",

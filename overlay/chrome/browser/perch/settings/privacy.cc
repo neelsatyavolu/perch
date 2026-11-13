@@ -156,6 +156,8 @@ base::DictValue Snapshot(Profile* profile,
   result.Set("dohCustomUrl", provider == "custom" ? templates : std::string());
 
   result.Set("fingerprinting", prefs->GetBoolean(prefs::kFingerprinting));
+  result.Set("searchSuggestions",
+             prefs->GetBoolean(::prefs::kSearchSuggestEnabled));
   result.Set("thirdPartyCookies",
              prefs->GetInteger(::prefs::kCookieControlsMode) ==
                      static_cast<int>(
@@ -170,7 +172,7 @@ base::DictValue Snapshot(Profile* profile,
 std::optional<std::string> Validate(const base::DictValue& patch) {
   for (const auto [key, value] : patch) {
     bool is_bool_field = key == "httpsOnly" || key == "dnsOverHttps" ||
-                         key == "fingerprinting";
+                         key == "fingerprinting" || key == "searchSuggestions";
     for (const auto& [field, unused] : kBlockerFields) {
       is_bool_field |= key == field;
     }
@@ -212,6 +214,9 @@ void ApplyPrefs(Profile* profile, const base::DictValue& patch) {
   PrefService* local = g_browser_process->local_state();
   if (std::optional<bool> on = patch.FindBool("httpsOnly")) {
     prefs->SetBoolean(::prefs::kHttpsOnlyModeEnabled, *on);
+  }
+  if (std::optional<bool> on = patch.FindBool("searchSuggestions")) {
+    prefs->SetBoolean(::prefs::kSearchSuggestEnabled, *on);
   }
   if (std::optional<bool> on = patch.FindBool("fingerprinting")) {
     prefs->SetBoolean(prefs::kFingerprinting, *on);

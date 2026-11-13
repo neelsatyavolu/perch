@@ -8,7 +8,7 @@ import { runScript, SCRIPT } from "./script";
 import type { ToolCall } from "../models/types";
 import type { AuditWriter } from "./audit";
 import { FILL_TOOLS, fillKind, fillSummary } from "./fill-tools";
-import { classify, needsApproval, type Kind, type Mode, type SiteRule, type Target } from "./permissions";
+import { classify, needsApproval, OFF_PAGE, type Kind, type Mode, type SiteRule, type Target } from "./permissions";
 import { approvalDetail, checkCall, describeTarget, focusedTarget, liveTarget, pageContext, runTool, type ToolContext, type ToolResult } from "./tools";
 
 export type ApprovalRequest = { call: ToolCall; target?: Target; kind: Kind; site: string; summary: string };
@@ -40,10 +40,10 @@ export async function prepareCall(ctx: ToolContext, opts: CallPolicy, call: Tool
   const fill = FILL_TOOLS.has(call.name);
   const page = READS.has(call.name) || app || fill ? {} : await pageContext(ctx);
   const drop = await dropTarget(ctx, call);
-  const destination = call.name === "navigate" || call.name === "open_tab" ? String(call.args.url) : undefined;
+  const destination = call.name === "navigate" || call.name === "open_tab" || call.name === "read_document" ? String(call.args.url) : undefined;
   const site = app ? app.site : destination ? hostOf(destination) : await currentHost(ctx);
   const kind = fill ? fillKind(call.name, site, ctx) : classify(call, target, page, drop);
-  const ruled = needsApproval(opts.mode, kind, opts.siteRule?.(site));
+  const ruled = needsApproval(opts.mode, kind, OFF_PAGE.has(call.name) ? undefined : opts.siteRule?.(site));
   const decision = ruled === "run" && app?.alwaysAsks(call.args) ? "ask" : ruled;
   const what = [target ? `${target.role} "${target.name}"` : summarizeArgs(call), drop ? `onto ${drop.role} "${drop.name}"` : ""].filter(Boolean).join(" ");
   const detail = kind === "read" ? what : [what, await approvalDetail(ctx, call)].filter(Boolean).join(" ");

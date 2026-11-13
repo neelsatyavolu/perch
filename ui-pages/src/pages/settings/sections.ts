@@ -62,6 +62,7 @@ export const SEARCH_INDEX: readonly SearchEntry[] = [
   { section: "privacy", anchor: "cookie-banners", title: "Reject cookie banners", words: "consent gdpr" },
   { section: "privacy", anchor: "tracking-params", title: "Remove tracking parameters", words: "utm fbclid gclid links" },
   { section: "privacy", anchor: "https-only", title: "HTTPS-only", words: "secure connections" },
+  { section: "privacy", anchor: "search-suggestions", title: "Search suggestions", words: "autocomplete typing address bar" },
   { section: "privacy", anchor: "doh", title: "Encrypted DNS", words: "dns over https doh cloudflare quad9 mullvad" },
   { section: "privacy", anchor: "fingerprinting", title: "Block ad-targeting APIs", words: "fingerprinting topics protected audience fledge ad measurement privacy sandbox" },
   { section: "privacy", anchor: "third-party-cookies", title: "Block third-party cookies", words: "cookies tracking" },

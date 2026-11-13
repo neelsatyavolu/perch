@@ -32,7 +32,7 @@ export type RunnerInput = {
   tab?: TabInfo;
   /** The chat this run belongs to, so the browser can mark the tabs it works in (the perch dot). */
   chatId?: string;
-  /** A private chat (spec 5.8): no memory in or out, and no page text in the audit log. */
+  /** A private chat (spec 5.8): no memory in or out, and nothing in the audit log. */
   incognito?: boolean;
 };
 export type Runner = (input: RunnerInput) => AsyncIterable<StepEvent>;
@@ -205,7 +205,7 @@ export class RunManager {
     };
     const tab = context?.targetId ? context : undefined;
     const holdBack = HOLD_BACK.test(text);
-    const built = buildTask({ history: chat.messages, text, scope: chat.settings.scope, tab: context, tabs: this.deps.tabs(), inTab: Boolean(tab), mentions, files });
+    const built = buildTask({ history: chat.messages, text, scope: chat.settings.scope, tab: context, tabs: this.deps.tabs(), incognito: chat.incognito === true, inTab: Boolean(tab), mentions, files });
     const page = tab?.targetId && this.deps.pageText ? await this.deps.pageText(tab.targetId).catch(() => null) : null;
     const withPage = page ? `${page}\n\n${built}` : built;
     const task = holdBack ? `${HOLD_BACK_NOTE}\n\n${withPage}` : withPage;

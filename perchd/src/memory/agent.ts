@@ -175,7 +175,9 @@ export function chatMemory(store: MemoryStore, opts: ChatMemoryOptions = {}): Me
     },
     // Proposals only fill the review draft, which the user approves on the Memory page.
     kind: (call) => (call.name === "memory_save" ? "change" : "read"),
-    mustAsk: (call) => call.name === "memory_save" && (Boolean(opts.unattended) || pathFor(call) !== null),
+    // Every save asks, in every mode: text a page planted could otherwise file itself as a fact
+    // that later chats trust. Learning without asking is the extraction pass's job (extract.ts).
+    mustAsk: (call) => call.name === "memory_save",
     summary(call) {
       if (call.name === "memory_search") return `Search memory for "${str(call.args.query)}"`;
       if (call.name === "memory_propose") return "Add findings to the memory draft";

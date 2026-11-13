@@ -268,6 +268,8 @@ export type PrivacySettings = {
   readonly dohProvider: DohProvider;
   readonly dohCustomUrl: string;
   readonly fingerprinting: boolean;
+  /** Whether the address bar sends what you type to the search engine for suggestions (off by default). */
+  readonly searchSuggestions: boolean;
   readonly thirdPartyCookies: "block" | "allow";
   /** Sites where the content blocker is off. */
   readonly blockerExceptions: readonly string[];

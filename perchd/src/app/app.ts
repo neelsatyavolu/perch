@@ -159,9 +159,20 @@ export class Windows {
   }
 }
 
+/**
+ * Whose artifacts never touch the disk: private chats, and any chat id the store does not know
+ * (a private chat already closed, say), so a mistake keeps a file off the disk rather than on it.
+ */
+export function keptInMemory(chats: Pick<ChatStore, "get">): (chatId: string) => boolean {
+  return (chatId) => {
+    const chat = chats.get(chatId);
+    return !chat || chat.incognito === true;
+  };
+}
+
 export async function startApp(opts: AppOptions): Promise<App> {
   const chats = await ChatStore.load(join(opts.dataDir, "chats"), opts.vault);
-  const artifacts = await ArtifactStore.load(join(opts.dataDir, "artifacts"), opts.vault, (chatId) => chats.get(chatId)?.incognito === true);
+  const artifacts = await ArtifactStore.load(join(opts.dataDir, "artifacts"), opts.vault, keptInMemory(chats));
   let publish: (event: AppEvent) => void = () => {};
   const windows = new Windows(chats, (event) => publish(event), opts.agentChatFor);
   let ownOrigin: string | null = null;

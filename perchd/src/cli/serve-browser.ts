@@ -24,7 +24,7 @@ import { startDaemon, type Daemon, type Outside } from "../daemon/daemon";
 import { Tasks } from "../app/tasks";
 import { CHAT_KEEP_MS, SIDEBAR_CLIENT } from "../daemon/server";
 import { runTask } from "../agent/loop";
-import { withoutPageText } from "../agent/audit-seal";
+import { PRIVATE_AUDIT } from "../agent/audit-seal";
 import type { OwnLoop } from "../app/sidebar-runner";
 import { bundledModels, loadModels, type ModelCatalog } from "@neelsatyavolu/shared-ai-auth";
 
@@ -173,7 +173,7 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
         mode,
         effort: loopEffort(input.settings.effort),
         approve: input.approve,
-        audit: input.incognito ? withoutPageText(audit) : audit,
+        audit: input.incognito ? PRIVATE_AUDIT : audit,
         client: "sidebar",
         signal: input.signal,
         policy,

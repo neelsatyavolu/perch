@@ -4,7 +4,9 @@
  * original in the chat's folder and returns its text. make_zip bundles files from that folder.
  */
 
+import { lookup } from "node:dns/promises";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { isIP } from "node:net";
 import { basename, extname, join } from "node:path";
 import { strFromU8, unzipSync, zipSync } from "fflate";
 import { textOf as pdfText } from "../page/pdf";
@@ -17,14 +19,25 @@ export const PART_CHARS = 30_000;
 export type Fetched = { bytes: Uint8Array; type: string; name: string; url: string };
 
 export type CookieSource = (url: string) => Promise<string>;
+/** Every address a host name resolves to. */
+export type Resolver = (host: string) => Promise<string[]>;
+export type FetchOptions = { resolve?: Resolver; fetch?: (url: string, init: RequestInit) => Promise<Response> };
 
-/** Downloads `url`, following redirects, sending the browser's cookies for each address it passes. */
-export async function fetchDocument(url: string, cookies: CookieSource, userAgent: string): Promise<Fetched> {
+const resolveAll: Resolver = async (host) => (await lookup(host, { all: true, verbatim: true })).map((a) => a.address);
+
+/**
+ * Downloads `url`, following redirects. The browser's cookies go with each https address it
+ * passes, never with plain http, where anyone on the network could read them. Every hop must be a
+ * public host (publicHost), so a page cannot point the agent at the Mac itself or the local network.
+ */
+export async function fetchDocument(url: string, cookies: CookieSource, userAgent: string, opts: FetchOptions = {}): Promise<Fetched> {
+  const get = opts.fetch ?? ((u: string, init: RequestInit) => fetch(u, init));
   let current = new URL(url);
   for (let hop = 0; hop <= MAX_HOPS; hop++) {
     if (current.protocol !== "https:" && current.protocol !== "http:") throw new Error("only http and https addresses can be read");
-    const cookie = await cookies(current.href).catch(() => "");
-    const res = await fetch(current.href, { redirect: "manual", headers: { "user-agent": userAgent, accept: "*/*", ...(cookie ? { cookie } : {}) } });
+    await publicHost(current, opts.resolve ?? resolveAll);
+    const cookie = current.protocol === "https:" ? await cookies(current.href).catch(() => "") : "";
+    const res = await get(current.href, { redirect: "manual", headers: { "user-agent": userAgent, accept: "*/*", ...(cookie ? { cookie } : {}) } });
     const location = res.headers.get("location");
     if (res.status >= 300 && res.status < 400 && location) {
       current = new URL(location, current);
@@ -39,6 +52,65 @@ export async function fetchDocument(url: string, cookies: CookieSource, userAgen
     return { bytes, type, name: fileName(res.headers.get("content-disposition"), current, type), url: current.href };
   }
   throw new Error("too many redirects");
+}
+
+const LOCAL_NAME = /(^|\.)(localhost|local|internal)$/i;
+
+/**
+ * Throws unless the host is public. A name is checked by every address it resolves to, so a
+ * public-looking name that points at 127.0.0.1 or the local network is refused too. (fetch looks
+ * the name up again, so a server that changes its answer within that moment is not caught.)
+ */
+export async function publicHost(url: URL, resolve: Resolver): Promise<void> {
+  const host = url.hostname.replace(/^\[|\]$/g, "").replace(/\.$/, "");
+  const refuse = () => new Error(`${host} is on this Mac or the local network; read_document only reads public addresses`);
+  if (!host || LOCAL_NAME.test(host)) throw refuse();
+  const addresses = isIP(host) ? [host] : await resolve(host).catch(() => {
+    throw new Error(`${host} could not be found`);
+  });
+  if (!addresses.length || addresses.some(privateAddress)) throw refuse();
+}
+
+/** Loopback, private, link-local and unspecified addresses, IPv4 and IPv6. */
+export function privateAddress(ip: string): boolean {
+  const mapped = ip.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i)?.[1];
+  if (mapped) return privateAddress(mapped);
+  // URLs write an IPv4-mapped address in hex ([::ffff:7f00:1] for 127.0.0.1).
+  const hex = ip.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+  if (hex) {
+    const [hi, lo] = [parseInt(hex[1]!, 16), parseInt(hex[2]!, 16)];
+    return privateAddress(`${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`);
+  }
+  if (isIP(ip) === 4) {
+    const [a = 0, b = 0] = ip.split(".").map(Number);
+    return a === 0 || a === 127 || a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254);
+  }
+  if (isIP(ip) === 6) {
+    const v6 = ip.toLowerCase();
+    if (v6 === "::1" || v6 === "::") return true;
+    const first = parseInt(v6.split(":")[0] || "0", 16);
+    // fc00::/7 (unique local) and fe80::/10 (link-local).
+    return (first & 0xfe00) === 0xfc00 || (first & 0xffc0) === 0xfe80;
+  }
+  return true;
+}
+
+export type ReadDocument = { path: string; text: string | Error };
+
+/** Documents read in each chat folder, by address, so reading on does not download again. */
+const cache = new Map<string, ReadDocument>();
+
+export function cachedDocument(workDir: string, url: string): ReadDocument | undefined {
+  return cache.get(`${workDir}\n${url}`);
+}
+
+export function cacheDocument(workDir: string, url: string, doc: ReadDocument): void {
+  cache.set(`${workDir}\n${url}`, doc);
+}
+
+/** Drops a closed chat folder's documents, so their text does not stay in memory after the chat. */
+export function forgetDocuments(workDir: string): void {
+  for (const key of [...cache.keys()]) if (key.startsWith(`${workDir}\n`)) cache.delete(key);
 }
 
 const TYPE_EXT: Record<string, string> = {

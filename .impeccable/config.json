@@ -59,6 +59,12 @@
         ],
         "createdAt": "2026-11-13T01:00:16.416Z",
         "reason": "DESIGN.md (Surfaces in the browser): the perch dot breathes, opacity 1 to 0.35 over 2.4s, on a tab the agent is using; the page's window mock shows that tab mid-task, and it rests under Reduce Motion"
+      },
+      {
+        "rule": "overused-font",
+        "value": "geist sans",
+        "createdAt": "2026-11-13T08:41:40.775Z",
+        "reason": "Perch DESIGN.md names Geist as the UI typeface; the user's design system"
       }
     ]
   }

@@ -1,4 +1,4 @@
-# Perch: no "Install app" icon in the address bar and no media controls button in the toolbar.
+Perch: no "Install app" icon in the address bar and no media controls button in the toolbar.
 diff --git a/chrome/browser/ui/views/toolbar/toolbar_view.cc b/chrome/browser/ui/views/toolbar/toolbar_view.cc
 index 1865f77856..df78482606 100644
 --- a/chrome/browser/ui/views/toolbar/toolbar_view.cc

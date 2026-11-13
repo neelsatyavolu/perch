@@ -100,6 +100,8 @@
 
 /* The mark: ink bar, accent dot. */
 .mark-bar { fill: currentColor; }
+.mark-branch { opacity: 0.45; }
+.mark-bird { fill: currentColor; stroke: currentColor; stroke-width: 28; stroke-linejoin: round; }
 .mark-dot { fill: var(--p-accent); }
 .nav__logo .pmark, .footer .nav__logo .pmark { width: 1.1em; height: 1.1em; margin-right: 0.3em; flex: none; }
 code, .pmono { font-family: var(--font-mono); font-size: 0.92em; }

@@ -1,7 +1,19 @@
 // Copyright 2026 The Perch Authors
 // Use of this source code is governed by the MIT license in Perch's LICENSE file.
 
-// The Perch mark in one colour: the perch (a bar) and the dot resting on it.
+// The Perch mark in one colour: a pointer that is also a bird, perched on a
+// branch, its eye cut out (branding/perch-mark.svg).
 CANVAS_DIMENSIONS, 24,
-ROUND_RECT, 4, 14, 16, 3.5, 0.75,
-CIRCLE, 15.5, 9.5, 3.25
+ROUND_RECT, 2, 17.9, 20, 1.5, 0.75,
+NEW_PATH,
+MOVE_TO, 3.13f, 5.74f,
+LINE_TO, 12.78f, 17.24f,
+LINE_TO, 13.55f, 12.32f,
+LINE_TO, 19.69f, 15.18f,
+LINE_TO, 20.85f, 12.95f,
+LINE_TO, 14.86f, 10.15f,
+LINE_TO, 18.72f, 6.91f,
+CLOSE,
+NEW_PATH,
+PATH_MODE_CLEAR,
+CIRCLE, 7.26f, 8.25f, 1.05f

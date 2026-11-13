@@ -71,24 +71,35 @@ function Blossom({ r }: { r: number }) {
 }
 
 /** The Perch mark: a flat single-colour glyph, never a sparkle (spec 6.5); in Sakura mode the dot is a blossom. `bare` drops the tile and draws only the perch, `size` wide. */
+/** The bird, a pointer whose tip is its beak and whose stem its tail, set on the branch (branding/perch-mark.svg). */
+const BIRD = "M352 236 L352 676 L462 580 L546 760 L614 732 L532 556 L680 556 Z";
+const PERCHED = "translate(40 -69) rotate(-40 512 512)";
+
+function MarkParts({ ink }: { ink: string }) {
+  return (
+    <>
+      <rect x="176" y="686" width="672" height="30" rx="15" style={`fill:${ink};opacity:0.45`} />
+      <path transform={PERCHED} d={BIRD} style={`fill:${ink};stroke:${ink};stroke-width:28;stroke-linejoin:round`} />
+      <circle class="mark-dot" cx="373" cy="408" r="46" style="fill:var(--accent)" />
+      <g transform="translate(373 408)">
+        <Blossom r={64} />
+      </g>
+    </>
+  );
+}
+
 export function PerchMark({ size = 48, bare = false }: { size?: number; bare?: boolean }) {
   if (bare)
     return (
-      <svg class="mark" width={size} height={Math.round((size * 264) / 480)} viewBox="272 384 480 264" aria-hidden="true">
-        <rect x="272" y="560" width="480" height="88" rx="12" style="fill:var(--mute)" />
-        <circle class="mark-dot" cx="632" cy="472" r="88" style="fill:var(--accent)" />
-        <g transform="translate(632 478)">
-          <Blossom r={94} />
-        </g>
+      <svg class="mark" width={size} height={Math.round((size * 450) / 700)} viewBox="160 290 700 450" aria-hidden="true">
+        <MarkParts ink="var(--mute)" />
       </svg>
     );
   return (
     <svg class="mark" width={size} height={size} viewBox="0 0 1024 1024" aria-hidden="true">
       <rect width="1024" height="1024" rx="228" style="fill:var(--raised)" />
-      <rect x="272" y="560" width="480" height="88" rx="12" style="fill:var(--ink)" />
-      <circle class="mark-dot" cx="632" cy="472" r="88" style="fill:var(--accent)" />
-      <g transform="translate(632 440)">
-        <Blossom r={150} />
+      <g transform="translate(512 512) scale(1.32) translate(-512 -518)">
+        <MarkParts ink="var(--ink)" />
       </g>
     </svg>
   );

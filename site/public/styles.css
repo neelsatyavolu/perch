@@ -94,6 +94,8 @@ h1, h2, h3 { color: var(--ink); text-wrap: balance; }
 
 /* The mark: ink bar, accent dot. */
 .mark-bar { fill: var(--ink); }
+.mark-branch { opacity: 0.45; }
+.mark-bird { fill: var(--ink); stroke: var(--ink); stroke-width: 28; stroke-linejoin: round; }
 .mark-dot { fill: var(--accent); }
 
 /* ---- Header: Perch's tab strip ------------------------------------------------------------ */

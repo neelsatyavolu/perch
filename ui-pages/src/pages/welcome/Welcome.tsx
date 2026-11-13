@@ -106,16 +106,19 @@ function Stage({ step, mute, children }: { readonly step?: number; readonly mute
   );
 }
 
-/** The mark assembling itself: the bar draws out, then the dot comes down and settles on it. */
+/** The mark assembling itself: the branch draws out, then the bird glides in and lands on it. */
 function LandingMark() {
   return (
-    <svg class="wl-mark" viewBox="0 0 240 120" width="240" height="120" aria-hidden="true">
-      <rect class="wl-mark-bar" x="24" y="78" width="192" height="14" rx="4" />
-      <circle class="wl-mark-dot" cx="158" cy="58" r="20" />
-      {/* Sakura mode: a blossom falls onto the bar instead, turning as it lands. */}
-      <g transform="translate(158 54)">
-        <g class="wl-mark-blossom">
-          <Blossom r={30} />
+    <svg class="wl-mark" viewBox="160 290 700 450" width="240" height="154" aria-hidden="true">
+      <rect class="wl-mark-bar" x="176" y="686" width="672" height="30" rx="15" />
+      <g class="wl-mark-bird">
+        <path transform="translate(40 -69) rotate(-40 512 512)" d="M352 236 L352 676 L462 580 L546 760 L614 732 L532 556 L680 556 Z" />
+        <circle class="wl-mark-dot" cx="373" cy="408" r="40" />
+        {/* Sakura mode: the bird's eye is a blossom. */}
+        <g transform="translate(373 408)">
+          <g class="wl-mark-blossom">
+            <Blossom r={64} />
+          </g>
         </g>
       </g>
     </svg>

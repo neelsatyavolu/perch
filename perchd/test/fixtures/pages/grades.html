@@ -1,0 +1,38 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Grade Editor</title>
+<style>tr{height:60px}</style>
+<h1>Participation</h1>
+<p id="status">No unsaved changes</p>
+<table aria-label="Participation scores for the week"><tbody id="rows"></tbody></table>
+<button id="save">Save</button>
+<div id="dialog" role="dialog" aria-label="Participation comment" hidden>
+  <textarea id="comment" placeholder="Why points were docked…"></textarea>
+  <button id="done">Done</button>
+</div>
+<script>
+  // Like a portal's grade table: a score box and a comment button per student, the comment in a dialog.
+  const people = Array.from({ length: 30 }, (_, i) => "Student " + (i + 1));
+  const state = Object.fromEntries(people.map((p) => [p, { score: "20", comment: "" }]));
+  let editing = null, dirty = 0;
+  const mark = () => (document.getElementById("status").textContent = dirty + " unsaved changes");
+  for (const p of people) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<th>${p}</th><td><input type="number" aria-label="Score for ${p} on Thu" value="20"></td><td><button aria-label="Add comment for ${p} on Thu">💬</button></td>`;
+    tr.querySelector("input").addEventListener("input", (e) => { state[p].score = e.target.value; dirty++; mark(); });
+    tr.querySelector("button").addEventListener("click", () => {
+      editing = p;
+      const box = document.getElementById("comment");
+      box.setAttribute("aria-label", "Comment for " + p);
+      box.value = state[p].comment;
+      document.getElementById("dialog").hidden = false;
+    });
+    document.getElementById("rows").appendChild(tr);
+  }
+  document.getElementById("done").addEventListener("click", () => {
+    state[editing].comment = document.getElementById("comment").value;
+    document.getElementById("dialog").hidden = true;
+    dirty++; mark();
+  });
+  document.getElementById("save").addEventListener("click", () => { window.saved = JSON.parse(JSON.stringify(state)); dirty = 0; document.getElementById("status").textContent = "Saved"; });
+</script>

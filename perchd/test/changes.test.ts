@@ -19,8 +19,11 @@ test("scrolling a lazy list says when more loaded and when the end is reached", 
   const first = await runTool(ctx, call("scroll", { dy: 100_000 }));
   expect(first.content).toMatch(/^scrolled the page to \d+ of \d+ px; more content loaded at the end/);
   let last = first.content;
-  for (let i = 0; i < 8 && !last.includes("this is the end of the page"); i++) last = (await runTool(ctx, call("scroll", { dy: 100_000 }))).content;
-  expect(last).toContain("this is the end of the page");
+  // The end shows either way: the scroll that reached it says so, or, when the page settled into it
+  // after the last load, the next scroll does not move.
+  const end = /this is the end of the page|the page did not move: it is at the end/;
+  for (let i = 0; i < 8 && !end.test(last); i++) last = (await runTool(ctx, call("scroll", { dy: 100_000 }))).content;
+  expect(last).toMatch(end);
   expect(last).toContain("End of results");
   const again = await runTool(ctx, call("scroll", { dy: 500 }));
   expect(again.content).toStartWith("the page did not move: it is at the end");

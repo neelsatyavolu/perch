@@ -16,19 +16,19 @@ export const SCRIPT = "script";
 
 /** Tools a script may call, by the name the script uses. `js` is the page repl. */
 const FUNCTIONS: Record<string, string> = {
-  navigate: "navigate", snapshot: "snapshot", click: "click", type: "type", select: "select", press: "press",
+  navigate: "navigate", snapshot: "snapshot", find: "find", click: "click", type: "type", select: "select", press: "press",
   scroll: "scroll", hover: "hover", drag: "drag", type_text: "type_text", wait_for: "wait_for", back: "back",
   tabs: "tabs", open_tab: "open_tab", switch_tab: "switch_tab", js: "repl",
 };
 const TOOL_NAMES = new Set(Object.values(FUNCTIONS));
 /** How each function's positional arguments map onto the tool's named ones. */
 const POSITIONAL: Record<string, string[]> = {
-  navigate: ["url"], click: ["ref"], type: ["ref", "text"], select: ["ref", "value"], press: ["key"], hover: ["ref"],
+  navigate: ["url"], find: ["role", "name"], click: ["ref"], type: ["ref", "text"], select: ["ref", "value"], press: ["key"], hover: ["ref"],
   drag: ["ref", "to"], type_text: ["text"], open_tab: ["url"], switch_tab: ["id"], js: ["code"], scroll: ["dy"], wait_for: ["text"],
 };
 
 export type ScriptLimits = { calls: number; ms: number; cpuMs: number; memory: number; output: number; sleepS: number };
-export const LIMITS: ScriptLimits = { calls: 40, ms: 120_000, cpuMs: 5_000, memory: 32 * 1024 * 1024, output: 30_000, sleepS: 10 };
+export const LIMITS: ScriptLimits = { calls: 120, ms: 300_000, cpuMs: 5_000, memory: 32 * 1024 * 1024, output: 30_000, sleepS: 10 };
 
 type Call = (c: ToolCall) => Promise<ToolResult>;
 
@@ -49,6 +49,8 @@ const sleep = (s) => __sleep(Number(s) || 0);
 ${Object.keys(FUNCTIONS)
   .map((f) => `globalThis.${f} = __fn(${JSON.stringify(f)}, ${JSON.stringify(POSITIONAL[f] ?? [])});`)
   .join("\n")}
+// find returns the elements as objects, so a script can use f.ref directly.
+{ const __find = globalThis.find; globalThis.find = async (...a) => { const text = await __find(...a); return [...text.matchAll(/^- (\\S+) "((?:[^"\\\\]|\\\\.)*)" \\[ref=(e\\d+)\\]$/gm)].map((m) => ({ ref: m[3], role: m[1], name: m[2].replace(/\\\\(.)/g, "$1") })); }; }
 `;
 
 let wasm: Promise<QuickJSWASMModule> | undefined;

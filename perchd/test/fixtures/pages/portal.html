@@ -1,0 +1,26 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Groups · Portal</title>
+<aside aria-label="Main menu">
+  <nav aria-label="Sections">
+    <a href="/portal.html">Home</a>
+    <a href="/portal.html#calendar">Calendar</a>
+    <a href="/portal.html#groups">Groups</a>
+    <a href="/portal.html#grades">Grade Editor</a>
+    <a href="/portal.html#people">People</a>
+  </nav>
+</aside>
+<main>
+  <h1>Groups</h1>
+  <a id="g1" href="/groups/1">Eastern Part of Cities</a>
+</main>
+<script>
+  // A single-page app: the link loads its data, then draws it, without loading a new document.
+  document.getElementById("g1").addEventListener("click", async (e) => {
+    e.preventDefault();
+    history.pushState({}, "", "/groups/1");
+    document.querySelector("main").innerHTML = "<p>Loading…</p>";
+    const group = await (await fetch("/api/group/1")).json();
+    document.querySelector("main").innerHTML = `<h1>${group.name}</h1><p>Brainstorm doc: ${group.doc}</p>`;
+  });
+</script>

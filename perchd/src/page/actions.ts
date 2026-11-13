@@ -79,7 +79,8 @@ export function type(tab: Tab, refs: RefTable, ref: string, text: string, opts: 
     await tab.sendIn(node.session, "DOM.scrollIntoViewIfNeeded", { backendNodeId: node.backendNodeId }).catch(() => undefined);
     await tab.sendIn(node.session, "DOM.focus", { backendNodeId: node.backendNodeId });
     await call(tab, node, "function () { if (typeof this.select === 'function') this.select(); else if (this.isContentEditable) document.execCommand('selectAll'); }");
-    const watch = !opts.submit && text !== "" && !(await call<boolean>(tab, node, "function () { return this.type === 'password'; }"));
+    // Number boxes, passwords and plain text areas never suggest, so they skip the wait for a list.
+    const watch = !opts.submit && text !== "" && !(await call<boolean>(tab, node, "function () { return this.type === 'password' || this.type === 'number' || (this.tagName === 'TEXTAREA' && !this.getAttribute('role') && !this.getAttribute('aria-autocomplete')); }"));
     const suggestions = () => call<string[]>(tab, node, VISIBLE_SUGGESTIONS);
     const before = watch ? await suggestions() : [];
     if (text) await typeKeys(tab, text);

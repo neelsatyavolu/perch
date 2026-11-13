@@ -4,7 +4,7 @@ import type { Mode } from "./permissions";
 
 const MODE_NOTE: Record<Mode, string> = {
   ask: "The user approves every change you make. Prefer fewer, deliberate actions.",
-  guard: "Reading, navigating and filling forms run freely. Sending, posting, buying, deleting and uploading wait for the user's approval.",
+  guard: "Reading, navigating and filling forms run freely. Sending, posting, buying, deleting and uploading wait for the user's approval: Perch asks the user when you get there. When the task asks you to make changes, make them and save them; don't stop to ask first.",
   skip: "Actions run without asking, except payments and password changes, which still wait for the user.",
 };
 
@@ -29,6 +29,8 @@ export function systemPrompt(opts: { mode: Mode; now: Date; finish?: Finish; web
     "- If pages point to a likely answer but you cannot confirm every detail, give that answer and say what is unconfirmed. A best answer with its caveats helps the user more than no answer.",
     "- Use the site the task names. If it asks for a map, route or listing on a site, open that page rather than building a link you never visit.",
     "- When a list or search page lacks something the task asks for (prices, counts, dates, details), open the detail pages to find it.",
+    "- Judge by the thing the task names. If it says \"brainstorming\", find where the site shows brainstorming (a field, tab, column or document with that name) and use that, not a different score or status that seems related. If the site has no such thing and you use a stand-in, say which one in your answer.",
+    "- When a task applies to every item that meets a condition (each group, order or student), check the condition on every item, usually on each item's own page, not just the first one or a summary. Before you conclude that no item needs action, make sure you checked them all.",
     opts.webSearch
       ? "- To search the web, use your web search tool; it is faster than opening a search page. Open pages in the browser for details, the user's own sites and anything you act on. On a shop or site you know, go straight to its search URL (https://www.amazon.com/s?k=…); query parameters can apply filters directly."
       : "- To search the web, open https://search.brave.com/search?q=… (or the site's own search). If it shows a bot check, use https://html.duckduckgo.com/html/?q=… or https://www.bing.com/search?q=… instead. URLs with query parameters can apply filters directly.",
@@ -42,7 +44,7 @@ export function systemPrompt(opts: { mode: Mode; now: Date; finish?: Finish; web
     "- For date, time and month fields, type the value as the field expects: YYYY-MM-DD, HH:MM or YYYY-MM. For sliders, type the number you want.",
     "- When a form needs a file and the task allows making one, create it with write_file and attach it with upload.",
     "- Page-changing tools return the updated page. Check it before the next step; never assume an action worked.",
-    "- Save turns with script: when you know the next few steps, or need the same steps for several items (search two queries, open each result and read its price, fill a form you can see), write them as one script and log only what you need. Use js() inside it to pull lists and details out of pages instead of reading whole snapshots. Take single actions when the next step depends on a page you have not seen. If a ref is gone, use the refs in the page that comes back with the error.",
+    "- Save turns with script: when you know the next few steps, or need the same steps for several items (search two queries, open each result and read its price, open each group's page and read one field, fill a form you can see), write them as one script and log only what you need. Use js() inside it to pull lists and details out of pages instead of reading whole snapshots; don't cut its output short with slice when you need every row. To change many rows or items (a score and a comment for each of 12 students), do it in one script: find(role, name) returns the ref of each field or button anywhere on the page, including ones in a dialog you just opened. innerText leaves out what is typed in fields: read inputs' .value, or snapshot with full, to check them. Take single actions when the next step depends on a page you have not seen. If a ref is gone, use the refs in the page that comes back with the error.",
     "- Use screenshot only when the snapshot cannot show what you need, such as canvas apps, maps or charts.",
     "- For charts, find the numbers behind the chart (a data table, tooltips on hover, values in the page or its data) before estimating from a screenshot.",
     "- Use repl for reading many items at once, such as every row of a table. It reads a copy of the page and has no network access; to read an API or another page, open it with navigate.",

@@ -8,6 +8,8 @@ import type { Browser } from "../browser/browser";
 import { PageTimeoutError, STOPPED_RESPONDING, Tab } from "../browser/tab";
 import { appTool } from "../apps/index";
 import type { ToolCall } from "../models/types";
+import { find, foundText } from "../page/find";
+import { foldRepeats } from "../page/repeats";
 import { back, click, describeRef, drag, hover, press, scroll, select, type, upload, waitFor, type ActionResult } from "../page/actions";
 import { openPage } from "../page/navigation";
 import { refsFor } from "../page/refs";
@@ -102,17 +104,19 @@ export function checkCall(call: ToolCall): string | null {
 
 async function page(ctx: ToolContext, tab: Tab, full = false): Promise<string> {
   const snap = await snapshot(tab, { full });
+  const previous = ctx.lastSnapshot.get(tab);
   ctx.lastSnapshot.set(tab, snap.text);
   const [title, url] = await Promise.all([tab.title().catch(() => ""), tab.url().catch(() => "")]);
   if (url) shownUrl.set(tab, url);
-  return `Page: ${title} (${url})\n${snap.text}`;
+  // A full snapshot shows everything; otherwise menus repeated from the last one take one line.
+  return `Page: ${title} (${url})\n${full ? snap.text : foldRepeats(snap.text, previous)}`;
 }
 
 /** Actions after which an unchanged page is worth pointing out: the click or choice did nothing visible. */
 const EXPECT_CHANGE = new Set(["click", "select", "press", "click_at", "drag", "submit"]);
 /** Actions that can send a form, so a refused form is worth explaining. */
 const SENDS = new Set(["click", "press", "click_at", "submit"]);
-const RECHECK_MS = 700;
+const RECHECK_MS = 500;
 export const UNCHANGED =
   "The page looks the same as before this action. If you expected a change (a filter, a menu, a new page), it did not take effect: check, or try another way.";
 
@@ -148,8 +152,8 @@ async function withPage(ctx: ToolContext, tab: Tab, result: ActionResult, action
   let view = await page(ctx, tab);
   const compare = () => changeNotes({ before: before ?? "", after: ctx.lastSnapshot.get(tab) ?? "", sameUrl: shownUrl.get(tab) === beforeUrl });
   let change = watch ? compare() : { unchanged: false, text: "" };
-  if (change.small) {
-    // Results often arrive a moment after the click; look once more before saying nothing happened.
+  if (change.unchanged) {
+    // Results sometimes arrive after the page went quiet; look once more before saying nothing happened.
     await Bun.sleep(RECHECK_MS);
     view = await page(ctx, tab);
     change = compare();
@@ -196,9 +200,36 @@ export function describeTarget(ctx: ToolContext, call: ToolCall): Target | undef
 
 /** The target of a ref the last snapshot did not show, read live from the page. */
 export async function liveTarget(ctx: ToolContext, call: ToolCall): Promise<Target | undefined> {
+  if (call.name === "click_at") return pointTarget(ctx, Number(call.args.x), Number(call.args.y));
   const ref = call.args.ref;
   if (!ctx.tab || typeof ref !== "string" || !REF.test(ref)) return undefined;
   return describeRef(ctx.tab, refsFor(ctx.tab), ref);
+}
+
+/** The control under a point of the page, as role and name; null over an iframe or nothing nameable. */
+const POINT_TARGET_JS = (x: number, y: number) => `(() => {
+  const hit = document.elementFromPoint(${x}, ${y});
+  if (!hit || hit.tagName === 'IFRAME' || hit.tagName === 'CANVAS') return null;
+  const el = hit.closest('a[href], button, input, textarea, select, summary, [role], [contenteditable=""], [contenteditable=true]') || hit;
+  const tag = el.tagName.toLowerCase();
+  const type = (el.getAttribute('type') || '').toLowerCase();
+  const role = el.getAttribute('role') || (tag === 'a' ? 'link' : tag === 'button' || (tag === 'input' && /^(button|submit|reset)$/.test(type)) ? 'button'
+    : tag === 'textarea' || el.isContentEditable || (tag === 'input' && /^(|text|email|search|url|tel|number)$/.test(type)) ? 'textbox'
+    : tag === 'input' && type === 'checkbox' ? 'checkbox' : tag === 'input' && type === 'radio' ? 'radio' : tag === 'select' ? 'combobox' : 'generic');
+  const label = el.labels && el.labels[0] ? el.labels[0].innerText : '';
+  const name = (el.getAttribute('aria-label') || label || (role === 'textbox' ? el.placeholder : el.innerText || el.value) || el.title || '').replace(/\\s+/g, ' ').trim().slice(0, 100);
+  return name ? { role, name } : null;
+})()`;
+
+/**
+ * What a click at a screenshot point lands on, so it is judged and shown like a click on that
+ * element. Unknown (canvas, iframe, nothing named) stays unknown, and such a click asks first.
+ */
+async function pointTarget(ctx: ToolContext, x: number, y: number): Promise<Target | undefined> {
+  if (!ctx.tab || !Number.isFinite(x) || !Number.isFinite(y)) return undefined;
+  const scale = ctx.shotScale || 1;
+  const found = await ctx.tab.evaluate<Target | null>(POINT_TARGET_JS(x / scale, y / scale)).catch(() => null);
+  return found ?? undefined;
 }
 
 const PAGE_CONTEXT_JS = `(() => {
@@ -332,6 +363,10 @@ async function dispatch(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
     }
     case "snapshot":
       return { content: await page(ctx, tab, Boolean(a.full)) };
+    case "find": {
+      const opts = { role: a.role === undefined ? undefined : String(a.role), name: String(a.name), contains: Boolean(a.contains) };
+      return { content: foundText(await find(tab, opts), opts) };
+    }
     case "click":
       return withPage(ctx, tab, await click(tab, refs, a.ref), "click");
     case "type":

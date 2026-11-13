@@ -17,6 +17,7 @@ const title: Prop = { type: "string", description: "A few words saying what this
 export const TOOL_SPECS: ToolSpec[] = [
   spec("navigate", "Open a URL in the current agent tab. Returns the page snapshot.", { url: { type: "string" } }, ["url"]),
   spec("snapshot", "Read the page as text. Interactive elements have refs like e12. Set full to include content far from the viewport.", { full: { type: "boolean" } }),
+  spec("find", "Find elements anywhere on the page by role and name, even far from view, and get their refs. Set contains to match part of the name.", { role: { type: "string", description: "e.g. button, textbox, spinbutton, link, row; empty for any" }, name: { type: "string" }, contains: { type: "boolean" } }, ["name"]),
   spec("click", "Click an element by ref.", { ref }, ["ref"]),
   spec("type", "Replace the text in a field by ref, typing key by key. Also sets dates, colours and sliders. Set submit to press Enter after.", { ref, text: { type: "string" }, submit: { type: "boolean" } }, ["ref", "text"]),
   spec("select", "Choose a dropdown option by its label or value.", { ref, value: { type: "string" } }, ["ref", "value"]),
@@ -47,7 +48,7 @@ export const TOOL_SPECS: ToolSpec[] = [
       code: {
         type: "string",
         description:
-          "Body of an async function; use await, and return or log() only what you need. Functions: navigate(url), snapshot({full}), click(ref), type(ref, text, {submit}), select(ref, value), press(key), scroll(dy), hover(ref), wait_for({text, seconds}), back(), tabs(), open_tab(url), switch_tab(id), js(code) (runs code in the page, returns its JSON result), sleep(s), log(...). Each returns what the tool of that name returns; a failed call throws. No network, fetch or DOM here: use js() for the page.",
+          "Body of an async function; use await, and return or log() only what you need. Functions: navigate(url), snapshot({full}), find(role, name, {contains}) (returns [{ref, role, name}] from the whole page), click(ref), type(ref, text, {submit}), select(ref, value), press(key), scroll(dy), hover(ref), wait_for({text, seconds}), back(), tabs(), open_tab(url), switch_tab(id), js(code) (runs code in the page, returns its JSON result), sleep(s), log(...). Each returns what the tool of that name returns; a failed call throws. No network, fetch or DOM here: use js() for the page.",
       },
       title,
     },

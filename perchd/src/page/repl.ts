@@ -75,7 +75,11 @@ async function sandbox(conn: CdpConnection): Promise<Tab> {
   let pending = sandboxes.get(conn);
   if (!pending) {
     pending = (async () => {
-      const { targetId } = await conn.send<{ targetId: string }>("Target.createTarget", { url: "about:blank", newWindow: true, background: true });
+      // A hidden target has no window or tab, so the user never sees it (a new window would get its
+      // own Space beside a full-screen one). Older browsers without hidden targets get a window.
+      const { targetId } = await conn
+        .send<{ targetId: string }>("Target.createTarget", { url: "about:blank", hidden: true, background: true })
+        .catch(() => conn.send<{ targetId: string }>("Target.createTarget", { url: "about:blank", newWindow: true, background: true }));
       Tab.hidden.add(targetId);
       const tab = await Tab.attach(conn, targetId);
       await tab.send("Network.enable");

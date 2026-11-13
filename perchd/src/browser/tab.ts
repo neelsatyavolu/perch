@@ -7,6 +7,23 @@ const LIFECYCLE: Record<WaitUntil, string> = { load: "load", networkidle: "netwo
 const NAV_TIMEOUT_MS = 30_000;
 const COMMAND_TIMEOUT_MS = 30_000;
 const SETTLE_LIMIT_MS = 10_000;
+/** After load, how long the page must go without new content before it counts as drawn. */
+const QUIET_MS = 200;
+/** The most an action waits for a loaded page's own data requests and redrawing. */
+const BUSY_LIMIT_MS = 3_000;
+/** Requests open longer than this are long polls or streams, not data the page waits for. */
+const LONG_REQUEST_MS = 4_000;
+/** Request types a page draws from: documents and its own data fetches. */
+const DATA_REQUESTS = new Set(["Document", "Fetch", "XHR"]);
+/** Resolves once nothing has been added to or changed in the page for `quiet` ms, or after `limit` ms. */
+const DOM_QUIET = (quiet: number, limit: number) => `new Promise((done) => {
+  let timer;
+  const end = () => { observer.disconnect(); clearTimeout(timer); clearTimeout(cap); done(true); };
+  const observer = new MutationObserver(() => { clearTimeout(timer); timer = setTimeout(end, ${quiet}); });
+  observer.observe(document, { subtree: true, childList: true, characterData: true });
+  timer = setTimeout(end, ${quiet});
+  const cap = setTimeout(end, ${limit});
+})`;
 
 export class TabClosedError extends Error {
   constructor() {
@@ -36,6 +53,8 @@ export class Tab {
   private navigationPending = false;
   private readonly unsubscribe: (() => void)[] = [];
   private loading = false;
+  /** The page's data requests still open: request id → when it started. */
+  private readonly requests = new Map<string, number>();
   /** Cross-site iframes run in their own process and session: frame id → session id. */
   readonly frameSessions = new Map<string, string>();
 
@@ -75,6 +94,12 @@ export class Tab {
     listen("Page.frameStoppedLoading", (p: { frameId: string }, sid) => {
       if (sid === session && main(p.frameId)) [this.loading, this.navigationPending] = [false, false];
     });
+    // Single-page apps fetch and draw after a click without loading a new document; settle waits for that.
+    listen("Network.requestWillBeSent", (p: { requestId: string; type?: string }, sid) => {
+      if (sid === session && DATA_REQUESTS.has(p.type ?? "")) this.requests.set(p.requestId, Date.now());
+    });
+    listen("Network.loadingFinished", (p: { requestId: string }, sid) => void (sid === session && this.requests.delete(p.requestId)));
+    listen("Network.loadingFailed", (p: { requestId: string }, sid) => void (sid === session && this.requests.delete(p.requestId)));
     const markClosed = () => {
       if (this.isClosed) return;
       this.isClosed = true;
@@ -91,6 +116,8 @@ export class Tab {
       tab.send("Page.enable"),
       tab.send("Runtime.enable"),
       tab.send("Page.setLifecycleEventsEnabled", { enabled: true }),
+      // Request events only, for settle: no response bodies are kept.
+      tab.send("Network.enable", { maxTotalBufferSize: 0, maxResourceBufferSize: 0 }).catch(() => undefined),
     ]);
     const { frameTree } = await tab.send<{ frameTree: { frame: { id: string } } }>("Page.getFrameTree");
     tab.mainFrameId = frameTree.frame.id;
@@ -143,16 +170,40 @@ export class Tab {
     return errors;
   }
 
-  /** After an action: waits for any navigation it started to finish loading, up to 10 s. */
+  /**
+   * After an action: waits for any navigation it started to finish loading, up to 10 s, then up to
+   * 3 s more for the page's own data requests and redrawing, so the snapshot shows the new content
+   * rather than a loading skeleton.
+   */
   async settle(): Promise<void> {
-    await Bun.sleep(150);
+    // Long enough for a click's navigation to be requested; the quiet wait below covers the rest.
+    await Bun.sleep(50);
     const started = Date.now();
     while ((this.navigationPending || this.loading) && Date.now() - started < SETTLE_LIMIT_MS && !this.isClosed) await Bun.sleep(50);
     while (Date.now() - started < SETTLE_LIMIT_MS) {
       const state = await this.evaluate<string>("document.readyState").catch(() => "loading");
-      if (state === "complete" || this.isClosed) return;
+      if (state === "complete" || this.isClosed) break;
       await Bun.sleep(100);
     }
+    await this.drawn();
+  }
+
+  /** Waits, up to 3 s, until no data request is open and the page has stopped changing. */
+  private async drawn(): Promise<void> {
+    const started = Date.now();
+    const busy = () => {
+      const now = Date.now();
+      let open = false;
+      for (const [id, since] of this.requests) {
+        if (now - since < LONG_REQUEST_MS) open = true;
+        else this.requests.delete(id);
+      }
+      return open;
+    };
+    while (busy() && Date.now() - started < BUSY_LIMIT_MS && !this.isClosed) await Bun.sleep(50);
+    const left = BUSY_LIMIT_MS - (Date.now() - started);
+    if (this.isClosed || left <= 0) return;
+    await this.evaluate(DOM_QUIET(QUIET_MS, Math.max(QUIET_MS, left))).catch(() => undefined);
   }
 
   /** Races a promise against this tab closing. */

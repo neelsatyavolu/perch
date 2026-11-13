@@ -26,7 +26,7 @@ export type Target = { role: string; name: string; expanded?: boolean };
 export type PageContext = { payment?: boolean; passwordChange?: boolean };
 
 // A batch or script is judged action by action as it runs (agent/session.ts callTool), so the batch itself is a read.
-const READ_TOOLS = new Set(["navigate", "snapshot", "screenshot", "scroll", "hover", "wait_for", "back", "tabs", "open_tab", "switch_tab", "downloads", "batch", "script", "done"]);
+const READ_TOOLS = new Set(["navigate", "snapshot", "find", "screenshot", "scroll", "hover", "wait_for", "back", "tabs", "open_tab", "switch_tab", "downloads", "batch", "script", "done"]);
 
 const RISKY = /\b(send|post|publish|submit|turn in|hand in|go live|push live|make live|deploy|delete|remove|discard|share|invite|transfer|confirm|sign up|unsubscribe|reply|forward|archive|trash)\b/i;
 const PAYMENT =
@@ -70,7 +70,8 @@ export function classify(call: ToolCall, target?: Target, page: PageContext = {}
   if (call.name === "sign_in" || call.name === "fill_code") return "risky";
   // A file in the chat's own folder touches nothing outside it (spec 7.4).
   if (call.name === "write_file" || call.name === "save_pdf") return "change";
-  if (call.name === "click_at") return guarded ? "payment" : "risky";
+  // A click at a point is judged by what is under it; with nothing known there, it asks.
+  if (call.name === "click_at") return guarded ? "payment" : target ? clickKind(target, false) : "risky";
   // Typing at the focus only fills the cell or field it is in; Enter (press) is what commits.
   if (call.name === "type_text") return guarded ? "payment" : "change";
   if (call.name === "select" || (call.name === "type" && !call.args.submit)) return "change";

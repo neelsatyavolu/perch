@@ -52,7 +52,9 @@ export function describeApproval(req: ApprovalRequest, ids: Ids): ApprovalCard {
       });
     }
     case "click_at":
-      return card(`Click at ${a.x}, ${a.y} on the page`, `Click at ${a.x}, ${a.y}`);
+      return req.target?.name
+        ? card(`Click ${what}`, `Click "${req.target.name.trim()}"`)
+        : card(`Click at ${a.x}, ${a.y} on the page`, `Click at ${a.x}, ${a.y}`);
     case "repl":
       return card("Run a script on the page", "Run script", { body: String(a.code ?? "") });
     case "sign_in":

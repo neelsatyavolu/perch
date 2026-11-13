@@ -36,15 +36,34 @@ export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
 /** One cherry petal, 16 units tall and notched at its tip; the same shape as ui-pages' Sakura.tsx. */
 export const PETAL_PATH = "M8 16C0.6 13 -0.8 5.2 3.4 0.9C5 0.4 6.6 1.3 8 3.3C9.4 1.3 11 0.4 12.6 0.9C16.8 5.2 15.4 13 8 16Z";
 
-/** Sakura mode's blossom (DESIGN.md): five petals round (0, 0), `r` to the tips. Shown only under data-sakura. */
+/** A broad cherry petal pointing up from (0, 0), `r` long, notched at the tip (ui-pages' sakura/art.ts petalD). */
+function petalD(r: number): string {
+  const w = r * 0.56;
+  const f = (n: number) => Math.round(n * 10) / 10;
+  return `M0 0C${f(-w * 0.55)} ${f(-r * 0.12)} ${f(-w * 1.02)} ${f(-r * 0.55)} ${f(-w * 0.78)} ${f(-r * 0.88)}C${f(-w * 0.6)} ${f(-r * 1.04)} ${f(-w * 0.22)} ${f(-r * 1.04)} 0 ${f(-r * 0.9)}C${f(w * 0.22)} ${f(-r * 1.04)} ${f(w * 0.6)} ${f(-r * 1.04)} ${f(w * 0.78)} ${f(-r * 0.88)}C${f(w * 1.02)} ${f(-r * 0.55)} ${f(w * 0.55)} ${f(-r * 0.12)} 0 0Z`;
+}
+
+/**
+ * Sakura mode's blossom (DESIGN.md): five broad petals shaded from a cherry heart to a pale tip, a
+ * dark eye and a ring of anthers. Shown only under data-sakura. `r` is centre to petal tip.
+ */
 function Blossom({ r }: { r: number }) {
-  const s = r / 16;
   return (
     <g class="blossom">
+      <defs>
+        <linearGradient id="sk-mark-petal" x1="0.5" y1="1" x2="0.5" y2="0">
+          <stop offset="0" class="sk-mark-base" />
+          <stop offset="1" class="sk-mark-tip" />
+        </linearGradient>
+      </defs>
       {[0, 72, 144, 216, 288].map((deg) => (
-        <path key={deg} d={PETAL_PATH} transform={`rotate(${deg}) translate(${-8 * s} ${-16 * s}) scale(${s})`} />
+        <path key={deg} class="blossom-petal" d={petalD(r)} transform={`rotate(${deg})`} />
       ))}
-      <circle class="blossom-centre" r={r * 0.2} />
+      <circle class="blossom-centre" r={r * 0.22} />
+      {[0, 72, 144, 216, 288].map((deg) => {
+        const a = ((deg + 36) * Math.PI) / 180;
+        return <circle key={deg} class="blossom-anther" cx={Math.sin(a) * r * 0.36} cy={-Math.cos(a) * r * 0.36} r={r * 0.06} />;
+      })}
     </g>
   );
 }

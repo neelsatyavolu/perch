@@ -19,65 +19,95 @@
 .mark .blossom { display: none; }
 :root[data-sakura] .mark .blossom { display: inline; }
 :root[data-sakura] .mark .mark-dot { display: none; }
-.mark .blossom path { fill: var(--accent); }
-.mark .blossom .blossom-centre { fill: color-mix(in srgb, var(--accent) 45%, var(--ink)); }
+/* The mark's blossom (Sakura.tsx), also the welcome screen's falling one. */
+:root[data-sakura] { --sk-mark-base: #C2355F; --sk-mark-tip: #F6B6C8; --sk-mark-eye: #8E1F44; --sk-mark-anther: #F2C14E; }
+:root[data-theme="yozakura"] { --sk-mark-base: #E07A9A; --sk-mark-tip: #FFE4EB; --sk-mark-eye: #A72B53; }
+.sk-mark-base { stop-color: var(--sk-mark-base); }
+.sk-mark-tip { stop-color: var(--sk-mark-tip); }
+.blossom-centre { fill: var(--sk-mark-eye); }
+.blossom-anther { fill: var(--sk-mark-anther); }
 
-/* ---- Falling petals ---- */
+/* ---- Falling petals (a canvas, sakura/Petals.tsx) ---- */
 .sakura-petals {
   position: fixed;
   inset: 0;
-  overflow: hidden;
+  width: 100vw;
+  height: 100vh;
   pointer-events: none;
   z-index: -1;
 }
-.sakura-petal {
-  position: absolute;
-  left: var(--x);
-  top: -24px;
-  width: var(--size);
-  height: var(--size);
-  opacity: 0;
-  animation: sakura-fall var(--fall) linear var(--delay) infinite;
-}
-.sakura-petal svg {
-  display: block;
-  animation: sakura-sway var(--sway) ease-in-out var(--delay) infinite alternate;
-}
-.sakura-petal.tint-0 path { fill: var(--sakura-0); }
-.sakura-petal.tint-1 path { fill: var(--sakura-1); }
-.sakura-petal.tint-2 path { fill: var(--sakura-2); }
-
-@keyframes sakura-fall {
-  0% { transform: translate3d(0, 0, 0); opacity: 0; }
-  8% { opacity: 0.55; }
-  85% { opacity: 0.5; }
-  100% { transform: translate3d(calc(var(--drift) * -1.5), calc(100vh + 48px), 0); opacity: 0; }
-}
-@keyframes sakura-sway {
-  from { transform: translateX(calc(var(--drift) * -1)) rotate(0deg); }
-  to { transform: translateX(var(--drift)) rotate(var(--spin)); }
-}
 
 /* ---- The branch on the new tab page ---- */
+/* Natural colours, not the accent: a cherry blossom is nearly white with a blush at its heart, on
+   dark bark. Yozakura's are lit as if by the moon behind them. */
+:root[data-sakura] {
+  --sk-petal-base: #F1A6BB; --sk-petal-mid: #FAD6DF; --sk-petal-tip: #FFF8FA;
+  --sk-petal-edge: rgba(208, 112, 142, 0.32);
+  --sk-eye-in: #C9365F; --sk-eye-out: #EE8FAA;
+  --sk-stamen: rgba(196, 70, 108, 0.75); --sk-anther: #EDBB45;
+  --sk-bark-hi: #6F5A5E; --sk-bark-lo: #3A2C30;
+  --sk-stem: #8C8A4E;
+  --sk-bud-base: #D9577E; --sk-bud-tip: #F4A9BF; --sk-sepal: #6F6A3A;
+  --sk-leaf: #9C8442;
+}
+:root[data-theme="yozakura"] {
+  --sk-petal-base: #E393AB; --sk-petal-mid: #F6CFDA; --sk-petal-tip: #FFF3F6;
+  --sk-petal-edge: rgba(255, 214, 226, 0.28);
+  --sk-eye-in: #B8325A; --sk-eye-out: #E7869F;
+  --sk-stamen: rgba(232, 128, 160, 0.8); --sk-anther: #E9C25C;
+  --sk-bark-hi: #4D3B42; --sk-bark-lo: #241A1E;
+  --sk-stem: #6E6E46;
+  --sk-leaf: #6F6238;
+}
 .sakura-branch {
   position: absolute;
   top: 0;
   right: 0;
+  width: clamp(380px, 40vw, 620px);
+  height: auto;
+  /* Lush in the corner, fading as it reaches toward the content, so text over it stays easy to read. */
+  -webkit-mask-image: linear-gradient(to bottom left, #000 34%, rgba(0, 0, 0, 0.42) 58%, rgba(0, 0, 0, 0.14) 82%);
+  mask-image: linear-gradient(to bottom left, #000 34%, rgba(0, 0, 0, 0.42) 58%, rgba(0, 0, 0, 0.14) 82%);
   pointer-events: none;
   z-index: -1;
+  overflow: visible;
 }
-.sakura-branch .twig { fill: none; stroke: color-mix(in srgb, var(--mute) 70%, var(--card)); stroke-width: 2; stroke-linecap: round; }
-.sakura-branch .twig.main { stroke-width: 3.5; }
-.sakura-branch .flower.tint-0 path, .sakura-branch .bud.tint-0 { fill: var(--sakura-0); }
-.sakura-branch .flower.tint-1 path, .sakura-branch .bud.tint-1 { fill: var(--sakura-1); }
-.sakura-branch .flower.tint-2 path, .sakura-branch .bud.tint-2 { fill: var(--sakura-2); }
-.sakura-branch .blossom-centre { fill: color-mix(in srgb, var(--accent) 40%, var(--ink)); }
+.sakura-branch .sk-bark { fill: url(#sk-bark); }
+.sakura-branch .sk-stem { fill: none; stroke: var(--sk-stem); stroke-width: 1.1; stroke-linecap: round; }
+.sakura-branch .sk-petal { fill: url(#sk-petal); stroke: var(--sk-petal-edge); stroke-width: 0.6; }
+.sakura-branch .sk-eye { fill: url(#sk-eye); }
+.sakura-branch .sk-stamen { stroke: var(--sk-stamen); stroke-width: 0.55; stroke-linecap: round; }
+.sakura-branch .sk-anther { fill: var(--sk-anther); }
+.sakura-branch .sk-bud { fill: url(#sk-bud); }
+.sakura-branch .sk-sepal { fill: var(--sk-sepal); }
+.sakura-branch .sk-leaf { fill: var(--sk-leaf); opacity: 0.9; }
+.sakura-branch .sk-midrib { stroke: rgba(255, 245, 220, 0.35); stroke-width: 0.6; }
+.sakura-branch .sk-bark-light { fill: none; stroke: rgba(255, 240, 244, 0.16); stroke-width: 1.4; stroke-linecap: round; }
+.sakura-branch .sk-lenticel { stroke: rgba(255, 236, 240, 0.22); stroke-width: 0.9; stroke-linecap: round; }
+.sakura-branch .sk-petal-base { stop-color: var(--sk-petal-base); }
+.sakura-branch .sk-petal-mid { stop-color: var(--sk-petal-mid); }
+.sakura-branch .sk-petal-tip { stop-color: var(--sk-petal-tip); }
+.sakura-branch .sk-eye-in { stop-color: var(--sk-eye-in); }
+.sakura-branch .sk-eye-out { stop-color: var(--sk-eye-out); }
+.sakura-branch .sk-bark-hi { stop-color: var(--sk-bark-hi); }
+.sakura-branch .sk-bark-lo { stop-color: var(--sk-bark-lo); }
+.sakura-branch .sk-bud-base { stop-color: var(--sk-bud-base); }
+.sakura-branch .sk-bud-tip { stop-color: var(--sk-bud-tip); }
+/* The moon shows only at night. */
+.sakura-branch .sk-moon { display: none; }
+:root[data-theme="yozakura"] .sakura-branch .sk-moon { display: inline; }
+.sakura-branch .sk-moon-in { stop-color: rgba(255, 236, 214, 0.20); }
+.sakura-branch .sk-moon-mid { stop-color: rgba(255, 226, 214, 0.06); }
+.sakura-branch .sk-moon-out { stop-color: rgba(255, 226, 214, 0); }
+.sakura-branch .sk-moon-disc { fill: #F6E6D8; opacity: 0.9; }
+/* A slow sway: the whole branch from where it enters, each cluster from its spur. */
+.sakura-branch .sk-sway { transform-origin: 460px 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .sakura-branch .sk-sway { animation: sk-branch 9s ease-in-out infinite alternate; }
+  .sakura-branch .sk-cluster { animation: sk-cluster 5.5s ease-in-out var(--sk-delay) infinite alternate; }
+}
+@keyframes sk-branch { from { transform: rotate(-0.6deg); } to { transform: rotate(0.8deg); } }
+@keyframes sk-cluster { from { transform: rotate(-2.2deg); } to { transform: rotate(2.4deg); } }
 @media (max-width: 899px) {
   :root[data-sakura] .sakura-branch { display: none; }
-}
-
-/* ---- Reduce Motion: the petals rest where they are ---- */
-@media (prefers-reduced-motion: reduce) {
-  .sakura-petal { animation: none; top: var(--y); opacity: 0.45; }
-  .sakura-petal svg { animation: none; transform: rotate(var(--spin)); }
 }

@@ -91,12 +91,14 @@ State colours: ok `#4FBF85`, warn `#D9A23A`, danger `#EE5A4B` on dark themes, `#
 
 ## Sakura mode
 
-The one place Perch decorates. It is on while the Sakura or Yozakura theme shows, and everywhere else stays as quiet as this file says.
+The one place Perch decorates. It is on while the Sakura or Yozakura theme shows, and everywhere else stays as quiet as this file says. Its art uses natural cherry colours, not the accent: a Somei-Yoshino blossom is nearly white with a blush at its heart, on dark bark. It is also the one place gradients are allowed, inside the decorations only (petal shading, bark, the moon), never on a surface, control or text.
 
-- **Petals**: a few cherry petals (8 to 14, 10–16px, the accent and two blush tints, never more than 60% opacity) drift down the new tab page and the welcome screen, under the content and never over a control. They are CSS animations of transform and opacity only, which the browser doesn't draw in a hidden tab. With Reduce Motion they rest in place instead.
-- **The branch**: a blossoming branch drawn in the new tab page's top right corner (280×200), line art in mute with blossoms in the accent's tints. Decorative only (aria-hidden), hidden below 900px wide.
-- **The blossom mark**: the dot in the Perch mark becomes a five-petal blossom in the accent, on Perch's own pages and in the sidebar; on the welcome screen it drifts down turning instead of dropping. The 6px status dot stays a dot (a blossom that small is a smudge).
-- **Petal burst**: sending a chat message lets six petals fall from the send button over 900ms. Never with Reduce Motion.
+- **Petals**: a canvas behind the page (sakura/Petals.tsx, engine.ts), 14 to 38 petals by window size. Each has a depth: far petals are smaller, slower, fainter and softer, near ones larger and crisper. They tumble (a flip about their own axis, drawn as a squash, so a petal edge-on nearly vanishes), ride a wind that gusts and eases, swirl away from the pointer, and some come to rest on the bottom edge and fade. About a third start at the branch's blossoms. Clicking the page's empty background sends a gust of petals from that spot. The canvas sits under every piece of content, never takes a click, and stops drawing in a hidden tab.
+- **The branch**: drawn in the new tab page's top right corner, 380 to 620px wide with the window: tapered bark with lenticels and a highlight, clusters of two to four five-petal blossoms (notched petals shaded base to tip, a red eye, stamens with yellow anthers) hanging on thin stems, closed buds and a few bronze young leaves. The branch and each cluster sway slowly. It fades out as it reaches toward the content, so text over it stays easy to read, and it is hidden below 900px wide.
+- **Yozakura**: a soft moon behind the branch, and blossoms and petals lit as if by it.
+- **The blossom mark**: the dot in the Perch mark becomes a shaded five-petal blossom with a dark eye and anthers, deeper pink than the branch's so it reads at 20px on a blush tile, on Perch's own pages and in the sidebar; on the welcome screen it drifts down turning instead of dropping. The 6px status dot stays a dot.
+- **Petal burst**: sending a chat message lets six petals tumble from the send button over 1.1s.
+- **Reduce Motion**: the petals are drawn once, still; nothing sways or bursts.
 - **Turning it on**: Settings › Appearance › Sakura mode picks Sakura (Yozakura from a dark theme) and the Sakura accent; off goes back to Paper or Ink with Blue. Picking either theme directly works too.
 - Pink is the accent Sakura mode suggests, but any accent works on both themes and every accent meets 4.5:1 on them.
 

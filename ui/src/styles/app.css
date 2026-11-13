@@ -366,9 +366,16 @@ select.ver:hover { background: var(--hover); color: var(--ink); }
 .mark .blossom { display: none; }
 :root[data-sakura] .mark .blossom { display: inline; }
 :root[data-sakura] .mark .mark-dot { display: none; }
-.mark .blossom path { fill: var(--accent); }
-.mark .blossom .blossom-centre { fill: color-mix(in srgb, var(--accent) 45%, var(--ink)); }
+:root[data-sakura] { --sk-mark-base: #C2355F; --sk-mark-tip: #F6B6C8; --sk-mark-eye: #8E1F44; --sk-mark-anther: #F2C14E; }
+:root[data-theme="yozakura"] { --sk-mark-base: #E07A9A; --sk-mark-tip: #FFE4EB; --sk-mark-eye: #A72B53; }
+.sk-mark-base { stop-color: var(--sk-mark-base); }
+.sk-mark-tip { stop-color: var(--sk-mark-tip); }
+.mark .blossom-petal { fill: url(#sk-mark-petal); }
+.mark .blossom-centre { fill: var(--sk-mark-eye); }
+.mark .blossom-anther { fill: var(--sk-mark-anther); }
 .petal-burst { position: fixed; z-index: 50; pointer-events: none; }
-.petal-burst.tint-0 path { fill: var(--accent); }
-.petal-burst.tint-1 path { fill: color-mix(in srgb, var(--accent) 62%, var(--card)); }
-.petal-burst.tint-2 path { fill: color-mix(in srgb, var(--accent) 34%, var(--card)); }
+/* Natural cherry petals, not the accent: pale, blush and deep, each with a soft edge. */
+.petal-burst path { stroke: rgba(196, 92, 126, 0.25); stroke-width: 0.5; }
+.petal-burst.tint-0 path { fill: #FAD6DF; }
+.petal-burst.tint-1 path { fill: #F4B4C6; }
+.petal-burst.tint-2 path { fill: #E98FAA; }

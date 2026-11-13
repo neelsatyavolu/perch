@@ -1,13 +1,13 @@
 /**
  * Sakura mode's petal burst (DESIGN.md): sending a message lets six petals fall from the send
- * button over 900ms. Only in Sakura mode and never with Reduce Motion. The petals are plain
+ * button, tumbling, over 1.1s. Only in Sakura mode and never with Reduce Motion. The petals are plain
  * decorative nodes on <body>, animated with transform and opacity, and removed when they land.
  */
 
 import { PETAL_PATH } from "./icon";
 
 const COUNT = 6;
-const DURATION_MS = 900;
+const DURATION_MS = 1100;
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 export function sakuraOn(doc: Document = document): boolean {
@@ -45,11 +45,13 @@ export function petalBurst(from: Element | null, win: Window = window): void {
     const dx = Math.cos(angle) * reach;
     const dy = -Math.sin(angle) * reach;
     const spin = (i % 2 ? 1 : -1) * (160 + i * 30);
+    // Up and out, then falling with a tumble: the squash across each petal flips it edge-on and back.
     const animation = svg.animate(
       [
-        { transform: "translate(0, 0) rotate(0deg) scale(0.6)", opacity: 0 },
-        { transform: `translate(${dx}px, ${dy}px) rotate(${spin / 2}deg) scale(1)`, opacity: 0.9, offset: 0.35 },
-        { transform: `translate(${dx * 1.4}px, ${dy + 56}px) rotate(${spin}deg) scale(0.9)`, opacity: 0 },
+        { transform: "translate(0, 0) rotate(0deg) scale(0.6, 0.6)", opacity: 0 },
+        { transform: `translate(${dx}px, ${dy}px) rotate(${spin / 3}deg) scale(1, 0.35)`, opacity: 0.95, offset: 0.3 },
+        { transform: `translate(${dx * 1.2}px, ${dy + 24}px) rotate(${(spin * 2) / 3}deg) scale(1, 1)`, opacity: 0.85, offset: 0.6 },
+        { transform: `translate(${dx * 1.4}px, ${dy + 60}px) rotate(${spin}deg) scale(0.9, 0.25)`, opacity: 0 },
       ],
       { duration: DURATION_MS, easing: "cubic-bezier(0.2, 0, 0, 1)", delay: i * 40 },
     );

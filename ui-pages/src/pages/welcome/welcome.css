@@ -70,8 +70,6 @@ html:has(.wl-stage), body:has(.wl-stage) { background: var(--card); }
 .wl-mark-blossom { display: none; }
 :root[data-sakura] .wl-mark-blossom { display: inline; }
 :root[data-sakura] .wl-mark-dot { display: none; }
-.wl-mark-blossom path { fill: var(--accent); }
-.wl-mark-blossom .blossom-centre { fill: color-mix(in srgb, var(--accent) 45%, var(--ink)); }
 @media (prefers-reduced-motion: no-preference) {
   .wl-mark-blossom { animation: wl-blossom 1100ms cubic-bezier(0.3, 1.2, 0.5, 1) 450ms backwards; }
 }

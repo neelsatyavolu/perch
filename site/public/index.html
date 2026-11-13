@@ -27,7 +27,7 @@
 <link rel="stylesheet" href="assets/motion/motion.css">
 <link rel="stylesheet" href="assets/layout/layout.css">
 <link rel="stylesheet" href="assets/icons/icon.css">
-<link rel="stylesheet" href="perch.css?v=20261113j">
+<link rel="stylesheet" href="perch.css?v=20261113l">
 <script src="js/head.js"></script>
 <link rel="modulepreload" href="assets/moments/moments.js">
 <link rel="modulepreload" href="assets/moments/lib.js">
@@ -239,6 +239,26 @@
     </div>
   </section>
 
+  <!-- LEDGER: what the agent can do beyond clicking, in the tools list style -->
+  <section class="section" id="abilities" aria-labelledby="abilities-h">
+    <div class="wrap">
+      <div class="grid head-pair">
+        <h2 class="span-5" id="abilities-h">An agent that remembers and hands you the work</h2>
+        <p class="span-6 start-7">It keeps its tabs out of your way, reads the documents behind links, gives you files you can keep, and learns what matters to you. You review what it remembers and can undo any of it.</p>
+      </div>
+      <ul class="tools">
+        <li><b>Agent Tabs</b><span>The agent works in tabs of its own. Open one and its chat sits beside it.</span></li>
+        <li><b>Reads documents</b><span>PDFs, slides, Word and Excel files behind a link, signed in as you.</span></li>
+        <li><b>Files you keep</b><span>Notes, tables and zips, with Download and Show in Finder.</span></li>
+        <li><b>Queue and steer</b><span>Send the next message while it works, or change its course.</span></li>
+        <li><b>Build my memory</b><span>Researches you from your mail, accounts and history. You approve every fact.</span></li>
+        <li><b>Recall as it works</b><span>Brings up what it knows for each message and the site you're on.</span></li>
+        <li><b>Undo for memory</b><span>Every change to memory is listed, and any of it can be taken back.</span></li>
+        <li><b>Private chats</b><span>Leave no memory, files or activity log behind.</span></li>
+      </ul>
+    </div>
+  </section>
+
   <!-- THREE CARDS on the surface band: how each model connects, with the providers' real icons.
        Moment: line-carries-colour, the band's ground arriving along a line. -->
   <section class="section ground-surface" id="models" aria-labelledby="models-h" data-moment="line-carries-colour" data-moment-opts='{"from": "base"}'>
@@ -352,27 +372,49 @@
       <div class="grid">
         <div class="span-5 split-copy">
           <h2 id="privacy-h">Perch is private without extra setup</h2>
-          <p>Perch works without an account. What it stores stays on your Mac unless you turn on sync, and nothing about how you use it is sent unless you opt in.</p>
+          <p>Perch blocks ads, trackers and fingerprinting from the first launch and works without an account. What it stores stays on your Mac, encrypted, and nothing about how you use it is sent anywhere.</p>
           <dl class="feat">
-            <div><dt>Sync the server can't read</dt><dd>End-to-end encrypted, and you can run your own server.</dd></div>
+            <div><dt>Fingerprints that don't follow you</dt><dd>Canvas, WebGL and audio readings differ on every site and every session.</dd></div>
+            <div><dt>Nothing typed leaves early</dt><dd>The address bar keeps what you type until you press Return.</dd></div>
             <div><dt>Every connection listed</dt><dd>Each background connection Perch makes has its own switch.</dd></div>
-            <div><dt>Export everything</dt><dd>Restore on a new Mac with your recovery key.</dd></div>
+            <div><dt>Sync the server can't read</dt><dd>End-to-end encrypted, and you can run your own server.</dd></div>
           </dl>
         </div>
-        <div class="frame pframe pframe--tall span-6 start-7" role="img" aria-label="Perch's Privacy settings with ad and tracker blocking, cookie banner rejection, tracking parameter removal, blocking ad-targeting APIs and third-party cookies, HTTPS-only and encrypted DNS all switched on.">
+        <div class="frame pframe pframe--tall span-6 start-7" role="img" aria-label="Perch's Privacy settings with ad and tracker blocking, cookie banner rejection, tracking parameter removal, fingerprint blocking and third-party cookie blocking switched on, HTTPS-only and encrypted DNS on, and search suggestions off.">
           <div class="piece pset pui" aria-hidden="true">
             <div class="pset-title">Privacy and security</div>
             <div class="p-sub">Ads and tracking</div>
-            <div class="p-row"><span>Block ads and trackers <small>EasyList, EasyPrivacy</small></span><span class="sw-on"></span></div>
+            <div class="p-row"><span>Block ads and trackers <small>EasyList, EasyPrivacy, uBlock</small></span><span class="sw-on"></span></div>
             <div class="p-row"><span>Reject cookie banners</span><span class="sw-on"></span></div>
             <div class="p-row"><span>Remove tracking parameters <small class="pmono">utm_, fbclid</small></span><span class="sw-on"></span></div>
-            <div class="p-row"><span>Block ad-targeting APIs</span><span class="sw-on"></span></div>
+            <div class="p-row"><span>Block fingerprinting <small>canvas, WebGL, audio</small></span><span class="sw-on"></span></div>
             <div class="p-row"><span>Block third-party cookies</span><span class="sw-on"></span></div>
             <div class="p-sub">Connections</div>
             <div class="p-row"><span>HTTPS-only</span><span class="sw-on"></span></div>
             <div class="p-row"><span>Encrypted DNS</span><span class="sw-on"></span></div>
+            <div class="p-row"><span>Search suggestions</span><span class="sw-off"></span></div>
           </div>
         </div>
+      </div>
+      <div class="compare">
+        <h3 class="compare-h" id="compare-h">Perch's defaults beside other browsers</h3>
+        <div class="compare-scroll">
+          <table aria-labelledby="compare-h">
+            <thead>
+              <tr><th scope="col">On a new install</th><th scope="col" class="c-perch">Perch</th><th scope="col">Brave</th><th scope="col">Safari</th><th scope="col">Chrome</th></tr>
+            </thead>
+            <tbody>
+              <tr><th scope="row">Blocks ads</th><td class="c-perch">Yes</td><td>Yes</td><td class="c-no">No</td><td class="c-no">No</td></tr>
+              <tr><th scope="row">Blocks third-party cookies</th><td class="c-perch">Yes</td><td>Yes</td><td>Yes</td><td class="c-no">No</td></tr>
+              <tr><th scope="row">Varies canvas, WebGL and audio fingerprints per site</th><td class="c-perch">Yes</td><td>Yes</td><td>Partly</td><td class="c-no">No</td></tr>
+              <tr><th scope="row">Sends Global Privacy Control</th><td class="c-perch">Yes</td><td>Yes</td><td class="c-no">No</td><td class="c-no">No</td></tr>
+              <tr><th scope="row">Keeps address bar typing on your Mac</th><td class="c-perch">Yes</td><td class="c-no">No</td><td class="c-no">No</td><td class="c-no">No</td></tr>
+              <tr><th scope="row">An agent that asks before it sends, posts or buys</th><td class="c-perch">Yes</td><td class="c-no">No</td><td class="c-no">No</td><td class="c-no">No</td></tr>
+              <tr><th scope="row">Open source</th><td class="c-perch">Yes, MIT</td><td>Yes, MPL</td><td>Engine only</td><td>Engine only</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="compare-note t-small muted">Default settings on a new install as of November 2026, as best we know them. If something here is out of date, <a href="https://github.com/neelsatyavolu/perch/issues">tell us</a>.</p>
       </div>
     </div>
   </section>
@@ -463,15 +505,15 @@ perch click e12</code></pre>
           <div class="span-3"><p class="t-stat">3</p><p class="t-small muted">permission modes for the agent</p></div>
         </div>
         <div class="grid index">
-          <div class="ix span-4"><p class="ix-title">Agent</p><ul><li>Side chat for each tab</li><li>Approval cards that name the action</li><li>Ask, Guard and Skip confirmation</li><li>Site rules and an activity log</li><li>Full-page chat with artifacts</li></ul></div>
+          <div class="ix span-4"><p class="ix-title">Agent</p><ul><li>Side chat for each tab</li><li>Approval cards that name the action</li><li>Ask, Guard and Skip confirmation</li><li>Site rules and an activity log</li><li>Agent Tabs out of your way</li><li>Reads PDFs, slides and Word files</li><li>Files and zips to download</li></ul></div>
           <div class="ix span-4"><p class="ix-title">Models</p><ul><li>Claude through Claude Code</li><li>ChatGPT, Codex and Grok sign-in</li><li>API keys for five providers</li><li>Local OpenAI-compatible servers</li><li>Image generation model</li></ul></div>
-          <div class="ix span-4"><p class="ix-title">Memory and routines</p><ul><li>Learn from chats</li><li>Tidy memory overnight</li><li>Scheduled routines</li><li>Skills</li><li>MCP servers and import</li></ul></div>
+          <div class="ix span-4"><p class="ix-title">Memory and routines</p><ul><li>Build my memory, reviewed by you</li><li>Recall with every message</li><li>Learn from chats, tidy overnight</li><li>Undo any memory change</li><li>Routines, skills and MCP servers</li></ul></div>
         </div>
       </div>
       <div class="grid index">
         <div class="ix span-4"><p class="ix-title">Browsing</p><ul><li>Every Chrome extension</li><li>Spaces and split view</li><li>Command bar</li><li>Sleeping tabs and memory by tab</li><li>Netflix through FairPlay</li></ul></div>
         <div class="ix span-4"><p class="ix-title">Built in</p><ul><li>Reader view and Picture in picture</li><li>Video keys and Link preview</li><li>Screenshots</li><li>Backrow</li><li>Caveatly</li></ul></div>
-        <div class="ix span-4"><p class="ix-title">Privacy and security</p><ul><li>Ad and tracker blocker</li><li>Cookie banners rejected</li><li>Tracking parameters removed</li><li>HTTPS-only and encrypted DNS</li><li>No telemetry unless you opt in</li></ul></div>
+        <div class="ix span-4"><p class="ix-title">Privacy and security</p><ul><li>Ads, trackers and ad slots blocked</li><li>Fingerprint noise on every site</li><li>Global Privacy Control</li><li>HTTPS-only and encrypted DNS</li><li>Cookie banners and tracking links cleaned</li><li>No telemetry</li></ul></div>
         <div class="ix span-4"><p class="ix-title">Sync and backup</p><ul><li>End-to-end encrypted sync</li><li>Self-hostable sync server</li><li>Recovery key</li><li>Export everything</li></ul></div>
         <div class="ix span-4"><p class="ix-title">Appearance</p><ul><li>Ink, Graphite, Dusk, Paper, Contrast</li><li>Blue, Teal, Amber, Rose, Mono</li><li>Match system</li><li>Density and frosted menus</li></ul></div>
         <div class="ix span-4"><p class="ix-title">For developers and IT</p><ul><li>The <code>perch</code> command and MCP server</li><li>A mode for each outside agent</li><li>Managed with Chrome's MDM tools</li><li>Updates itself, signed and notarized</li></ul></div>

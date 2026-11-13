@@ -121,3 +121,4 @@ perch/shell/sleep-pinned-tabs.patch
 perch/shell/restore-last-session.patch
 perch/shell/webkit-tab.patch
 perch/shell/sleeping-pinned-favicon.patch
+perch/shell/vertical-tabs-new-tab-row.patch

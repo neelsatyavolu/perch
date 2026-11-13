@@ -40,6 +40,7 @@ export const SEARCH_INDEX: readonly SearchEntry[] = [
   { section: "appearance", anchor: "match-system", title: "Match system", words: "dark mode light mode automatic macos" },
   { section: "appearance", anchor: "hide-chrome", title: "Hide tab strip and bookmarks bar", words: "chrome bars fullscreen minimal" },
   { section: "appearance", anchor: "reveal-on-hover", title: "Show the bars at the top edge", words: "hover reveal" },
+  { section: "appearance", anchor: "vertical-tabs", title: "Vertical tabs", words: "side tabs sidebar tab strip left arc aside layout" },
   { section: "appearance", anchor: "density", title: "Density", words: "compact comfortable rows" },
   { section: "models", anchor: "providers", title: "Model providers", words: "sign in claude chatgpt codex grok openai anthropic gemini openrouter ollama lm studio api key" },
   { section: "models", anchor: "task-models", title: "Task models", words: "default fast standard deep visual image generation effort" },

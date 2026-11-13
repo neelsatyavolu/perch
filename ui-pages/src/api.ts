@@ -70,6 +70,8 @@ export type Appearance = {
   /** With chrome hidden, show it when the pointer reaches the top edge. */
   readonly revealOnHover: boolean;
   readonly density: Density;
+  /** Tabs down the side of the window instead of across the top (Chromium's vertical tab strip). */
+  readonly verticalTabs?: boolean;
 };
 
 /* ---------- New tab page (spec 5.5, DESIGN.md) ---------- */

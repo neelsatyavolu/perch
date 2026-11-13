@@ -62,6 +62,7 @@
 #include "chrome/browser/ui/views/omnibox/omnibox_view_views.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "chrome/common/pref_names.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "ui/views/controls/button/button.h"
 #include "ui/views/view_tracker.h"
@@ -218,6 +219,9 @@ class Snapshotter {
           browser_->GetTabStripModel()->ContainsIndex(index)) {
         browser_->GetTabStripModel()->ActivateTabAt(index);
       }
+    } else if (state == "vertical-tabs") {
+      // Chromium's vertical tab strip, as Settings › Appearance turns it on.
+      prefs->SetBoolean(::prefs::kVerticalTabsEnabled, true);
     } else if (state == "panel") {
       SidePanelUI::From(browser_)->Show(SidePanelEntryId::kPerch);
     } else if (state == "chevron-menu" || state == "close-menus") {

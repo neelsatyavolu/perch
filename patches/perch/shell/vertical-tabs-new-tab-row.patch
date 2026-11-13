@@ -1,0 +1,17 @@
+Perch: in the expanded vertical tab strip, the new tab button is a "New tab" row lined up with the tab titles.
+diff --git a/chrome/browser/ui/views/tabs/vertical/vertical_tab_strip_bottom_container.cc b/chrome/browser/ui/views/tabs/vertical/vertical_tab_strip_bottom_container.cc
+index 64150f80cf..982f2dcf1c 100644
+--- a/chrome/browser/ui/views/tabs/vertical/vertical_tab_strip_bottom_container.cc
++++ b/chrome/browser/ui/views/tabs/vertical/vertical_tab_strip_bottom_container.cc
+@@ -105,6 +105,11 @@ void VerticalTabStripBottomContainer::UpdateButtonStyles(bool collapsed) {
+   new_tab_button_->SetInsets(GetLayoutInsets(
+       collapsed ? LayoutInset::VERTICAL_TAB_STRIP_BOTTOM_BUTTON_COLLAPSED
+                 : LayoutInset::VERTICAL_TAB_STRIP_BOTTOM_BUTTON_UNCOLLAPSED));
++  // Perch: expanded, the button is a "New tab" row lined up with the tab
++  // titles above it; collapsed, it is the plus alone.
++  new_tab_button_->SetText(collapsed ? std::u16string() : u"New tab");
++  new_tab_button_->SetHorizontalAlignment(collapsed ? gfx::ALIGN_CENTER
++                                                    : gfx::ALIGN_LEFT);
+ }
+ 
+ BEGIN_METADATA(VerticalTabStripBottomContainer)

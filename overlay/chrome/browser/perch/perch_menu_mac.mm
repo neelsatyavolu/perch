@@ -127,12 +127,11 @@ void AddPerchMenuItems() {
     settings.title = @"Settings\u2026";
   }
   NSMenu* view_menu = [main_menu itemWithTag:IDC_VIEW_MENU].submenu;
-  // Google-only View items: Lens, AI mode and the search tools, and vertical
-  // tabs, which Perch doesn't offer.
+  // Google-only View items: Lens, AI mode and the search tools. Vertical tabs
+  // stay (View › Vertical Tabs, also Settings › Appearance).
   for (NSInteger tag :
        {IDC_SHOW_GOOGLE_LENS_SHORTCUT, IDC_SHOW_AI_MODE_OMNIBOX_BUTTON,
-        IDC_SHOW_SEARCH_TOOLS, IDC_TOGGLE_VERTICAL_TABS,
-        IDC_TOGGLE_VERTICAL_TABS_COLLAPSE}) {
+        IDC_SHOW_SEARCH_TOOLS}) {
     if (NSMenuItem* item = [view_menu itemWithTag:tag]) {
       [view_menu removeItem:item];
     }

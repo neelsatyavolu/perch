@@ -66,6 +66,9 @@ export function Appearance() {
       </Group>
       <Group label="Window">
         <div class="card">
+          <Row id="vertical-tabs" title="Vertical tabs" detail="Tabs down the side of the window, with pinned tabs as tiles at the top">
+            <Switch label="Vertical tabs" describedBy="vertical-tabs-d" checked={Boolean(a.verticalTabs)} onChange={(verticalTabs) => update({ verticalTabs })} />
+          </Row>
           <Row id="hide-chrome" title="Hide tab strip and bookmarks bar" detail="⌘L shows the address bar and ⌃Tab shows your tabs">
             <Switch label="Hide tab strip and bookmarks bar" describedBy="hide-chrome-d" checked={a.hideChrome} onChange={(hideChrome) => update({ hideChrome })} />
           </Row>

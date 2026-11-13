@@ -8,6 +8,7 @@
 #include <string_view>
 
 #include "chrome/browser/perch/perch_pref_names.h"
+#include "chrome/common/pref_names.h"
 #include "components/prefs/pref_service.h"
 
 namespace perch {
@@ -56,6 +57,8 @@ constexpr BoolField kBools[] = {
     {"matchSystem", prefs::kAppearanceMatchSystem},
     {"hideChrome", prefs::kAppearanceHideChrome},
     {"revealOnHover", prefs::kAppearanceRevealOnHover},
+    // Chromium's own vertical tab strip, which switches over live.
+    {"verticalTabs", ::prefs::kVerticalTabsEnabled},
 };
 
 }  // namespace

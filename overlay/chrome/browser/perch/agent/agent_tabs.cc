@@ -16,6 +16,8 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/browser_window/public/create_browser_window.h"
+#include "chrome/browser/ui/side_panel/side_panel_entry_id.h"
+#include "chrome/browser/ui/side_panel/side_panel_ui.h"
 #include "chrome/browser/ui/tabs/tab_enums.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/tabs/tab_strip_model_observer.h"
@@ -202,6 +204,10 @@ void ShowAgentTab(tabs::TabInterface* tab, BrowserWindowInterface* into) {
   TabStripModel* target = into->GetTabStripModel();
   target->InsertDetachedTabAt(target->count(), std::move(moved),
                               AddTabTypes::ADD_ACTIVE);
+  // The sidebar opens beside it, on the chat whose agent works in the tab.
+  if (SidePanelUI* panel = SidePanelUI::From(into)) {
+    panel->Show(SidePanelEntryId::kPerch);
+  }
 }
 
 void CloseAgentTabs(Profile* profile) {

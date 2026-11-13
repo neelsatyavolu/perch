@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, statSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { StepEvent } from "../src/agent/loop";
@@ -13,6 +13,8 @@ import { Vault } from "../src/app/vault";
 const ORIGIN = "chrome://perch-chat";
 let dir: string;
 let app: App;
+/** Agent tabs and the chats whose agents opened them (serve-browser.ts asks the daemon). */
+const agentOwners = new Map<string, string>();
 const sendReq: ApprovalRequest = { call: { id: "c", name: "type", args: { ref: "e2", text: "On my way", submit: true } }, target: { role: "textbox", name: "Message" }, kind: "risky", site: "chat.example", summary: "" };
 
 const inputs: RunnerInput[] = [];
@@ -37,6 +39,7 @@ beforeAll(async () => {
     runner,
     models: [{ id: "fake", label: "Fake", provider: "test", efforts: ["low", "medium", "high"] }, { id: "other", label: "Other", provider: "test", efforts: ["medium"] }],
     allowedOrigins: [ORIGIN],
+    agentChatFor: (targetId) => agentOwners.get(targetId),
   });
 });
 afterAll(async () => {
@@ -274,6 +277,41 @@ test("an image artifact downloads through the API as an attachment", async () =>
   expect(Buffer.from(await res.arrayBuffer()).equals(png)).toBe(true);
   expect((await api(`/api/artifacts/${meta.id}/file?version=9`)).status).toBe(404);
   expect((await fetch(`${app.server.url}/api/artifacts/${meta.id}/file`)).status).toBe(401);
+});
+
+test("an artifact can be renamed, saved to Downloads once, and deleted", async () => {
+  const downloads = mkdtempSync(join(tmpdir(), "perch-dl-"));
+  process.env.PERCH_DOWNLOADS_DIR = downloads;
+  try {
+    const chat = (await (await api("/api/chats", { method: "POST", json: {} })).json()) as Chat;
+    const meta = await (await api(`/api/chats/${chat.id}/artifacts`, { method: "POST", json: { title: "Study kit", kind: "markdown", content: "# Kit" } })).json();
+    const renamed = await (await api(`/api/artifacts/${meta.id}`, { method: "PATCH", json: { title: "physics-unit2-study-kit" } })).json();
+    expect(renamed.title).toBe("physics-unit2-study-kit");
+    expect((await api(`/api/artifacts/${meta.id}`, { method: "PATCH", json: { title: "  " } })).status).toBe(400);
+    const first = await (await api(`/api/artifacts/${meta.id}/save`, { method: "POST", json: {} })).json();
+    expect(first.path).toBe(join(downloads, "physics-unit2-study-kit.md"));
+    expect(readFileSync(first.path, "utf8")).toBe("# Kit");
+    const again = await (await api(`/api/artifacts/${meta.id}/save`, { method: "POST", json: {} })).json();
+    expect(again.path).toBe(first.path);
+    expect(readdirSync(downloads)).toEqual(["physics-unit2-study-kit.md"]);
+    expect((await api(`/api/artifacts/${meta.id}`, { method: "DELETE" })).status).toBe(200);
+    expect((await api(`/api/artifacts/${meta.id}`)).status).toBe(404);
+    expect((await (await api(`/api/chats/${chat.id}`)).json()).artifacts).toEqual([]);
+  } finally {
+    delete process.env.PERCH_DOWNLOADS_DIR;
+    rmSync(downloads, { recursive: true, force: true });
+  }
+});
+
+test("an agent's tab brought into a window shows the chat that works in it", async () => {
+  const chat = (await (await api("/api/chats", { method: "POST", json: { title: "Jensen Huang research" } })).json()) as Chat;
+  agentOwners.set("AGENT1", chat.id);
+  await api("/api/windows/w12/active", { method: "POST", json: { tab: { id: "t60", title: "France 24", url: "https://france24.com", targetId: "AGENT1" } } });
+  const view = await (await api("/api/tabs/t60/chat")).json();
+  expect(view.chat.id).toBe(chat.id);
+  expect((await (await api("/api/windows/w12")).json()).chatId).toBe(chat.id);
+  await api("/api/windows/w12/active", { method: "POST", json: { tab: { id: "t61", title: "Other", url: "https://example.com", targetId: "USER1" } } });
+  expect((await (await api("/api/tabs/t61/chat")).json()).chat).toBeNull();
 });
 
 test("the browser's open-tab list replaces the known tabs and frees side chats of tabs it does not have", async () => {

@@ -62,9 +62,25 @@ export async function newToolContext(browser: Browser): Promise<ToolContext> {
   return ctx;
 }
 
-async function currentTab(ctx: ToolContext): Promise<Tab> {
+/**
+ * A page on the user's own machine (a dev server's preview, a local file) is something to show the
+ * user, so it opens as an ordinary tab in their window rather than among the hidden agent tabs.
+ */
+export function isLocalUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    if (u.protocol === "file:") return true;
+    if (u.protocol !== "http:" && u.protocol !== "https:") return false;
+    const host = u.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+    return host === "localhost" || host.endsWith(".localhost") || host === "::1" || host === "0.0.0.0" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host);
+  } catch {
+    return false;
+  }
+}
+
+async function currentTab(ctx: ToolContext, url?: string): Promise<Tab> {
   if (ctx.tab && !ctx.tab.closed) return ctx.tab;
-  ctx.tab = await ctx.browser.newTab();
+  ctx.tab = await ctx.browser.newTab(undefined, { visible: url !== undefined && isLocalUrl(url) });
   ctx.owned.push(ctx.tab);
   return ctx.tab;
 }
@@ -348,12 +364,12 @@ async function dispatch(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
   if (call.name === "downloads") return { content: recentDownloads() };
   if (call.name === "switch_tab") return switchTab(ctx, String(a.id));
   if (call.name === "open_tab") {
-    ctx.tab = await ctx.browser.newTab();
+    ctx.tab = await ctx.browser.newTab(undefined, { visible: isLocalUrl(normalizeUrl(a.url)) });
     ctx.owned.push(ctx.tab);
     const note = await openPage(ctx.tab, normalizeUrl(a.url));
     return { content: `opened ${a.url} in a new tab${note ? `\n${note}` : ""}\n\n${await page(ctx, ctx.tab)}` };
   }
-  const tab = await currentTab(ctx);
+  const tab = await currentTab(ctx, call.name === "navigate" ? normalizeUrl(String(a.url)) : undefined);
   const refs = refsFor(tab);
   // Script errors and new tabs are reported for the action that caused them, not for earlier ones.
   tab.takePageErrors();
@@ -429,7 +445,7 @@ async function dispatch(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
 }
 
 /** The user's Downloads folder (PERCH_DOWNLOADS_DIR in tests). */
-const downloadsDir = () => process.env.PERCH_DOWNLOADS_DIR || join(homedir(), "Downloads");
+export const downloadsDir = () => process.env.PERCH_DOWNLOADS_DIR || join(homedir(), "Downloads");
 const RECENT_MS = 3_600_000;
 
 /** A path in `dir` for `name` that doesn't overwrite anything: "Report.pdf", then "Report 2.pdf". */

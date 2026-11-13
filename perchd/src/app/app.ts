@@ -9,7 +9,7 @@ import { FileRegistry } from "./attachments";
 import { ArtifactStore } from "./artifacts";
 import { ChatStore, DEFAULT_SETTINGS } from "./chats";
 import type { PagesApi } from "./pages-api";
-import type { AppEvent, AppInfo, ChatSettings, ModelInfo, TabInfo, WindowState } from "./protocol";
+import type { AppEvent, AppInfo, Chat, ChatSettings, ModelInfo, TabInfo, WindowState } from "./protocol";
 import { fitEffort } from "./effort";
 import { RunManager, type RunDeps, type Runner } from "./runs";
 import { startServer, type Listen, type Server } from "./server";
@@ -43,6 +43,8 @@ export type AppOptions = {
   pageText?: RunDeps["pageText"];
   /** Artifacts on `perch-artifact://`, when the browser that runs perchd serves that scheme. */
   artifactScheme?: boolean;
+  /** The chat whose agent opened the tab with this target id, if one did. */
+  agentChatFor?: (targetId: string) => string | undefined;
 };
 
 /** What the pages API gets from the app: its chats, runs, an event to the pages, and the new-chat defaults. */
@@ -78,11 +80,28 @@ export class Windows {
   private active = new Map<string, TabInfo | null>();
   private known = new Map<string, TabInfo>();
 
-  constructor(private readonly chats: ChatStore, private readonly emit: (event: AppEvent) => void = () => {}) {}
+  constructor(
+    private readonly chats: ChatStore,
+    private readonly emit: (event: AppEvent) => void = () => {},
+    /** The chat whose agent opened the tab with this target id, if one did. */
+    private readonly agentChatFor: (targetId: string) => string | undefined = () => undefined,
+  ) {}
+
+  /**
+   * The chat a tab's sidebar shows: its own side chat, or for an agent's tab the user brought into
+   * view, the chat whose agent works in it (as in Aside).
+   */
+  chatFor(tabId: string): Chat | undefined {
+    const own = this.chats.forTab(tabId);
+    if (own) return own;
+    const targetId = this.known.get(tabId)?.targetId;
+    const agentChat = targetId ? this.agentChatFor(targetId) : undefined;
+    return agentChat ? this.chats.get(agentChat) : undefined;
+  }
 
   state(windowId: string): WindowState {
     const tab = this.active.get(windowId) ?? null;
-    return { windowId, tab, chatId: tab ? this.chats.forTab(tab.id)?.id ?? null : null };
+    return { windowId, tab, chatId: tab ? this.chatFor(tab.id)?.id ?? null : null };
   }
 
   /** The browser switched tabs in a window. A tab that arrives from another window brings its side chat. */
@@ -144,7 +163,7 @@ export async function startApp(opts: AppOptions): Promise<App> {
   const chats = await ChatStore.load(join(opts.dataDir, "chats"), opts.vault);
   const artifacts = await ArtifactStore.load(join(opts.dataDir, "artifacts"), opts.vault, (chatId) => chats.get(chatId)?.incognito === true);
   let publish: (event: AppEvent) => void = () => {};
-  const windows = new Windows(chats, (event) => publish(event));
+  const windows = new Windows(chats, (event) => publish(event), opts.agentChatFor);
   let ownOrigin: string | null = null;
   // Perch's pages may frame artifacts; so may the development pages this server itself serves.
   const artifactServer = startArtifactServer({ store: artifacts, frameAncestors: () => [...opts.allowedOrigins, ...(opts.uiDir && ownOrigin ? [ownOrigin] : [])], browserScheme: opts.artifactScheme === true });

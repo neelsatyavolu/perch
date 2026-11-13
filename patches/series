@@ -125,3 +125,4 @@ perch/shell/vertical-tabs-new-tab-row.patch
 perch/shell/side-panel-tab-switch.patch
 perch/agent/agent-tabs.patch
 perch/shell/ntp-autocomplete-sources.patch
+perch/shell/no-install-app-or-media-button.patch

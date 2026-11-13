@@ -80,9 +80,11 @@ export class Browser {
    * the tab opens in the background of the user's window instead, held drawing by
    * `Perch.claimTab`, and the session puts it in its tab group.
    */
-  async newTab(url?: string): Promise<Tab> {
+  async newTab(url?: string, opts: { visible?: boolean } = {}): Promise<Tab> {
     let targetId: string;
-    if (this.agentTabs) {
+    // `visible`: a tab for the user to see (a local preview) opens in their window even when
+    // Perch keeps the agent's other tabs hidden.
+    if (this.agentTabs && !opts.visible) {
       // Perch keeps agent tabs in a hidden window of their own, listed under the toolbar's
       // Agent Tabs button, and holds them drawing (agent_tabs.h).
       ({ targetId } = await this.conn.send<{ targetId: string }>("Perch.createAgentTab", { url: "about:blank" }));

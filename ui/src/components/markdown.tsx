@@ -108,6 +108,13 @@ function cells(line: string): string[] {
   return line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
 }
 
+/** Cells this short (dates, names, amounts) stay on one line; longer ones wrap between words. */
+const SHORT_CELL = 24;
+
+function cellClass(text: string): string | undefined {
+  return text.length <= SHORT_CELL ? "short" : undefined;
+}
+
 function Table({ rows }: { rows: string[][] }) {
   const [head, ...body] = rows;
   return (
@@ -118,7 +125,7 @@ function Table({ rows }: { rows: string[][] }) {
         </thead>
         <tbody>
           {body.map((r, n) => (
-            <tr key={n}>{r.map((c, m) => <td key={m}>{inline(c)}</td>)}</tr>
+            <tr key={n}>{r.map((c, m) => <td key={m} class={cellClass(c)}>{inline(c)}</td>)}</tr>
           ))}
         </tbody>
       </table>

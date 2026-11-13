@@ -66,6 +66,10 @@ export function createClient(api: string, token: string, deps: Deps = {}) {
     artifact: (id: string, version?: number) => call<{ meta: ArtifactMeta; content: string | null }>("GET", `/api/artifacts/${encodeURIComponent(id)}${version ? `?version=${version}` : ""}`),
     /** A version's bytes, for saving to disk. */
     artifactFile: (id: string, version?: number) => request("GET", `/api/artifacts/${encodeURIComponent(id)}/file${version ? `?version=${version}` : ""}`).then((r) => r.blob()),
+    renameArtifact: (id: string, title: string) => call<ArtifactMeta>("PATCH", `/api/artifacts/${encodeURIComponent(id)}`, { title }),
+    deleteArtifact: (id: string) => call<{ removed: string }>("DELETE", `/api/artifacts/${encodeURIComponent(id)}`),
+    /** Writes the newest version to Downloads (once) and returns its path; `reveal` also shows it in Finder. */
+    downloadArtifact: (id: string, reveal = false) => call<{ path: string }>("POST", `/api/artifacts/${encodeURIComponent(id)}/save`, { reveal }),
     saveArtifact: (chatId: string, a: { title: string; kind: ArtifactKind; content: string; language?: string; mime?: string }) => call<ArtifactMeta>("POST", `/api/chats/${encodeURIComponent(chatId)}/artifacts`, a),
     decide: (approvalId: string, approved: boolean) => call<{ ok: true }>("POST", `/api/approvals/${encodeURIComponent(approvalId)}`, { approved }),
     windowState: (windowId: string) => call<WindowState>("GET", `/api/windows/${encodeURIComponent(windowId)}`),

@@ -35,6 +35,8 @@ export function applyToView(view: ChatView, event: AppEvent): ChatView {
       return { ...view, run: null, chat: { ...chat, messages: [...chat.messages, event.message] } };
     case "run.queue":
       return { ...view, queued: event.queued };
+    case "artifact.removed":
+      return { ...view, artifacts: view.artifacts.filter((a) => a.id !== event.artifactId) };
     case "artifact.saved":
       return { ...view, artifacts: [...view.artifacts.filter((a) => a.id !== event.artifact.id), event.artifact] };
     default:

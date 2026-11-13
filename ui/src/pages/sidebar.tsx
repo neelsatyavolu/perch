@@ -181,6 +181,7 @@ export function Sidebar({ client, windowId, fallbackTab = null, host }: Props) {
         </button>
       </header>
       <Thread
+        client={client}
         view={view}
         error={chat.error}
         empty={loaded ? SIDEBAR_EMPTY : ""}

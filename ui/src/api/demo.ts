@@ -159,6 +159,9 @@ export function createDemoClient(windowId: string): Client {
     artifact: () => Promise.reject(new ApiError("This demo has no artifacts", 404)),
     artifactFile: () => Promise.reject(new ApiError("This demo has no artifacts", 404)),
     saveArtifact: () => Promise.reject(new ApiError("This demo can't save artifacts", 400)),
+    renameArtifact: () => Promise.reject(new ApiError("This demo has no artifacts", 404)),
+    deleteArtifact: () => Promise.reject(new ApiError("This demo has no artifacts", 404)),
+    downloadArtifact: () => Promise.reject(new ApiError("This demo has no artifacts", 404)),
     decide: (approvalId, approved) => attempt(() => {
       const current = run;
       if (!current?.approval || current.approval.id !== approvalId) throw new ApiError("That approval is no longer waiting", 404);

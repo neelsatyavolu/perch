@@ -149,6 +149,7 @@ export type AppEvent =
   /** The chat's waiting messages changed: one was queued, removed, or started. */
   | { type: "run.queue"; chatId: string; queued: QueuedMessage[] }
   | { type: "artifact.saved"; chatId: string; artifact: ArtifactMeta }
+  | { type: "artifact.removed"; chatId: string; artifactId: string }
   | { type: "window.active"; state: WindowState }
   /** What new chats start with changed: a pick in any composer, or Settings → Models. */
   | { type: "defaults"; defaults: ChatSettings }

@@ -6,9 +6,12 @@ import type { ArtifactMeta, ChatMessage } from "../api/types";
 import type { ChatView } from "../state/chat";
 import { ApprovalCard } from "./approval";
 import { PerchMark } from "./icon";
-import { ArtifactCard, LiveRun, Message, dayLabel, newDay } from "./message";
+import type { Client } from "../api/client";
+import { FileCard } from "./files";
+import { LiveRun, Message, dayLabel, newDay } from "./message";
 
 type ThreadProps = {
+  client: Client;
   view: ChatView;
   onDecide: (approvalId: string, approved: boolean) => Promise<void> | void;
   onOpenArtifact: (meta: ArtifactMeta) => void;
@@ -21,7 +24,7 @@ type ThreadProps = {
   empty: VNode | string;
 };
 
-export function Thread({ view, onDecide, onOpenArtifact, onBranch, selectedArtifact, onScroll, error, empty }: ThreadProps) {
+export function Thread({ client, view, onDecide, onOpenArtifact, onBranch, selectedArtifact, onScroll, error, empty }: ThreadProps) {
   const box = useRef<HTMLDivElement>(null);
   const pad = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
@@ -130,9 +133,9 @@ export function Thread({ view, onDecide, onOpenArtifact, onBranch, selectedArtif
   const artifact = useCallback(
     (id: string) => {
       const meta = view.artifacts.find((a) => a.id === id);
-      return meta ? <ArtifactCard meta={meta} onOpen={onOpenArtifact} selected={selectedArtifact === id} /> : <div class="artifact-card missing">This artifact was removed</div>;
+      return meta ? <FileCard client={client} meta={meta} onOpen={onOpenArtifact} selected={selectedArtifact === id} /> : null;
     },
-    [view.artifacts, selectedArtifact, onOpenArtifact],
+    [client, view.artifacts, selectedArtifact, onOpenArtifact],
   );
   return (
     <div

@@ -102,6 +102,26 @@ export class ArtifactStore {
     this.records.set(record.id, record);
   }
 
+  /** Gives an artifact a new name; every version keeps its content. */
+  async rename(id: string, title: string): Promise<ArtifactRecord> {
+    const trimmed = title.trim();
+    if (!trimmed || trimmed.length > 200) throw new Error("an artifact needs a title of up to 200 characters");
+    return this.queue.run(id, async () => {
+      const current = this.records.get(id);
+      if (!current) throw new Error(`no artifact ${id}`);
+      const next: ArtifactRecord = { ...current, title: trimmed };
+      await this.write(next);
+      return next;
+    });
+  }
+
+  async remove(id: string): Promise<void> {
+    await this.queue.run(id, async () => {
+      this.records.delete(id);
+      await rm(join(this.dir, `${id}${EXT}`), { force: true });
+    });
+  }
+
   async removeForChat(chatId: string): Promise<void> {
     await Promise.all(
       this.forChat(chatId).map((r) =>
@@ -151,6 +171,22 @@ export function parseArtifactBlocks(text: string): { text: string; blocks: Artif
     i = close;
   }
   return { text: out.join("\n"), blocks };
+}
+
+const IMAGE_EXT: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif" };
+const TEXT_EXT: Record<ArtifactKind, string> = { html: "html", markdown: "md", code: "txt", svg: "svg", csv: "csv", json: "json", image: "png" };
+
+export function fileExtension(kind: ArtifactKind, language: string | undefined, mime: string | undefined): string {
+  if (kind === "image") return IMAGE_EXT[mime ?? ""] ?? "png";
+  if (kind === "code" && language && /^[\w]{1,16}$/.test(language)) return language;
+  return TEXT_EXT[kind];
+}
+
+/** The name an artifact gets as a file: its title, safe for Finder, with the kind's extension. */
+export function artifactFileName(record: ArtifactRecord, version: ArtifactVersion): string {
+  const ext = fileExtension(record.kind, record.language, version.mime);
+  const stem = record.title.replace(/[\/:*?"<>|\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 80) || "artifact";
+  return stem.toLowerCase().endsWith(`.${ext}`) ? stem : `${stem}.${ext}`;
 }
 
 function defaultTitle(kind: ArtifactKind): string {

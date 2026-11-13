@@ -1,9 +1,9 @@
 /** One chat message: the user's bubble, or a reply with its steps, text, artifacts and actions. */
 
-import type { VNode } from "preact";
+import { Fragment, type VNode } from "preact";
 import { memo } from "./memo";
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { ArtifactMeta, ChatMessage } from "../api/types";
+import type { ChatMessage } from "../api/types";
 import { Icon } from "./icon";
 import { Markdown } from "./markdown";
 
@@ -77,21 +77,6 @@ export function useTyped(text: string, from: number | null): string {
   return text.slice(0, shown);
 }
 
-export function ArtifactCard({ meta, onOpen, selected }: { meta: ArtifactMeta; onOpen: (meta: ArtifactMeta) => void; selected?: boolean }) {
-  const kind = { html: "Page", markdown: "Document", code: meta.language ? `Code · ${meta.language}` : "Code", svg: "Drawing", csv: "Table", json: "Data", image: "Image" }[meta.kind];
-  return (
-    <button type="button" class={selected ? "artifact-card sel" : "artifact-card"} onClick={() => onOpen(meta)}>
-      <Icon name="panel" />
-      <span>
-        <span class="t">{meta.title}</span>
-        <span class="k">
-          {kind} · version {meta.versions}
-        </span>
-      </span>
-    </button>
-  );
-}
-
 /** The time in the user's own clock style, such as "2:09 AM" or "02:09". */
 export function time(iso: string): string {
   const d = new Date(iso);
@@ -123,6 +108,16 @@ export function newDay(iso: string, prev?: string): boolean {
   return Number.isNaN(a.getTime()) || Number.isNaN(b.getTime()) ? false : dayKey(a) !== dayKey(b);
 }
 
+const MARKERS = /\[\[artifact:([^\]]+)\]\]/g;
+
+/** The files a reply made, in the order it gave them; they show together at its end. */
+export function fileIds(message: ChatMessage): string[] {
+  return [...new Set([...[...message.text.matchAll(MARKERS)].map((m) => m[1]!), ...(message.artifacts ?? [])])];
+}
+
+/** Files show under the reply, not where the reply mentioned them. */
+const noInline = () => null;
+
 type MessageProps = {
   message: ChatMessage;
   /** For the reply that just finished: how much of its text was already on screen; the rest types out. */
@@ -135,6 +130,7 @@ type MessageProps = {
 export const Message = memo(function Message({ message, artifact, onBranch, typeFrom }: MessageProps) {
   const [copied, setCopied] = useState(false);
   const typed = useTyped(message.role === "assistant" ? message.text : "", typeFrom ?? null);
+  const files = message.role === "assistant" ? fileIds(message) : [];
   const copy = async () => {
     try {
       await navigator.clipboard?.writeText(message.text.replace(/\[\[artifact:[^\]]+\]\]\n?/g, ""));
@@ -166,7 +162,8 @@ export const Message = memo(function Message({ message, artifact, onBranch, type
   return (
     <div class="reply" data-id={message.id}>
       <Steps steps={message.steps ?? []} />
-      {typed && <Markdown text={typed} renderArtifact={artifact} />}
+      {typed && <Markdown text={typed} renderArtifact={noInline} />}
+      {files.length > 0 && <div class="reply-files">{files.map((id) => <Fragment key={id}>{artifact(id)}</Fragment>)}</div>}
       {message.stopped && <div class="note">Stopped</div>}
       {message.error && (
         <div class="note error" role="alert">

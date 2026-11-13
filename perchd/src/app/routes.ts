@@ -2,7 +2,8 @@
 
 import type { ArtifactServer } from "./artifact-server";
 import type { FileRegistry } from "./attachments";
-import type { ArtifactStore } from "./artifacts";
+import { artifactFileName, type ArtifactStore } from "./artifacts";
+import { saveArtifactFile } from "./artifact-files";
 import type { Windows } from "./app";
 import type { ChatStore } from "./chats";
 import type { PagesApi } from "./pages-api";
@@ -104,15 +105,6 @@ function artifactVersion(ctx: RouteContext, id: string, query: URLSearchParams) 
   const content = Number.isInteger(version) && version >= 1 ? ctx.artifacts.content(id, version) : undefined;
   if (!content) throw new AppError(`Version ${query.get("version")} does not exist`, 404);
   return { record, version, content };
-}
-
-const IMAGE_EXT: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif" };
-const TEXT_EXT: Record<ArtifactKind, string> = { html: "html", markdown: "md", code: "txt", svg: "svg", csv: "csv", json: "json", image: "png" };
-
-function fileExtension(kind: ArtifactKind, language: string | undefined, mime: string | undefined): string {
-  if (kind === "image") return IMAGE_EXT[mime ?? ""] ?? "png";
-  if (kind === "code" && language && /^[\w]{1,16}$/.test(language)) return language;
-  return TEXT_EXT[kind];
 }
 
 export function exportMarkdown(ctx: RouteContext, chat: Chat): string {
@@ -245,7 +237,7 @@ export const ROUTES: Route[] = [
   route("GET", "/api/artifacts/:id/file", (ctx, [id], _, query) => {
     const { record, content } = artifactVersion(ctx, id!, query);
     const image = record.kind === "image";
-    const name = `${record.title.replace(/[^\w .-]/g, "_")}.${fileExtension(record.kind, record.language, content.mime)}`;
+    const name = artifactFileName(record, content).replace(/[^\w .-]/g, "_");
     return new Response(image ? Buffer.from(content.content, "base64") : content.content, {
       headers: {
         "content-type": image ? content.mime ?? "application/octet-stream" : "text/plain; charset=utf-8",
@@ -254,6 +246,31 @@ export const ROUTES: Route[] = [
         "cache-control": "no-store",
       },
     });
+  }),
+  route("PATCH", "/api/artifacts/:id", async (ctx, [id], body) => {
+    const o = v.object(body);
+    v.onlyKeys(o, ["title"]);
+    const title = v.text(o.title, "title", 200).trim();
+    if (!title) throw new AppError("A file name cannot be empty");
+    if (!ctx.artifacts.get(id!)) throw new AppError("This artifact no longer exists", 404);
+    const record = await ctx.artifacts.rename(id!, title);
+    ctx.runs.announceArtifact(record);
+    return ctx.runs.artifactMeta(record);
+  }),
+  route("DELETE", "/api/artifacts/:id", async (ctx, [id]) => {
+    const record = ctx.artifacts.get(id!);
+    if (!record) throw new AppError("This artifact no longer exists", 404);
+    await ctx.artifacts.remove(id!);
+    ctx.runs.announceArtifactRemoved(record.chatId, record.id);
+    return { removed: record.id };
+  }),
+  // Writes the file to Downloads (once per version), and with "reveal" shows it in Finder.
+  route("POST", "/api/artifacts/:id/save", async (ctx, [id], body, query) => {
+    const o = v.object(body ?? {});
+    v.onlyKeys(o, ["reveal"]);
+    const reveal = o.reveal === undefined ? false : v.bool(o.reveal, "reveal");
+    const { record, version, content } = artifactVersion(ctx, id!, query);
+    return { path: await saveArtifactFile(record, version, content, { reveal }) };
   }),
   route("POST", "/api/approvals/:id", (ctx, [id], body) => {
     const o = v.object(body);
@@ -274,7 +291,7 @@ export const ROUTES: Route[] = [
     return ctx.windows.activate(id!, o.tab === null ? null : v.tabInfo({ ...v.object(o.tab, '"tab"'), windowId: id }));
   }),
   route("GET", "/api/tabs/:id/chat", (ctx, [id]) => {
-    const chat = ctx.chats.forTab(id!);
+    const chat = ctx.windows.chatFor(id!);
     return chat ? chatView(ctx, chat) : { chat: null, run: null, artifacts: [] };
   }),
   route("POST", "/api/tabs/:id/chat", (ctx, [id], body) => sideChat(ctx, id!, body)),

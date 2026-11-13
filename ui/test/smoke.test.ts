@@ -179,7 +179,7 @@ for (const { theme, accent } of pairs) {
     await tab.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
     await tab.navigate(`${app.server.url}/ui/chat.html?theme=${theme.id}&accent=${accent.id}&chat=${fullChatId}#token=${app.token}`);
     await waitFor(`!!document.querySelector('.full[data-ready] .reply .md-table') && !!document.querySelector('.chats .row.sel')`);
-    await tab.evaluate(`document.querySelector('button.artifact-card').click()`);
+    await tab.evaluate(`document.querySelector('.file-card .file-open').click()`);
     await waitFor(`!!document.querySelector('.art .art-frame')`);
     await Bun.sleep(300);
     const seen = await tab.evaluate<{ bg: string; title: string; frame: string; width: number }>(`(() => ({

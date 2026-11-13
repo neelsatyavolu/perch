@@ -10,6 +10,7 @@ import { ArtifactPane, PANE } from "../components/artifact-pane";
 import { ChatList } from "../components/chat-list";
 import { Composer } from "../components/composer";
 import { Icon, PerchDot } from "../components/icon";
+import { OutputsPanel } from "../components/files";
 import { Menu } from "../components/menu";
 import { Thread } from "../components/thread";
 import { applyToList } from "../state/chat";
@@ -36,6 +37,7 @@ export function FullChat({ client, initialChat = null, initialAsk = null, onNavi
   const [list, setList] = useState<ChatSummary[]>([]);
   const [listOpen, setListOpen] = useState(() => window.innerWidth >= LIST_BREAKPOINT && readPref("chat.list", true));
   const [artifact, setArtifact] = useState<ArtifactMeta | null>(null);
+  const [outputs, setOutputs] = useState(false);
   const [width, setWidth] = useState(() => readPref("chat.paneWidth", PANE.initial));
   const [pending, setPending] = useState<Partial<ChatSettings>>({});
   // A pick in any composer: new chats start with it, and an unsent pick here gives way to it.
@@ -58,6 +60,7 @@ export function FullChat({ client, initialChat = null, initialAsk = null, onNavi
   const open = async (id: string | null) => {
     const n = ++opening.current;
     setArtifact(null);
+    setOutputs(false);
     setConfirmDelete(false);
     setEditing(false);
     const payload = id ? await client.chat(id).catch(() => null) : null;
@@ -109,7 +112,9 @@ export function FullChat({ client, initialChat = null, initialAsk = null, onNavi
   useEffect(() => {
     if (!artifact) return;
     const fresh = view.artifacts.find((a) => a.id === artifact.id);
-    if (fresh && fresh.versions !== artifact.versions) setArtifact(fresh);
+    // Deleted: the pane closes. A new version or name: the pane follows it.
+    if (!fresh) setArtifact(null);
+    else if (fresh.versions !== artifact.versions || fresh.title !== artifact.title) setArtifact(fresh);
   }, [view.artifacts]);
 
   // A full-page chat has no tab of its own, so new ones start with the agent's own tabs.
@@ -210,11 +215,14 @@ export function FullChat({ client, initialChat = null, initialAsk = null, onNavi
             </button>
           ) : null}
           {view.artifacts.length > 0 && (
-            <button type="button" class="ib" aria-label="Artifacts" title={artifact ? "Hide artifacts" : "Show artifacts"} aria-pressed={Boolean(artifact)} onClick={() => setArtifact(artifact ? null : view.artifacts.at(-1) ?? null)}>
-              <Icon name="panel" />
+            <button type="button" class="ib" aria-label="Outputs" title={outputs ? "Hide files" : "Files Perch made"} aria-pressed={outputs} onClick={() => setOutputs(!outputs)}>
+              <Icon name="files" />
             </button>
           )}
         </header>
+        {outputs && view.artifacts.length > 0 && (
+          <OutputsPanel client={client} artifacts={view.artifacts} selected={artifact?.id ?? null} onOpen={setArtifact} onClose={() => setOutputs(false)} />
+        )}
         {confirmDelete && (
           <div class="confirm" role="alert">
             <span>Delete this chat and its artifacts? This cannot be undone.</span>
@@ -227,6 +235,7 @@ export function FullChat({ client, initialChat = null, initialAsk = null, onNavi
           </div>
         )}
         <Thread
+          client={client}
           view={view}
           error={chat.error}
           empty={EMPTY}

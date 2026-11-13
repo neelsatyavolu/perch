@@ -503,6 +503,15 @@ export class RunManager {
     await Promise.all([...this.naming]);
   }
 
+  /** Tells every page an artifact changed (a new version or a new name), or is gone. */
+  announceArtifact(record: ArtifactRecord): void {
+    this.deps.emit({ type: "artifact.saved", chatId: record.chatId, artifact: this.artifactMeta(record) });
+  }
+
+  announceArtifactRemoved(chatId: string, artifactId: string): void {
+    this.deps.emit({ type: "artifact.removed", chatId, artifactId });
+  }
+
   /** Tells every page that a chat is gone. */
   announceRemoved(chatId: string): void {
     this.deps.emit({ type: "chat.removed", chatId });

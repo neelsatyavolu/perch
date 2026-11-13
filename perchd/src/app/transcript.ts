@@ -9,6 +9,7 @@ export const ARTIFACT_FORMAT = [
   "If the user would want to keep what you make (a page, document, chart, table, code file or data), give it as an artifact:",
   'a fenced block that opens with ```artifact <kind> "<title>" and closes with ```. Kinds: html, markdown, code:<language>, svg, csv, json.',
   "Use a longer fence (````) when the content contains ```. Using the same title again saves a new version.",
+  "To hand the user a file from your chat folder (one you made with write_file, downloaded with read_document, or bundled with make_zip), put [[file:<its full path>]] on its own line in your final reply; it shows as a file they can download. For a kit of several files (notes, the original PDFs and slides), bundle them with make_zip and hand over the zip.",
 ].join("\n");
 
 /** On a chat's first message: the agent names the chat in its reply (chat-title.ts takes the line out). */

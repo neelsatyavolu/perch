@@ -1,5 +1,6 @@
 /** Runs the model's tool calls against the browser. Errors come back as text; nothing throws. */
 
+import { documentText, fetchDocument, freeName, makeZip, part } from "./documents";
 import { pdfPages, pdfSection } from "../page/pdf";
 import { FILL_TOOLS, runFillTool, type FillSites, type PasswordManager } from "./fill-tools";
 import { existsSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -170,6 +171,28 @@ async function withPage(ctx: ToolContext, tab: Tab, result: ActionResult, action
   }
   notes.push(...tab.takeDialogNotes());
   return { content: `${notes.join("\n")}\n\n${view}` };
+}
+
+/** Documents read in each chat folder, by address, so reading on does not download again. */
+const documents = new Map<string, { path: string; text: string | Error }>();
+
+async function readDocument(ctx: ToolContext, url: string, from: number): Promise<ToolResult> {
+  const key = `${ctx.workDir}\n${url}`;
+  let doc = documents.get(key);
+  if (!doc || !existsSync(doc.path)) {
+    const tab = await currentTab(ctx);
+    const cookies = async (u: string) =>
+      (await tab.send<{ cookies: { name: string; value: string }[] }>("Network.getCookies", { urls: [u] })).cookies.map((c) => `${c.name}=${c.value}`).join("; ");
+    const { userAgent } = await ctx.browser.conn.send<{ userAgent: string }>("Browser.getVersion");
+    const fetched = await fetchDocument(url, cookies, userAgent);
+    const path = freeName(ctx.workDir, fetched.name);
+    writeFileSync(path, fetched.bytes);
+    const text = await documentText(fetched.bytes, fetched.name, fetched.type).catch((e: Error) => e);
+    doc = { path, text };
+    documents.set(key, doc);
+  }
+  if (doc.text instanceof Error) return { content: `Saved the file as ${doc.path}, but couldn't read its text: ${doc.text.message}.` };
+  return { content: `${basename(doc.path)}, saved as ${doc.path}:\n\n${part(doc.text, from)}` };
 }
 
 /** When each tab's current action started, to tell its own new tabs from older ones. */
@@ -348,6 +371,12 @@ async function dispatch(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
     const path = join(ctx.workDir, name);
     writeFileSync(path, String(a.content));
     return { content: `saved ${path} (${String(a.content).length} characters)` };
+  }
+  if (call.name === "read_document") return readDocument(ctx, normalizeUrl(String(a.url)), Number(a.from ?? 0) || 0);
+  if (call.name === "make_zip") {
+    const files = Array.isArray(a.files) ? a.files.map(String) : [];
+    const zip = makeZip(ctx.workDir, String(a.name), files, readdirSync(ctx.workDir));
+    return { content: `saved ${zip.path} (${zip.count} file${zip.count === 1 ? "" : "s"}). To give it to the user, put [[file:${zip.path}]] on its own line in your final reply.` };
   }
   if (call.name === "downloads") return { content: recentDownloads() };
   if (call.name === "switch_tab") return switchTab(ctx, String(a.id));

@@ -18,7 +18,26 @@ import { ensurePrivateDir, KeyedQueue, UUID, writePrivate } from "./files";
 import type { ArtifactKind } from "./protocol";
 import type { Vault } from "./vault";
 
-export const ARTIFACT_KINDS: readonly ArtifactKind[] = ["html", "markdown", "code", "svg", "csv", "json", "image"];
+export const ARTIFACT_KINDS: readonly ArtifactKind[] = ["html", "markdown", "code", "svg", "csv", "json", "image", "file"];
+/** Kinds kept as base64 bytes rather than text. */
+export const isBinaryKind = (kind: ArtifactKind) => kind === "image" || kind === "file";
+/** A file the agent hands over (a zip, a PDF, slides): its type by extension. */
+export const FILE_TYPES: Record<string, string> = {
+  ".zip": "application/zip",
+  ".pdf": "application/pdf",
+  ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ".md": "text/markdown",
+  ".txt": "text/plain",
+  ".csv": "text/csv",
+  ".json": "application/json",
+  ".html": "text/html",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+};
+const MAX_FILE_BASE64 = 40_000_000;
 export const IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"] as const;
 const MAX_TEXT = 2_000_000;
 const MAX_IMAGE_BASE64 = 11_000_000;
@@ -139,7 +158,11 @@ function checkArtifact(input: NewArtifact): void {
   if (!UUID.test(input.chatId)) throw new Error("artifacts belong to a chat id");
   if (typeof input.title !== "string" || !input.title.trim() || input.title.length > 200) throw new Error("an artifact needs a title of up to 200 characters");
   if (typeof input.content !== "string") throw new Error("artifact content must be text");
-  if (input.kind === "image") {
+  if (input.kind === "file") {
+    if (!input.mime || !/^[\w.+-]+\/[\w.+-]+$/.test(input.mime)) throw new Error("a file needs its type");
+    if (input.content.length > MAX_FILE_BASE64) throw new Error("the file is too large (30 MB at most)");
+    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(input.content)) throw new Error("files are sent as base64");
+  } else if (input.kind === "image") {
     if (!IMAGE_TYPES.includes(input.mime as (typeof IMAGE_TYPES)[number])) throw new Error("images must be PNG, JPEG, WebP or GIF");
     if (input.content.length > MAX_IMAGE_BASE64) throw new Error("the image is too large (8 MB at most)");
     if (!/^[A-Za-z0-9+/]*={0,2}$/.test(input.content)) throw new Error("images are sent as base64");
@@ -162,7 +185,7 @@ export function parseArtifactBlocks(text: string): { text: string; blocks: Artif
     const open = lines[i]!.match(OPEN);
     const kind = open?.[2] as ArtifactKind | undefined;
     const close = open ? lines.findIndex((l, j) => j > i && l.trim() === open[1]) : -1;
-    if (!open || !kind || !ARTIFACT_KINDS.includes(kind) || kind === "image" || close < 0) {
+    if (!open || !kind || !ARTIFACT_KINDS.includes(kind) || isBinaryKind(kind) || close < 0) {
       out.push(lines[i]!);
       continue;
     }
@@ -174,7 +197,7 @@ export function parseArtifactBlocks(text: string): { text: string; blocks: Artif
 }
 
 const IMAGE_EXT: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif" };
-const TEXT_EXT: Record<ArtifactKind, string> = { html: "html", markdown: "md", code: "txt", svg: "svg", csv: "csv", json: "json", image: "png" };
+const TEXT_EXT: Record<ArtifactKind, string> = { html: "html", markdown: "md", code: "txt", svg: "svg", csv: "csv", json: "json", image: "png", file: "bin" };
 
 export function fileExtension(kind: ArtifactKind, language: string | undefined, mime: string | undefined): string {
   if (kind === "image") return IMAGE_EXT[mime ?? ""] ?? "png";
@@ -184,11 +207,13 @@ export function fileExtension(kind: ArtifactKind, language: string | undefined, 
 
 /** The name an artifact gets as a file: its title, safe for Finder, with the kind's extension. */
 export function artifactFileName(record: ArtifactRecord, version: ArtifactVersion): string {
+  // A handed-over file keeps its own name, extension included.
+  if (record.kind === "file") return record.title.replace(/[\/:*?"<>|\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120) || "file";
   const ext = fileExtension(record.kind, record.language, version.mime);
   const stem = record.title.replace(/[\/:*?"<>|\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 80) || "artifact";
   return stem.toLowerCase().endsWith(`.${ext}`) ? stem : `${stem}.${ext}`;
 }
 
 function defaultTitle(kind: ArtifactKind): string {
-  return { html: "Page", markdown: "Document", code: "Code", svg: "Drawing", csv: "Table", json: "Data", image: "Image" }[kind];
+  return { html: "Page", markdown: "Document", code: "Code", svg: "Drawing", csv: "Table", json: "Data", image: "Image", file: "File" }[kind];
 }

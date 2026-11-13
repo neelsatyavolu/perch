@@ -4,6 +4,8 @@
  * chat's task continues while its tab is in the background, spec 5.3).
  */
 
+import { basename } from "node:path";
+import { FILE_MARKER, handedFile } from "./handed-files";
 import { Scheduler } from "./scheduled";
 import type { Mode } from "../agent/permissions";
 import { provisionalTitle, takeTitleLine } from "./chat-title";
@@ -448,6 +450,22 @@ export class RunManager {
         this.deps.emit({ type: "artifact.saved", chatId: run.chatId, artifact: this.artifactMeta(record) });
       } catch (e) {
         text = text.replace(`[[artifact:#${i}]]`, `(The artifact "${block.title}" could not be saved: ${(e as Error).message}.)`);
+      }
+    }
+    for (const match of [...text.matchAll(FILE_MARKER)]) {
+      const path = match[1]!;
+      const file = handedFile(path);
+      if ("error" in file) {
+        text = text.replace(match[0], `(The file ${basename(path)} could not be attached: ${file.error}.)`);
+        continue;
+      }
+      try {
+        const record = await this.deps.artifacts.save({ chatId: run.chatId, kind: "file", ...file });
+        ids.push(record.id);
+        text = text.replace(match[0], `[[artifact:${record.id}]]`);
+        this.deps.emit({ type: "artifact.saved", chatId: run.chatId, artifact: this.artifactMeta(record) });
+      } catch (e) {
+        text = text.replace(match[0], `(The file ${file.title} could not be attached: ${(e as Error).message}.)`);
       }
     }
     const message: ChatMessage = {

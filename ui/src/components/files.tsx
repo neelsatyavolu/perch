@@ -11,14 +11,17 @@ import type { Client } from "../api/client";
 import type { ArtifactMeta } from "../api/types";
 import { Icon } from "./icon";
 
-const EXT: Record<ArtifactMeta["kind"], string> = { html: "html", markdown: "md", code: "txt", svg: "svg", csv: "csv", json: "json", image: "png" };
+const EXT: Record<ArtifactMeta["kind"], string> = { html: "html", markdown: "md", code: "txt", svg: "svg", csv: "csv", json: "json", image: "png", file: "" };
 
 export function fileExtension(meta: ArtifactMeta): string {
+  // A handed-over file (a zip, a PDF, slides) carries its extension in its name.
+  if (meta.kind === "file") return meta.title.match(/\.([\w]{1,8})$/)?.[1]?.toLowerCase() ?? "file";
   return meta.kind === "code" && meta.language && /^\w{1,16}$/.test(meta.language) ? meta.language : EXT[meta.kind];
 }
 
 /** The file's name as Downloads gets it: the title, safe for Finder, with its extension. */
 export function fileName(meta: ArtifactMeta): string {
+  if (meta.kind === "file") return meta.title;
   const ext = fileExtension(meta);
   const stem = meta.title.replace(/[/:*?"<>|\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 80) || "artifact";
   return stem.toLowerCase().endsWith(`.${ext}`) ? stem : `${stem}.${ext}`;
@@ -42,7 +45,7 @@ const previews = new Map<string, Promise<string>>();
 function usePreview(client: Client, meta: ArtifactMeta): string {
   const [text, setText] = useState("");
   useEffect(() => {
-    if (meta.kind === "image") return;
+    if (meta.kind === "image" || meta.kind === "file") return;
     const key = `${meta.id}:${meta.versions}`;
     let p = previews.get(key);
     if (!p) {
@@ -211,7 +214,7 @@ function menuItems(meta: ArtifactMeta, a: Actions, startRename: () => void): Men
     { label: "Open", run: a.open },
     { label: "Download", run: () => void a.download() },
     { label: "Show in Finder", run: () => void a.reveal() },
-    ...(meta.kind === "image" ? [] : [{ label: "Copy contents", run: () => void a.copy() }]),
+    ...(meta.kind === "image" || meta.kind === "file" ? [] : [{ label: "Copy contents", run: () => void a.copy() }]),
     { label: "Rename", run: startRename },
     { label: "Delete", run: () => void a.remove(), danger: true, confirm: "Delete this file?" },
   ];

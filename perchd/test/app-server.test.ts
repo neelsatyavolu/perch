@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { StepEvent } from "../src/agent/loop";
@@ -26,6 +26,13 @@ async function* runner(input: RunnerInput): AsyncIterable<StepEvent> {
   if (input.task.includes("needs approval")) {
     const ok = await input.approve(sendReq);
     yield { type: "final", text: ok ? "Sent." : "Not sent." };
+    return;
+  }
+  if (input.task.includes("make me a kit")) {
+    // Like make_zip: a file in the chat's own folder, handed over with a marker.
+    const folder = mkdtempSync(join(tmpdir(), "perch-chat-"));
+    writeFileSync(join(folder, "Study kit.zip"), "zip bytes");
+    yield { type: "final", text: `Here is your kit.\n[[file:${join(folder, "Study kit.zip")}]]\n[[file:/etc/hosts]]` };
     return;
   }
   yield { type: "final", text: 'Done.\n```artifact html "Card"\n<p>hi</p>\n```' };
@@ -312,6 +319,20 @@ test("an agent's tab brought into a window shows the chat that works in it", asy
   expect((await (await api("/api/windows/w12")).json()).chatId).toBe(chat.id);
   await api("/api/windows/w12/active", { method: "POST", json: { tab: { id: "t61", title: "Other", url: "https://example.com", targetId: "USER1" } } });
   expect((await (await api("/api/tabs/t61/chat")).json()).chat).toBeNull();
+});
+
+test("a file the agent hands over from its chat folder becomes a file in the chat", async () => {
+  const chat = (await (await api("/api/chats", { method: "POST", json: {} })).json()) as Chat;
+  await api(`/api/chats/${chat.id}/messages`, { method: "POST", json: { text: "make me a kit" } });
+  await app.runs.idle();
+  const view = await (await api(`/api/chats/${chat.id}`)).json();
+  const reply = view.chat.messages.at(-1);
+  expect(view.artifacts.map((a: { title: string; kind: string }) => [a.title, a.kind])).toEqual([["Study kit.zip", "file"]]);
+  expect(reply.text).toContain(`[[artifact:${view.artifacts[0].id}]]`);
+  expect(reply.text).toContain("(The file hosts could not be attached: only files in this chat's folder can be handed over.)");
+  const file = await api(`/api/artifacts/${view.artifacts[0].id}/file`);
+  expect(file.headers.get("content-disposition")).toBe('attachment; filename="Study kit.zip"');
+  expect(await file.text()).toBe("zip bytes");
 });
 
 test("the browser's open-tab list replaces the known tabs and frees side chats of tabs it does not have", async () => {

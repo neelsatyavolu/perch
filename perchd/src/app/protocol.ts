@@ -98,7 +98,7 @@ export type ChatSummary = {
   failed?: true;
 };
 
-export type ArtifactKind = "html" | "markdown" | "code" | "svg" | "csv" | "json" | "image";
+export type ArtifactKind = "html" | "markdown" | "code" | "svg" | "csv" | "json" | "image" | "file";
 
 export type ArtifactMeta = {
   id: string;

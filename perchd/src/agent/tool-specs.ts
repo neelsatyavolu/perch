@@ -27,6 +27,8 @@ export const TOOL_SPECS: ToolSpec[] = [
   spec("hover", "Move the mouse over an element by ref, for menus and tooltips.", { ref }, ["ref"]),
   spec("upload", "Attach local files to a file input by ref.", { ref, paths: { type: "array", items: { type: "string" } } }, ["ref", "paths"]),
   spec("write_file", "Save a text file in this chat's own folder, for example to upload it to a form. Returns its path.", { name: { type: "string" }, content: { type: "string" } }, ["name", "content"]),
+  spec("read_document", "Read the file a link points to (PDF, .pptx, .docx, .xlsx or a page) with the user's sign-in. Saves the original in this chat's folder and returns its text; pass from to read on in long ones.", { url: { type: "string" }, from: { type: "number", description: "Character to start at, from the last part's note" } }, ["url"]),
+  spec("make_zip", "Bundle files from this chat's folder (made with write_file or saved by read_document) into a .zip there. Leave files empty to include them all. Returns its path.", { name: { type: "string" }, files: { type: "array", items: { type: "string" }, description: "File names in this chat's folder" } }, ["name"]),
   spec("wait_for", "Wait until text appears on the page, or wait a number of seconds and return the page.", { text: { type: "string" }, timeout_s: { type: "number" }, seconds: { type: "number" } }),
   spec("back", "Go back one page in the current tab.", {}),
   spec("screenshot", "See the visible page as an image. Use when the snapshot cannot describe it, as on canvas, maps and charts.", {}),

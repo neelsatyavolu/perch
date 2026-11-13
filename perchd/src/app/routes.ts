@@ -2,7 +2,7 @@
 
 import type { ArtifactServer } from "./artifact-server";
 import type { FileRegistry } from "./attachments";
-import { artifactFileName, type ArtifactStore } from "./artifacts";
+import { artifactFileName, isBinaryKind, type ArtifactStore } from "./artifacts";
 import { saveArtifactFile } from "./artifact-files";
 import type { Windows } from "./app";
 import type { ChatStore } from "./chats";
@@ -231,12 +231,12 @@ export const ROUTES: Route[] = [
     const { record, version, content } = artifactVersion(ctx, id!, query);
     return {
       meta: { ...ctx.runs.artifactMeta(record), version, url: ctx.artifactServer.urlFor(record.id, version) },
-      content: record.kind === "image" ? null : content.content,
+      content: isBinaryKind(record.kind) ? null : content.content,
     };
   }),
   route("GET", "/api/artifacts/:id/file", (ctx, [id], _, query) => {
     const { record, content } = artifactVersion(ctx, id!, query);
-    const image = record.kind === "image";
+    const image = isBinaryKind(record.kind);
     const name = artifactFileName(record, content).replace(/[^\w .-]/g, "_");
     return new Response(image ? Buffer.from(content.content, "base64") : content.content, {
       headers: {

@@ -7,7 +7,7 @@
 import { existsSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { downloadsDir, freePath } from "../agent/tools";
-import { artifactFileName, type ArtifactRecord, type ArtifactVersion } from "./artifacts";
+import { artifactFileName, isBinaryKind, type ArtifactRecord, type ArtifactVersion } from "./artifacts";
 
 const saved = new Map<string, string>();
 
@@ -24,7 +24,7 @@ export async function saveArtifactFile(record: ArtifactRecord, version: number, 
   let path = saved.get(key);
   if (!path || !existsSync(path)) {
     path = freePath(opts.dir ?? downloadsDir(), artifactFileName(record, content));
-    await writeFile(path, record.kind === "image" ? Buffer.from(content.content, "base64") : content.content, { flag: "wx" });
+    await writeFile(path, isBinaryKind(record.kind) ? Buffer.from(content.content, "base64") : content.content, { flag: "wx" });
     saved.set(key, path);
   }
   if (opts.reveal) await (opts.revealFile ?? revealInFinder)(path);

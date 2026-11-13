@@ -81,6 +81,10 @@ export function startArtifactServer(opts: {
       "cross-origin-resource-policy": "cross-origin",
       "cache-control": "no-store",
     };
+    // A handed-over file (a zip, slides) downloads rather than opening on the artifact origin.
+    if (record.kind === "file") {
+      return new Response(Buffer.from(content.content, "base64"), { headers: { ...headers, "content-type": "application/octet-stream", "content-disposition": `attachment; filename="${record.title.replace(/[^\w .-]/g, "_")}"` } });
+    }
     if (record.kind === "image") {
       return new Response(Buffer.from(content.content, "base64"), { headers: { ...headers, "content-type": content.mime ?? "application/octet-stream" } });
     }

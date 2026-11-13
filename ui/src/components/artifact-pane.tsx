@@ -11,7 +11,7 @@ import { Icon } from "./icon";
 import { Markdown } from "./markdown";
 
 export const PANE = { min: 280, max: 720, initial: 360, step: 16 };
-const EXT: Record<ArtifactMeta["kind"], string> = { html: "html", markdown: "md", code: "txt", svg: "svg", csv: "csv", json: "json", image: "png" };
+const EXT: Record<ArtifactMeta["kind"], string> = { html: "html", markdown: "md", code: "txt", svg: "svg", csv: "csv", json: "json", image: "png", file: "" };
 
 export function clampWidth(width: number): number {
   return Math.round(Math.min(PANE.max, Math.max(PANE.min, width)));
@@ -43,6 +43,7 @@ function Body({ meta, content }: { meta: ArtifactMeta; content: string | null })
     return <iframe class="art-frame" title={meta.title} src={meta.url} sandbox="allow-scripts" referrerpolicy="no-referrer" />;
   }
   if (meta.kind === "image") return <img class="art-img" src={meta.url} alt={meta.title} />;
+  if (meta.kind === "file") return <p class="cap">Perch can't show this file here. Save it to disk to open it.</p>;
   if (content === null) return <p class="cap">Loading</p>;
   if (meta.kind === "markdown") return <Markdown text={content} />;
   if (meta.kind === "csv") {
@@ -97,7 +98,7 @@ export function ArtifactPane({ client, meta, width, onWidth, onClose }: PaneProp
       const blob = shown.content === null ? await client.artifactFile(meta.id, shown.meta.version) : new Blob([shown.content], { type: "text/plain" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = `${meta.title.replace(/[^\w .-]/g, "_")}.${meta.kind === "code" ? meta.language ?? "txt" : EXT[meta.kind]}`;
+      a.download = meta.kind === "file" ? meta.title.replace(/[^\w .-]/g, "_") : `${meta.title.replace(/[^\w .-]/g, "_")}.${meta.kind === "code" ? meta.language ?? "txt" : EXT[meta.kind]}`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     } catch (e) {

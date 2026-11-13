@@ -24,6 +24,11 @@ export class Browser {
    */
   features: ReadonlySet<string> = new Set();
 
+  /** Agent tabs open in Perch's hidden agent window rather than the user's tab strip. */
+  get agentTabs(): boolean {
+    return this.perch && this.features.has("agentTabs");
+  }
+
   private constructor(readonly conn: CdpConnection) {
     conn.on("Target.targetCreated", (p: { targetInfo: { targetId: string; type: string; openerId?: string } }) => {
       const t = p.targetInfo;
@@ -76,13 +81,20 @@ export class Browser {
    * `Perch.claimTab`, and the session puts it in its tab group.
    */
   async newTab(url?: string): Promise<Tab> {
-    const { targetId } = await this.conn.send<{ targetId: string }>(
-      "Target.createTarget",
-      this.perch
-        ? { url: "about:blank", background: true }
-        : { url: "about:blank", newWindow: true, background: true, width: AGENT_WINDOW.width, height: AGENT_WINDOW.height },
-    );
-    await this.claim(targetId);
+    let targetId: string;
+    if (this.agentTabs) {
+      // Perch keeps agent tabs in a hidden window of their own, listed under the toolbar's
+      // Agent Tabs button, and holds them drawing (agent_tabs.h).
+      ({ targetId } = await this.conn.send<{ targetId: string }>("Perch.createAgentTab", { url: "about:blank" }));
+    } else {
+      ({ targetId } = await this.conn.send<{ targetId: string }>(
+        "Target.createTarget",
+        this.perch
+          ? { url: "about:blank", background: true }
+          : { url: "about:blank", newWindow: true, background: true, width: AGENT_WINDOW.width, height: AGENT_WINDOW.height },
+      ));
+      await this.claim(targetId);
+    }
     const tab = await Tab.attach(this.conn, targetId);
     if (url) await tab.navigate(url);
     return tab;

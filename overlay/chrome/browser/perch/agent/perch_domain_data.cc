@@ -3,6 +3,8 @@
 
 #include "chrome/browser/perch/agent/perch_domain_data.h"
 
+#include "chrome/browser/perch/agent/agent_tabs.h"
+
 #include <memory>
 #include <utility>
 
@@ -281,7 +283,9 @@ DataResult AddHistory(Profile* profile, const base::DictValue& params) {
 DataResult GetOpenTabs(Profile* profile) {
   base::ListValue windows;
   for (BrowserWindowInterface* browser : GetAllBrowserWindowInterfaces()) {
-    if (browser->GetProfile()->GetOriginalProfile() != profile) {
+    // Agent tabs (agent_tabs.h) are the agents' own, not the user's.
+    if (browser->GetProfile()->GetOriginalProfile() != profile ||
+        IsAgentWindow(browser)) {
       continue;
     }
     TabStripModel* model = browser->GetTabStripModel();

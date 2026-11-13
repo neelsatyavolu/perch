@@ -14,7 +14,7 @@ import { tempProfile } from "./helpers";
 const TOKEN = "s".repeat(43);
 
 /** A browser end that answers like Perch: it has the Perch domain and records what it was sent. */
-function fakePerch(perch: boolean) {
+function fakePerch(perch: boolean, features: string[] = []) {
   const toBrowser = new PassThrough();
   const fromBrowser = new PassThrough();
   const sent: { method: string; params?: Record<string, unknown> }[] = [];
@@ -24,7 +24,8 @@ function fakePerch(perch: boolean) {
       sent.push({ method: msg.method, params: msg.params });
       const reply = (result: unknown) => fromBrowser.write(encode({ id: msg.id, ...(msg.sessionId ? { sessionId: msg.sessionId } : {}), result }));
       if (msg.method.startsWith("Perch.") && !perch) fromBrowser.write(encode({ id: msg.id, error: { code: -32601, message: `'${msg.method}' wasn't found` } }));
-      else if (msg.method === "Perch.getInfo") reply({ product: "Perch/158", perch: true });
+      else if (msg.method === "Perch.getInfo") reply({ product: "Perch/158", perch: true, features });
+      else if (msg.method === "Perch.createAgentTab") reply({ targetId: "AGENT2" });
       else if (msg.method === "Target.createTarget") reply({ targetId: "AGENT1" });
       else if (msg.method === "Target.attachToTarget") reply({ sessionId: "S1" });
       else if (msg.method === "Page.getFrameTree") reply({ frameTree: { frame: { id: "F1" } } });
@@ -33,6 +34,20 @@ function fakePerch(perch: boolean) {
   });
   return { conn: connectStreams(toBrowser, fromBrowser), sent };
 }
+
+test("in a Perch with agent tabs, they open in its hidden agent window and get no tab group", async () => {
+  const { conn, sent } = fakePerch(true, ["agentTabs"]);
+  const browser = await Browser.adopt(conn);
+  expect(browser.agentTabs).toBe(true);
+  const tab = await browser.newTab();
+  expect(tab.id).toBe("AGENT2");
+  expect(sent.find((m) => m.method === "Perch.createAgentTab")?.params).toEqual({ url: "about:blank" });
+  expect(sent.some((m) => m.method === "Target.createTarget")).toBe(false);
+  const { cdpTabGroups } = await import("../src/daemon/sessions");
+  await cdpTabGroups(async () => browser).apply(["AGENT2"], "Perch · Sidebar");
+  expect(sent.some((m) => m.method === "Perch.setTabGroup")).toBe(false);
+  conn.close();
+});
 
 test("inside Perch, agent tabs open in the user's window and are held drawing", async () => {
   const { conn, sent } = fakePerch(true);

@@ -180,6 +180,8 @@ async function followPopup(ctx: ToolContext, tab: Tab): Promise<string | null> {
   if (!popup) return null;
   ctx.owned = [...ctx.owned, popup];
   ctx.tab = popup;
+  // A page an agent tab opened lands beside it in the hidden agent window: keep it drawing too.
+  await ctx.browser.claim(id);
   for (let i = 0; i < 60 && (await popup.url().catch(() => "about:blank")) === "about:blank"; i++) await Bun.sleep(50);
   await popup.settle();
   return `This opened a new tab, and Perch switched to it. The previous page is still open (switch_tab ${tab.id}).\n\n${await page(ctx, popup)}`;

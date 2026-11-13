@@ -1,0 +1,46 @@
+Perch: the sidebar opens or closes for the new active tab with Chromium's own side panels, before the page is shown, so it does not flicker.
+diff --git a/chrome/browser/ui/side_panel/side_panel_ui_base.cc b/chrome/browser/ui/side_panel/side_panel_ui_base.cc
+index e4d83955b2..518b7483c1 100644
+--- a/chrome/browser/ui/side_panel/side_panel_ui_base.cc
++++ b/chrome/browser/ui/side_panel/side_panel_ui_base.cc
+@@ -207,9 +207,22 @@ SidePanelEntryWaiter* SidePanelUIBase::waiter() const {
+   return panel_data_->waiter.get();
+ }
+ 
++namespace {
++SidePanelUIBase::PerchActiveTabHook g_perch_active_tab_hook = nullptr;
++}  // namespace
++
++// static
++void SidePanelUIBase::SetPerchActiveTabHook(PerchActiveTabHook hook) {
++  g_perch_active_tab_hook = hook;
++}
++
+ void SidePanelUIBase::OnActiveTabChanged(content::WebContents* old_contents,
+                                          content::WebContents* new_contents,
+                                          bool tab_removed_for_deletion) {
++  if (g_perch_active_tab_hook && new_contents) {
++    g_perch_active_tab_hook(browser_, new_contents);
++  }
++
+   SidePanelRegistry* old_contextual_registry = nullptr;
+   if (!tab_removed_for_deletion && old_contents) {
+     old_contextual_registry = GetSidePanelRegistryFromWebContents(old_contents);
+diff --git a/chrome/browser/ui/side_panel/side_panel_ui_base.h b/chrome/browser/ui/side_panel/side_panel_ui_base.h
+index b1295a06da..c9c0c4f33f 100644
+--- a/chrome/browser/ui/side_panel/side_panel_ui_base.h
++++ b/chrome/browser/ui/side_panel/side_panel_ui_base.h
+@@ -80,6 +80,13 @@ class SidePanelUIBase : public SidePanelUI {
+ 
+   BrowserWindowInterface* browser() const { return browser_; }
+ 
++  // Perch: its sidebar opens or closes for the new active tab here, with
++  // Chromium's own side panels and before the browser shows the tab's page,
++  // so the page is laid out once at its final width instead of flickering.
++  using PerchActiveTabHook = void (*)(BrowserWindowInterface* browser,
++                                      content::WebContents* new_contents);
++  static void SetPerchActiveTabHook(PerchActiveTabHook hook);
++
+  protected:
+   friend class SidePanelEntryWaiter;
+ 

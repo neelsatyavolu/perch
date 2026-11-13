@@ -27,6 +27,7 @@
 #include "chrome/browser/perch/agent/perch_devtools.h"
 #include "chrome/browser/perch/agent/perchd_launcher.h"
 #include "chrome/browser/perch/side_panel/perch_tab_sync.h"
+#include "chrome/browser/perch/agent/agent_tabs.h"
 #include "chrome/browser/perch/webui/perch_side_chat_ui.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/actions/chrome_action_id.h"
@@ -39,6 +40,7 @@
 #include "chrome/browser/ui/side_panel/side_panel_enums.h"
 #include "chrome/browser/ui/side_panel/side_panel_registry.h"
 #include "chrome/browser/ui/side_panel/side_panel_ui.h"
+#include "chrome/browser/ui/side_panel/side_panel_ui_base.h"
 #include "chrome/browser/ui/tabs/tab_change_type.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/toolbar/pinned_toolbar/pinned_toolbar_actions_model.h"
@@ -294,6 +296,11 @@ void PerchSidePanelController::OnTabStripModelChanged(
   }
   tabs::TabInterface* tab = selection.new_tab;
   sync.Activate(profile, window_id_, tab);
+  // Normally already done by OnActiveTabChanging, before the page was shown.
+  MatchPanelTo(tab);
+}
+
+void PerchSidePanelController::MatchPanelTo(tabs::TabInterface* tab) {
   SidePanelUI* side_panel = SidePanelUI::From(browser_);
   if (!side_panel) {
     return;
@@ -437,11 +444,13 @@ bool PerchSidePanelController::IsShowing() const {
 
 void InitWindowFeatures(BrowserWindowInterface* browser,
                         SidePanelRegistry& registry) {
+  // The hidden agent window (agent/agent_tabs.h) gets no sidebar or menus.
   if (browser->GetType() != BrowserWindowInterface::TYPE_NORMAL ||
-      !browser->GetTabStripModel()) {
+      !browser->GetTabStripModel() || IsCreatingAgentWindow()) {
     return;
   }
   PerchdLauncher::Get().MaybeStart();
+  SidePanelUIBase::SetPerchActiveTabHook(&OnActiveTabChanging);
   Controllers()[browser] =
       std::make_unique<PerchSidePanelController>(browser, registry);
   ApplyPerchTheme(browser->GetProfile());
@@ -450,6 +459,17 @@ void InitWindowFeatures(BrowserWindowInterface* browser,
   WatchHideChrome(browser);
   AddPerchMenuItems();
   MaybeStartChromeSnapshot(browser);
+}
+
+void OnActiveTabChanging(BrowserWindowInterface* browser,
+                         content::WebContents* new_contents) {
+  auto it = Controllers().find(browser);
+  tabs::TabInterface* tab =
+      new_contents ? tabs::TabInterface::MaybeGetFromContents(new_contents)
+                   : nullptr;
+  if (it != Controllers().end() && tab) {
+    it->second->MatchPanelTo(tab);
+  }
 }
 
 void TearDownWindowFeatures(BrowserWindowInterface* browser) {

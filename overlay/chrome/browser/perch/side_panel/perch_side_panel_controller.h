@@ -14,6 +14,10 @@
 
 class BrowserWindowInterface;
 class SidePanelEntryScope;
+
+namespace content {
+class WebContents;
+}
 class SidePanelRegistry;
 
 namespace views {
@@ -57,6 +61,10 @@ class PerchSidePanelController : public TabStripModelObserver,
   void OnEntryHideCancelled(SidePanelEntry* entry) override;
   void OnEntryHidden(SidePanelEntry* entry) override;
 
+  // Opens or closes the sidebar to match what `tab` last had. Called on a
+  // tab switch before the browser shows the tab's page.
+  void MatchPanelTo(tabs::TabInterface* tab);
+
  private:
   std::unique_ptr<views::View> CreateView(SidePanelEntryScope& scope);
   void PinOnce();
@@ -83,6 +91,10 @@ class PerchSidePanelController : public TabStripModelObserver,
 void InitWindowFeatures(BrowserWindowInterface* browser,
                         SidePanelRegistry& registry);
 void TearDownWindowFeatures(BrowserWindowInterface* browser);
+
+// The tab switch hook (SidePanelUIBase::SetPerchActiveTabHook).
+void OnActiveTabChanging(BrowserWindowInterface* browser,
+                         content::WebContents* new_contents);
 
 }  // namespace perch
 

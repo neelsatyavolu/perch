@@ -19,6 +19,7 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
+#include "chrome/browser/perch/agent/agent_tabs.h"
 #include "chrome/browser/perch/agent/credential_fill.h"
 #include "chrome/browser/perch/agent/import_bundle.h"
 #include "chrome/browser/perch/agent/perch_domain_data.h"
@@ -42,6 +43,7 @@
 #include "third_party/inspector_protocol/crdtp/dispatch.h"
 #include "third_party/inspector_protocol/crdtp/json.h"
 #include "ui/gfx/geometry/size.h"
+#include "url/gurl.h"
 
 namespace perch {
 
@@ -151,7 +153,8 @@ Reply GetInfo() {
        {"setTaskStatus", "revealChat", "askRequested", "getBookmarks",
         "applyBookmarkChanges", "getHistory", "addHistory", "getOpenTabs",
         "getExtensionTabId", "applyImportBundle", "listLogins", "fillLogin",
-        "listCards", "fillCard", "perch-artifact", "getTabs", "tabEvents"}) {
+        "listCards", "fillCard", "perch-artifact", "getTabs", "tabEvents",
+        "agentTabs"}) {
     features.Append(feature);
   }
   result.Set("features", std::move(features));
@@ -252,11 +255,12 @@ Reply ReleaseTab(const base::DictValue& params) {
 }
 
 // Every tab in every window and profile, incognito ones flagged (spec 5.8).
+// Agent tabs are left out: they are the agents' own, not the user's.
 Reply GetTabs() {
   base::ListValue list;
   for (BrowserWindowInterface* browser : GetAllBrowserWindowInterfaces()) {
     TabStripModel* model = browser->GetTabStripModel();
-    if (!model) {
+    if (!model || IsAgentWindow(browser)) {
       continue;
     }
     for (int i = 0; i < model->count(); ++i) {
@@ -264,6 +268,33 @@ Reply GetTabs() {
     }
   }
   return Ok(base::DictValue().Set("tabs", std::move(list)));
+}
+
+// Opens a tab in the profile's hidden agent window (agent_tabs.h) and keeps
+// it drawing, like claimTab. Returns its target id.
+Reply CreateAgentTab(const base::DictValue& params) {
+  Profile* profile = AgentProfile();
+  if (!profile) {
+    return Fail(kServerError, "No browser window is open");
+  }
+  const std::string* url = params.FindString("url");
+  const GURL gurl(url ? *url : std::string("about:blank"));
+  if (!gurl.is_valid() || !(gurl.SchemeIsHTTPOrHTTPS() || gurl.IsAboutBlank())) {
+    return Fail(kInvalidParams, "url must be http, https or about:blank");
+  }
+  content::WebContents* contents = OpenAgentTab(profile, gurl);
+  if (!contents) {
+    return Fail(kServerError, "Perch couldn't open an agent tab");
+  }
+  const std::string target_id =
+      content::DevToolsAgentHost::GetOrCreateFor(contents)->GetId();
+  base::DictValue claim;
+  claim.Set("targetId", target_id);
+  if (const base::DictValue* owner = params.FindDict("owner")) {
+    claim.Set("owner", owner->Clone());
+  }
+  ClaimTab(claim);
+  return Ok(base::DictValue().Set("targetId", target_id));
 }
 
 Reply SetTaskStatusCommand(const base::DictValue& params) {
@@ -336,6 +367,9 @@ Reply Dispatch(std::string_view method, const base::DictValue& params) {
   }
   if (method == "setTabGroup") {
     return SetTabGroup(params);
+  }
+  if (method == "createAgentTab") {
+    return CreateAgentTab(params);
   }
   if (method == "claimTab") {
     return ClaimTab(params);

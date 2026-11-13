@@ -310,6 +310,8 @@ export function cdpTabGroups(browser: () => Promise<Browser>): TabGroups {
     async apply(targetIds, label) {
       if (!supported) return;
       const b = await browser();
+      // Agent tabs live in Perch's hidden agent window, listed under Agent Tabs: no groups.
+      if (b.agentTabs) return;
       await b.conn.send("Perch.setTabGroup", { targetIds, title: label }).catch(() => {
         supported = false;
       });

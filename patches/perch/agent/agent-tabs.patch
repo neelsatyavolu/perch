@@ -1,0 +1,91 @@
+Perch: agents' tabs live in a hidden window, listed under the toolbar's Agent Tabs button; links from other apps never open there.
+diff --git a/chrome/browser/ui/browser_window/internal/BUILD.gn b/chrome/browser/ui/browser_window/internal/BUILD.gn
+index 15f1c5a5d9..2d2726b258 100644
+--- a/chrome/browser/ui/browser_window/internal/BUILD.gn
++++ b/chrome/browser/ui/browser_window/internal/BUILD.gn
+@@ -142,6 +142,10 @@ source_set("internal") {
+       "//chrome/browser/perch/agent/perch_domain_data.cc",
+       "//chrome/browser/perch/agent/perch_domain_data.h",
+       "//chrome/browser/perch/agent/task_status.cc",
++      "//chrome/browser/perch/agent/agent_tabs.cc",
++      "//chrome/browser/perch/agent/agent_tabs.h",
++      "//chrome/browser/perch/toolbar/agent_tabs_button.cc",
++      "//chrome/browser/perch/toolbar/agent_tabs_button.h",
+       "//chrome/browser/perch/agent/task_status.h",
+       "//chrome/browser/perch/keys/backup.cc",
+       "//chrome/browser/perch/keys/backup.h",
+diff --git a/chrome/browser/ui/browser_window/internal/profile_browser_collection.cc b/chrome/browser/ui/browser_window/internal/profile_browser_collection.cc
+index 1859358eac..0a61410e40 100644
+--- a/chrome/browser/ui/browser_window/internal/profile_browser_collection.cc
++++ b/chrome/browser/ui/browser_window/internal/profile_browser_collection.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "chrome/browser/ui/browser_window/public/profile_browser_collection.h"
+ 
++#include "chrome/browser/perch/agent/agent_tabs.h"
++
+ #include "base/check_deref.h"
+ #include "build/build_config.h"
+ #include "chrome/browser/profiles/profile.h"
+@@ -35,6 +37,10 @@ BrowserWindowInterface* ProfileBrowserCollection::FindTabbedBrowser(
+         browser->IsDeleteScheduled()) {
+       return true;
+     }
++    // Perch: the hidden window agents work in never takes the user's tabs.
++    if (perch::IsAgentWindow(browser)) {
++      return true;
++    }
+     if (original && browser->GetProfile()->GetOriginalProfile() != original) {
+       return true;
+     }
+diff --git a/chrome/browser/ui/views/frame/horizontal_tab_strip_region_view.cc b/chrome/browser/ui/views/frame/horizontal_tab_strip_region_view.cc
+index 6e4b0856de..3cdc94e7ca 100644
+--- a/chrome/browser/ui/views/frame/horizontal_tab_strip_region_view.cc
++++ b/chrome/browser/ui/views/frame/horizontal_tab_strip_region_view.cc
+@@ -7,6 +7,7 @@
+ #include <algorithm>
+ 
+ #include "chrome/browser/perch/spaces/spaces.h"
++#include "chrome/browser/perch/toolbar/agent_tabs_button.h"
+ 
+ #include "base/feature_list.h"
+ #include "base/functional/bind.h"
+@@ -252,9 +253,12 @@ HorizontalTabStripRegionViewOld::HorizontalTabStripRegionViewOld(
+     tab_strip_action_container_ =
+         AddChildView(std::move(tab_strip_action_container));
+   }
+-  // Perch: the Spaces arrow at the strip's trailing end, out of the tabs' way.
++  // Perch: the Spaces arrow at the strip's trailing end, out of the tabs' way,
++  // with the Agent Tabs button just before it.
+   if (browser &&
+       browser->GetType() == BrowserWindowInterface::Type::TYPE_NORMAL) {
++    AddChildView(perch::CreateAgentTabsButton(
++        browser, perch::AgentTabsPlacement::kTabStrip));
+     AddChildView(perch::CreateSpacesButton(browser));
+   }
+   UpdateTabStripMargin();
+diff --git a/chrome/browser/ui/views/toolbar/toolbar_view.cc b/chrome/browser/ui/views/toolbar/toolbar_view.cc
+index 1d605028f1..1865f77856 100644
+--- a/chrome/browser/ui/views/toolbar/toolbar_view.cc
++++ b/chrome/browser/ui/views/toolbar/toolbar_view.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "chrome/browser/ui/views/toolbar/toolbar_view.h"
+ 
++#include "chrome/browser/perch/toolbar/agent_tabs_button.h"
++
+ #include <algorithm>
+ #include <memory>
+ #include <utility>
+@@ -517,6 +519,11 @@ void ToolbarView::Init() {
+     toolbar_divider_ = AddChildView(std::move(toolbar_divider));
+   }
+ 
++  // Perch: the tabs agents opened for their work, here with vertical tabs
++  // (with tabs along the top, at the strip's right end).
++  AddChildView(perch::CreateAgentTabsButton(
++      browser_, perch::AgentTabsPlacement::kToolbar));
++
+   if (!features::IsWebUIPinnedToolbarActionsEnabled()) {
+     pinned_toolbar_actions_container_ = AddChildView(
+         std::make_unique<PinnedToolbarActionsContainer>(browser_view_, this));

@@ -93,6 +93,8 @@
 #include "ui/gfx/codec/png_codec.h"
 #include "ui/views/widget/widget.h"
 #include "url/gurl.h"
+#include "chrome/browser/perch/agent/agent_tabs.h"
+#include "chrome/browser/perch/toolbar/agent_tabs_button.h"
 
 namespace perch {
 
@@ -644,6 +646,19 @@ class Snapshotter {
       ExecutePerchCommand(browser_, IDC_PERCH_SPLIT_FOCUS_LEFT);
       LOG(WARNING) << "Perch snapshot: split active index "
                    << browser_->GetTabStripModel()->active_index();
+    } else if (state == "agent-tabs" || state == "agent-tabs-menu") {
+      // Two tabs an agent opened: the toolbar shows Agent Tabs 2; the menu
+      // state opens its list.
+      Profile* profile = browser_->GetProfile();
+      OpenAgentTab(profile, GURL("chrome://version"));
+      OpenAgentTab(profile, GURL("chrome://history"));
+      if (state == "agent-tabs-menu") {
+        base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+            FROM_HERE,
+            base::BindOnce(&OpenAgentTabsMenuForSnapshot,
+                           base::Unretained(browser_.get())),
+            base::Milliseconds(1200));
+      }
     } else if (state == "pinned-sleep") {
       // Two pinned tabs with favicons; the first goes to sleep, so the
       // picture shows a sleeping pin (favicon and moon badge) beside an awake
@@ -793,6 +808,9 @@ class Snapshotter {
     // The command bar state draws the bar's own bubble.
     if (states_[index_] == "command-bar") {
       widget = GetCommandBarWidget(browser_);
+    }
+    if (states_[index_] == "agent-tabs-menu" && GetAgentTabsMenuWidget()) {
+      widget = GetAgentTabsMenuWidget();
     }
     ui::Layer* layer = widget ? widget->GetLayer() : nullptr;
     if (!layer) {

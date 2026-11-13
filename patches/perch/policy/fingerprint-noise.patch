@@ -1,0 +1,483 @@
+Perch: canvas, WebGL and Web Audio readbacks carry a small per-site, per-session noise (after Brave's farbling) while Block fingerprinting is on.
+diff --git a/chrome/browser/chrome_content_browser_client.cc b/chrome/browser/chrome_content_browser_client.cc
+index ec013be4a5..824852985c 100644
+--- a/chrome/browser/chrome_content_browser_client.cc
++++ b/chrome/browser/chrome_content_browser_client.cc
+@@ -74,6 +74,9 @@
+ #include "chrome/browser/bluetooth/chrome_bluetooth_delegate_impl_client.h"
+ #include "chrome/browser/browser_about_handler.h"
+ #include "chrome/browser/perch/scheme/perch_scheme.h"
++#include "chrome/browser/perch/perch_pref_names.h"
++#include "base/rand_util.h"
++#include "base/strings/string_number_conversions.h"
+ #include "chrome/browser/browser_features.h"
+ #include "chrome/browser/browser_process.h"
+ #include "chrome/browser/browsing_data/chrome_browsing_data_model_delegate.h"
+@@ -3165,6 +3168,19 @@ void ChromeContentBrowserClient::AppendExtraCommandLineSwitches(
+       for (auto& part : extra_parts_) {
+         part->AppendExtraRendererCommandLineSwitches(command_line, *process);
+       }
++      // Perch: the key for fingerprinting noise (blink perch_farbling.h), new
++      // every session and separate for private windows, while "Block
++      // fingerprinting" is on.
++      Profile* profile = Profile::FromBrowserContext(process->GetBrowserContext());
++      if (profile && profile->GetPrefs()->GetBoolean(perch::prefs::kFingerprinting)) {
++        static const base::NoDestructor<std::string> normal_key(
++            base::HexEncode(base::RandBytesAsVector(16)));
++        static const base::NoDestructor<std::string> private_key(
++            base::HexEncode(base::RandBytesAsVector(16)));
++        command_line->AppendSwitchASCII(
++            "perch-farbling-key",
++            profile->IsOffTheRecord() ? *private_key : *normal_key);
++      }
+     }
+ 
+ #if BUILDFLAG(IS_CHROMEOS)
+diff --git a/third_party/blink/renderer/core/html/build.gni b/third_party/blink/renderer/core/html/build.gni
+index 29e4efa481..51b483f15a 100644
+--- a/third_party/blink/renderer/core/html/build.gni
++++ b/third_party/blink/renderer/core/html/build.gni
+@@ -38,6 +38,8 @@ blink_core_sources_html = [
+   "canvas/html_canvas_accessibility_manager.cc",
+   "canvas/html_canvas_accessibility_manager.h",
+   "canvas/html_canvas_element.cc",
++  "canvas/perch_farbling.cc",
++  "canvas/perch_farbling.h",
+   "canvas/html_canvas_element.h",
+   "canvas/image_data.cc",
+   "canvas/image_data.h",
+diff --git a/third_party/blink/renderer/core/html/canvas/canvas_async_blob_creator.cc b/third_party/blink/renderer/core/html/canvas/canvas_async_blob_creator.cc
+index e2a22f203b..ccdfca8071 100644
+--- a/third_party/blink/renderer/core/html/canvas/canvas_async_blob_creator.cc
++++ b/third_party/blink/renderer/core/html/canvas/canvas_async_blob_creator.cc
+@@ -3,6 +3,7 @@
+ // found in the LICENSE file.
+ 
+ #include "third_party/blink/renderer/core/html/canvas/canvas_async_blob_creator.h"
++#include "third_party/blink/renderer/core/html/canvas/perch_farbling.h"
+ 
+ #include "base/location.h"
+ #include "base/metrics/histogram_functions.h"
+@@ -176,6 +177,8 @@ CanvasAsyncBlobCreator::CanvasAsyncBlobCreator(
+   // necessary. May return nullptr if GPU context lost or readback buffer
+   // allocation failed.
+   image_ = image->MakeUnaccelerated();
++  // Perch: toBlob and convertToBlob carry this site's fingerprinting noise.
++  image_ = perch::FarbleImage(image_, context);
+ 
+   if (image_) {
+     skia_image_ = image_->PaintImageForCurrentFrame().GetSwSkImage();
+diff --git a/third_party/blink/renderer/core/html/canvas/html_canvas_element.cc b/third_party/blink/renderer/core/html/canvas/html_canvas_element.cc
+index 5d9d963d79..a63c4f8486 100644
+--- a/third_party/blink/renderer/core/html/canvas/html_canvas_element.cc
++++ b/third_party/blink/renderer/core/html/canvas/html_canvas_element.cc
+@@ -26,6 +26,7 @@
+  */
+ 
+ #include "third_party/blink/renderer/core/html/canvas/html_canvas_element.h"
++#include "third_party/blink/renderer/core/html/canvas/perch_farbling.h"
+ 
+ #include <math.h>
+ 
+@@ -1436,7 +1437,9 @@ String HTMLCanvasElement::ToDataURLInternal(
+   ImageEncodingMimeType encoding_mime_type =
+       ImageEncoderUtils::ToEncodingMimeType(mime_type);
+ 
+-  scoped_refptr<StaticBitmapImage> image_bitmap = Snapshot(source_buffer);
++  // Perch: the page reads a copy with this site's fingerprinting noise.
++  scoped_refptr<StaticBitmapImage> image_bitmap = perch::FarbleImage(
++      Snapshot(source_buffer), GetDocument().GetExecutionContext());
+   if (image_bitmap) {
+     std::unique_ptr<ImageDataBuffer> data_buffer =
+         ImageDataBuffer::Create(image_bitmap);
+diff --git a/third_party/blink/renderer/core/html/canvas/perch_farbling.cc b/third_party/blink/renderer/core/html/canvas/perch_farbling.cc
+new file mode 100644
+index 0000000000..206ca497a2
+--- /dev/null
++++ b/third_party/blink/renderer/core/html/canvas/perch_farbling.cc
+@@ -0,0 +1,162 @@
++// Copyright 2026 The Perch Authors
++// Use of this source code is governed by the MIT license in Perch's LICENSE file.
++
++#include "third_party/blink/renderer/core/html/canvas/perch_farbling.h"
++
++#include <string>
++
++#include "base/command_line.h"
++#include "base/hash/hash.h"
++#include "base/no_destructor.h"
++#include "third_party/blink/renderer/core/execution_context/execution_context.h"
++#include "third_party/blink/renderer/core/frame/frame.h"
++#include "third_party/blink/renderer/core/frame/local_dom_window.h"
++#include "third_party/blink/renderer/core/frame/local_frame.h"
++#include "third_party/blink/renderer/platform/graphics/static_bitmap_image.h"
++#include "third_party/blink/renderer/platform/graphics/unaccelerated_static_bitmap_image.h"
++#include "third_party/blink/renderer/platform/weborigin/security_origin.h"
++#include "third_party/skia/include/core/SkBitmap.h"
++#include "third_party/skia/include/core/SkImage.h"
++#include "third_party/skia/include/core/SkPixmap.h"
++
++namespace blink::perch {
++
++namespace {
++
++constexpr char kKeySwitch[] = "perch-farbling-key";
++// About 1 pixel in 40 changes (6 of 256).
++constexpr uint64_t kPixelOdds = 6;
++
++const std::string& Key() {
++  static const base::NoDestructor<std::string> key(
++      base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(kKeySwitch));
++  return *key;
++}
++
++uint64_t Mix(uint64_t x) {
++  // splitmix64: a well-spread hash of one 64-bit value.
++  x += 0x9E3779B97F4A7C15ull;
++  x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull;
++  x = (x ^ (x >> 27)) * 0x94D049BB133111EBull;
++  return x ^ (x >> 31);
++}
++
++// The site the person sees in the address bar: the top frame's registrable
++// domain, so a site's frames and its embeds on that site agree.
++String SiteOf(const ExecutionContext* context) {
++  const SecurityOrigin* origin = context->GetSecurityOrigin();
++  if (const auto* window = DynamicTo<LocalDOMWindow>(context)) {
++    if (LocalFrame* frame = window->GetFrame()) {
++      if (const SecurityContext* top =
++              frame->Tree().Top().GetSecurityContext()) {
++        if (top->GetSecurityOrigin()) {
++          origin = top->GetSecurityOrigin();
++        }
++      }
++    }
++  }
++  if (!origin) {
++    return String();
++  }
++  String site = origin->RegistrableDomain();
++  return site.empty() ? origin->Host() : site;
++}
++
++}  // namespace
++
++std::optional<uint64_t> FarblingSeed(const ExecutionContext* context) {
++  if (!context || Key().empty()) {
++    return std::nullopt;
++  }
++  const std::string site = SiteOf(context).Utf8();
++  const uint64_t high = base::FastHash(Key() + "|" + site);
++  const uint64_t low = base::FastHash(site + "|" + Key());
++  return Mix((high << 32) | low);
++}
++
++void FarbleRgba8(uint8_t* pixels,
++                 size_t row_bytes,
++                 int width,
++                 int height,
++                 bool premultiplied,
++                 uint64_t seed) {
++  if (!pixels || width <= 0 || height <= 0) {
++    return;
++  }
++  for (int y = 0; y < height; ++y) {
++    uint8_t* row = UNSAFE_TODO(pixels + y * row_bytes);
++    for (int x = 0; x < width; ++x) {
++      const uint64_t r =
++          Mix(seed ^ (static_cast<uint64_t>(y) * 0x100000001B3ull + x));
++      if ((r & 0xff) >= kPixelOdds) {
++        continue;
++      }
++      uint8_t* pixel = UNSAFE_TODO(row + x * 4);
++      const uint8_t alpha = UNSAFE_TODO(pixel[3]);
++      if (premultiplied && alpha == 0) {
++        continue;
++      }
++      uint8_t& channel = UNSAFE_TODO(pixel[(r >> 8) % 3]);
++      if (channel & 1) {
++        --channel;
++      } else if (!premultiplied || channel + 1 <= alpha) {
++        ++channel;
++      }
++    }
++  }
++}
++
++void FarblePixmap(const SkPixmap& pixmap, const ExecutionContext* context) {
++  const std::optional<uint64_t> seed = FarblingSeed(context);
++  if (!seed || !pixmap.writable_addr() ||
++      (pixmap.colorType() != kRGBA_8888_SkColorType &&
++       pixmap.colorType() != kBGRA_8888_SkColorType)) {
++    return;
++  }
++  FarbleRgba8(static_cast<uint8_t*>(pixmap.writable_addr()),
++              pixmap.rowBytes(), pixmap.width(), pixmap.height(),
++              pixmap.alphaType() == kPremul_SkAlphaType, *seed);
++}
++
++scoped_refptr<StaticBitmapImage> FarbleImage(
++    scoped_refptr<StaticBitmapImage> image,
++    const ExecutionContext* context) {
++  const std::optional<uint64_t> seed = FarblingSeed(context);
++  if (!seed || !image) {
++    return image;
++  }
++  scoped_refptr<StaticBitmapImage> plain = image->MakeUnaccelerated();
++  if (!plain) {
++    return image;
++  }
++  sk_sp<SkImage> source = plain->PaintImageForCurrentFrame().GetSwSkImage();
++  if (!source) {
++    return image;
++  }
++  const SkAlphaType alpha = source->alphaType() == kOpaque_SkAlphaType
++                                ? kOpaque_SkAlphaType
++                                : kPremul_SkAlphaType;
++  SkBitmap bitmap;
++  if (!bitmap.tryAllocPixels(SkImageInfo::MakeN32(
++          source->width(), source->height(), alpha, source->refColorSpace())) ||
++      !source->readPixels(bitmap.pixmap(), 0, 0)) {
++    return image;
++  }
++  FarbleRgba8(static_cast<uint8_t*>(bitmap.getPixels()), bitmap.rowBytes(),
++              bitmap.width(), bitmap.height(), alpha == kPremul_SkAlphaType,
++              *seed);
++  bitmap.setImmutable();
++  return UnacceleratedStaticBitmapImage::Create(bitmap.asImage(),
++                                                plain->Orientation());
++}
++
++float AudioFarblingFactor(const ExecutionContext* context) {
++  const std::optional<uint64_t> seed = FarblingSeed(context);
++  if (!seed) {
++    return 1.0f;
++  }
++  // Between 0.9999 and 0.99999: far below hearing, enough to change a hash.
++  return 1.0f - static_cast<float>((*seed % 900) + 100) * 1e-7f;
++}
++
++}  // namespace blink::perch
+diff --git a/third_party/blink/renderer/core/html/canvas/perch_farbling.h b/third_party/blink/renderer/core/html/canvas/perch_farbling.h
+new file mode 100644
+index 0000000000..7239eac608
+--- /dev/null
++++ b/third_party/blink/renderer/core/html/canvas/perch_farbling.h
+@@ -0,0 +1,56 @@
++// Copyright 2026 The Perch Authors
++// Use of this source code is governed by the MIT license in Perch's LICENSE file.
++
++#ifndef THIRD_PARTY_BLINK_RENDERER_CORE_HTML_CANVAS_PERCH_FARBLING_H_
++#define THIRD_PARTY_BLINK_RENDERER_CORE_HTML_CANVAS_PERCH_FARBLING_H_
++
++#include <cstdint>
++#include <optional>
++
++#include "base/memory/scoped_refptr.h"
++#include "third_party/blink/renderer/core/core_export.h"
++
++class SkPixmap;
++
++namespace blink {
++
++class ExecutionContext;
++class StaticBitmapImage;
++
++// Perch's fingerprinting protection, after Brave's "farbling": what a page
++// reads back from a canvas, WebGL or Web Audio carries a tiny change that is
++// the same for one site for the whole session and different on every other
++// site and every new session, so the readings can't link one person across
++// sites or visits. The browser turns it on by passing each renderer a random
++// key (--perch-farbling-key); without the key nothing changes.
++namespace perch {
++
++// The noise seed for the top-level site of `context` in this session.
++CORE_EXPORT std::optional<uint64_t> FarblingSeed(const ExecutionContext* context);
++
++// Flips the lowest bit of one color channel in about 1 pixel in 40, chosen by
++// `seed`. Alpha is never changed, and premultiplied colors stay valid.
++CORE_EXPORT void FarbleRgba8(uint8_t* pixels,
++                             size_t row_bytes,
++                             int width,
++                             int height,
++                             bool premultiplied,
++                             uint64_t seed);
++
++// The same for an 8-bit RGBA or BGRA pixmap read back for a page.
++CORE_EXPORT void FarblePixmap(const SkPixmap& pixmap,
++                              const ExecutionContext* context);
++
++// A copy of `image` with the noise, for toDataURL and toBlob; `image` itself
++// when farbling is off or the image can't be read.
++CORE_EXPORT scoped_refptr<StaticBitmapImage> FarbleImage(
++    scoped_refptr<StaticBitmapImage> image,
++    const ExecutionContext* context);
++
++// A factor just under 1 that audio samples are multiplied by; 1 when off.
++CORE_EXPORT float AudioFarblingFactor(const ExecutionContext* context);
++
++}  // namespace perch
++}  // namespace blink
++
++#endif  // THIRD_PARTY_BLINK_RENDERER_CORE_HTML_CANVAS_PERCH_FARBLING_H_
+diff --git a/third_party/blink/renderer/modules/canvas/canvas2d/base_rendering_context_2d.cc b/third_party/blink/renderer/modules/canvas/canvas2d/base_rendering_context_2d.cc
+index eaa71b910d..d5547253d6 100644
+--- a/third_party/blink/renderer/modules/canvas/canvas2d/base_rendering_context_2d.cc
++++ b/third_party/blink/renderer/modules/canvas/canvas2d/base_rendering_context_2d.cc
+@@ -3,6 +3,7 @@
+ // found in the LICENSE file.
+ 
+ #include "third_party/blink/renderer/modules/canvas/canvas2d/base_rendering_context_2d.h"
++#include "third_party/blink/renderer/core/html/canvas/perch_farbling.h"
+ 
+ #include <inttypes.h>
+ 
+@@ -934,6 +935,9 @@ ImageData* BaseRenderingContext2D::getImageDataInternal(
+       SkIRect bounds =
+           snapshot->PaintImageForCurrentFrame().GetSkImageInfo().bounds();
+       DCHECK(!bounds.intersect(SkIRect::MakeXYWH(sx, sy, sw, sh)));
++    } else {
++      // Perch: getImageData carries this site's fingerprinting noise.
++      perch::FarblePixmap(image_data_pixmap, GetTopExecutionContext());
+     }
+   }
+ 
+diff --git a/third_party/blink/renderer/modules/webaudio/analyser_node.cc b/third_party/blink/renderer/modules/webaudio/analyser_node.cc
+index 4bc4b15f4b..a9c9cdc92f 100644
+--- a/third_party/blink/renderer/modules/webaudio/analyser_node.cc
++++ b/third_party/blink/renderer/modules/webaudio/analyser_node.cc
+@@ -24,6 +24,7 @@
+  */
+ 
+ #include "third_party/blink/renderer/modules/webaudio/analyser_node.h"
++#include "third_party/blink/renderer/core/html/canvas/perch_farbling.h"
+ 
+ #include "third_party/blink/renderer/bindings/modules/v8/v8_analyser_options.h"
+ #include "third_party/blink/renderer/modules/webaudio/analyser_handler.h"
+@@ -123,9 +124,23 @@ double AnalyserNode::smoothingTimeConstant() const {
+   return GetAnalyserHandler().SmoothingTimeConstant();
+ }
+ 
++// Perch: what a page reads from an analyser carries this site's
++// fingerprinting factor (perch_farbling.h).
++static void PerchFarble(DOMFloat32Array* array, BaseAudioContext* context) {
++  const float factor =
++      perch::AudioFarblingFactor(context ? context->GetExecutionContext() : nullptr);
++  if (factor == 1.0f || !array) {
++    return;
++  }
++  for (float& value : array->AsSpan()) {
++    value *= factor;
++  }
++}
++
+ void AnalyserNode::getFloatFrequencyData(NotShared<DOMFloat32Array> array) {
+   GetAnalyserHandler().GetFloatFrequencyData(array.Get(),
+                                              context()->currentTime());
++  PerchFarble(array.Get(), context());
+ }
+ 
+ void AnalyserNode::getByteFrequencyData(NotShared<DOMUint8Array> array) {
+@@ -135,6 +150,7 @@ void AnalyserNode::getByteFrequencyData(NotShared<DOMUint8Array> array) {
+ 
+ void AnalyserNode::getFloatTimeDomainData(NotShared<DOMFloat32Array> array) {
+   GetAnalyserHandler().GetFloatTimeDomainData(array.Get());
++  PerchFarble(array.Get(), context());
+ }
+ 
+ void AnalyserNode::getByteTimeDomainData(NotShared<DOMUint8Array> array) {
+diff --git a/third_party/blink/renderer/modules/webaudio/audio_buffer.cc b/third_party/blink/renderer/modules/webaudio/audio_buffer.cc
+index 9a66186d8e..9be6de3a82 100644
+--- a/third_party/blink/renderer/modules/webaudio/audio_buffer.cc
++++ b/third_party/blink/renderer/modules/webaudio/audio_buffer.cc
+@@ -27,6 +27,8 @@
+  */
+ 
+ #include "third_party/blink/renderer/modules/webaudio/audio_buffer.h"
++#include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
++#include "third_party/blink/renderer/core/html/canvas/perch_farbling.h"
+ 
+ #include <memory>
+ 
+@@ -212,9 +214,29 @@ NotShared<DOMFloat32Array> AudioBuffer::getChannelData(
+     return NotShared<DOMFloat32Array>(nullptr);
+   }
+ 
++  PerchFarbleOnce();
+   return getChannelData(channel_index);
+ }
+ 
++void AudioBuffer::PerchFarbleOnce() {
++  if (perch_farbled_) {
++    return;
++  }
++  perch_farbled_ = true;
++  const float factor = perch::AudioFarblingFactor(
++      CurrentExecutionContext(v8::Isolate::GetCurrent()));
++  if (factor == 1.0f) {
++    return;
++  }
++  for (auto& channel : channels_) {
++    if (channel) {
++      for (float& sample : channel->AsSpan()) {
++        sample *= factor;
++      }
++    }
++  }
++}
++
+ NotShared<DOMFloat32Array> AudioBuffer::getChannelData(unsigned channel_index) {
+   if (channel_index >= channels_.size()) {
+     return NotShared<DOMFloat32Array>(nullptr);
+@@ -250,6 +272,7 @@ void AudioBuffer::copyFromChannel(NotShared<DOMFloat32Array> destination,
+     return;
+   }
+ 
++  PerchFarbleOnce();
+   base::span<const float> src = channels_[channel_number].Get()->AsSpan();
+   base::span<float> dst = destination->AsSpan();
+ 
+diff --git a/third_party/blink/renderer/modules/webaudio/audio_buffer.h b/third_party/blink/renderer/modules/webaudio/audio_buffer.h
+index 0dd11f830e..42aeae216f 100644
+--- a/third_party/blink/renderer/modules/webaudio/audio_buffer.h
++++ b/third_party/blink/renderer/modules/webaudio/audio_buffer.h
+@@ -122,6 +122,11 @@ class MODULES_EXPORT AudioBuffer final : public ScriptWrappable {
+   float sample_rate_;
+   uint32_t length_;
+ 
++  // Perch: applies this site's fingerprinting factor to every channel the
++  // first time a page reads the samples (perch_farbling.h).
++  void PerchFarbleOnce();
++  bool perch_farbled_ = false;
++
+   HeapVector<Member<DOMFloat32Array>> channels_;
+ };
+ 
+diff --git a/third_party/blink/renderer/modules/webgl/webgl_rendering_context_base.cc b/third_party/blink/renderer/modules/webgl/webgl_rendering_context_base.cc
+index 1a00418d11..cd701b8635 100644
+--- a/third_party/blink/renderer/modules/webgl/webgl_rendering_context_base.cc
++++ b/third_party/blink/renderer/modules/webgl/webgl_rendering_context_base.cc
+@@ -24,6 +24,7 @@
+  */
+ 
+ #include "third_party/blink/renderer/modules/webgl/webgl_rendering_context_base.h"
++#include "third_party/blink/renderer/core/html/canvas/perch_farbling.h"
+ 
+ #include <inttypes.h>
+ 
+@@ -5453,6 +5454,15 @@ void WebGLRenderingContextBase::ReadPixelsHelper(GLint x,
+     }
+     ContextGL()->ReadPixels(x, y, width, height, format, type, data);
+   }
++  // Perch: 8-bit RGBA readbacks carry this site's fingerprinting noise.
++  if (format == GL_RGBA && type == GL_UNSIGNED_BYTE && !buffer &&
++      pack_alignment_ <= 4) {
++    if (std::optional<uint64_t> seed =
++            perch::FarblingSeed(Host()->GetTopExecutionContext())) {
++      perch::FarbleRgba8(data, static_cast<size_t>(width) * 4, width, height,
++                         /*premultiplied=*/false, *seed);
++    }
++  }
+ }
+ 
+ void WebGLRenderingContextBase::RenderbufferStorageImpl(

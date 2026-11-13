@@ -64,7 +64,7 @@ export const SEARCH_INDEX: readonly SearchEntry[] = [
   { section: "privacy", anchor: "https-only", title: "HTTPS-only", words: "secure connections" },
   { section: "privacy", anchor: "search-suggestions", title: "Search suggestions", words: "autocomplete typing address bar" },
   { section: "privacy", anchor: "doh", title: "Encrypted DNS", words: "dns over https doh cloudflare quad9 mullvad" },
-  { section: "privacy", anchor: "fingerprinting", title: "Block ad-targeting APIs", words: "fingerprinting topics protected audience fledge ad measurement privacy sandbox" },
+  { section: "privacy", anchor: "fingerprinting", title: "Block fingerprinting", words: "fingerprinting canvas webgl audio noise farbling topics protected audience fledge ad measurement privacy sandbox" },
   { section: "privacy", anchor: "third-party-cookies", title: "Block third-party cookies", words: "cookies tracking" },
   { section: "privacy", anchor: "background-connections", title: "Background connections", words: "network updates safe browsing widevine" },
   { section: "privacy", anchor: "backup-export", title: "Export everything", words: "backup encrypted export file new mac migrate secure enclave keys" },

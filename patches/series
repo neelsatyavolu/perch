@@ -127,3 +127,4 @@ perch/agent/agent-tabs.patch
 perch/shell/ntp-autocomplete-sources.patch
 perch/shell/no-install-app-or-media-button.patch
 perch/policy/privacy-hardening.patch
+perch/policy/fingerprint-noise.patch

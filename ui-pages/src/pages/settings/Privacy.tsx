@@ -17,7 +17,7 @@ const BLOCK_ADS: Toggle = { id: "content-blocker", key: "contentBlocker", title:
 const AD_TOGGLES: readonly Toggle[] = [
   { id: "cookie-banners", key: "cookieBanners", title: "Reject cookie banners", detail: "Clicks reject for you where the site offers it" },
   { id: "tracking-params", key: "trackingParams", title: "Remove tracking parameters", detail: "Strips utm_, fbclid, gclid and similar from links you open and copy" },
-  { id: "fingerprinting", key: "fingerprinting", title: "Block ad-targeting APIs", detail: "Turns off Topics, Protected Audience and ad measurement, which let sites target ads without cookies" },
+  { id: "fingerprinting", key: "fingerprinting", title: "Block fingerprinting", detail: "Adds a little noise, different on every site, to what canvas, WebGL and audio report, and turns off the ad-targeting APIs. Applies to tabs opened after you change it" },
 ];
 const SEARCH_SUGGESTIONS: Toggle = { id: "search-suggestions", key: "searchSuggestions", title: "Search suggestions", detail: "Sends what you type in the address bar to your search engine as you type, to suggest searches" };
 const HTTPS_ONLY: Toggle = { id: "https-only", key: "httpsOnly", title: "HTTPS-only", detail: "Asks before opening a site that only offers an unencrypted connection" };

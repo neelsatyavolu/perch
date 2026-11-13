@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Element hiding fixture</title></head>
+<body>
+  <div class="generic-ad">generic</div>
+  <div class="excepted-ad" style="display: flex">excepted here</div>
+  <div class="site-ad">site</div>
+  <div class="other-ad">other site</div>
+  <div class="plain">plain</div>
+  <script>
+    window.shown = () => Object.fromEntries(
+      ["generic-ad", "excepted-ad", "site-ad", "other-ad", "plain"].map((c) => [c, getComputedStyle(document.querySelector("." + c)).display]),
+    );
+  </script>
+</body>
+</html>

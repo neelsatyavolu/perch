@@ -13,7 +13,7 @@ import { BackupGroup } from "./Backup";
 const DOH: Readonly<Record<DohProvider, string>> = { cloudflare: "Cloudflare", quad9: "Quad9", mullvad: "Mullvad", custom: "Custom" };
 
 type Toggle = { id: string; key: keyof PrivacyPatch; title: string; detail: string };
-const BLOCK_ADS: Toggle = { id: "content-blocker", key: "contentBlocker", title: "Block ads and trackers", detail: "EasyList and EasyPrivacy rules. Turn it off for one site from the address bar." };
+const BLOCK_ADS: Toggle = { id: "content-blocker", key: "contentBlocker", title: "Block ads and trackers", detail: "EasyList, EasyPrivacy and uBlock Origin's privacy filters block requests and hide ad slots on pages. Turn it off for one site from the address bar." };
 const AD_TOGGLES: readonly Toggle[] = [
   { id: "cookie-banners", key: "cookieBanners", title: "Reject cookie banners", detail: "Clicks reject for you where the site offers it" },
   { id: "tracking-params", key: "trackingParams", title: "Remove tracking parameters", detail: "Strips utm_, fbclid, gclid and similar from links you open and copy" },

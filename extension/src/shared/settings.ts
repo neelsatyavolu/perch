@@ -5,7 +5,7 @@ export type Feature = "blocker" | "banners" | "params" | "pip" | "speedKeys" | "
 export type Settings = Readonly<Record<Feature, boolean> & { sitesOff: readonly string[] }>;
 
 export const FEATURES: readonly { id: Feature; label: string; detail: string }[] = [
-  { id: "blocker", label: "Block ads and trackers", detail: "EasyList and EasyPrivacy, built in." },
+  { id: "blocker", label: "Block ads and trackers", detail: "EasyList, EasyPrivacy, uBlock Origin's privacy filters and Peter Lowe's list, built in. Hides ad spaces too." },
   { id: "banners", label: "Reject cookie banners", detail: "Clicks the reject option on common consent banners. Never accepts." },
   { id: "params", label: "Remove tracking parameters", detail: "utm_*, fbclid, gclid and similar, from links you open." },
   { id: "pip", label: "Picture in picture when you switch tabs", detail: "A playing video keeps playing in a small window." },

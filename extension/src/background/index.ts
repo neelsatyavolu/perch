@@ -5,6 +5,7 @@ import { SETTINGS_KEY, isSiteOff, loadSettings } from "../shared/settings";
 import { fillCodeInFrame, type FillResult } from "../totp/fill-code";
 import { createMenus, onCommand, onMenuClick, toggleReader } from "./menus";
 import { fetchPreview } from "./preview";
+import { hideOnCommit } from "./cosmetic";
 import { applySettings } from "./protection";
 import { fullPageScreenshot } from "./screenshot";
 import { forgetTab, recordBanner, tabState } from "./tabstate";
@@ -27,6 +28,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && changes[SETTINGS_KEY]) void loadSettings().then(applySettings).catch(report);
 });
 
+chrome.webNavigation.onCommitted.addListener((details) => void hideOnCommit(details).catch(report));
 chrome.tabs.onRemoved.addListener((tabId) => void forgetTab(tabId));
 chrome.contextMenus.onClicked.addListener((info, tab) => void onMenuClick(info, tab).catch(report));
 chrome.commands.onCommand.addListener((command, tab) => void onCommand(command, tab).catch(report));

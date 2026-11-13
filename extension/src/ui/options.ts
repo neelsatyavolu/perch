@@ -3,6 +3,7 @@
 import { FEATURES, loadSettings, saveSettings, withSiteProtection, type Settings } from "../shared/settings";
 import { errorText, h, switchButton } from "./dom";
 import { codesPanel } from "./options-codes";
+import { FILTER_LISTS, isFilterRuleset } from "../rules/rulesets";
 
 function panel(title: string, intro: string | null, children: Node[], id?: string): HTMLElement {
   return h("section", { class: "panel", attrs: id ? { id } : {} }, [h("h2", { text: title }), intro ? h("p", { class: "intro", text: intro }) : null, ...children]);
@@ -42,12 +43,12 @@ async function listsPanel(): Promise<HTMLElement> {
     };
     const rulesetIds = await chrome.declarativeNetRequest.getEnabledRulesets();
     const rows = Object.entries(meta.lists).flatMap(([id, list]) => [
-      h("dt", { text: id === "easylist" ? "EasyList" : id === "easyprivacy" ? "EasyPrivacy" : id }),
+      h("dt", { text: isFilterRuleset(id) ? FILTER_LISTS[id] : id }),
       h("dd", { text: `${list.version ?? "unknown version"} · ${meta.stats[id]?.rules ?? 0} rules · ${rulesetIds.includes(id) ? "on" : "off"}` }),
     ]);
     return panel(
       "Filter lists",
-      "Lists are compiled into Perch and update with each Perch release. EasyList and EasyPrivacy are by the EasyList authors, under GPLv3 or CC BY-SA 3.0.",
+      "Lists are compiled into Perch and update with each Perch release. EasyList and EasyPrivacy are by the EasyList authors, under GPLv3 or CC BY-SA 3.0. uBlock filters – Privacy is by the uBlock Origin authors, under GPLv3.",
       [h("dl", { class: "stats" }, rows)],
     );
   } catch (error) {

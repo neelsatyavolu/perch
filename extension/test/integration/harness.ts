@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { Browser } from "../../../perchd/src/browser/browser";
 import type { Tab } from "../../../perchd/src/browser/tab";
 import { build } from "../../scripts/build";
+import { FILTER_RULESET_IDS } from "../../src/rules/rulesets";
 import { startFixtures } from "../fixtures/server";
 
 const LISTS = join(import.meta.dir, "..", "fixtures", "lists");
@@ -19,7 +20,7 @@ let built: Promise<string> | null = null;
 export function buildOnce(): Promise<string> {
   built ??= (async () => {
     const outDir = mkdtempSync(join(tmpdir(), "perch-ext-"));
-    await build({ outDir, lists: { easylist: join(LISTS, "easylist.txt"), easyprivacy: join(LISTS, "easyprivacy.txt") } });
+    await build({ outDir, lists: Object.fromEntries(FILTER_RULESET_IDS.map((id) => [id, join(LISTS, `${id}.txt`)])) });
     process.once("exit", () => rmSync(outDir, { recursive: true, force: true }));
     return outDir;
   })();

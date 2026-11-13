@@ -28,6 +28,7 @@
     "declarativeNetRequestFeedback",
     "storage",
     "scripting",
+    "webNavigation",
     "contextMenus",
     "cookies",
     "contentSettings",
@@ -50,6 +51,11 @@
         "id": "easyprivacy",
         "enabled": true,
         "path": "rules/easyprivacy.json"
+      },
+      {
+        "id": "ubo-privacy",
+        "enabled": true,
+        "path": "rules/ubo-privacy.json"
       },
       {
         "id": "params",

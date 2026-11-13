@@ -1,0 +1,2 @@
+! Title: Fixture uBlock filters – Privacy
+||ubo-tracker.localhost^

@@ -7,3 +7,9 @@
 ! The fixture server has a port, so exceptions avoid host-anchored paths.
 @@/allowed.js$script,domain=site.localhost
 example.com##.ad
+##.generic-ad
+##.excepted-ad
+site.localhost#@#.excepted-ad
+site.localhost##.site-ad
+other.localhost##.other-ad
+site.localhost#?#.x:-abp-has(.y)

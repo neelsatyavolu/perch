@@ -1,6 +1,8 @@
-/** Makes Chrome's state match the settings: rulesets, the per-site rule and registered content scripts. */
+/** Makes Chrome's state match the settings: rulesets, the per-site rule and registered content scripts (generic element hiding among them). */
 
+import { genericExemptHosts } from "../cosmetic/data";
 import type { Settings } from "../shared/settings";
+import { cosmeticData } from "./cosmetic";
 import { contentScriptPlan, enabledRulesets, siteOffRules } from "./plan";
 
 export async function applySettings(settings: Settings): Promise<void> {
@@ -20,6 +22,6 @@ async function applyRules(settings: Settings): Promise<void> {
 async function applyContentScripts(settings: Settings): Promise<void> {
   const ours = (await chrome.scripting.getRegisteredContentScripts()).map((s) => s.id).filter((id) => id.startsWith("perch-"));
   if (ours.length) await chrome.scripting.unregisterContentScripts({ ids: ours });
-  const plan = contentScriptPlan(settings);
+  const plan = contentScriptPlan(settings, settings.blocker ? genericExemptHosts(await cosmeticData()) : []);
   if (plan.length) await chrome.scripting.registerContentScripts(plan.map((s) => ({ ...s, persistAcrossSessions: true })));
 }

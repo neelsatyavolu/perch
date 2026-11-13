@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { DEFAULT_SETTINGS, isSiteOff, listableHost, normalizeHost, protectionState, sanitizeSettings, withSiteProtection } from "../../src/shared/settings";
-import { siteOffRules, contentScriptPlan } from "../../src/background/plan";
+import { siteOffRules, contentScriptPlan, enabledRulesets } from "../../src/background/plan";
 import { PRIORITY } from "../../src/rules/limits";
 import { validateRule } from "../../src/rules/compile";
 
@@ -74,10 +74,36 @@ describe("siteOffRules", () => {
 describe("contentScriptPlan", () => {
   test("registers a script per enabled feature and skips sites with protections off for banners only", () => {
     const plan = contentScriptPlan({ ...DEFAULT_SETTINGS, linkPreview: false, sitesOff: ["a.example"] });
-    expect(plan.map((s) => s.id)).toEqual(["perch-banners", "perch-pip", "perch-speed"]);
+    expect(plan.map((s) => s.id)).toEqual(["perch-cosmetic", "perch-banners", "perch-pip", "perch-speed"]);
     const banners = plan.find((s) => s.id === "perch-banners")!;
     expect(banners.excludeMatches).toEqual(["*://a.example/*", "*://*.a.example/*"]);
     expect(banners.allFrames).toBe(true);
     expect(plan.find((s) => s.id === "perch-pip")!.excludeMatches).toBeUndefined();
+  });
+
+  test("generic element hiding runs at document start in every frame, skipping exempt and $generichide sites", () => {
+    const plan = contentScriptPlan({ ...DEFAULT_SETTINGS, sitesOff: ["a.example"] }, ["g.example"]);
+    expect(plan.find((s) => s.id === "perch-cosmetic")).toEqual({
+      id: "perch-cosmetic",
+      css: ["cosmetic/generic.css"],
+      matches: ["http://*/*", "https://*/*"],
+      excludeMatches: ["*://a.example/*", "*://*.a.example/*", "*://g.example/*", "*://*.g.example/*"],
+      allFrames: true,
+      runAt: "document_start",
+    });
+  });
+
+  test("the blocker switch removes generic element hiding", () => {
+    expect(contentScriptPlan({ ...DEFAULT_SETTINGS, blocker: false }, ["g.example"]).map((s) => s.id)).not.toContain("perch-cosmetic");
+  });
+});
+
+describe("enabledRulesets", () => {
+  test("the blocker switch covers every filter list; params has its own", () => {
+    expect(enabledRulesets(DEFAULT_SETTINGS)).toEqual({ enable: ["easylist", "easyprivacy", "ubo-privacy", "params"], disable: [] });
+    expect(enabledRulesets({ ...DEFAULT_SETTINGS, blocker: false })).toEqual({
+      enable: ["params"],
+      disable: ["easylist", "easyprivacy", "ubo-privacy"],
+    });
   });
 });

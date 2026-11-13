@@ -1,6 +1,6 @@
 /**
  * Builds the unpacked extension into dist/: bundles the TypeScript, copies the static files and
- * icons, and compiles the filter lists into declarativeNetRequest rulesets.
+ * icons, and compiles the filter lists into declarativeNetRequest rulesets and element-hiding CSS.
  *
  *   bun scripts/build.ts            uses lists in .cache/lists, downloading them if missing
  *   bun scripts/build.ts --refresh  downloads fresh lists first
@@ -9,6 +9,7 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
+import { compileCosmetic, type CosmeticStats } from "../src/cosmetic/compile";
 import { compileLists, type Rule } from "../src/rules/compile";
 import { STATIC_RULE_BUDGET } from "../src/rules/limits";
 import { paramRules } from "../src/params/strip";
@@ -19,12 +20,17 @@ const ICONS = join(ROOT, "..", "overlay", "chrome", "app", "theme");
 
 export type BuildOptions = {
   outDir?: string;
-  /** Filter list files by ruleset id; defaults to the downloaded EasyList and EasyPrivacy. */
+  /** Filter list files by ruleset id; defaults to the downloaded lists in scripts/lists.ts. */
   lists?: Record<string, string>;
   minify?: boolean;
 };
 
-export type BuildReport = { outDir: string; rules: Record<string, number>; skipped: Record<string, Record<string, number>> };
+export type BuildReport = {
+  outDir: string;
+  rules: Record<string, number>;
+  skipped: Record<string, Record<string, number>>;
+  cosmetic: CosmeticStats;
+};
 
 const ESM_ENTRIES = ["src/background/index.ts", "src/ui/popup.ts", "src/ui/options.ts", "src/ui/shot.ts", "src/ui/offscreen.ts"];
 const CONTENT_ENTRIES = ["src/content/banners.ts", "src/content/pip.ts", "src/content/speed.ts", "src/content/preview.ts", "src/content/reader.ts", "src/content/drm-hook.ts", "src/content/drm-notice.ts"];
@@ -34,6 +40,7 @@ export async function build(opts: BuildOptions = {}): Promise<BuildReport> {
   const minify = opts.minify ?? true;
   rmSync(outDir, { recursive: true, force: true });
   mkdirSync(join(outDir, "rules"), { recursive: true });
+  mkdirSync(join(outDir, "cosmetic"), { recursive: true });
 
   await bundle(ESM_ENTRIES, "esm", outDir, minify);
   // Content scripts are classic scripts: one self-contained file each, no imports at run time.
@@ -43,19 +50,25 @@ export async function build(opts: BuildOptions = {}): Promise<BuildReport> {
   copyIcons(join(outDir, "icons"));
 
   const lists = opts.lists ?? (await defaultLists());
-  const compiled = compileLists(Object.entries(lists).map(([id, path]) => ({ id, text: readFileSync(path, "utf8") })), STATIC_RULE_BUDGET - 1);
+  const texts = Object.entries(lists).map(([id, path]) => ({ id, text: readFileSync(path, "utf8") }));
+  const compiled = compileLists(texts, STATIC_RULE_BUDGET - 1);
   const rulesets: { id: string; rules: Rule[] }[] = [...compiled.rulesets, { id: "params", rules: paramRules() }];
   for (const { id, rules } of rulesets) writeFileSync(join(outDir, "rules", `${id}.json`), JSON.stringify(rules));
+
+  const cosmetic = compileCosmetic(texts);
+  writeFileSync(join(outDir, "cosmetic", "generic.css"), cosmetic.genericCss);
+  writeFileSync(join(outDir, "cosmetic", "sites.json"), JSON.stringify(cosmetic.data));
 
   const meta = {
     built: new Date().toISOString(),
     lists: Object.fromEntries(
       Object.entries(lists).map(([id, path]) => {
         const text = readFileSync(path, "utf8");
-        return [id, { sha256: createHash("sha256").update(text).digest("hex"), version: /^! Version: (.+)$/m.exec(text)?.[1] ?? null }];
+        return [id, { sha256: createHash("sha256").update(text).digest("hex"), version: /^!\s*(?:Version|Last modified): (.+)$/m.exec(text)?.[1]?.trim() ?? null }];
       }),
     ),
     stats: compiled.stats,
+    cosmetic: cosmetic.stats,
   };
   writeFileSync(join(outDir, "rules", "meta.json"), JSON.stringify(meta, null, 2));
   checkManifest(outDir, rulesets.map((r) => r.id));
@@ -64,6 +77,7 @@ export async function build(opts: BuildOptions = {}): Promise<BuildReport> {
     outDir,
     rules: Object.fromEntries(rulesets.map((r) => [r.id, r.rules.length])),
     skipped: Object.fromEntries(Object.entries(compiled.stats).map(([id, s]) => [id, s.skipped])),
+    cosmetic: cosmetic.stats,
   };
 }
 
@@ -113,4 +127,5 @@ if (import.meta.main) {
   process.stdout.write(`built ${report.outDir}\n`);
   for (const [id, n] of Object.entries(report.rules)) process.stdout.write(`  ${id}: ${n} rules\n`);
   for (const [id, s] of Object.entries(report.skipped)) process.stdout.write(`  ${id} skipped: ${JSON.stringify(s)}\n`);
+  process.stdout.write(`  cosmetic: ${JSON.stringify(report.cosmetic)}\n`);
 }

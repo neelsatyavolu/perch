@@ -11,7 +11,7 @@ No remote code, no telemetry. The only network requests it makes are the link pr
 
 | Feature | How |
 |---|---|
-| Ad and tracker blocking | EasyList and EasyPrivacy compiled to `declarativeNetRequest` static rulesets at build time (`src/rules`). Off for one site from the panel, everywhere from Settings. |
+| Ad and tracker blocking | EasyList, EasyPrivacy, uBlock filters – Privacy and Peter Lowe's list compiled to `declarativeNetRequest` static rulesets at build time (`src/rules`). Their element-hiding filters compile to `cosmetic/generic.css` (a dynamic content script at document start) and `cosmetic/sites.json` (inserted per frame as a user stylesheet on commit) (`src/cosmetic`); procedural filters and scriptlets are skipped. Off for one site from the panel, everywhere from Settings. |
 | Cookie banners | Reject-only rules for OneTrust, Didomi, Quantcast, TrustArc, Cookiebot, Usercentrics, Sourcepoint and others (`src/banners`). A control that reads as accepting is never clicked. |
 | Tracking parameters | One DNR `removeParams` rule on page loads (`src/params`), plus "Copy link without tracking" in the link menu. |
 | Reader view | Mozilla Readability, sanitised, in a closed shadow root. Menu, panel, or ⌃⇧R. |
@@ -25,14 +25,14 @@ No remote code, no telemetry. The only network requests it makes are the link pr
 
 ```sh
 bun install
-bun run lists        # download EasyList and EasyPrivacy into .cache/lists (gitignored)
+bun run lists        # download the filter lists into .cache/lists (gitignored)
 bun run build        # bundle, copy static files and icons, compile rules into dist/
 bun test             # unit tests, then integration tests in headless Chrome for Testing
 bun run typecheck
 ```
 
 `bun run build -- --refresh` downloads fresh lists first. `dist/rules/meta.json` records each list's
-version and SHA-256 and what the compiler skipped. The integration tests use the small lists in
+version and SHA-256, rule counts, element-hiding counts and what the compilers skipped. The integration tests use the small lists in
 `test/fixtures/lists`; `test/integration/real-lists.test.ts` also checks the real lists when they
 have been downloaded. Integration tests need Chrome for Testing (see `perchd`).
 

@@ -3,9 +3,10 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { build } from "../../scripts/build";
+import { FILTER_RULESET_IDS } from "../../src/rules/rulesets";
 
 const LISTS = join(import.meta.dir, "..", "fixtures", "lists");
-const lists = { easylist: join(LISTS, "easylist.txt"), easyprivacy: join(LISTS, "easyprivacy.txt") };
+const lists = Object.fromEntries(FILTER_RULESET_IDS.map((id) => [id, join(LISTS, `${id}.txt`)]));
 const dirs: string[] = [];
 afterAll(() => dirs.forEach((d) => rmSync(d, { recursive: true, force: true })));
 

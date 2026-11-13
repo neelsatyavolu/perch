@@ -1,6 +1,7 @@
 /** Site facts for the panel: blocked counts, permissions, cookies. Runs in the extension's pages. */
 
 import { isBlockRuleId } from "../rules/limits";
+import { isFilterRuleset } from "../rules/rulesets";
 
 export type Counts = { blocked: number; params: number };
 
@@ -18,7 +19,7 @@ export async function matchedCounts(tabId: number): Promise<Counts> {
   let params = 0;
   for (const { rule } of rulesMatchedInfo) {
     if (rule.rulesetId === "params") params++;
-    else if ((rule.rulesetId === "easylist" || rule.rulesetId === "easyprivacy") && isBlockRuleId(rule.ruleId)) blocked++;
+    else if (isFilterRuleset(rule.rulesetId) && isBlockRuleId(rule.ruleId)) blocked++;
   }
   return { blocked, params };
 }

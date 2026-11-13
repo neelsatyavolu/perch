@@ -504,9 +504,10 @@ main > :is(section, .section).g2 > .wrap > .group > .grid:last-child { flex: 0 0
   .hero__art .ntp > * { width: min(100%, 460px); }
   .hero__art .ntp > .ntp-mark { width: auto; }
 }
-/* On a phone the comparison fits the screen instead of scrolling, so every browser stays in view. */
+/* On a phone six browsers don't fit: the table scrolls sideways with the row names pinned. */
 @media (max-width: 639px) {
-  .compare table { min-width: 0; font-size: var(--t-small); }
-  .compare th, .compare td { padding-right: var(--s-2); }
-  .compare tbody th { width: 38%; }
+  .compare table { min-width: 560px; font-size: var(--t-small); }
+  .compare th, .compare td { padding-right: var(--s-3); }
+  .compare tbody th, .compare thead th:first-child { position: sticky; left: 0; z-index: 1; width: 132px; min-width: 132px; background: var(--bg); }
+  .compare tbody th { padding-right: var(--s-3); }
 }

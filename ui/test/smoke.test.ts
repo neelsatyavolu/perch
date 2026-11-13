@@ -43,7 +43,28 @@ const REPLY = [
   "```",
 ].join("\n");
 
+/** Released by the queue test: the "Hold on" task waits for it. */
+let releaseHold: (() => void) | null = null;
+
 async function* runner(input: RunnerInput): AsyncIterable<StepEvent> {
+  if (input.ask?.includes("Grade everyone")) {
+    // A long reply that outgrows the view while steps keep coming.
+    for (let i = 1; i <= 30; i++) {
+      yield { type: "text", delta: `Checking group ${i} of 30 for a brainstorm doc and its members.\n\n` };
+      yield { type: "step", ...(i === 30 ? { detail: "jensen huang bloomberg" } : {}), label: i === 30 ? `Search the web for "Jensen Huang last hours as Nvidia CEO Bloomberg interview transcript free version archive mirror without paywall full text 2026 november keynote remarks"` : `Find ${i}` };
+      await Bun.sleep(15);
+    }
+    if (!input.signal.aborted) await new Promise<void>((resolve) => input.signal.addEventListener("abort", () => resolve(), { once: true }));
+    return;
+  }
+  if (input.ask?.includes("Hold on")) {
+    if (!input.signal.aborted) await new Promise<void>((resolve) => {
+      releaseHold = resolve;
+      input.signal.addEventListener("abort", () => resolve(), { once: true });
+    });
+    yield { type: "final", text: "Held." };
+    return;
+  }
   yield { type: "step", label: "Opened mail.example" };
   if (input.task.includes("Reply to Maya")) {
     yield { type: "text", delta: "The reply is ready." };
@@ -175,3 +196,84 @@ for (const { theme, accent } of pairs) {
     expect(problems).toEqual([]);
   }, 30_000);
 }
+
+/** Opens a chat in the full page and waits until it has loaded, so typing is not reset by the load. */
+async function openChat(chatId: string, title: string): Promise<void> {
+  await tab.send("Page.navigate", { url: `${app.server.url}/ui/chat.html?chat=${chatId}#token=${app.token}` });
+  await waitFor(`!!document.querySelector('.full[data-ready] .composer textarea') && document.body.innerText.includes(${JSON.stringify(title)})`);
+  await Bun.sleep(100);
+}
+
+/** Types into the composer and presses Enter (with ⌘ to steer). */
+async function typeAndEnter(text: string, meta = false): Promise<void> {
+  await tab.evaluate(`(() => {
+    const f = document.querySelector('.composer textarea');
+    f.focus();
+    f.value = ${JSON.stringify(text)};
+    f.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await Bun.sleep(50);
+  await tab.evaluate(`document.querySelector('.composer textarea').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: ${meta}, bubbles: true }))`);
+}
+
+test("a reply that outgrows the view is followed, so its newest step stays in sight", async () => {
+  problems.length = 0;
+  const chat = await app.chats.create({ title: "Grades", settings: { model: "gpt-6-astra" } });
+  await tab.send("Emulation.setDeviceMetricsOverride", { width: 1000, height: 700, deviceScaleFactor: 1, mobile: false });
+  await openChat(chat.id, "Grades");
+  await typeAndEnter("Grade everyone without a brainstorm doc");
+  await waitFor(`[...document.querySelectorAll('.reply.live .step-l')].some((s) => s.textContent.startsWith('Search the web'))`);
+  // A long step ends in an ellipsis inside the column instead of running off the side.
+  const spill = await tab.evaluate<string[]>(`(() => {
+    const thread = document.querySelector('.thread');
+    const label = [...document.querySelectorAll('.reply.live .step-l')].find((s) => s.textContent.startsWith('Search the web'));
+    if (!label) return ['no long step'];
+    // Every box from the label up to the list either fits its text or clips it.
+    const out = [];
+    for (let el = label; el && el !== thread; el = el.parentElement) {
+      for (const box of [el, ...el.querySelectorAll('*')]) {
+        if (box.scrollWidth > box.clientWidth + 1 && getComputedStyle(box).overflowX === 'visible') out.push(box.className || box.tagName);
+      }
+      if (el.classList.contains('steplist')) break;
+    }
+    return [...new Set(out)];
+  })()`);
+  expect(spill).toEqual([]);
+  await tab.send("Emulation.setDeviceMetricsOverride", { width: 400, height: 700, deviceScaleFactor: 2, mobile: false });
+  await Bun.sleep(300);
+  // Narrowing wraps the text taller; the view stays at the newest step.
+  expect(await tab.evaluate<boolean>(`(() => {
+    const thread = document.querySelector('.thread');
+    const step = [...document.querySelectorAll('.reply.live .step-l')].at(-1);
+    return step.getBoundingClientRect().bottom <= thread.getBoundingClientRect().bottom;
+  })()`)).toBe(true);
+  await shot("long-step-narrow");
+  await tab.send("Emulation.setDeviceMetricsOverride", { width: 1000, height: 700, deviceScaleFactor: 1, mobile: false });
+  // The newest step comes into view and stays there, with the view scrolled down to it.
+  await waitFor(`(() => {
+    const thread = document.querySelector('.thread');
+    const step = [...document.querySelectorAll('.reply.live .step-l')].at(-1);
+    return thread.scrollTop > 0 && step.getBoundingClientRect().bottom <= thread.getBoundingClientRect().bottom;
+  })()`, 5000);
+  app.runs.stop(chat.id);
+  await app.runs.idleFor(chat.id);
+  expect(problems).toEqual([]);
+}, 30_000);
+
+test("a message sent while a task runs waits above the composer, then goes out when the task ends", async () => {
+  problems.length = 0;
+  const chat = await app.chats.create({ title: "Queue", settings: { model: "gpt-6-astra" } });
+  await openChat(chat.id, "Queue");
+  await typeAndEnter("Hold on");
+  await waitFor(`!!document.querySelector('.reply.live')`);
+  await typeAndEnter("then export the CSV");
+  await waitFor(`document.querySelector('.queued-t')?.textContent === 'then export the CSV'`);
+  await shot("sidebar-queued");
+  releaseHold?.();
+  await waitFor(`!document.querySelector('.queued') && [...document.querySelectorAll('[data-id]')].some((m) => m.textContent.includes('then export the CSV'))`);
+  await app.runs.idleFor(chat.id);
+  const messages = app.chats.get(chat.id)!.messages;
+  expect(messages.map((m) => m.role)).toEqual(["user", "assistant", "user", "assistant"]);
+  expect(messages.filter((m) => m.role === "user").map((m) => m.text)).toEqual(["Hold on", "then export the CSV"]);
+  expect(problems).toEqual([]);
+}, 30_000);

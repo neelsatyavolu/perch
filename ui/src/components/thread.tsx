@@ -1,7 +1,7 @@
 /** The conversation: messages, the run in progress, and the approval card as the only status while it is up. */
 
 import { Fragment, type VNode } from "preact";
-import { useCallback, useLayoutEffect, useRef } from "preact/hooks";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "preact/hooks";
 import type { ArtifactMeta, ChatMessage } from "../api/types";
 import type { ChatView } from "../state/chat";
 import { ApprovalCard } from "./approval";
@@ -27,6 +27,8 @@ export function Thread({ view, onDecide, onOpenArtifact, onBranch, selectedArtif
   const pinned = useRef(true);
   /** The message just sent: it scrolls to the top and the reply grows below it, without the view following. */
   const anchor = useRef<string | null>(null);
+  /** Whether the user scrolled by hand since the last message was sent; the view then stays put. */
+  const moved = useRef(false);
   const seen = useRef<string | null>(null);
   /** The reply that just finished, and how much of its text the live run had already shown. */
   const fresh = useRef<{ id: string; from: number } | null>(null);
@@ -72,8 +74,38 @@ export function Thread({ view, onDecide, onOpenArtifact, onBranch, selectedArtif
     if (last && last.id !== seen.current && last.role === "user" && seen.current !== null) {
       anchor.current = last.id;
       pinned.current = false;
+      moved.current = false;
     }
     if (last) seen.current = last.id;
+    fit();
+  });
+
+  // The live reply types its text and adds steps without this component rendering again, so the
+  // view also re-fits whenever what is inside it changes, or the view itself changes size.
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    let frame = 0;
+    const refit = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(fit);
+    };
+    const watch = new MutationObserver(refit);
+    watch.observe(el, { childList: true, subtree: true, characterData: true });
+    // A narrower sidebar wraps the text taller; a view at the bottom stays there.
+    const resize = typeof ResizeObserver === "function" ? new ResizeObserver(refit) : null;
+    resize?.observe(el);
+    return () => {
+      watch.disconnect();
+      resize?.disconnect();
+      cancelAnimationFrame(frame);
+    };
+  }, []);
+
+  /** Keeps the sent message at the top while its reply is short, then follows the reply's end. */
+  function fit() {
+    const el = box.current;
+    if (!el) return;
     const target = anchor.current ? el.querySelector<HTMLElement>(`[data-id="${CSS.escape(anchor.current)}"]`) : null;
     if (target && pad.current) {
       // Room below the sent message so it can sit at the top while the reply is still short.
@@ -83,9 +115,16 @@ export function Thread({ view, onDecide, onOpenArtifact, onBranch, selectedArtif
       if (target.dataset.anchored !== "1") {
         target.dataset.anchored = "1";
         el.scrollTo({ top: Math.max(0, top - 12), behavior: "smooth" });
+      } else if (below > el.clientHeight - 24 && !moved.current) {
+        // The reply has outgrown the view: from here the view follows it, so new steps stay in sight.
+        anchor.current = null;
+        pinned.current = true;
+        pad.current.style.height = "0px";
+        // An instant scroll also ends the smooth one to the message, which would otherwise win.
+        el.scrollTo({ top: el.scrollHeight, behavior: "instant" });
       }
     } else if (pinned.current) el.scrollTop = el.scrollHeight;
-  });
+  }
 
   // Stable while the artifacts are, so past messages skip re-rendering on every streamed token.
   const artifact = useCallback(
@@ -100,6 +139,9 @@ export function Thread({ view, onDecide, onOpenArtifact, onBranch, selectedArtif
       class="thread"
       ref={box}
       aria-live="polite"
+      onWheel={() => void (moved.current = true)}
+      onTouchMove={() => void (moved.current = true)}
+      onKeyDown={(e) => void (/^(PageUp|PageDown|ArrowUp|ArrowDown|Home|End| )$/.test(e.key) && (moved.current = true))}
       onScroll={(e) => {
         const el = e.currentTarget as HTMLDivElement;
         pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;

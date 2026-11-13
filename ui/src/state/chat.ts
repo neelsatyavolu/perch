@@ -1,9 +1,10 @@
 /** Pure reducers from app events to what a page shows. Every change returns new objects. */
 
-import type { AppEvent, ArtifactMeta, Chat, ChatSummary, RunSnapshot } from "../api/types";
+import type { AppEvent, ArtifactMeta, Chat, ChatSummary, QueuedMessage, RunSnapshot } from "../api/types";
 
-export type ChatView = { chat: Chat | null; run: RunSnapshot | null; artifacts: ArtifactMeta[] };
-export const emptyView: ChatView = Object.freeze({ chat: null, run: null, artifacts: [] });
+/** `queued`: messages sent while the task ran, waiting to go out as the next turns. */
+export type ChatView = { chat: Chat | null; run: RunSnapshot | null; artifacts: ArtifactMeta[]; queued: readonly QueuedMessage[] };
+export const emptyView: ChatView = Object.freeze({ chat: null, run: null, artifacts: [], queued: [] });
 
 export function applyToView(view: ChatView, event: AppEvent): ChatView {
   const chat = view.chat;
@@ -32,6 +33,8 @@ export function applyToView(view: ChatView, event: AppEvent): ChatView {
       return { ...view, run: view.run.runId.startsWith("held-") ? null : { ...view.run, approval: null } };
     case "run.finished":
       return { ...view, run: null, chat: { ...chat, messages: [...chat.messages, event.message] } };
+    case "run.queue":
+      return { ...view, queued: event.queued };
     case "artifact.saved":
       return { ...view, artifacts: [...view.artifacts.filter((a) => a.id !== event.artifact.id), event.artifact] };
     default:

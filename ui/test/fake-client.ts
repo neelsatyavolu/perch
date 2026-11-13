@@ -54,10 +54,12 @@ export function fakeClient(): FakeClient {
       return record("patchChat", [id, patch], next);
     },
     deleteChat: (id: string) => record("deleteChat", [id], { removed: id }),
-    send: (id: string, text: string, context?: TabInfo, extras?: { files?: string[]; mentions?: string[] }) =>
+    send: (id: string, text: string, context?: TabInfo, extras?: { files?: string[]; mentions?: string[]; when?: "queue" | "steer" }) =>
       record("send", extras ? [id, text, context, extras] : [id, text, context], { runId: "r1", message: { id: `m${++n}`, role: "user" as const, text, time: new Date().toISOString() } }),
     tabs: () => record("tabs", [], [...windows.values()].flatMap((w) => (w.tab ? [w.tab] : []))),
-    cancel: (id: string) => record("cancel", [id], { stopped: true }),
+    cancel: (id: string) => record("cancel", [id], { stopped: true, unsent: [] as string[] }),
+    unqueue: (id: string, queuedId: string) => record("unqueue", [id, queuedId], { removed: true }),
+    sendQueuedNow: (id: string, queuedId: string) => record("sendQueuedNow", [id, queuedId], { runId: "r2", message: { id: `m${++n}`, role: "user" as const, text: "", time: new Date().toISOString() } }),
     branch: (id: string, messageId: string) => record("branch", [id, messageId], newChat({ title: "Branch" })),
     exportChat: (id: string) => record("exportChat", [id], "# chat"),
     artifact: (id: string) => record("artifact", [id], { meta: { id, chatId: "", title: "", kind: "markdown" as const, version: 1, versions: 1, updatedAt: "", url: "" }, content: "# doc" }),

@@ -1,6 +1,6 @@
 /** The app API from a page: JSON over fetch with the token, and events over one WebSocket. */
 
-import type { AppEvent, AppInfo, ArtifactKind, ArtifactMeta, Chat, ChatMessage, ChatSettings, ChatSummary, RunSnapshot, TabInfo, WindowState } from "./types";
+import type { AppEvent, AppInfo, ArtifactKind, ArtifactMeta, Chat, ChatMessage, ChatSettings, ChatSummary, QueuedMessage, RunSnapshot, TabInfo, WindowState } from "./types";
 
 export type ChatPayload = { chat: Chat | null; run: RunSnapshot | null; artifacts: ArtifactMeta[] };
 
@@ -46,16 +46,21 @@ export function createClient(api: string, token: string, deps: Deps = {}) {
     patchChat: (id: string, patch: { title?: string; draft?: string; scrollTop?: number; settings?: Partial<ChatSettings>; pinned?: boolean; read?: true }) => call<Chat>("PATCH", `/api/chats/${encodeURIComponent(id)}`, patch),
     deleteChat: (id: string) => call<{ removed: string }>("DELETE", `/api/chats/${encodeURIComponent(id)}`),
     /** `files` are attachment ids from the browser's file panel; `mentions` are tab ids picked with @. */
-    send: (id: string, text: string, context?: TabInfo, extras: { files?: string[]; mentions?: string[] } = {}) =>
-      call<{ runId: string; message: ChatMessage }>("POST", `/api/chats/${encodeURIComponent(id)}/messages`, {
+    /** `when`, while a task runs: "queue" sends it once the task ends, "steer" stops the task and sends it now. */
+    send: (id: string, text: string, context?: TabInfo, extras: { files?: string[]; mentions?: string[]; when?: "queue" | "steer" } = {}) =>
+      call<{ runId: string; message: ChatMessage } | { queued: QueuedMessage }>("POST", `/api/chats/${encodeURIComponent(id)}/messages`, {
         text,
         ...(context ? { context } : {}),
         ...(extras.files?.length ? { files: extras.files } : {}),
         ...(extras.mentions?.length ? { mentions: extras.mentions } : {}),
+        ...(extras.when ? { when: extras.when } : {}),
       }),
+    unqueue: (id: string, queuedId: string) => call<{ removed: boolean }>("DELETE", `/api/chats/${encodeURIComponent(id)}/queue/${encodeURIComponent(queuedId)}`),
+    sendQueuedNow: (id: string, queuedId: string) => call<{ runId: string; message: ChatMessage }>("POST", `/api/chats/${encodeURIComponent(id)}/queue/${encodeURIComponent(queuedId)}/steer`, {}),
     /** Every open tab the browser reported, for @. */
     tabs: () => call<TabInfo[]>("GET", "/api/tabs"),
-    cancel: (id: string) => call<{ stopped: boolean }>("POST", `/api/chats/${encodeURIComponent(id)}/cancel`, {}),
+    /** Stops the task; `unsent` is the text of messages that were waiting behind it. */
+    cancel: (id: string) => call<{ stopped: boolean; unsent?: string[] }>("POST", `/api/chats/${encodeURIComponent(id)}/cancel`, {}),
     branch: (id: string, messageId: string) => call<Chat>("POST", `/api/chats/${encodeURIComponent(id)}/branch`, { messageId }),
     exportChat: (id: string) => call<string>("GET", `/api/chats/${encodeURIComponent(id)}/export`),
     artifact: (id: string, version?: number) => call<{ meta: ArtifactMeta; content: string | null }>("GET", `/api/artifacts/${encodeURIComponent(id)}${version ? `?version=${version}` : ""}`),

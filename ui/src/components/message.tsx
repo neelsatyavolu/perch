@@ -17,11 +17,11 @@ function StepRow({ step, current }: { step: StepItem; current?: boolean }) {
   const [open, setOpen] = useState(false);
   const more = Boolean(step.detail || step.output);
   const cls = current ? "step current" : "step";
-  if (!more) return <li class={cls}><span class="step-l">{step.label}</span></li>;
+  if (!more) return <li class={cls}><span class="step-l"><span title={step.label}>{step.label}</span></span></li>;
   return (
     <li class={cls}>
       <button type="button" class="step-l more" aria-expanded={open} onClick={() => setOpen(!open)}>
-        <span>{step.label}</span>
+        <span title={step.label}>{step.label}</span>
         <Icon name="down" size={12} />
       </button>
       {open && (

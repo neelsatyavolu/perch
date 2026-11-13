@@ -12,7 +12,7 @@ import type { ApprovalRequest } from "../agent/session";
 import { describeApproval } from "./approval-card";
 import { parseArtifactBlocks, type ArtifactRecord, type ArtifactStore } from "./artifacts";
 import type { ChatStore } from "./chats";
-import type { AppEvent, ApprovalCard, ArtifactMeta, Chat, ChatMessage, ChatSettings, ChatStatus, ChatSummary, RunSnapshot, ScheduledMessage, Step, TabInfo } from "./protocol";
+import type { AppEvent, ApprovalCard, ArtifactMeta, Chat, ChatMessage, ChatSettings, ChatStatus, ChatSummary, QueuedMessage, RunSnapshot, ScheduledMessage, Step, TabInfo } from "./protocol";
 import { buildTask } from "./transcript";
 
 export type RunnerInput = {
@@ -73,12 +73,21 @@ const HOLD_BACK_NOTE =
   "The user wants this done without the final submit or send: do everything up to that point, leave the submit, send or publish step for them, and say it is ready.";
 
 const MAX_MESSAGE = 50_000;
+/** Messages that can wait behind one chat's task. */
+const MAX_QUEUED = 10;
+
+/** A queued message with what it is sent with once its turn comes. */
+type Waiting = QueuedMessage & { context?: TabInfo; extras: SendExtras };
 
 export class RunManager {
   private readonly naming = new Set<Promise<void>>();
   private runs = new Map<string, Run>();
   /** Cards for work that runs outside a chat's own run: an outside agent's action, a new client. */
   private held = new Map<string, Pending>();
+  /** Messages sent while a chat's task runs, sent in order once it ends. */
+  private queues = new Map<string, readonly Waiting[]>();
+  /** Chats whose run is being stopped to steer, so the queue waits for the steering message. */
+  private steering = new Set<string>();
 
   readonly scheduler: Scheduler;
 
@@ -106,7 +115,8 @@ export class RunManager {
 
   snapshot(chatId: string): RunSnapshot | null {
     const run = this.runs.get(chatId);
-    if (run) return { runId: run.runId, chatId, text: run.text, steps: run.steps, approval: run.pending?.card ?? null, startedAt: run.startedAt };
+    const queued = this.queued(chatId);
+    if (run) return { runId: run.runId, chatId, text: run.text, steps: run.steps, approval: run.pending?.card ?? null, startedAt: run.startedAt, ...(queued.length ? { queued } : {}) };
     const held = this.held.get(chatId);
     return held ? { runId: held.card.runId, chatId, text: "", steps: [], approval: held.card } : null;
   }
@@ -220,6 +230,90 @@ export class RunManager {
     return { runId: run.runId, message };
   }
 
+  /** The messages waiting behind this chat's task, oldest first. */
+  queued(chatId: string): QueuedMessage[] {
+    return (this.queues.get(chatId) ?? []).map(({ id, text, time }) => ({ id, text, time }));
+  }
+
+  /**
+   * Queue: while the chat's task runs, the message waits and is sent as the next turn when the
+   * task ends (after anything queued before it). With nothing running it is sent at once.
+   */
+  async enqueue(chatId: string, text: string, context?: TabInfo, extras: SendExtras = {}): Promise<{ runId: string; message: ChatMessage } | { queued: QueuedMessage }> {
+    if (!this.runs.has(chatId) && !this.queues.get(chatId)?.length) return this.send(chatId, text, context, extras);
+    if (!this.deps.chats.get(chatId)) throw new AppError(`no chat ${chatId}`, 404);
+    if (!text.trim()) throw new AppError("The message is empty");
+    if (text.length > MAX_MESSAGE) throw new AppError("The message is too long (50,000 characters at most)");
+    const waiting = this.queues.get(chatId) ?? [];
+    if (waiting.length >= MAX_QUEUED) throw new AppError(`At most ${MAX_QUEUED} messages can wait in one chat`, 409);
+    const item: Waiting = { id: crypto.randomUUID(), text, time: new Date().toISOString(), ...(context ? { context } : {}), extras };
+    this.setQueue(chatId, [...waiting, item]);
+    // A run that ended while this was being queued would not pick it up on its own.
+    if (!this.runs.has(chatId)) void this.drain(chatId);
+    return { queued: { id: item.id, text, time: item.time } };
+  }
+
+  /**
+   * Steer: stop the task where it is (its steps so far stay in the chat) and send this message
+   * now, as the next turn. Queued messages still follow it.
+   */
+  async steer(chatId: string, text: string, context?: TabInfo, extras: SendExtras = {}): Promise<{ runId: string; message: ChatMessage }> {
+    if (!this.deps.chats.get(chatId)) throw new AppError(`no chat ${chatId}`, 404);
+    if (!text.trim()) throw new AppError("The message is empty");
+    const run = this.runs.get(chatId);
+    if (run) {
+      this.steering.add(chatId);
+      try {
+        run.controller.abort();
+        run.pending?.resolve(false);
+        await this.idleFor(chatId);
+      } finally {
+        this.steering.delete(chatId);
+      }
+    }
+    return this.send(chatId, text, context, extras);
+  }
+
+  /** Sends a queued message now, steering the task with it. */
+  async steerQueued(chatId: string, queuedId: string): Promise<{ runId: string; message: ChatMessage }> {
+    const item = this.takeQueued(chatId, queuedId);
+    if (!item) throw new AppError("That message is no longer waiting", 404);
+    return this.steer(chatId, item.text, item.context, item.extras);
+  }
+
+  /** Takes a message out of the queue; false when it was not waiting. */
+  unqueue(chatId: string, queuedId: string): boolean {
+    return this.takeQueued(chatId, queuedId) !== undefined;
+  }
+
+  private takeQueued(chatId: string, queuedId: string): Waiting | undefined {
+    const waiting = this.queues.get(chatId) ?? [];
+    const item = waiting.find((w) => w.id === queuedId);
+    if (item) this.setQueue(chatId, waiting.filter((w) => w.id !== queuedId));
+    return item;
+  }
+
+  private setQueue(chatId: string, waiting: readonly Waiting[]): void {
+    if (waiting.length) this.queues.set(chatId, waiting);
+    else this.queues.delete(chatId);
+    this.deps.emit({ type: "run.queue", chatId, queued: this.queued(chatId) });
+  }
+
+  /** After a run ends: sends the next queued message, unless a steer is about to send its own. */
+  private async drain(chatId: string): Promise<void> {
+    if (this.runs.has(chatId) || this.steering.has(chatId)) return;
+    const [next, ...rest] = this.queues.get(chatId) ?? [];
+    if (!next) return;
+    this.setQueue(chatId, rest);
+    try {
+      await this.send(chatId, next.text, next.context, next.extras);
+    } catch {
+      // The chat is gone, or a run started meanwhile: put it back if the chat still exists.
+      if (this.deps.chats.get(chatId) && !this.runs.has(chatId)) return this.drain(chatId);
+      if (this.deps.chats.get(chatId)) this.setQueue(chatId, [next, ...(this.queues.get(chatId) ?? [])]);
+    }
+  }
+
   /** The user's answer to an approval card. False when the card is not waiting any more. */
   decide(approvalId: string, approved: boolean): boolean {
     const held = [...this.held.values()].find((p) => p.card.id === approvalId);
@@ -233,7 +327,21 @@ export class RunManager {
     return true;
   }
 
+  /**
+   * Stop. Messages waiting behind the task are not sent; their text comes back in `unsent` so the
+   * composer can offer it again.
+   */
   cancel(chatId: string): boolean {
+    return this.stop(chatId).stopped;
+  }
+
+  stop(chatId: string): { stopped: boolean; unsent: string[] } {
+    const unsent = (this.queues.get(chatId) ?? []).map((w) => w.text);
+    if (unsent.length) this.setQueue(chatId, []);
+    return { stopped: this.abort(chatId) || unsent.length > 0, unsent };
+  }
+
+  private abort(chatId: string): boolean {
     // Stop on a chat that only holds a card declines the card.
     const held = this.held.get(chatId);
     if (held && !this.runs.has(chatId)) {
@@ -320,6 +428,7 @@ export class RunManager {
     } finally {
       this.runs.delete(run.chatId);
       this.announce(run.chatId);
+      void this.drain(run.chatId);
     }
   }
 

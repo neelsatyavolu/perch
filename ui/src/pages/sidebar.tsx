@@ -97,7 +97,7 @@ export function Sidebar({ client, windowId, fallbackTab = null, host }: Props) {
     if ((payload?.chat?.id ?? null) !== chat.unsent().chatId) return present(s.tab, payload);
     // The same chat: refresh it and keep what is being typed.
     setTab(s.tab);
-    if (payload?.chat) chat.setView({ chat: payload.chat, run: payload.run, artifacts: payload.artifacts });
+    if (payload?.chat) chat.setView({ chat: payload.chat, run: payload.run, artifacts: payload.artifacts, queued: payload.run?.queued ?? [] });
   };
 
   useEffect(() => {
@@ -203,6 +203,9 @@ export function Sidebar({ client, windowId, fallbackTab = null, host }: Props) {
         listTabs={() => client.tabs()}
         onStop={() => void chat.stop()}
         running={Boolean(view.run)}
+        queued={view.queued}
+        onUnqueue={(id) => void chat.unqueue(id)}
+        onSendNow={(id) => void chat.sendQueuedNow(id)}
         tab={tab}
         settings={settings}
         models={info?.models ?? []}

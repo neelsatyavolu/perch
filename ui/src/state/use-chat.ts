@@ -33,7 +33,7 @@ export function useChat(client: Client) {
   const show = useCallback(
     (payload: ChatPayload | null, draftIfNone = "") => {
       void saveDraft();
-      const next = payload?.chat ? { chat: payload.chat, run: payload.run, artifacts: payload.artifacts } : emptyView;
+      const next = payload?.chat ? { chat: payload.chat, run: payload.run, artifacts: payload.artifacts, queued: payload.run?.queued ?? [] } : emptyView;
       const draft = next.chat ? next.chat.draft : draftIfNone;
       current.current = { chatId: next.chat?.id ?? null, draft, saved: draft };
       setDraftState(draft);
@@ -92,7 +92,7 @@ export function useChat(client: Client) {
       clearTimeout(c.timer);
       setDraftState("");
       try {
-        await client.send(chatId, text, context, { files: extras?.files.map((f) => f.id), mentions: extras?.mentions.map((t) => t.id) });
+        await client.send(chatId, text, context, { files: extras?.files.map((f) => f.id), mentions: extras?.mentions.map((t) => t.id), ...(extras?.when ? { when: extras.when } : {}) });
       } catch (e) {
         if (current.current.chatId === chatId && current.current.draft === "") setDraft(text);
         throw e;
@@ -102,7 +102,16 @@ export function useChat(client: Client) {
     return sent;
   };
 
-  const stop = () => guard(async () => view.chat && client.cancel(view.chat.id));
+  // Messages that were waiting behind the task come back into the composer, after anything typed.
+  const stop = () =>
+    guard(async () => {
+      if (!view.chat) return;
+      const chatId = view.chat.id;
+      const { unsent = [] } = await client.cancel(chatId);
+      if (unsent.length && current.current.chatId === chatId) setDraft([current.current.draft.trim(), ...unsent].filter(Boolean).join("\n\n"));
+    });
+  const unqueue = (queuedId: string) => guard(async () => view.chat && client.unqueue(view.chat.id, queuedId));
+  const sendQueuedNow = (queuedId: string) => guard(async () => view.chat && client.sendQueuedNow(view.chat.id, queuedId));
   const decide = (approvalId: string, approved: boolean) => guard(() => client.decide(approvalId, approved));
   const setSettings = (patch: Partial<ChatSettings>, apply: (patch: Partial<ChatSettings>) => void = () => {}) =>
     guard(async () => {
@@ -118,5 +127,5 @@ export function useChat(client: Client) {
 
   useEffect(() => () => void saveDraft(), [saveDraft]);
 
-  return { view, setView, show, unsent, onEvent, draft, setDraft, saveDraft, send, stop, decide, setSettings, error, setError, run: guard };
+  return { view, setView, show, unsent, onEvent, draft, setDraft, saveDraft, send, stop, unqueue, sendQueuedNow, decide, setSettings, error, setError, run: guard };
 }

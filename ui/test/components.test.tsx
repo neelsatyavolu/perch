@@ -142,10 +142,46 @@ test("Enter sends, Shift+Enter does not, and typing reports the draft", () => {
 });
 
 test("while a task runs the send button becomes Stop", () => {
-  const { el, calls } = composer({ running: true, draft: "more" });
+  const { el, calls } = composer({ running: true, draft: "" });
   expect(el.querySelector('[aria-label="Send message"]')).toBeNull();
   click(el.querySelector('[aria-label="Stop task"]'));
   expect(calls.stop).toBe(1);
+});
+
+test("while a task runs, Enter queues a message and ⌘↩ or Steer steers the task with it", () => {
+  const sent: { text: string; when?: string }[] = [];
+  const { el, calls } = composer({ running: true, draft: "only approved pitches", onSend: (text, extras) => void sent.push({ text, when: extras.when }) });
+  const field = el.querySelector("textarea")!;
+  act(() => void field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+  act(() => void field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", metaKey: true, bubbles: true })));
+  click(el.querySelector('[aria-label="Queue message"]'));
+  click([...el.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Steer") ?? null);
+  expect(sent).toEqual([
+    { text: "only approved pitches", when: "queue" },
+    { text: "only approved pitches", when: "steer" },
+    { text: "only approved pitches", when: "queue" },
+    { text: "only approved pitches", when: "steer" },
+  ]);
+  // Stop stays in reach while typing.
+  click(el.querySelector('[aria-label="Stop task"]'));
+  expect(calls.stop).toBe(1);
+});
+
+test("waiting messages show above the composer with Send now and Remove", () => {
+  const now: string[] = [];
+  const removed: string[] = [];
+  const { el } = composer({
+    running: true,
+    queued: [{ id: "q1", text: "then export the CSV", time: "2026-11-12T20:00:00Z" }, { id: "q2", text: "and email it to Rod", time: "2026-11-12T20:00:01Z" }],
+    onSendNow: (id) => void now.push(id),
+    onUnqueue: (id) => void removed.push(id),
+  });
+  const list = el.querySelector('[aria-label="Messages waiting to send"]')!;
+  expect([...list.querySelectorAll(".queued-t")].map((n) => n.textContent)).toEqual(["then export the CSV", "and email it to Rod"]);
+  click([...list.querySelectorAll("button")].find((b) => b.textContent === "Send now") ?? null);
+  click([...list.querySelectorAll("button")].find((b) => b.getAttribute("aria-label")?.startsWith('Remove "and email')) ?? null);
+  expect(now).toEqual(["q1"]);
+  expect(removed).toEqual(["q2"]);
 });
 
 test("mode, effort and model pickers change the chat's settings", () => {

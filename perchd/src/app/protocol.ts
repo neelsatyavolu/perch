@@ -146,6 +146,8 @@ export type AppEvent =
   | { type: "run.approval"; chatId: string; runId: string; card: ApprovalCard }
   | { type: "run.approval.resolved"; chatId: string; runId: string; approvalId: string; approved: boolean }
   | { type: "run.finished"; chatId: string; runId: string; message: ChatMessage }
+  /** The chat's waiting messages changed: one was queued, removed, or started. */
+  | { type: "run.queue"; chatId: string; queued: QueuedMessage[] }
   | { type: "artifact.saved"; chatId: string; artifact: ArtifactMeta }
   | { type: "window.active"; state: WindowState }
   /** What new chats start with changed: a pick in any composer, or Settings → Models. */
@@ -155,4 +157,8 @@ export type AppEvent =
 
 /** A run in progress, for a page that opens while it runs. */
 /** `startedAt`: when the run began, for the chat's "Working for…" clock. */
-export type RunSnapshot = { runId: string; chatId: string; text: string; steps: Step[]; approval: ApprovalCard | null; startedAt?: string };
+/** `queued`: messages the user sent while it ran, waiting their turn. */
+export type RunSnapshot = { runId: string; chatId: string; text: string; steps: Step[]; approval: ApprovalCard | null; startedAt?: string; queued?: QueuedMessage[] };
+
+/** A message sent while the chat's task runs, sent as the next turn once the task ends. */
+export type QueuedMessage = { id: string; text: string; time: string };

@@ -130,8 +130,8 @@ test("queued messages run in order after the current run", async () => {
     yield { type: "final", text: "ok" };
   });
   const t = await tasks.start({ client: "cli", clientMode: "guard", task: "One" });
-  expect(tasks.queue("cli", t.id, "Two").queued).toBe(1);
-  expect(tasks.queue("cli", t.id, "Three").queued).toBe(2);
+  expect((await tasks.queue("cli", t.id, "Two")).queued).toBe(1);
+  expect((await tasks.queue("cli", t.id, "Three")).queued).toBe(2);
   release();
   for (let i = 0; i < 50 && seen.length < 3; i++) await Bun.sleep(10);
   await runs.idle();
@@ -145,7 +145,7 @@ test("stop drops queued messages", async () => {
     await new Promise((r) => input.signal.addEventListener("abort", r));
   });
   const t = await tasks.start({ client: "cli", clientMode: "guard", task: "One" });
-  tasks.queue("cli", t.id, "Two");
+  await tasks.queue("cli", t.id, "Two");
   expect(tasks.stop("cli", t.id).stopped).toBe(true);
   await runs.idle();
   await Bun.sleep(30);

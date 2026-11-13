@@ -87,7 +87,7 @@ export function FullChat({ client, initialChat = null, initialAsk = null, onNavi
           if (id)
             void client
               .chat(id)
-              .then((p) => p.chat && chat.unsent().chatId === p.chat.id && chat.setView({ chat: p.chat, run: p.run, artifacts: p.artifacts }))
+              .then((p) => p.chat && chat.unsent().chatId === p.chat.id && chat.setView({ chat: p.chat, run: p.run, artifacts: p.artifacts, queued: p.run?.queued ?? [] }))
               .catch(() => undefined);
         }
       },
@@ -243,6 +243,9 @@ export function FullChat({ client, initialChat = null, initialAsk = null, onNavi
           listTabs={() => client.tabs()}
           onStop={() => void chat.stop()}
           running={Boolean(view.run)}
+          queued={view.queued}
+          onUnqueue={(id) => void chat.unqueue(id)}
+          onSendNow={(id) => void chat.sendQueuedNow(id)}
           tab={null}
           settings={settings}
           models={info?.models ?? []}

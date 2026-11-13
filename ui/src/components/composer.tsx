@@ -1,12 +1,14 @@
 /**
  * The composer (spec 7.6): one box holding the current tab chip, the message field and a single
  * row with attach, the permission mode, the model and effort pickers, and one round button that
- * dictates while the field is empty, sends once there is text, and stops a running task.
+ * dictates while the field is empty, sends once there is text, and stops a running task. While a
+ * task runs, a message waits its turn (Enter) or steers the task now (⌘↩, or Steer); waiting
+ * messages show above the field, each with Send now and Remove.
  */
 
 import { useEffect, useRef, useState } from "preact/hooks";
 import { petalBurst } from "./petals";
-import type { ChatSettings, Effort, Mode, ModelInfo, TabInfo } from "../api/types";
+import type { ChatSettings, Effort, Mode, ModelInfo, QueuedMessage, TabInfo } from "../api/types";
 import type { PageHost } from "../host/frame-host";
 import type { AttachedFile } from "../host/protocol";
 import { Icon } from "./icon";
@@ -15,8 +17,8 @@ import { Menu, type Choice } from "./menu";
 import { EFFORT_LABEL, fitEffort, ModelMenu, modelName } from "./model-menu";
 import { ProviderMark } from "./provider-mark";
 
-/** What a message carries besides its text. */
-export type SendExtras = { files: AttachedFile[]; mentions: TabInfo[] };
+/** What a message carries besides its text. `when`, while a task runs: wait for it, or steer it now. */
+export type SendExtras = { files: AttachedFile[]; mentions: TabInfo[]; when?: "queue" | "steer" };
 
 export const PLACEHOLDER = "Ask Perch a task, @ for context";
 
@@ -33,6 +35,10 @@ type ComposerProps = {
   onSend: (text: string, extras: SendExtras) => Promise<boolean> | void;
   onStop: () => void;
   running: boolean;
+  /** Messages waiting behind the running task. */
+  queued?: readonly QueuedMessage[];
+  onUnqueue?: (id: string) => void;
+  onSendNow?: (id: string) => void;
   tab: TabInfo | null;
   settings: ChatSettings;
   models: ModelInfo[];
@@ -95,14 +101,16 @@ export function Composer(p: ComposerProps) {
     field.current?.focus();
   };
 
-  const send = () => {
+  /** Sends; while a task runs it waits its turn, or with `steer` stops the task and goes now. */
+  const send = (steer = false) => {
     const text = p.draft.trim();
-    if (!text || p.running) return;
+    if (!text) return;
     if (dictating) void stopDictation();
     petalBurst(document.querySelector(".composer .send"));
     const sentFiles = files;
     const sentPicks = picked;
-    void Promise.resolve(p.onSend(text, { files: sentFiles, mentions: keptMentions(text, sentPicks) })).then((ok) => {
+    const when = p.running ? (steer ? "steer" : "queue") : undefined;
+    void Promise.resolve(p.onSend(text, { files: sentFiles, mentions: keptMentions(text, sentPicks), ...(when ? { when } : {}) })).then((ok) => {
       if (ok === false) return;
       setFiles((list) => list.filter((f) => !sentFiles.includes(f)));
       setPicked((list) => list.filter((t) => !sentPicks.includes(t)));
@@ -128,7 +136,7 @@ export function Composer(p: ComposerProps) {
     }
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
-      send();
+      send(e.metaKey || e.ctrlKey);
     }
   };
 
@@ -169,9 +177,25 @@ export function Composer(p: ComposerProps) {
   // The round button: stop while a task runs, the microphone while there is nothing to send, send
   // otherwise (with a small microphone beside it, to dictate after what is typed).
   const showMic = !p.running && canDictate && (dictating || !p.draft.trim());
+  const typed = Boolean(p.draft.trim());
+  const queued = p.queued ?? [];
 
   return (
     <div class="composer-block">
+      {queued.length > 0 && (
+        <ol class="queued" aria-label="Messages waiting to send">
+          {queued.map((q) => (
+            <li key={q.id} class="queued-item">
+              <Icon name="history" size={12} />
+              <span class="queued-t" title={q.text}>{q.text}</span>
+              <button type="button" class="btn quiet small" onClick={() => p.onSendNow?.(q.id)} title="Stop the task and send this now">Send now</button>
+              <button type="button" class="ib x" aria-label={`Remove "${q.text.slice(0, 40)}"`} title="Remove" onClick={() => p.onUnqueue?.(q.id)}>
+                <Icon name="x" size={12} />
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
       <div class="composer">
         {choices.length > 0 && (
           <ul class="menu start mentions" role="listbox" aria-label="Tabs to mention">
@@ -263,7 +287,19 @@ export function Composer(p: ComposerProps) {
               <span class="eff-t">{EFFORT_LABEL[p.settings.effort]}</span>
             </Menu>
           )}
-          {p.running ? (
+          {p.running && typed ? (
+            <>
+              <button type="button" class="ib" aria-label="Stop task" title="Stop task" onClick={p.onStop}>
+                <Icon name="stop" size={14} />
+              </button>
+              <button type="button" class="btn quiet small steer" title="Stop the task and send this now (⌘↩)" onClick={() => send(true)}>
+                Steer
+              </button>
+              <button type="button" class="ib send" aria-label="Queue message" title="Send when the task finishes (↩)" onClick={() => send()}>
+                <Icon name="send" />
+              </button>
+            </>
+          ) : p.running ? (
             <button type="button" class="ib send stop" aria-label="Stop task" title="Stop task" onClick={p.onStop}>
               <Icon name="stop" />
             </button>
@@ -285,7 +321,7 @@ export function Composer(p: ComposerProps) {
                   <Icon name="mic" />
                 </button>
               )}
-              <button type="button" class="ib send" aria-label="Send message" title="Send message" disabled={!p.draft.trim()} onClick={send}>
+              <button type="button" class="ib send" aria-label="Send message" title="Send message" disabled={!typed} onClick={() => send()}>
                 <Icon name="send" />
               </button>
             </>

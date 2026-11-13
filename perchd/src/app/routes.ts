@@ -188,7 +188,7 @@ export const ROUTES: Route[] = [
   }),
   route("POST", "/api/chats/:id/messages", (ctx, [id], body) => {
     const o = v.object(body);
-    v.onlyKeys(o, ["text", "context", "files", "mentions"]);
+    v.onlyKeys(o, ["text", "context", "files", "mentions", "when"]);
     const files = o.files === undefined ? [] : v.list(o.files, "files", 20).map((f, i) => ctx.files.resolve(v.id(f, `files[${i}]`)));
     // A mention names a tab the browser reported; a page never invents one.
     const mentions = o.mentions === undefined ? [] : v.list(o.mentions, "mentions", 10).map((t, i) => {
@@ -196,8 +196,13 @@ export const ROUTES: Route[] = [
       if (!tab) throw new AppError("That tab is closed. Pick it again with @");
       return tab;
     });
-    return ctx.runs.send(id!, v.text(o.text, "text", 50_001), o.context === undefined ? undefined : reported(ctx, v.tabInfo(o.context, "context")), { files, mentions });
+    // While a task runs: "queue" sends this once it ends, "steer" stops it and sends this now.
+    const when = o.when === undefined ? "now" : v.oneOf(o.when, "when", ["now", "queue", "steer"] as const);
+    const send = when === "queue" ? ctx.runs.enqueue.bind(ctx.runs) : when === "steer" ? ctx.runs.steer.bind(ctx.runs) : ctx.runs.send.bind(ctx.runs);
+    return send(id!, v.text(o.text, "text", 50_001), o.context === undefined ? undefined : reported(ctx, v.tabInfo(o.context, "context")), { files, mentions });
   }),
+  route("DELETE", "/api/chats/:id/queue/:queued", (ctx, [id, queued]) => ({ removed: ctx.runs.unqueue(chatOf(ctx, id!).id, v.id(queued, "queued")) })),
+  route("POST", "/api/chats/:id/queue/:queued/steer", (ctx, [id, queued]) => ctx.runs.steerQueued(chatOf(ctx, id!).id, v.id(queued, "queued"))),
   // The browser registers the files the user picked in its open panel; the page gets ids only.
   browserRoute("POST", "/api/files", (ctx, _, body) => {
     const o = v.object(body);
@@ -206,7 +211,7 @@ export const ROUTES: Route[] = [
   }),
   // The @ menu: every tab the browser reported, without its CDP target.
   route("GET", "/api/tabs", (ctx) => ctx.windows.tabs().map(({ targetId: _, ...tab }) => tab)),
-  route("POST", "/api/chats/:id/cancel", (ctx, [id]) => ({ stopped: ctx.runs.cancel(chatOf(ctx, id!).id) })),
+  route("POST", "/api/chats/:id/cancel", (ctx, [id]) => ctx.runs.stop(chatOf(ctx, id!).id)),
   route("POST", "/api/chats/:id/branch", (ctx, [id], body) => {
     const o = v.object(body);
     v.onlyKeys(o, ["messageId"]);

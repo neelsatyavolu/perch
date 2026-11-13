@@ -34,15 +34,7 @@ export type TaskView = {
 export type StartTask = { client: string; clientMode: Mode; task: string; model?: string; effort?: string; mode?: string };
 
 const MODES: readonly Mode[] = ["ask", "guard", "skip"];
-/** Queued follow-ups, per chat, run one after another once the chat is idle. */
-const MAX_QUEUED = 10;
-
 export class Tasks {
-  private readonly queued = new Map<string, Promise<void>>();
-  private readonly queueSize = new Map<string, number>();
-  /** Bumped by stop and delete, so messages queued before them never run. */
-  private readonly generation = new Map<string, number>();
-
   constructor(private readonly app: Pick<App, "chats" | "runs" | "info">) {}
 
   /** The models a task may use, as `perch exec --model` names them. */
@@ -87,49 +79,25 @@ export class Tasks {
   /** Steer: stop the current step and continue with this message. */
   async steer(client: string, id: string, text: string): Promise<TaskView> {
     const chat = this.own(client, id);
-    this.app.runs.cancel(chat.id);
-    await this.app.runs.idleFor(chat.id);
-    await this.app.runs.send(chat.id, text);
+    await this.app.runs.steer(chat.id, text);
     return this.view(this.app.chats.get(chat.id)!);
   }
 
   /** Queue: send this once the current run, and anything queued before it, has finished. */
-  queue(client: string, id: string, text: string): { queued: number } {
+  async queue(client: string, id: string, text: string): Promise<{ queued: number }> {
     const chat = this.own(client, id);
-    const size = this.queueSize.get(chat.id) ?? 0;
-    if (size >= MAX_QUEUED) throw new AppError(`At most ${MAX_QUEUED} messages can wait in one task`, 409);
-    this.queueSize.set(chat.id, size + 1);
-    const generation = this.generation.get(chat.id) ?? 0;
-    const before = this.queued.get(chat.id) ?? Promise.resolve();
-    const next = before
-      .then(() => this.app.runs.idleFor(chat.id))
-      .then(async () => {
-        if (this.app.chats.get(chat.id) && (this.generation.get(chat.id) ?? 0) === generation) await this.app.runs.send(chat.id, text);
-        await this.app.runs.idleFor(chat.id);
-      })
-      .catch(() => undefined)
-      .finally(() => {
-        const left = (this.queueSize.get(chat.id) ?? 1) - 1;
-        if (left > 0) this.queueSize.set(chat.id, left);
-        else this.queueSize.delete(chat.id);
-        if (this.queued.get(chat.id) === next) this.queued.delete(chat.id);
-      });
-    this.queued.set(chat.id, next);
-    return { queued: size + 1 };
+    await this.app.runs.enqueue(chat.id, text);
+    return { queued: Math.max(1, this.app.runs.queued(chat.id).length) };
   }
 
   /** Stops the run and drops anything queued after it. */
   stop(client: string, id: string): { stopped: boolean } {
-    const chat = this.own(client, id);
-    const dropped = (this.queueSize.get(chat.id) ?? 0) > 0;
-    this.generation.set(chat.id, (this.generation.get(chat.id) ?? 0) + 1);
-    return { stopped: this.app.runs.cancel(chat.id) || dropped };
+    return { stopped: this.app.runs.stop(this.own(client, id).id).stopped };
   }
 
   async remove(client: string, id: string): Promise<{ removed: string }> {
     const chat = this.own(client, id);
-    this.generation.set(chat.id, (this.generation.get(chat.id) ?? 0) + 1);
-    this.app.runs.cancel(chat.id);
+    this.app.runs.stop(chat.id);
     await this.app.runs.idleFor(chat.id);
     await this.app.chats.remove(chat.id);
     this.app.runs.announceRemoved(chat.id);

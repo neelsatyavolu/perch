@@ -137,7 +137,9 @@ svg.pmark { flex: none; }
 .work { display: flex; align-items: center; gap: 8px; color: var(--mute); font-size: 13px; font-variant-numeric: tabular-nums; }
 .steplist.now { margin: 0; padding: 0 0 0 14px; border-left: 1px solid var(--hair-strong); gap: 6px; }
 .steplist.now li.current { color: var(--ink); }
-.step-l { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; }
+/* A long step (a search query, a URL) ends in an ellipsis on one line; its full text is in the title. */
+.steplist > li { min-width: 0; }
+.step-l { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-width: 0; }
 .step-l span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .step-l.more { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-align: left; }
 .step-l.more:hover { color: var(--ink); }
@@ -258,6 +260,14 @@ button.artifact-card:hover { background: var(--fill-hover); }
 .me-files { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .composer .menu.mentions { left: 0; right: 0; max-width: none; }
 .files { display: flex; flex-wrap: wrap; gap: 4px; }
+/* Messages waiting behind the running task: one quiet line each above the composer, newest last. */
+.queued { list-style: none; margin: 0 24px 6px; padding: 0; display: grid; gap: 2px; }
+.queued-item { display: flex; align-items: center; gap: 6px; min-width: 0; height: 32px; padding: 0 2px 0 10px; border-radius: var(--r-control); background: var(--fill); color: var(--mute); font-size: 13px; }
+.queued-item > svg { flex: none; }
+.queued-t { flex: 1; min-width: 0; color: var(--body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.queued-item .btn.small { flex: none; height: 26px; padding: 0 8px; }
+.queued-item .ib.x { flex: none; width: 26px; height: 26px; }
+.crow > .steer { flex: none; color: var(--ink); }
 .chip.file { padding-left: 8px; padding-right: 2px; max-width: 220px; }
 .chip.file .ib.x { width: 20px; height: 20px; }
 .cnote { color: var(--mute); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }

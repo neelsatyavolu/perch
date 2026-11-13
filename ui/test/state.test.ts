@@ -84,3 +84,15 @@ test("a card held for an outside agent shows in an idle chat and leaves when ans
   v = applyToView(v, { type: "run.approval.resolved", chatId: "c1", runId: "held-1", approvalId: "p1", approved: false });
   expect(v.run).toBeNull();
 });
+
+test("the queue of waiting messages follows run.queue events and outlives each run", () => {
+  let view: ChatView = { ...emptyView, chat };
+  view = applyToView(view, { type: "run.queue", chatId: "c1", queued: [{ id: "q1", text: "next", time: "t" }] });
+  expect(view.queued.map((q) => q.text)).toEqual(["next"]);
+  view = applyToView(view, { type: "run.finished", chatId: "c1", runId: "r1", message: reply });
+  expect(view.queued.map((q) => q.text)).toEqual(["next"]);
+  view = applyToView(view, { type: "run.queue", chatId: "c2", queued: [] });
+  expect(view.queued).toHaveLength(1);
+  view = applyToView(view, { type: "run.queue", chatId: "c1", queued: [] });
+  expect(view.queued).toEqual([]);
+});

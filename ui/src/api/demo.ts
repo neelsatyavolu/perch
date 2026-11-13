@@ -135,6 +135,11 @@ export function createDemoClient(windowId: string): Client {
       later(STEP_MS * 2, () => finish(id, runId, "This is a demo of Perch, so it can't act on sites here.", []));
       return { runId, message };
     }),
+    // The demo runs one task at a time and queues nothing.
+    unqueue: () => ok({ removed: false }),
+    sendQueuedNow: () => attempt(() => {
+      throw new ApiError("That message is no longer waiting", 404);
+    }),
     tabs: () => ok([tab]),
     cancel: (id) => attempt(() => {
       if (run?.chatId !== id) return { stopped: false };

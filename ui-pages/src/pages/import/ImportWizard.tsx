@@ -30,7 +30,8 @@ export function ImportWizard({ onFinished, embedded = false, onSkip, onBack }: P
   const browsers = useLoad((a) => a.detectBrowsers());
   const [step, setStep] = useState<Step>("browser");
   const [browser, setBrowser] = useState<DetectedBrowser | null>(null);
-  const [profile, setProfile] = useState("");
+  /** The profiles to import, in the order the browser lists them; the first is picked to start. */
+  const [profiles, setProfiles] = useState<readonly string[]>([]);
   const [kinds, setKinds] = useState<readonly ImportKind[]>([]);
   const [access, setAccess] = useState<SystemAccess | null>(null);
   const [csv, setCsv] = useState<FileChoice | null>(null);
@@ -42,7 +43,7 @@ export function ImportWizard({ onFinished, embedded = false, onSkip, onBack }: P
 
   const choose = (b: DetectedBrowser) => {
     setBrowser(b);
-    setProfile(b.profiles[0]?.id ?? "");
+    setProfiles(b.profiles[0] ? [b.profiles[0].id] : []);
     setKinds(defaultKinds(b));
     setCsv(null);
   };
@@ -71,7 +72,8 @@ export function ImportWizard({ onFinished, embedded = false, onSkip, onBack }: P
     setJobId(null);
     // The chosen file goes only with Passwords still ticked; unticking it on the way back drops it.
     const passwordsCsv = needs.includes("csv-export") ? csv?.id : undefined;
-    const id = await act(() => api.startImport({ browser: browser.id, profile, kinds, ...(passwordsCsv ? { passwordsCsv } : {}) }));
+    const ordered = browser.profiles.map((p) => p.id).filter((p) => profiles.includes(p));
+    const id = await act(() => api.startImport({ browser: browser.id, profile: ordered[0] ?? "", ...(ordered.length > 1 ? { profiles: ordered } : {}), kinds, ...(passwordsCsv ? { passwordsCsv } : {}) }));
     if (id) {
       setJobId(id);
       go("run");
@@ -122,7 +124,8 @@ export function ImportWizard({ onFinished, embedded = false, onSkip, onBack }: P
         <section class="panel imp-body">
           {browsers.error && <p class="err-note">{browsers.error}</p>}
           {step === "browser" && browsers.data && (
-            <BrowserStep browsers={browsers.data} browser={browser} profile={profile} onBrowser={(b) => { picked.current = true; choose(b); }} onProfile={setProfile} />
+            <BrowserStep browsers={browsers.data} browser={browser} profiles={profiles} onBrowser={(b) => { picked.current = true; choose(b); }}
+              onToggleProfile={(id) => setProfiles((x) => (x.includes(id) ? x.filter((p) => p !== id) : [...x, id]))} />
           )}
           {step === "data" && browser && (
             <>
@@ -157,7 +160,7 @@ export function ImportWizard({ onFinished, embedded = false, onSkip, onBack }: P
           {!ownBack && onBack && step === "browser" && <button type="button" class={backClass} onClick={onBack}>Back</button>}
           <span class="grow" />
           {onSkip && !done && <button type="button" class="btn quiet" onClick={onSkip}>Skip import</button>}
-          {step === "browser" && <button type="button" class="btn primary" disabled={!browser} onClick={next}>Continue</button>}
+          {step === "browser" && <button type="button" class="btn primary" disabled={!browser || profiles.length === 0} onClick={next}>Continue</button>}
           {step === "data" && <button type="button" class="btn primary" disabled={kinds.length === 0} onClick={next}>Continue</button>}
           {step === "access" && <button type="button" class="btn primary" disabled={csvMissing} onClick={next}>Start import</button>}
           {failed && <button type="button" class="btn primary" onClick={start}>Try again</button>}

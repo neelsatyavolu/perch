@@ -207,8 +207,8 @@ export type AsideFixture = {
 };
 
 /** Aside's agent folder (~/.aside/u/0) with made-up memory, skills and chats. Returns the account folder. */
-export function asideAgent(home: string, data: AsideFixture): string {
-  const account = join(home, ".aside", "u", "0");
+export function asideAgent(home: string, data: AsideFixture, id = 0): string {
+  const account = join(home, ".aside", "u", String(id));
   for (const [path, text] of Object.entries(data.memory ?? {})) write(join(account, "memory", path), text);
   for (const [path, text] of Object.entries(data.skills ?? {})) write(join(account, "skills", "user", path), text);
   const db = sqlite(

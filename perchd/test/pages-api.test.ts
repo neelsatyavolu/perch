@@ -685,6 +685,57 @@ test("1Password: pick an account, which 1Password checks right away, then turn i
   expect((await raw("setOnePassword", [42])).status).toBe(400);
 });
 
+test("import: two Chrome profiles come over together, each named in the summary", async () => {
+  const home = join(dir, "home");
+  const root = join(home, "Library", "Application Support", "Google", "Chrome");
+  chromeProfile(home, "Google/Chrome", "Profile 1", "Work");
+  // chromeProfile writes Local State for its one profile; list both, as Chrome does.
+  writeFileSync(join(root, "Local State"), JSON.stringify({ profile: { info_cache: { Default: { name: "Person 1" }, "Profile 1": { name: "Work" } } } }));
+  const chrome = (await api.detectBrowsers()).find((b) => b.id === "chrome")!;
+  expect(chrome.profiles).toEqual([{ id: "Default", name: "Person 1" }, { id: "Profile 1", name: "Work" }]);
+
+  expect((await fails(api.startImport({ browser: "chrome", profile: "Default", profiles: ["Default", "Nobody"], kinds: ["history"] }))).message).toBe("That browser profile wasn't found");
+  const done = await untilDone(await api.startImport({ browser: "chrome", profile: "Default", profiles: ["Default", "Profile 1"], kinds: ["history"] }));
+  const summary = done.at(-1)!.summary!;
+  expect(summary).toHaveLength(2);
+  expect(summary[0]).toStartWith("Person 1: ");
+  expect(summary[1]).toStartWith("Work: ");
+  rmSync(join(root, "Profile 1"), { recursive: true, force: true });
+  writeFileSync(join(root, "Local State"), JSON.stringify({ profile: { info_cache: { Default: { name: "Person 1" } } } }));
+});
+
+test("import: each Aside profile brings the account it's signed in to; an unused account comes on its own", async () => {
+  const home = join(dir, "home");
+  chromeProfile(home, "Aside");
+  asideAgent(home, { memory: { "people/ada.md": "# Ada Lovelace\n\n## Current\n- Wrote the first program.\n" } }, 0);
+  asideAgent(home, { memory: { "people/alan.md": "# Alan Turing\n\n## Current\n- Broke Enigma.\n" } }, 1);
+  // Aside's own map: its Default profile is signed in to account 1. Session tokens beside it are never read.
+  writeFileSync(
+    join(home, ".aside", "accounts.json"),
+    JSON.stringify({
+      currentAccountId: 0,
+      accounts: [{ id: 0, name: "Grace" }, { id: 1, name: "Local Account" }],
+      sessions: { "0": { accessToken: "secret-token" } },
+      profileAccountBindings: { x: { profilePath: join(home, "Library", "Application Support", "Aside", "Default"), accountId: 1 } },
+    }),
+  );
+  const aside = (await api.detectBrowsers()).find((b) => b.id === "aside")!;
+  expect(aside.profiles).toEqual([{ id: "Default", name: "Person 1 (Local Account)" }, { id: "account:0", name: "Grace: memory, skills and chats" }]);
+  expect(JSON.stringify(aside)).not.toContain("secret-token");
+
+  const one = await untilDone(await api.startImport({ browser: "aside", profile: "Default", kinds: ["aside-memory"] }));
+  expect(one.at(-1)).toMatchObject({ state: "done", summary: ["1 memory pages"] });
+  expect(await api.readMemoryPage("people/alan.md")).toMatchObject({ title: "Alan Turing" });
+  expect((await fails(api.readMemoryPage("people/ada.md"))).status).toBe(404);
+
+  const both = await untilDone(await api.startImport({ browser: "aside", profile: "Default", profiles: ["Default", "account:0"], kinds: ["aside-memory"] }));
+  expect(both.at(-1)!.summary).toEqual(["Person 1 (Local Account): 0 memory pages, 1 skipped", "Grace: memory, skills and chats: 1 memory pages"]);
+  expect(await api.readMemoryPage("people/ada.md")).toMatchObject({ title: "Ada Lovelace" });
+  for (const path of ["people/ada.md", "people/alan.md"]) await api.deleteMemoryPage(path);
+  rmSync(join(home, ".aside"), { recursive: true, force: true });
+  rmSync(join(home, "Library", "Application Support", "Aside"), { recursive: true, force: true });
+});
+
 test("import: Aside's memory, skills and chats go into Perch's own stores, once", async () => {
   const home = join(dir, "home");
   chromeProfile(home, "Aside");

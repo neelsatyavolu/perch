@@ -27,12 +27,12 @@ function startOfDay(t: number): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 }
 
-export function BrowserStep({ browsers, browser, profile, onBrowser, onProfile }: {
+export function BrowserStep({ browsers, browser, profiles, onBrowser, onToggleProfile }: {
   readonly browsers: readonly DetectedBrowser[];
   readonly browser: DetectedBrowser | null;
-  readonly profile: string;
+  readonly profiles: readonly string[];
   readonly onBrowser: (b: DetectedBrowser) => void;
-  readonly onProfile: (p: string) => void;
+  readonly onToggleProfile: (id: string) => void;
 }) {
   if (browsers.length === 0) return <p class="mute">No other browsers found on this Mac.</p>;
   return (
@@ -50,12 +50,15 @@ export function BrowserStep({ browsers, browser, profile, onBrowser, onProfile }
         ))}
       </div>
       {browser && browser.profiles.length > 1 && (
-        <label class="label">
-          <span>Profile</span>
-          <select class="picker" value={profile} onChange={(e) => onProfile((e.currentTarget as HTMLSelectElement).value)}>
-            {browser.profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-        </label>
+        <fieldset class="pick-list profiles" aria-label={`Profiles to bring from ${browser.name}`}>
+          <p class="cap pick-sub">Profiles. Each one's bookmarks go into their own folder.</p>
+          {browser.profiles.map((p) => (
+            <label key={p.id} class="pick data">
+              <input type="checkbox" checked={profiles.includes(p.id)} onChange={() => onToggleProfile(p.id)} />
+              <span class="pick-t"><span class="ink">{p.name}</span></span>
+            </label>
+          ))}
+        </fieldset>
       )}
     </>
   );

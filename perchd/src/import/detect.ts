@@ -162,10 +162,42 @@ export function parseIni(text: string): Record<string, Record<string, string>> {
 }
 
 function asideAccounts(root: string): Profile[] {
+  const info = asideAccountInfo(join(root, ".."));
   return safeList(root)
     .filter((d) => /^\d+$/.test(d) && (isDir(join(root, d, "memory")) || existsSync(join(root, d, "state.db"))))
     .sort((a, b) => Number(a) - Number(b))
-    .map((d) => ({ id: d, name: `Aside account ${Number(d) + 1}`, path: join(root, d) }));
+    .map((d) => ({ id: d, name: info.names.get(d) ?? `Aside account ${Number(d) + 1}`, path: join(root, d) }));
+}
+
+export type AsideAccountInfo = {
+  /** Account id ("0", "1", ...) to the name Aside shows for it. */
+  readonly names: ReadonlyMap<string, string>;
+  /** Aside browser profile folder ("Profile 4") to the agent account it's signed in to. */
+  readonly bindings: ReadonlyMap<string, string>;
+  readonly current?: string;
+};
+
+/**
+ * Which Aside agent account each Aside browser profile uses, and the accounts' names, from
+ * ~/.aside/accounts.json. That file also holds Aside's session tokens: only `accounts[].id/name`,
+ * `currentAccountId` and `profileAccountBindings[].profilePath/accountId` are read, and nothing
+ * else in it is kept.
+ */
+export function asideAccountInfo(asideDir: string): AsideAccountInfo {
+  const raw = readJson(join(asideDir, "accounts.json"));
+  const names = new Map<string, string>();
+  const bindings = new Map<string, string>();
+  if (!raw || typeof raw !== "object") return { names, bindings };
+  for (const a of Array.isArray(raw.accounts) ? raw.accounts : []) {
+    if (Number.isInteger(a?.id) && typeof a?.name === "string" && a.name.trim()) names.set(String(a.id), a.name.trim().slice(0, 80));
+  }
+  const bound = raw.profileAccountBindings && typeof raw.profileAccountBindings === "object" ? Object.values(raw.profileAccountBindings) : [];
+  for (const b of bound as { profilePath?: unknown; accountId?: unknown }[]) {
+    if (typeof b?.profilePath !== "string" || !Number.isInteger(b?.accountId)) continue;
+    const folder = b.profilePath.split("/").filter(Boolean).pop();
+    if (folder && isSafeName(folder)) bindings.set(folder, String(b.accountId));
+  }
+  return { names, bindings, ...(Number.isInteger(raw.currentAccountId) ? { current: String(raw.currentAccountId) } : {}) };
 }
 
 function safariSource(root: string, browser: BrowserInfo): Source {

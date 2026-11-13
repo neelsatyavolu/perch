@@ -374,7 +374,9 @@ export type DetectedBrowser = {
 };
 export type ImportRequest = {
   readonly browser: BrowserId;
+  /** The first profile picked; `profiles` lists every one when several are imported together. */
   readonly profile: string;
+  readonly profiles?: readonly string[];
   readonly kinds: readonly ImportKind[];
   /** A `chooseFile("passwords-csv")` id. Required when passwords are picked and their option needs "csv-export" (Safari, Firefox, Zen). */
   readonly passwordsCsv?: string;

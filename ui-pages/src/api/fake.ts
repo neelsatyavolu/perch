@@ -736,19 +736,24 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     async startImport(request) {
       if (request.kinds.length === 0) throw new Error("Pick at least one thing to import");
       const browser = state.browsers.find((b) => b.id === request.browser);
-      if (!browser || !browser.profiles.some((p) => p.id === request.profile)) throw new Error("That browser profile wasn't found");
+      const ids = request.profiles ?? [request.profile];
+      if (!browser || ids.length === 0 || !ids.every((id) => browser.profiles.some((p) => p.id === id))) throw new Error("That browser profile wasn't found");
       const picked = browser.options.filter((o) => request.kinds.includes(o.kind) && o.available);
       if (picked.some((o) => o.needs === "csv-export") && !file(request.passwordsCsv, "passwords-csv")) {
         throw new Error("Choose the passwords file you exported, or untick Passwords");
       }
-      const steps = picked.map((o) => `Importing ${IMPORT_KINDS[o.kind].label.toLowerCase()}`);
+      // Like perchd: each profile in turn, its lines named after it when there are several.
+      const names = ids.map((id) => browser.profiles.find((p) => p.id === id)!.name);
+      const steps = names.flatMap((name) => picked.map((o) => `Importing ${IMPORT_KINDS[o.kind].label.toLowerCase()}${ids.length > 1 ? ` from ${name}` : ""}`));
       return runJob(steps, () => {
         markDone("setup-import");
-        return picked.map((o) => {
-          const noun = IMPORT_KINDS[o.kind].noun;
-          if (o.kind === "tabs" && o.count !== undefined) return `${countOf(o.count, noun)}, asleep until you open them`;
-          return o.count !== undefined ? countOf(o.count, noun) : IMPORT_KINDS[o.kind].label;
-        });
+        return names.flatMap((name) =>
+          picked.map((o) => {
+            const noun = IMPORT_KINDS[o.kind].noun;
+            const line = o.kind === "tabs" && o.count !== undefined ? `${countOf(o.count, noun)}, asleep until you open them` : o.count !== undefined ? countOf(o.count, noun) : IMPORT_KINDS[o.kind].label;
+            return ids.length > 1 ? `${name}: ${line}` : line;
+          }),
+        );
       });
     },
 

@@ -12,7 +12,10 @@ describe("Import wizard", () => {
     const r = renderWithApi(<ImportWizard />);
     expect(await r.findByRole("heading", { level: 1, name: "Import from another browser" })).toBeTruthy();
     fireEvent.click(await r.findByRole("radio", { name: /Chrome/ }));
-    fireEvent.change(r.getByRole("combobox", { name: "Profile" }), { target: { value: "Profile 1" } });
+    // Chrome has two profiles: swap the first for the second.
+    const profiles = r.getByRole("group", { name: "Profiles to bring from Chrome" });
+    fireEvent.click(within(profiles).getByRole("checkbox", { name: "Neel" }));
+    fireEvent.click(within(profiles).getByRole("checkbox", { name: "School" }));
     fireEvent.click(r.getByRole("button", { name: "Continue" }));
 
     const data = await r.findByRole("group", { name: "What to bring from Chrome" });
@@ -27,6 +30,28 @@ describe("Import wizard", () => {
     expect(await r.findByRole("heading", { name: "Import finished" })).toBeTruthy();
     expect(r.getByText("41 tabs, asleep until you open them")).toBeTruthy();
     expect(r.getByText("Passwords")).toBeTruthy();
+  });
+
+  test("several profiles import together, each summary line named after its profile", async () => {
+    const r = renderWithApi(<ImportWizard />);
+    fireEvent.click(await r.findByRole("radio", { name: /Chrome/ }));
+    const profiles = r.getByRole("group", { name: "Profiles to bring from Chrome" });
+    expect((within(profiles).getByRole("checkbox", { name: "Neel" }) as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(within(profiles).getByRole("checkbox", { name: "School" }));
+    fireEvent.click(r.getByRole("button", { name: "Continue" }));
+    const data = await r.findByRole("group", { name: "What to bring from Chrome" });
+    for (const box of within(data).getAllByRole("checkbox")) if ((box as HTMLInputElement).checked && !/Bookmarks/.test(box.parentElement!.textContent!)) fireEvent.click(box);
+    fireEvent.click(r.getByRole("button", { name: "Continue" }));
+    expect(await r.findByRole("heading", { name: "Import finished" })).toBeTruthy();
+    expect(r.getByText(/^Neel: .*bookmarks/)).toBeTruthy();
+    expect(r.getByText(/^School: .*bookmarks/)).toBeTruthy();
+  });
+
+  test("no profile ticked means no Continue", async () => {
+    const r = renderWithApi(<ImportWizard />);
+    fireEvent.click(await r.findByRole("radio", { name: /Chrome/ }));
+    fireEvent.click(within(r.getByRole("group", { name: "Profiles to bring from Chrome" })).getByRole("checkbox", { name: "Neel" }));
+    expect((r.getByRole("button", { name: "Continue" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   test("the browser listed first, the one used most recently, starts picked", async () => {

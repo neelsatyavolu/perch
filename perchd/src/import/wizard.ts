@@ -88,7 +88,10 @@ function resolve(home: string, ref: SourceRef) {
   if (source?.access === "full-disk-access") throw new ImportError(FULL_DISK_ACCESS_HELP, "full-disk-access");
   const profile = source?.profiles.find((p) => p.id === ref.profile);
   if (!profile) throw new ImportError(`${browser.name} has no profile named "${ref.profile}" on this Mac.`, "not-found");
-  return { browser, profile, reader: readerFor(browser, profile) };
+  // With several profiles, each one's bookmarks go into their own "Imported from Chrome (Work)"
+  // folder and their own pending bundle, so importing two profiles never mixes them.
+  const many = (source?.profiles.length ?? 0) > 1;
+  return { browser, profile, from: many ? `${browser.name} (${profile.name})` : browser.name, reader: readerFor(browser, profile) };
 }
 
 export async function countSource(home: string, ref: SourceRef): Promise<Counts> {
@@ -122,7 +125,7 @@ function validTypes(types: readonly unknown[]): DataType[] {
 
 export async function importSource(input: ImportInput): Promise<Report> {
   const types = validTypes(input.types);
-  const { browser, profile, reader } = resolve(input.home, input.source);
+  const { browser, profile, from, reader } = resolve(input.home, input.source);
   const parts: { type: DataType; data: ImportData; skipped?: number }[] = [];
   const failed: TypeResult[] = [];
   for (const [index, type] of types.entries()) {
@@ -143,7 +146,7 @@ export async function importSource(input: ImportInput): Promise<Report> {
   // Each extension's own data goes over before Perch installs it, so it starts as it was left.
   const extensions = parts.find((p) => p.type === "extensions")?.data.extensions;
   if (browser.family === "chromium" && extensions?.length) copyExtensionData(profile.path, join(input.target.userDataDir, input.target.profileDir ?? "Default"), extensions.map((e) => e.id));
-  const applied = await applyImport({ target: input.target, keychain: input.keychain, source: { browser: browser.name, profile: profile.name }, parts, onProgress: input.onProgress, now: input.now, running: input.running, browser: input.browser, agent: input.agent });
+  const applied = await applyImport({ target: input.target, keychain: input.keychain, source: { browser: from, profile: profile.name }, parts, onProgress: input.onProgress, now: input.now, running: input.running, browser: input.browser, agent: input.agent });
   const order = (r: TypeResult) => types.indexOf(r.type);
   const results = [...applied.results, ...failed].sort((a, b) => order(a) - order(b));
   results.forEach((r, index) => input.onProgress?.({ type: r.type, state: r.status === "failed" ? "failed" : "done", index, total: types.length }));

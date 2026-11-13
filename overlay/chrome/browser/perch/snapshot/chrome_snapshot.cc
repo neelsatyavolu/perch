@@ -640,6 +640,26 @@ class Snapshotter {
       ExecutePerchCommand(browser_, IDC_PERCH_SPLIT_FOCUS_LEFT);
       LOG(WARNING) << "Perch snapshot: split active index "
                    << browser_->GetTabStripModel()->active_index();
+    } else if (state == "pinned-sleep") {
+      // Two pinned tabs with favicons; the first goes to sleep, so the
+      // picture shows a sleeping pin (favicon and moon badge) beside an awake
+      // one.
+      Open("chrome://history");
+      Open("chrome://settings");
+      TabStripModel* tabs = browser_->GetTabStripModel();
+      tabs->SetTabPinned(1, true);
+      tabs->SetTabPinned(2, true);
+      // Pinning moves both to the front; the active tab can't sleep, so the
+      // unpinned one (now last) is shown.
+      tabs->ActivateTabAt(tabs->count() - 1);
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+          FROM_HERE,
+          base::BindOnce(
+              [](TabStripModel* tabs) {
+                SleepTab(tabs->GetTabAtIndex(0));
+              },
+              base::Unretained(tabs)),
+          base::Milliseconds(800));
     } else if (state == "tabs") {
       TabStripModel* tabs = browser_->GetTabStripModel();
       for (const char* url : {"about:blank", "chrome://version",

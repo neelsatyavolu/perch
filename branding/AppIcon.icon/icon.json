@@ -20,13 +20,13 @@
       "layers": [
         {
           "glass": true,
-          "image-name": "dot.svg",
-          "name": "dot"
+          "image-name": "eye.svg",
+          "name": "eye"
         }
       ],
       "shadow": {
         "kind": "neutral",
-        "opacity": 0.55
+        "opacity": 0.4
       },
       "specular": true,
       "translucency": {
@@ -38,15 +38,33 @@
       "layers": [
         {
           "glass": false,
-          "image-name": "bar.svg",
-          "name": "bar"
+          "image-name": "bird.svg",
+          "name": "bird"
         }
       ],
       "shadow": {
         "kind": "neutral",
-        "opacity": 0.45
+        "opacity": 0.5
       },
       "specular": true,
+      "translucency": {
+        "enabled": false,
+        "value": 0
+      }
+    },
+    {
+      "layers": [
+        {
+          "glass": false,
+          "image-name": "branch.svg",
+          "name": "branch"
+        }
+      ],
+      "shadow": {
+        "kind": "none",
+        "opacity": 0
+      },
+      "specular": false,
       "translucency": {
         "enabled": false,
         "value": 0

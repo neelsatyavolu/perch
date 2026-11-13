@@ -1,35 +1,24 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <!-- The Perch app icon for every bitmap and macOS before 26 (AppIcon.icon is the layered one):
-       the perch (a paper-white bar) with the perch dot, a lit blue sphere, resting on it, on an ink
-       tile with a faint dawn glow behind the dot. -->
+       a pointer that is also a bird, perched on a branch. Its tip is the beak, its stem the tail,
+       and its eye is the perch dot. Ink tile with a faint blue glow behind the head. -->
   <defs>
-    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#2A2C36"/>
-      <stop offset="0.85" stop-color="#0C0C0E"/>
-    </linearGradient>
-    <radialGradient id="glow" cx="668" cy="444" r="440" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#4C8DFF" stop-opacity="0.5"/>
-      <stop offset="0.45" stop-color="#3A6FE0" stop-opacity="0.14"/>
-      <stop offset="1" stop-color="#2A4FB0" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="dot" cx="628" cy="400" r="190" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#8DB6FF"/>
-      <stop offset="0.55" stop-color="#4C8DFF"/>
-      <stop offset="1" stop-color="#2E62D6"/>
-    </radialGradient>
-    <linearGradient id="bar" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FFFFFF"/>
-      <stop offset="1" stop-color="#E6E3DB"/>
-    </linearGradient>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2A2C36"/><stop offset="0.85" stop-color="#0C0C0E"/></linearGradient>
+    <radialGradient id="glow" cx="420" cy="420" r="460" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#4C8DFF" stop-opacity="0.28"/><stop offset="1" stop-color="#2A4FB0" stop-opacity="0"/></radialGradient>
+    <linearGradient id="bird" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#E4E1D8"/></linearGradient>
+    <radialGradient id="eye" cx="0.38" cy="0.32" r="0.75"><stop offset="0" stop-color="#9CC0FF"/><stop offset="0.55" stop-color="#4C8DFF"/><stop offset="1" stop-color="#2E62D6"/></radialGradient>
     <clipPath id="sq"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
-    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="10"/></filter>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="9"/></filter>
   </defs>
   <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#tile)"/>
   <rect x="100" y="100" width="824" height="824" fill="url(#glow)" clip-path="url(#sq)"/>
   <rect x="102" y="102" width="820" height="820" rx="183" fill="none" stroke="#FFFFFF" stroke-opacity="0.12" stroke-width="4"/>
-  <rect x="212" y="572" width="600" height="96" rx="48" fill="url(#bar)"/>
-  <!-- The dot's shadow on the bar. -->
-  <ellipse cx="668" cy="578" rx="96" ry="14" fill="#0B1A40" opacity="0.35" filter="url(#soft)"/>
-  <circle cx="668" cy="448" r="124" fill="url(#dot)"/>
-  <ellipse cx="626" cy="398" rx="46" ry="30" fill="#FFFFFF" opacity="0.32" filter="url(#soft)"/>
+  <!-- the branch -->
+  <rect x="176" y="686" width="672" height="30" rx="15" fill="#F7F5EF" opacity="0.5"/>
+  <ellipse cx="535" cy="688" rx="70" ry="9" fill="#000" opacity="0.45" filter="url(#soft)"/>
+  <!-- the bird: a pointer, tip forward as the beak, its stem the tail -->
+  <g transform="translate(40 -69) rotate(-40 512 512)">
+    <path d="M352 236 L352 676 L462 580 L546 760 L614 732 L532 556 L680 556 Z" fill="url(#bird)" stroke="url(#bird)" stroke-width="28" stroke-linejoin="round"/>
+    <circle cx="398" cy="370" r="32" fill="url(#eye)"/>
+  </g>
 </svg>

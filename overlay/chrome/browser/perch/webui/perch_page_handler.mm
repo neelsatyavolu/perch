@@ -144,11 +144,14 @@ base::ListValue BuiltIns(Profile* profile) {
 PerchPageHandler::PerchPageHandler() = default;
 PerchPageHandler::~PerchPageHandler() = default;
 
-void PerchPageHandler::Navigate(const GURL& url) {
+void PerchPageHandler::Navigate(const GURL& url, bool typed) {
   web_ui()->GetWebContents()->OpenURL(
-      content::OpenURLParams(url, content::Referrer(),
-                             WindowOpenDisposition::kCurrentTab,
-                             ui::PAGE_TRANSITION_LINK, false),
+      content::OpenURLParams(
+          url, content::Referrer(), WindowOpenDisposition::kCurrentTab,
+          typed ? ui::PageTransitionFromInt(ui::PAGE_TRANSITION_TYPED |
+                                            ui::PAGE_TRANSITION_FROM_ADDRESS_BAR)
+                : ui::PAGE_TRANSITION_LINK,
+          false),
       {});
 }
 
@@ -499,6 +502,19 @@ void PerchPageHandler::Dispatch(const std::string& method,
       target = GURL("chrome://perch-chat/?ask=" +
                     base::EscapeQueryParamValue(*text, /*use_plus=*/false));
     } else if (*mode == "search") {
+      // As in the address bar: a site Perch recognises opens; anything else
+      // is searched, with Brave or (after Tab) Google.
+      if (!autocomplete_) {
+        autocomplete_ = std::make_unique<PerchAutocomplete>(profile());
+      }
+      std::optional<PerchAutocomplete::Target> where =
+          *engine == "google" ? std::nullopt
+                              : autocomplete_->Destination(*text);
+      if (where && !where->search) {
+        Navigate(where->url, /*typed=*/true);
+        Resolve(std::move(id), base::Value());
+        return;
+      }
       target = SearchURL(profile(), *engine, *text);
     }
     if (!target) {
@@ -506,6 +522,38 @@ void PerchPageHandler::Dispatch(const std::string& method,
       return;
     }
     Navigate(*target);
+    Resolve(std::move(id), base::Value());
+  } else if (method == "autocompleteAddress") {
+    // The Search box's suggestions: the address bar's, for what is typed.
+    const std::string* text = arg0 ? arg0->GetIfString() : nullptr;
+    if (!text || text->size() > 2000) {
+      Reject(std::move(id), "invalid", "Send the text to complete");
+      return;
+    }
+    if (!autocomplete_) {
+      autocomplete_ = std::make_unique<PerchAutocomplete>(profile());
+    }
+    autocomplete_->Query(
+        *text, base::BindOnce(
+                   [](base::WeakPtr<PerchPageHandler> self, base::Value id,
+                      base::DictValue result) {
+                     if (self) {
+                       self->Resolve(std::move(id),
+                                     base::Value(std::move(result)));
+                     }
+                   },
+                   weak_factory_.GetWeakPtr(), std::move(id)));
+  } else if (method == "openAddress") {
+    // A suggestion the person picked, opened as if typed in the address bar.
+    const std::string* spec = arg0 ? arg0->GetIfString() : nullptr;
+    const GURL url(spec ? *spec : std::string());
+    if (!url.is_valid() ||
+        !(url.SchemeIsHTTPOrHTTPS() || url.SchemeIs("chrome") ||
+          url.IsAboutBlank())) {
+      Reject(std::move(id), "invalid", "That address can't be opened here");
+      return;
+    }
+    Navigate(url, /*typed=*/true);
     Resolve(std::move(id), base::Value());
   } else if (method == "openChat") {
     const std::string* chat = arg0 ? arg0->GetIfString() : nullptr;

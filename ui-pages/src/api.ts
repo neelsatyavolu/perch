@@ -109,6 +109,18 @@ export type Suggestion = {
 };
 export type SearchEngine = "brave" | "google";
 export type Query = { readonly text: string; readonly mode: "search" | "ask"; readonly engine: SearchEngine };
+/**
+ * One of the address bar's suggestions for the Search box: a site or a search. `inline` is the
+ * text the address bar would fill in after what was typed (only for a match that can be the default).
+ */
+export type AddressMatch = {
+  readonly contents: string;
+  readonly description: string;
+  readonly url: string;
+  readonly kind: "search" | "url";
+  readonly inline: string;
+  readonly default: boolean;
+};
 /** A model a new chat can use, as the chat composer lists it. */
 export type ComposerModel = { readonly id: string; readonly label: string; readonly provider: string; readonly efforts: readonly ChatEffort[] };
 export type ChatEffort = "low" | "medium" | "high" | "xhigh" | "max" | "ultra";
@@ -438,8 +450,12 @@ export interface PerchApi {
   searchChats(text: string): Promise<readonly ChatSummary[]>;
   listSuggestions(): Promise<readonly Suggestion[]>;
   dismissSuggestion(id: string): Promise<void>;
-  /** Search opens results in this tab; Ask starts a chat with the text. */
+  /** Search opens a site or searches, as the address bar does; Ask starts a chat with the text. */
   submitQuery(query: Query): Promise<void>;
+  /** The address bar's suggestions for what is typed in the Search box. */
+  autocompleteAddress(text: string): Promise<{ readonly matches: readonly AddressMatch[] }>;
+  /** Opens a suggestion in this tab, as if it was typed in the address bar. */
+  openAddress(url: string): Promise<void>;
   /** The model, effort and permission mode the next task starts with, and the models to pick from. */
   getComposer(): Promise<Composer>;
   setComposer(patch: Partial<Pick<Composer, "model" | "effort" | "mode">>): Promise<Composer>;
@@ -627,7 +643,7 @@ export interface PerchApi {
 /** Method names, for the RPC adapter and the transport's allow-list. */
 export const API_METHODS = [
   "getAppearance", "setAppearance",
-  "getNtpLayout", "setNtpLayout", "listChats", "searchChats", "listSuggestions", "dismissSuggestion", "submitQuery", "getComposer", "setComposer", "openChat", "newChat", "openPage",
+  "getNtpLayout", "setNtpLayout", "listChats", "searchChats", "listSuggestions", "dismissSuggestion", "submitQuery", "autocompleteAddress", "openAddress", "getComposer", "setComposer", "openChat", "newChat", "openPage",
   "chooseFile",
   "listProviders", "signIn", "finishSignIn", "signOut", "connectProvider", "listModels", "getTaskModels", "setTaskModel",
   "listMcpServers", "scanMcpImports", "importMcpServers", "addMcpServer", "updateMcpServer", "removeMcpServer",

@@ -1,0 +1,14 @@
+Perch: builds the new tab Search box's address-bar suggestions.
+diff --git a/chrome/browser/ui/browser_window/internal/BUILD.gn b/chrome/browser/ui/browser_window/internal/BUILD.gn
+index 2d2726b258..d2f88b1d16 100644
+--- a/chrome/browser/ui/browser_window/internal/BUILD.gn
++++ b/chrome/browser/ui/browser_window/internal/BUILD.gn
+@@ -97,6 +97,8 @@ source_set("internal") {
+       "//chrome/browser/perch/webui/perch_pages_ui.cc",
+       "//chrome/browser/perch/webui/perch_pages_ui.h",
+       "//chrome/browser/perch/webui/perch_page_handler.h",
++      "//chrome/browser/perch/webui/perch_autocomplete.cc",
++      "//chrome/browser/perch/webui/perch_autocomplete.h",
+       "//chrome/browser/perch/webui/perch_page_handler.mm",
+       "//chrome/browser/perch/settings/appearance.cc",
+       "//chrome/browser/perch/settings/appearance.h",

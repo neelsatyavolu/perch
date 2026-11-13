@@ -14,7 +14,7 @@ describe("New tab page", () => {
     let release = () => {};
     const api: PerchApi = { ...fake, listChats: (n) => new Promise((done) => (release = () => done(fake.listChats(n)))) };
     const { findByRole, queryByText, findByText } = renderWithApi(<NewTab />, { api });
-    await findByRole("searchbox", { name: "Search or ask" });
+    await findByRole("combobox", { name: "Search or ask" });
     await new Promise((r) => setTimeout(r, 10));
     expect(queryByText(/No chats yet/)).toBeNull();
     expect(document.querySelector(".ntp-sec")).toBeNull();
@@ -37,7 +37,7 @@ describe("New tab page", () => {
 
   test("shows the mark, the address box with Search | Ask, and the hints", async () => {
     const { findByRole, getByText, getByRole } = renderWithApi(<NewTab />);
-    expect(await findByRole("searchbox", { name: "Search or ask" })).toBeTruthy();
+    expect(await findByRole("combobox", { name: "Search or ask" })).toBeTruthy();
     expect(getByRole("radio", { name: "Search" }).getAttribute("aria-checked")).toBe("true");
     expect(getByText("Google")).toBeTruthy();
     expect(getByText("Ask", { selector: ".hints span" })).toBeTruthy();
@@ -46,7 +46,7 @@ describe("New tab page", () => {
 
   test("Enter searches with Brave; Tab switches the query to Google; Backspace at the start switches back", async () => {
     const { findByRole, nav, queryByText } = renderWithApi(<NewTab />);
-    const box = (await findByRole("searchbox", { name: "Search or ask" })) as HTMLInputElement;
+    const box = (await findByRole("combobox", { name: "Search or ask" })) as HTMLInputElement;
     fireEvent.input(box, { target: { value: "perch browser" } });
     fireEvent.keyDown(box, { key: "Tab" });
     expect(queryByText("Google", { selector: ".engine-chip" })).toBeTruthy();
@@ -58,9 +58,49 @@ describe("New tab page", () => {
     await waitFor(() => expect(nav).toEqual([{ what: "query", detail: { text: "perch browser", mode: "search", engine: "google" } }]));
   });
 
+  test("Search works as an address bar: the top site completes inline and Enter opens it", async () => {
+    const { findByRole, nav } = renderWithApi(<NewTab />);
+    const box = (await findByRole("combobox", { name: "Search or ask" })) as HTMLInputElement;
+    box.focus();
+    fireEvent.input(box, { target: { value: "flights" } });
+    await waitFor(() => expect(box.value).toBe("flights.example.com/search?from=SFO&to=HND"));
+    // The completion is selected, so typing on replaces it.
+    expect([box.selectionStart, box.selectionEnd]).toEqual(["flights".length, box.value.length]);
+    expect(await findByRole("option", { name: /flights\.example\.com/ })).toBeTruthy();
+    fireEvent.keyDown(box, { key: "Enter" });
+    await waitFor(() => expect(nav).toEqual([{ what: "open-address", detail: "https://flights.example.com/search?from=SFO&to=HND" }]));
+  });
+
+  test("Backspace drops the completion first; ↓ picks a suggestion and Enter opens it", async () => {
+    const { findByRole, nav } = renderWithApi(<NewTab />);
+    const box = (await findByRole("combobox", { name: "Search or ask" })) as HTMLInputElement;
+    box.focus();
+    fireEvent.input(box, { target: { value: "git" } });
+    await waitFor(() => expect(box.value.startsWith("github.com/")).toBe(true));
+    fireEvent.keyDown(box, { key: "Backspace" });
+    await waitFor(() => expect(box.value).toBe("git"));
+    const list = await findByRole("listbox", { name: "Suggestions" });
+    expect(list.querySelectorAll("[role=option]").length).toBeGreaterThan(1);
+    fireEvent.keyDown(box, { key: "ArrowDown" });
+    fireEvent.keyDown(box, { key: "ArrowDown" });
+    await waitFor(() => expect(document.querySelectorAll("#addr-suggest [role=option]")[1]?.getAttribute("aria-selected")).toBe("true"));
+    fireEvent.keyDown(box, { key: "Enter" });
+    await waitFor(() => expect(nav[0]?.what).toBe("open-address"));
+  });
+
+  test("Ask gets no address suggestions", async () => {
+    const { findByRole, getByRole, queryByRole } = renderWithApi(<NewTab />);
+    const box = (await findByRole("combobox", { name: "Search or ask" })) as HTMLInputElement;
+    fireEvent.click(getByRole("radio", { name: "Ask" }));
+    fireEvent.input(box, { target: { value: "flights" } });
+    await new Promise((r) => setTimeout(r, 80));
+    expect(queryByRole("listbox", { name: "Suggestions" })).toBeNull();
+    expect(box.value).toBe("flights");
+  });
+
   test("Tab in an empty box moves focus as usual", async () => {
     const { findByRole } = renderWithApi(<NewTab />);
-    const box = await findByRole("searchbox", { name: "Search or ask" });
+    const box = await findByRole("combobox", { name: "Search or ask" });
     const e = new KeyboardEvent("keydown", { key: "Tab", cancelable: true, bubbles: true });
     box.dispatchEvent(e);
     expect(e.defaultPrevented).toBe(false);
@@ -68,7 +108,7 @@ describe("New tab page", () => {
 
   test("⌘Enter asks Perch", async () => {
     const { findByRole, nav } = renderWithApi(<NewTab />);
-    const box = await findByRole("searchbox", { name: "Search or ask" });
+    const box = await findByRole("combobox", { name: "Search or ask" });
     fireEvent.input(box, { target: { value: "summarise my unread mail" } });
     fireEvent.keyDown(box, { key: "Enter", metaKey: true });
     await waitFor(() => expect(nav[0]).toEqual({ what: "query", detail: { text: "summarise my unread mail", mode: "ask", engine: "brave" } }));

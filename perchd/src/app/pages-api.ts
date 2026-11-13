@@ -29,7 +29,7 @@ import * as v from "./validate";
 export const BROWSER_METHODS = [
   "getAppearance", "setAppearance", "getPrivacy", "setPrivacy", "setBackgroundConnection", "removeBlockerException", "listSiteData", "forgetSite",
   "openPage", "chooseFile", "openFullDiskAccess", "getAbout", "checkForUpdates", "installUpdate", "setAutoUpdate",
-  "submitQuery", "openChat", "newChat",
+  "submitQuery", "autocompleteAddress", "openAddress", "openChat", "newChat",
   "listBuiltInExtensions", "setBuiltInExtension",
   "getMemorySaver", "setMemorySaver", "addSleepRule", "listTabMemory",
   "queryCommandBar", "runCommandBarItem", "closeCommandBar",

@@ -1,40 +1,77 @@
-import { useState } from "preact/hooks";
-import type { ChatEffort, Composer as ComposerState, PermissionMode, Query, SearchEngine } from "../../api";
+import { useLayoutEffect, useRef, useState } from "preact/hooks";
+import type { AddressMatch, ChatEffort, Composer as ComposerState, PermissionMode, Query, SearchEngine } from "../../api";
 import { useAction, useApi, useLoad } from "../../ui/frame";
-import { Icon, Search } from "../../ui/icons";
+import { Globe, Icon, Search } from "../../ui/icons";
 import { EFFORT_NAMES, ModelMenu, modelName } from "../../ui/ModelMenu";
 import { ProviderGlyph } from "../../ui/ProviderMark";
 import { Segmented } from "../../ui/Segmented";
+import { useAddressSuggest } from "./useAddressSuggest";
 
 type Mode = Query["mode"];
 
 /**
- * The new tab page's "Search or ask" box (spec 5.5). Enter searches with Brave, Tab while typing
- * switches that query to Google (Tab again or Backspace at the start switches back), ⌘Enter asks
- * Perch. Escape clears. Tab in an empty box moves focus as usual.
+ * The new tab page's "Search or ask" box (spec 5.5). In Search it works as a second address bar:
+ * the browser's own suggestions as you type, the top site completed inline, ↑↓ to pick, Enter to
+ * open a site or search (Tab first switches that search to Google; Tab again or Backspace at the
+ * start switches back). Ask (or ⌘Enter) hands the text to Perch as a task. Escape closes the
+ * suggestions, then clears. Tab in an empty box moves focus as usual.
  */
 export function AddressBox({ onSubmit }: { readonly onSubmit: (q: Query) => void }) {
+  const api = useApi();
+  const act = useAction();
   const [text, setText] = useState("");
   const [mode, setMode] = useState<Mode>("search");
   const [engine, setEngine] = useState<SearchEngine>("brave");
+  const [focused, setFocused] = useState(true);
+  const deleting = useRef(false);
+  const field = useRef<HTMLInputElement>(null);
   const composer = useComposer();
+  const sug = useAddressSuggest(text, mode === "search" && engine === "brave", deleting.current);
+  const picked = sug.selected >= 0 ? sug.matches[sug.selected] : undefined;
+  const shown = picked ? fillOf(picked) : text + sug.inline;
+  const open = focused && sug.matches.length > 0;
+
+  // The inline completion is selected, so typing on replaces it, as in the address bar.
+  useLayoutEffect(() => {
+    const input = field.current;
+    if (input && !picked && sug.inline && document.activeElement === input) input.setSelectionRange(text.length, shown.length);
+  }, [shown]);
 
   const submit = (asMode: Mode) => {
     const clean = text.trim();
     if (clean) onSubmit({ text: clean, mode: asMode, engine: asMode === "ask" ? "brave" : engine });
   };
+  const openMatch = (m: AddressMatch) => void act(() => api.openAddress(m.url));
 
   const onKeyDown = (e: KeyboardEvent) => {
     const input = e.currentTarget as HTMLInputElement;
-    if (e.key === "Enter") {
+    if (open && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
       e.preventDefault();
-      submit(e.metaKey || e.ctrlKey ? "ask" : mode);
+      sug.select(sug.selected + (e.key === "ArrowDown" ? 1 : -1));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (e.metaKey || e.ctrlKey || mode === "ask") return submit("ask");
+      if (picked) return openMatch(picked);
+      if (sug.inline && sug.matches[0]) return openMatch(sug.matches[0]);
+      submit("search");
+    } else if ((e.key === "ArrowRight" || e.key === "End") && sug.inline && !picked) {
+      // Accepting the completion makes it typed text.
+      setText(text + sug.inline);
+      sug.dropInline();
     } else if (e.key === "Tab" && !e.shiftKey && mode === "search" && text.trim()) {
       e.preventDefault();
       setEngine((x) => (x === "google" ? "brave" : "google"));
     } else if (e.key === "Backspace" && engine === "google" && input.selectionStart === 0 && input.selectionEnd === 0) {
       e.preventDefault();
       setEngine("brave");
+    } else if (e.key === "Backspace" && sug.inline && !picked) {
+      // The first Backspace removes the completion only.
+      e.preventDefault();
+      deleting.current = true;
+      sug.dropInline();
+    } else if (e.key === "Escape" && open) {
+      e.preventDefault();
+      sug.clear();
     } else if (e.key === "Escape" && text) {
       e.preventDefault();
       setText("");
@@ -49,15 +86,28 @@ export function AddressBox({ onSubmit }: { readonly onSubmit: (q: Query) => void
           <Icon of={Search} />
           {engine === "google" && mode === "search" && <span class="engine-chip">Google</span>}
           <input
+            ref={field}
             type="search"
+            role="combobox"
             aria-label="Search or ask"
             aria-describedby="addr-hints"
-            placeholder={mode === "ask" ? "Ask Perch a task" : "Search or ask"}
-            value={text}
+            aria-expanded={open}
+            aria-controls="addr-suggest"
+            aria-autocomplete="both"
+            aria-activedescendant={picked ? `addr-s-${sug.selected}` : undefined}
+            placeholder={mode === "ask" ? "Ask Perch a task" : "Search or type a site"}
+            value={shown}
             autoFocus
             spellcheck={false}
             autoComplete="off"
-            onInput={(e) => setText((e.currentTarget as HTMLInputElement).value)}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            onInput={(e) => {
+              deleting.current = /^delete/.test((e as InputEvent).inputType ?? "");
+              const value = (e.currentTarget as HTMLInputElement).value;
+              sug.select(-1);
+              setText(value);
+            }}
             onKeyDown={onKeyDown}
           />
           <Segmented class="mode" label="Search or ask" value={mode} onChange={setMode} options={[{ value: "search", label: "Search" }, { value: "ask", label: "Ask" }]} />
@@ -66,12 +116,37 @@ export function AddressBox({ onSubmit }: { readonly onSubmit: (q: Query) => void
           <Composer side="mode" composer={composer} />
           <Composer side="model" composer={composer} />
         </div>
+        {open && (
+          <ul class="addr-suggest" id="addr-suggest" role="listbox" aria-label="Suggestions">
+            {sug.matches.map((m, i) => (
+              <li
+                key={`${m.url}-${i}`}
+                id={`addr-s-${i}`}
+                role="option"
+                aria-selected={i === sug.selected}
+                class={i === sug.selected ? "on" : undefined}
+                onMouseDown={(e) => e.preventDefault()}
+                onMouseEnter={() => sug.select(i)}
+                onClick={() => openMatch(m)}
+              >
+                <Icon of={m.kind === "search" ? Search : Globe} />
+                <span class="s-main">{m.contents}</span>
+                {m.description && <span class="s-desc">{m.description}</span>}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
       <p class="hints" id="addr-hints">
         <kbd class="key">Tab</kbd> <span>Google</span> <span aria-hidden="true">·</span> <kbd class="key" aria-label="Command Return">⌘↵</kbd> <span>Ask</span>
       </p>
     </div>
   );
+}
+
+/** What the field shows for a picked suggestion: a site's address without its scheme, or the search. */
+function fillOf(m: AddressMatch): string {
+  return m.kind === "url" ? m.url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "") : m.contents;
 }
 
 const MODE_NAMES: Readonly<Record<PermissionMode, string>> = { ask: "Ask before actions", guard: "Ask before sends", skip: "Skip confirmation" };

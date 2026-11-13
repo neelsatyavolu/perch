@@ -124,3 +124,4 @@ perch/shell/sleeping-pinned-favicon.patch
 perch/shell/vertical-tabs-new-tab-row.patch
 perch/shell/side-panel-tab-switch.patch
 perch/agent/agent-tabs.patch
+perch/shell/ntp-autocomplete-sources.patch

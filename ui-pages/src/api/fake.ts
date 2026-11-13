@@ -303,6 +303,22 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     async dismissSuggestion(id) {
       set({ dismissed: [...state.dismissed, id] });
     },
+    async autocompleteAddress(text) {
+      const typed = text.trim().toLowerCase();
+      if (!typed) return { matches: [] };
+      // History first, as the address bar ranks sites you visit; then a search for the text.
+      const sites = [...seed.HISTORY, ...seed.BOOKMARKS]
+        .map((h) => h.url.replace(/^https?:\/\/(www\.)?/, ""))
+        .filter((u, i, all) => u.toLowerCase().startsWith(typed) && all.indexOf(u) === i)
+        .slice(0, 4)
+        .map((u, i) => ({ contents: u, description: "", url: `https://${u}`, kind: "url" as const, inline: i === 0 ? u.slice(typed.length) : "", default: i === 0 }));
+      const search = { contents: text.trim(), description: "Brave Search", url: `https://search.brave.com/search?q=${encodeURIComponent(text.trim())}`, kind: "search" as const, inline: "", default: sites.length === 0 };
+      return { matches: [...sites, search] };
+    },
+    async openAddress(url) {
+      if (!/^(https?:|chrome:|about:blank)/.test(url)) throw new Error("That address can't be opened here");
+      navigate("open-address", url);
+    },
     async submitQuery(query) {
       if (!query.text.trim()) throw new Error("Type something to search or ask");
       navigate("query", query);

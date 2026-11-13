@@ -72,15 +72,14 @@ function Blossom({ r }: { r: number }) {
 
 /** The Perch mark: a flat single-colour glyph, never a sparkle (spec 6.5); in Sakura mode the dot is a blossom. `bare` drops the tile and draws only the perch, `size` wide. */
 /** The bird, a pointer whose tip is its beak and whose stem its tail, set on the branch (branding/perch-mark.svg). */
-/** Its eye is a hole (even-odd), so whatever is behind shows through. */
-const BIRD = "M352.0 258.0 L352.0 654.0 Q352 676 368.6 661.5 L445.4 594.5 Q462 580 471.3 599.9 L536.7 740.1 Q546 760 566.3 751.6 L593.7 740.4 Q614 732 604.7 712.1 L541.3 575.9 Q532 556 554.0 556.0 L658.0 556.0 Q680 556 664.3 540.6 L367.7 251.4 Q352 236 352.0 258.0 Z M444 382 A42 42 0 1 0 360 382 A42 42 0 1 0 444 382 Z";
+const BIRD = "M352.0 258.0 L352.0 654.0 Q352 676 368.6 661.5 L445.4 594.5 Q462 580 471.3 599.9 L536.7 740.1 Q546 760 566.3 751.6 L593.7 740.4 Q614 732 604.7 712.1 L541.3 575.9 Q532 556 554.0 556.0 L658.0 556.0 Q680 556 664.3 540.6 L367.7 251.4 Q352 236 352.0 258.0 Z";
 const PERCHED = "translate(40 -45) rotate(-40 512 512)";
 
 function MarkParts({ ink }: { ink: string }) {
   return (
     <>
       <rect x="176" y="686" width="672" height="30" rx="15" style={`fill:${ink};opacity:0.45`} />
-      <path transform={PERCHED} d={BIRD} fill-rule="evenodd" style={`fill:${ink}`} />
+      <path transform={PERCHED} d={BIRD} style={`fill:${ink}`} />
       <g transform="translate(384 438)">
         <Blossom r={64} />
       </g>

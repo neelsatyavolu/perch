@@ -2,7 +2,7 @@
 // Use of this source code is governed by the MIT license in Perch's LICENSE file.
 
 // The Perch mark in one colour: a pointer that is also a bird, perched on a
-// branch, its eye cut out (branding/perch-mark.svg).
+// branch (branding/perch-mark.svg).
 CANVAS_DIMENSIONS, 24,
 ROUND_RECT, 2, 17.9, 20, 1.5, 0.75,
 NEW_PATH,
@@ -13,7 +13,4 @@ LINE_TO, 19.69f, 15.78f,
 LINE_TO, 20.85f, 13.55f,
 LINE_TO, 14.86f, 10.75f,
 LINE_TO, 18.72f, 7.51f,
-CLOSE,
-NEW_PATH,
-PATH_MODE_CLEAR,
-CIRCLE, 7.64f, 9.06f, 1.2f
+CLOSE

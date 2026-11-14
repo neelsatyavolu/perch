@@ -20,6 +20,31 @@ describe("Memory page", () => {
     await waitFor(async () => expect((await r.api.readMemoryPage("people/maya-chen.md")).body).toContain("mornings"));
   });
 
+  test("picking another page with unsaved edits asks first; ⌘S saves", async () => {
+    const r = renderWithApi(<MemoryPage />);
+    const list = await r.findByRole("navigation", { name: "Memory pages" });
+    fireEvent.click(await within(list).findByRole("button", { name: "Maya Chen" }));
+    const body = (await r.findByRole("textbox", { name: "Maya Chen" })) as HTMLTextAreaElement;
+    fireEvent.input(body, { target: { value: "# Maya Chen\n\n- Edited\n" } });
+    fireEvent.click(within(list).getByRole("button", { name: "Jordan Patel" }));
+    const ask = await r.findByRole("dialog", { name: "Discard your changes?" });
+    fireEvent.click(within(ask).getByRole("button", { name: "Keep editing" }));
+    expect(((await r.findByRole("textbox", { name: "Maya Chen" })) as HTMLTextAreaElement).value).toContain("Edited");
+    fireEvent.keyDown(r.getByRole("textbox", { name: "Maya Chen" }), { key: "s", metaKey: true });
+    await waitFor(async () => expect((await r.api.readMemoryPage("people/maya-chen.md")).body).toContain("Edited"));
+    await waitFor(() => expect((r.getByRole("button", { name: "Save" }) as HTMLButtonElement).disabled).toBe(true));
+    fireEvent.click(within(list).getByRole("button", { name: "Jordan Patel" }));
+    expect(await r.findByRole("textbox", { name: "Jordan Patel" })).toBeTruthy();
+  });
+
+  test("a list that fails to load says why, not 'No pages match'", async () => {
+    const { createFakeApi } = await import("../../src/api/fake");
+    const fake = createFakeApi({ stepMs: 0 });
+    const r = renderWithApi(<MemoryPage />, { api: { ...fake, listMemoryPages: () => Promise.reject(new Error("Memory is locked")) } });
+    expect(await r.findByText("Memory is locked")).toBeTruthy();
+    expect(r.queryByText("No pages match")).toBeNull();
+  });
+
   test("filters pages and deletes one after asking", async () => {
     const r = renderWithApi(<MemoryPage />);
     fireEvent.input(await r.findByRole("searchbox", { name: "Search memory" }), { target: { value: "jordan" } });

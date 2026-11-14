@@ -38,7 +38,7 @@ export function FactReview({ facts, onChange }: Props) {
                       ref={(el) => el?.focus()}
                       onInput={(e) => setText((e.currentTarget as HTMLInputElement).value)}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter") commit(f.id);
+                        if (e.key === "Enter" && !e.isComposing) commit(f.id);
                         if (e.key === "Escape") {
                           open.current = null;
                           setEditing(null);

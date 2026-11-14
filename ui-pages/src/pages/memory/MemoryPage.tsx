@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { MemoryChange, MemoryDoc, MemoryFolder, MemoryHit, MemoryPage as Page } from "../../api";
 import { inlineTime } from "../../lib/time";
 import { useAction, useApi, useLoad } from "../../ui/frame";
@@ -72,17 +72,35 @@ function useContentSearch(query: string): readonly MemoryHit[] {
   return hits;
 }
 
-function Editor({ path, onDeleted }: { readonly path: string; readonly onDeleted: (path: string) => void }) {
+type EditorProps = { readonly path: string; readonly onDeleted: (path: string) => void; readonly onDirty: (dirty: boolean) => void };
+
+function Editor({ path, onDeleted, onDirty }: EditorProps) {
   const api = useApi();
   const act = useAction();
   const doc = useLoad((a) => a.readMemoryPage(path), [path]);
   const [body, setBody] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
-  useEffect(() => setBody(null), [path]);
   const d: MemoryDoc | undefined = doc.data;
+  const dirty = d !== undefined && body !== null && body !== d.body;
+  // A layout effect, so the page knows before the next click, not a frame later.
+  useLayoutEffect(() => {
+    onDirty(dirty);
+    if (!dirty) return;
+    // Closing the tab with unsaved edits asks first.
+    const guard = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", guard);
+    return () => window.removeEventListener("beforeunload", guard);
+  }, [dirty]);
+  useLayoutEffect(() => () => onDirty(false), []);
   if (!d) return <div class="mem-doc"><p class="mute">{doc.error ?? ""}</p></div>;
   const value = body ?? d.body;
-  const dirty = body !== null && body !== d.body;
+  const save = async () => {
+    const saved = await act(() => api.writeMemoryPage(d.path, value), `Saved ${d.title}`);
+    if (saved) {
+      doc.set(saved);
+      setBody(null);
+    }
+  };
   return (
     <section class="mem-doc" aria-labelledby="doc-h">
       <div class="doc-h">
@@ -92,15 +110,15 @@ function Editor({ path, onDeleted }: { readonly path: string; readonly onDeleted
         </div>
         <span class="grow" />
         <button type="button" class="btn danger" onClick={() => setConfirming(true)}>Delete page</button>
-        <button type="button" class="btn primary" disabled={!dirty} onClick={async () => {
-          const saved = await act(() => api.writeMemoryPage(d.path, value), `Saved ${d.title}`);
-          if (saved) {
-            doc.set(saved);
-            setBody(null);
-          }
-        }}>Save</button>
+        <button type="button" class="btn primary" disabled={!dirty} aria-keyshortcuts="Meta+S" onClick={() => void save()}>Save</button>
       </div>
-      <textarea class="field doc-body mono" aria-label={d.title} spellcheck={false} value={value} onInput={(e) => setBody((e.currentTarget as HTMLTextAreaElement).value)} />
+      <textarea class="field doc-body mono" aria-label={d.title} spellcheck={false} value={value} onInput={(e) => setBody((e.currentTarget as HTMLTextAreaElement).value)}
+        onKeyDown={(e) => {
+          if (e.key === "s" && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            if (dirty) void save();
+          }
+        }} />
       <Dialog open={confirming} title={`Delete ${d.title}?`} onClose={() => setConfirming(false)} footer={<>
         <button type="button" class="btn" onClick={() => setConfirming(false)}>Cancel</button>
         <button type="button" class="btn primary danger" onClick={async () => {
@@ -122,6 +140,14 @@ function Browser({ onSetup }: { readonly onSetup: () => void }) {
   const [filter, setFilter] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  /** The open page has edits not saved yet; picking another page asks before dropping them. */
+  const dirty = useRef(false);
+  const [leaving, setLeaving] = useState<string | null>(null);
+  const pick = (path: string) => {
+    if (path === selected) return;
+    if (dirty.current) setLeaving(path);
+    else setSelected(path);
+  };
   const all: readonly Page[] = pages.data ?? [];
   const q = filter.trim().toLowerCase();
   const shown = q ? all.filter((p) => `${p.title} ${p.path}`.toLowerCase().includes(q)) : all;
@@ -146,6 +172,16 @@ function Browser({ onSetup }: { readonly onSetup: () => void }) {
         <button type="button" class="btn" onClick={onSetup}><Icon of={User} />Set up your memory</button>
         <button type="button" class="btn primary" onClick={buildWithAgent} title="Perch researches you in a chat of its own and saves what it finds"><Icon of={Brain} />Build my memory</button>
       </div>
+      <Dialog open={leaving !== null} title="Discard your changes?" onClose={() => setLeaving(null)} footer={<>
+        <button type="button" class="btn" onClick={() => setLeaving(null)}>Keep editing</button>
+        <button type="button" class="btn primary danger" onClick={() => {
+          dirty.current = false;
+          setSelected(leaving);
+          setLeaving(null);
+        }}>Discard changes</button>
+      </>}>
+        <p>Your edits to this page aren't saved.</p>
+      </Dialog>
       <HistoryDialog open={historyOpen} onClose={() => setHistoryOpen(false)} onChanged={() => pages.reload()} />
       {pages.data && all.length === 0 ? (
         <div class="mem-empty">
@@ -170,7 +206,7 @@ function Browser({ onSetup }: { readonly onSetup: () => void }) {
                 <section key={f.id || "core"} aria-labelledby={`mf-${f.id || "core"}`}>
                   <h3 class="rail-lbl" id={`mf-${f.id || "core"}`}>{f.label}</h3>
                   {items.map((p) => (
-                    <button key={p.path} type="button" class="row" aria-current={p.path === selected ? "page" : undefined} onClick={() => setSelected(p.path)}>
+                    <button key={p.path} type="button" class="row" aria-current={p.path === selected ? "page" : undefined} onClick={() => pick(p.path)}>
                       {p.title}
                     </button>
                   ))}
@@ -181,17 +217,17 @@ function Browser({ onSetup }: { readonly onSetup: () => void }) {
               <section aria-labelledby="mf-found">
                 <h3 class="rail-lbl" id="mf-found">Mentioned in</h3>
                 {found.map((h) => (
-                  <button key={h.path} type="button" class="row mem-hit" aria-current={h.path === selected ? "page" : undefined} onClick={() => setSelected(h.path)}>
+                  <button key={h.path} type="button" class="row mem-hit" aria-current={h.path === selected ? "page" : undefined} onClick={() => pick(h.path)}>
                     <span>{h.title}</span>
                     {h.snippet && <span class="cap">{h.snippet}</span>}
                   </button>
                 ))}
               </section>
             )}
-            {shown.length === 0 && found.length === 0 && <p class="rail-empty">No pages match</p>}
+            {pages.error ? <p class="rail-empty err-note">{pages.error}</p> : pages.data && shown.length === 0 && found.length === 0 && <p class="rail-empty">No pages match</p>}
           </nav>
           {selected ? (
-            <Editor key={selected} path={selected} onDeleted={(path) => {
+            <Editor key={selected} path={selected} onDirty={(d) => (dirty.current = d)} onDeleted={(path) => {
               setSelected(null);
               pages.set(all.filter((p) => p.path !== path));
             }} />

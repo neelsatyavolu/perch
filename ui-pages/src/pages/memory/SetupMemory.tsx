@@ -73,7 +73,8 @@ export function SetupMemory({ onOpenMemory }: { readonly onOpenMemory: () => voi
     }
   };
   const discard = async () => {
-    await act(() => api.discardProfileDraft());
+    // If throwing the draft away failed, it stays on screen to try again.
+    if (!(await act(() => api.discardProfileDraft().then(() => true)))) return;
     setDraft([]);
     setOutcome({ kind: "discarded" });
   };
@@ -93,6 +94,7 @@ export function SetupMemory({ onOpenMemory }: { readonly onOpenMemory: () => voi
       <div class="mem-grid">
         <section class="panel" aria-labelledby="src-h">
           <div class="panel-h"><h2 id="src-h">Sources</h2><span class="cap">{`${chosen.length} of ${list.length} on`}</span></div>
+          {sources.error && <p class="empty">{sources.error}</p>}
           <SourceList sources={list} chosen={chosen} files={files} disabled={building}
             onToggle={toggle} onChooseFile={chooseFile} onOpenFullDiskAccess={openFullDiskAccess} />
           <div class="panel-f">

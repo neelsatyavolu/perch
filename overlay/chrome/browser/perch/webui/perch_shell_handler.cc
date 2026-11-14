@@ -3,6 +3,9 @@
 
 #include "chrome/browser/perch/webui/perch_shell_handler.h"
 
+#include "ui/base/clipboard/clipboard.h"
+#include "ui/base/clipboard/file_info.h"
+
 #include <algorithm>
 #include <utility>
 
@@ -218,6 +221,39 @@ void PerchShellHandler::HandleHost(const base::ListValue& args) {
   }
   if (method == "chooseFiles") {
     ChooseFiles(id);
+    return;
+  }
+  if (method == "pastedFiles") {
+    // Files copied in Finder and pasted into the chat: the page sees only
+    // their names, so the browser reads the clipboard's file paths and
+    // attaches them as if picked with +.
+    ui::Clipboard* clipboard = ui::Clipboard::GetForCurrentThread();
+    if (!clipboard || !pending_files_id_.empty()) {
+      Reply(id, true, base::Value(base::ListValue()));
+      return;
+    }
+    clipboard->ReadFilenames(
+        ui::ClipboardBuffer::kCopyPaste, /*data_dst=*/std::nullopt,
+        base::BindOnce(
+            [](base::WeakPtr<PerchShellHandler> self, std::string id,
+               std::vector<ui::FileInfo> copied) {
+              if (!self) {
+                return;
+              }
+              std::vector<base::FilePath> paths;
+              for (const ui::FileInfo& file : copied) {
+                if (paths.size() < kMaxFiles && !file.path.empty()) {
+                  paths.push_back(file.path);
+                }
+              }
+              if (paths.empty() || !self->pending_files_id_.empty()) {
+                self->Reply(id, true, base::Value(base::ListValue()));
+                return;
+              }
+              self->pending_files_id_ = id;
+              self->SendPaths(std::move(paths));
+            },
+            weak_factory_.GetWeakPtr(), id));
     return;
   }
   if (method == "startDictation") {

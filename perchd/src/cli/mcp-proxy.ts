@@ -50,8 +50,9 @@ export class McpProxy {
     try {
       return { jsonrpc: "2.0", id: msg.id, result: await this.handle(msg) };
     } catch (error) {
-      const e = error as Error & { code?: number };
-      return { jsonrpc: "2.0", id: msg.id, error: { code: e.code ?? -32603, message: e.message } };
+      const e = error as Error & { code?: unknown };
+      // JSON-RPC codes are numbers; a system error's code ("ENOENT") is not one.
+      return { jsonrpc: "2.0", id: msg.id, error: { code: typeof e.code === "number" ? e.code : -32603, message: e.message } };
     }
   }
 

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { Browser } from "../src/browser/browser";
-import { clientFromInfo, runMcp } from "../src/cli/mcp-proxy";
+import { clientFromInfo, McpProxy, runMcp } from "../src/cli/mcp-proxy";
 import { startDaemon, type Daemon } from "../src/daemon/daemon";
 import { MemoryKeychain } from "../src/daemon/keychain";
 import { perchPaths } from "../src/daemon/paths";
@@ -123,3 +123,17 @@ test("an agent started by agterm or agmux works in that tab's session, even thro
   expect(daemon.manager.get("claude-code", "TAB-5")).toBeUndefined();
   await c.end();
 }, 60_000);
+
+test("an error with a system code (ENOENT) still answers with a numeric JSON-RPC code", async () => {
+  const other = tempProfile();
+  const otherPaths = perchPaths({ PERCH_HOME: other.dir });
+  mkdirSync(otherPaths.runDir, { recursive: true });
+  writeFileSync(otherPaths.socket, "");
+  const failing = { get: async () => Promise.reject(Object.assign(new Error("no such file"), { code: "ENOENT" })), set: async () => undefined, delete: async () => undefined };
+  const io = { env: { PERCH_HOME: other.dir }, cwd: "/work/perch", keychain: failing, stdout: () => {}, stderr: () => {}, autostart: false };
+  const proxy = new McpProxy(io, { client: "claude-code", session: "s1", title: "perch", onEnd: "close" }, () => {});
+  const reply = await proxy.message({ jsonrpc: "2.0", id: 1, method: "tools/list" });
+  expect(reply?.error).toEqual({ code: -32603, message: "no such file" });
+  proxy.close();
+  other.cleanup();
+});

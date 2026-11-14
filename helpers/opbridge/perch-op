@@ -1,0 +1,12 @@
+#!/bin/sh
+# Perch 1Password: runs 1Password's `op` for perchd as an app of its own.
+#
+# From inside Perch's own processes macOS keeps `op` out of the 1Password app's data, so it sees no
+# accounts. Started by LaunchServices (`open -a "Perch 1Password" --stdout FIFO --stderr FIFO
+# --args /path/to/op …`), this script runs that `op` (only a program named op), passes its output
+# through, and ends its error output with the exit code for perchd to read.
+case "$1" in /*/op) ;; *) exit 64 ;; esac
+"$@"
+code=$?
+printf '\n<perch-op-exit:%s>\n' "$code" >&2
+exit "$code"

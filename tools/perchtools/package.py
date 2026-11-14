@@ -19,6 +19,10 @@ FEED_URL = "https://github.com/neelsatyavolu/perch/releases/latest/download/appc
 APP = "Perch.app"
 PACKAGING = "Perch Packaging"
 KEYS_APP = "Perch Keys.app"
+# Runs 1Password's `op` as an app of its own (helpers/opbridge): from inside Perch macOS keeps it out
+# of the 1Password app's data.
+OP_APP = "Perch 1Password.app"
+OP_SOURCE = Path("helpers") / "opbridge"
 KEYS_PROFILE = Path("build") / "keys.provisionprofile"
 KEYS_ENTITLEMENTS = Path("helpers") / "keyhelper" / "entitlements.plist"
 CRED_VARS = ("APPLE_SIGNING_IDENTITY", "APPLE_API_KEY", "APPLE_API_ISSUER", "APPLE_API_KEY_PATH")
@@ -130,6 +134,18 @@ def stage_keyhelper_into(app: Path, staged: Path) -> Path:
     return dest
 
 
+def stage_opbridge_into(app: Path, repo: Path) -> Path:
+    """Assemble Perch 1Password.app (an Info.plist and the perch-op script) into the framework's Helpers."""
+    dest = _framework_version(app) / "Helpers" / OP_APP
+    shutil.rmtree(dest, ignore_errors=True)
+    (dest / "Contents" / "MacOS").mkdir(parents=True)
+    shutil.copyfile(repo / OP_SOURCE / "Info.plist", dest / "Contents" / "Info.plist")
+    script = dest / "Contents" / "MacOS" / "perch-op"
+    shutil.copyfile(repo / OP_SOURCE / "perch-op", script)
+    script.chmod(0o755)
+    return dest
+
+
 def embed_keys_profile(helper: Path, repo: Path) -> bool:
     """Embed build/keys.provisionprofile (git-ignored) in the helper when it is present.
 
@@ -188,10 +204,12 @@ def package(
     stage_fonts(paths.repo, _framework_version(app) / "Resources" / "perch_fonts")
     helper = stage_keyhelper_into(app, paths.out("release") / KEYS_APP)
     embed_keys_profile(helper, paths.repo)
+    op_helper = stage_opbridge_into(app, paths.repo)
     if mode == "adhoc":
         update_plist(app / "Contents" / "Info.plist", bundle_versions(info))
         # Ad hoc: no restricted entitlements, so the helper falls back to a software key (protected: false).
         run(["codesign", "--force", "--options", "runtime", "--sign", "-", helper])
+        run(["codesign", "--force", "--options", "runtime", "--sign", "-", op_helper])
         run(["codesign", "--force", "--deep", "--sign", "-", app])
         return _make_dmg(app, dist, info, run)
 
@@ -213,6 +231,7 @@ def package(
     run(["codesign", "--force", "--timestamp", "--options", "runtime",
          "--entitlements", paths.repo / KEYS_ENTITLEMENTS, "--sign", creds.identity, helper],
         secrets=secrets)
+    run(["codesign", "--force", "--timestamp", "--options", "runtime", "--sign", creds.identity, op_helper], secrets=secrets)
     update_plist(app / "Contents" / "Info.plist", bundle_versions(info) | sparkle_keys(FEED_URL, key))
     signed = dist / "signed"
     run(

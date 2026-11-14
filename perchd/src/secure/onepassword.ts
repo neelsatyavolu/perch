@@ -8,9 +8,9 @@
  * never logged, stored, or returned to the model.
  */
 
-import { existsSync, readdirSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { chmodSync, existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 
 export type OpResult = { readonly code: number; readonly stdout: string; readonly stderr: string };
 export type OpRun = (args: readonly string[], opts?: { readonly timeoutMs?: number }) => Promise<OpResult>;
@@ -54,19 +54,56 @@ export function findOp(env: Readonly<Record<string, string | undefined>>, exists
   return null;
 }
 
-/** The person's login shell, which `op` can be run inside to get the environment it has in Terminal. */
-const LOGIN_SHELL = "/bin/zsh";
+type OpSpawn = (args: readonly string[], timeoutMs: number) => Promise<OpResult>;
+
+/** Perch 1Password.app, beside this perchd in the framework's Helpers (tools/perchtools/package.py). */
+export function findOpBridge(execPath: string = process.execPath, exists: (path: string) => boolean = existsSync): string | null {
+  const app = join(dirname(execPath), "Perch 1Password.app");
+  return exists(join(app, "Contents", "MacOS", "perch-op")) ? app : null;
+}
+
+/**
+ * `op` run by Perch 1Password.app, an app LaunchServices starts: from inside Perch's own processes
+ * macOS keeps `op` out of the 1Password app's data (it then sees no accounts), and an app of its own
+ * is let in. Its output comes back through two named pipes, so nothing it prints touches the disk.
+ */
+export function opBridge(app: string, opPath: string, env: Readonly<Record<string, string | undefined>>): OpSpawn {
+  return async (args, timeoutMs) => {
+    const dir = mkdtempSync(join(tmpdir(), "perch-op-"));
+    try {
+      chmodSync(dir, 0o700);
+      const out = join(dir, "out");
+      const err = join(dir, "err");
+      if (Bun.spawnSync(["/usr/bin/mkfifo", "-m", "600", out, err]).exitCode !== 0) return { code: 1, stdout: "", stderr: "Perch couldn't start its 1Password helper" };
+      // Readers first, so the helper's writes have somewhere to go; each ends when the helper exits.
+      const readOut = Bun.spawn(["/bin/cat", out], { stdout: "pipe", stderr: "ignore" });
+      const readErr = Bun.spawn(["/bin/cat", err], { stdout: "pipe", stderr: "ignore" });
+      const opener = Bun.spawn(["/usr/bin/open", "-W", "-n", "-g", "-a", app, "--stdout", out, "--stderr", err, "--env", "OP_FORMAT=json", "--args", opPath, ...args], {
+        stdin: "ignore", stdout: "ignore", stderr: "ignore", env: { ...env },
+      });
+      const timer = setTimeout(() => [opener, readOut, readErr].forEach((p) => p.kill()), timeoutMs);
+      try {
+        const [stdout, rawErr] = await Promise.all([new Response(readOut.stdout).text(), new Response(readErr.stdout).text(), opener.exited]);
+        const marker = /\n?<perch-op-exit:(\d+)>\s*$/.exec(rawErr);
+        return { code: marker ? Number(marker[1]) : 143, stdout, stderr: marker ? rawErr.slice(0, marker.index) : rawErr };
+      } finally {
+        clearTimeout(timer);
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+}
 
 /**
  * Runs `op` with arguments only; they are never parsed by a shell. When `op` started straight from
- * Perch sees no accounts but works in the person's Terminal, it runs inside their login shell
- * instead (`zsh -l -c 'exec "$0" "$@"' op …`, the arguments passed as parameters, not as text), so
- * it gets the same environment as there; that choice sticks for the rest of the run.
+ * Perch sees no accounts, it runs through Perch 1Password.app (opBridge) instead; if that sees them,
+ * every later call goes that way too.
  */
-export function opRunner(path: string, env: Readonly<Record<string, string | undefined>> = process.env, shell: string | null = LOGIN_SHELL): OpRun {
-  let viaShell = false;
-  const spawn = async (argv: string[], timeoutMs: number): Promise<OpResult> => {
-    const proc = Bun.spawn(argv, { stdin: "ignore", stdout: "pipe", stderr: "pipe", env: { ...env, OP_FORMAT: "json" } });
+export function opRunner(path: string, env: Readonly<Record<string, string | undefined>> = process.env, fallback: OpSpawn | null = defaultBridge(path, env)): OpRun {
+  let viaFallback = false;
+  const direct: OpSpawn = async (args, timeoutMs) => {
+    const proc = Bun.spawn([path, ...args], { stdin: "ignore", stdout: "pipe", stderr: "pipe", env: { ...env, OP_FORMAT: "json" } });
     const timer = setTimeout(() => proc.kill(), timeoutMs);
     try {
       const [stdout, stderr, code] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
@@ -75,19 +112,23 @@ export function opRunner(path: string, env: Readonly<Record<string, string | und
       clearTimeout(timer);
     }
   };
-  const inShell = (args: readonly string[]) => [shell!, "-l", "-c", 'exec "$0" "$@"', path, ...args];
   return async (args, opts = {}) => {
     const timeoutMs = opts.timeoutMs ?? READ_TIMEOUT_MS;
-    if (viaShell && shell) return spawn(inShell(args), timeoutMs);
-    const direct = await spawn([path, ...args], timeoutMs);
-    if (!shell || args[0] !== "account" || args[1] !== "list" || direct.code !== 0 || !noAccounts(direct.stdout)) return direct;
-    const shelled = await spawn(inShell(args), timeoutMs);
-    if (shelled.code === 0 && !noAccounts(shelled.stdout)) {
-      viaShell = true;
-      return shelled;
+    if (viaFallback && fallback) return fallback(args, timeoutMs);
+    const first = await direct(args, timeoutMs);
+    if (!fallback || args[0] !== "account" || args[1] !== "list" || first.code !== 0 || !noAccounts(first.stdout)) return first;
+    const second = await fallback(args, timeoutMs);
+    if (second.code === 0 && !noAccounts(second.stdout)) {
+      viaFallback = true;
+      return second;
     }
-    return direct;
+    return first;
   };
+}
+
+function defaultBridge(path: string, env: Readonly<Record<string, string | undefined>>): OpSpawn | null {
+  const app = findOpBridge();
+  return app ? opBridge(app, path, env) : null;
 }
 
 function noAccounts(stdout: string): boolean {

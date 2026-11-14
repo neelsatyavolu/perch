@@ -40,6 +40,9 @@ def staged_build(paths, tmp_path):
     (repo / "branding" / "fonts" / "OFL.txt").write_text("licence")
     (repo / "build").mkdir()
     (repo / "build" / "keys.provisionprofile").write_bytes(b"profile")
+    (repo / "helpers" / "opbridge").mkdir(parents=True)
+    (repo / "helpers" / "opbridge" / "Info.plist").write_text("plist")
+    (repo / "helpers" / "opbridge" / "perch-op").write_text("#!/bin/sh\n")
     paths = type(paths)(repo=repo, chromium=paths.chromium, src=paths.src, depot_tools=paths.depot_tools)
     return paths, sparkle
 
@@ -53,7 +56,7 @@ def test_package_release_runs_steps_in_order(staged_build, recorder):
     dmg = package(paths, INFO, "release", CREDS, run=recorder, sparkle_root=sparkle, public_key="PUB")
     assert dmg == paths.repo / "dist" / "Perch-0.1.0.dmg"
     assert _names(recorder.calls)[:3] == ["bun", "bun", "bun"]
-    assert _names(recorder.calls)[3:] == ["codesign"] * 7 + [
+    assert _names(recorder.calls)[3:] == ["codesign"] * 8 + [
         "python3", "ditto", "hdiutil", "codesign", "xcrun notarytool submit", "xcrun stapler staple",
         "codesign", "spctl", "xcrun stapler validate",
     ]
@@ -65,7 +68,9 @@ def test_package_release_runs_steps_in_order(staged_build, recorder):
     assert "--entitlements" in recorder.calls[8] and "runtime" in recorder.calls[8]
     assert (framework / "Resources" / "perch_ui" / "assets" / "a.js").read_text() == "1"
     assert (framework / "Resources" / "perch_skills" / "example" / "SKILL.md").read_text() == "Example skill"
-    assert recorder.calls[10] == [
+    # The 1Password helper is signed with the Developer ID too, after the key helper.
+    assert recorder.calls[10][:2] == ["codesign", "--force"] and recorder.calls[10][-1].endswith("Perch 1Password.app")
+    assert recorder.calls[11] == [
         "python3", str(dist / "stage" / "Perch Packaging" / "sign_chrome.py"),
         "--input", str(dist / "stage"), "--output", str(dist / "signed"),
         "--identity", CREDS.identity, "--disable-packaging", "--notarize", "none",
@@ -104,8 +109,9 @@ def test_adhoc_skips_notarize_and_sparkle(staged_build, recorder):
     paths, sparkle = staged_build
     package(paths, INFO, "adhoc", None, run=recorder, sparkle_root=sparkle, public_key="")
     names = _names(recorder.calls)
-    assert names == ["bun", "bun", "bun", "codesign", "codesign", "ditto", "hdiutil"]
-    assert recorder.calls[4][-2:] == ["-", str(paths.repo / "dist" / "stage" / "Perch.app")]
+    assert names == ["bun", "bun", "bun", "codesign", "codesign", "codesign", "ditto", "hdiutil"]
+    assert recorder.calls[4][-1].endswith("Perch 1Password.app")
+    assert recorder.calls[5][-2:] == ["-", str(paths.repo / "dist" / "stage" / "Perch.app")]
     assert not (paths.repo / "dist" / "stage" / "Perch.app" / "Contents" / "Frameworks" / "Sparkle.framework").exists()
 
 

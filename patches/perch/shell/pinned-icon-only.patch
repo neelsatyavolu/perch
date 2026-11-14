@@ -1,0 +1,19 @@
+diff --git a/chrome/browser/ui/views/tabs/tab.cc b/chrome/browser/ui/views/tabs/tab.cc
+index 58540b22b6..6159e7ae87 100644
+--- a/chrome/browser/ui/views/tabs/tab.cc
++++ b/chrome/browser/ui/views/tabs/tab.cc
+@@ -1363,10 +1363,10 @@ void Tab::UpdateIconVisibility() {
+   if (data().pinned || is_animating_from_pinned_) {
+     // When the tab is pinned, we can show one of the two icons; the alert icon
+     // is given priority over the favicon. The close button is never shown.
+-    // Perch: pinned tabs are wide enough for both side by side (Layout pairs
+-    // them), so a playing tab keeps its site's icon.
+-    showing_alert_indicator_ = has_alert_icon;
+-    showing_icon_ = has_favicon && (!has_alert_icon || PerchPinnedPairFits());
++    // Perch: a pinned tab shows only its site's icon; sound, picture in
++    // picture and the other indicators show only on a tab with no icon.
++    showing_icon_ = has_favicon;
++    showing_alert_indicator_ = has_alert_icon && !has_favicon;
+     showing_close_button_ = false;
+ 
+     // While animating to or from the pinned state, pinned tabs are rendered as

@@ -32,6 +32,7 @@ namespace perch {
 namespace {
 
 constexpr char kWelcomeURL[] = "chrome://perch-welcome/";
+constexpr char kTourURL[] = "chrome://perch-tour/";
 
 // Profiles whose welcome page has opened in this run; a second window of the
 // same profile doesn't get another.
@@ -65,6 +66,37 @@ bool IsWelcomeURL(const GURL& url) {
          (url.SchemeIs(kPerchScheme) && url.host() == "welcome");
 }
 
+namespace {
+
+// Set up before the tour existed, or left it unfinished: it opens once per
+// run, in front, until it is finished or skipped (FinishTour).
+void MaybeStartTour(BrowserWindowInterface* browser) {
+  Profile* profile = browser->GetProfile();
+  if (profile->GetPrefs()->GetBoolean(prefs::kTourFinished) ||
+      FinishedAt().contains(profile->GetPath()) ||
+      !Started().insert(profile->GetPath()).second) {
+    return;
+  }
+  TabStripModel* strip = browser->GetTabStripModel();
+  for (int i = 0; i < strip->count(); ++i) {
+    if (IsTourURL(strip->GetWebContentsAt(i)->GetVisibleURL())) {
+      strip->ActivateTabAt(i);
+      return;
+    }
+  }
+  content::WebContents* active = strip->GetActiveWebContents();
+  const bool replace = active && IsNewTabURL(active->GetVisibleURL());
+  browser->OpenURL(
+      content::OpenURLParams(GURL(kTourURL), content::Referrer(),
+                             replace ? WindowOpenDisposition::kCurrentTab
+                                     : WindowOpenDisposition::kNewForegroundTab,
+                             ui::PAGE_TRANSITION_AUTO_TOPLEVEL,
+                             /*is_renderer_initiated=*/false),
+      {});
+}
+
+}  // namespace
+
 void MaybeStartOnboarding(BrowserWindowInterface* browser) {
   // Headless runs add --no-first-run themselves; --force-first-run wins.
   const base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
@@ -74,9 +106,14 @@ void MaybeStartOnboarding(BrowserWindowInterface* browser) {
   }
   Profile* profile = browser->GetProfile();
   if (!profile->IsRegularProfile() || profile->IsOffTheRecord() ||
-      browser->GetType() != BrowserWindowInterface::TYPE_NORMAL ||
-      profile->GetPrefs()->GetBoolean(prefs::kOnboardingFinished) ||
-      !Started().insert(profile->GetPath()).second) {
+      browser->GetType() != BrowserWindowInterface::TYPE_NORMAL) {
+    return;
+  }
+  if (profile->GetPrefs()->GetBoolean(prefs::kOnboardingFinished)) {
+    MaybeStartTour(browser);
+    return;
+  }
+  if (!Started().insert(profile->GetPath()).second) {
     return;
   }
   // After a restart in the middle of setup (Full Disk Access applies only
@@ -114,6 +151,17 @@ void MaybeStartOnboarding(BrowserWindowInterface* browser) {
       !browser->GetWindow()->IsMaximized()) {
     browser->GetWindow()->Maximize();
   }
+}
+
+bool IsTourURL(const GURL& url) {
+  return (url.SchemeIs(content::kChromeUIScheme) &&
+          url.host() == "perch-tour") ||
+         (url.SchemeIs(kPerchScheme) && url.host() == "tour");
+}
+
+void FinishTour(Profile* profile) {
+  profile->GetOriginalProfile()->GetPrefs()->SetBoolean(prefs::kTourFinished,
+                                                        true);
 }
 
 bool ExtensionTabsHeldBack(Profile* profile) {

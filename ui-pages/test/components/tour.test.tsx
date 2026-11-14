@@ -28,6 +28,32 @@ describe("Tour", () => {
     expect(r.getByRole("button", { name: /Hand it a task/ }).getAttribute("aria-expanded")).toBe("true");
   });
 
+  test("the order-form task ticks off when its own chat finishes, not Build my memory, and the tour comes back to front", async () => {
+    const r = renderWithApi(<TourPage />);
+    // Build my memory is already running in its own tab.
+    await r.api.startMemoryChat();
+    fireEvent.click(await r.findByRole("button", { name: /Hand it a task/ }));
+    fireEvent.click(await r.findByRole("button", { name: "Have it fill in an order form" }));
+    await waitFor(() => expect(r.getByText("1 of 4 done")).toBeTruthy(), { timeout: 5000 });
+    expect(r.nav.some((n) => n.what === "show-this-tab")).toBe(true);
+    // The tour moved on to the next step; back on this one, it offers the filled form.
+    fireEvent.click(r.getByRole("button", { name: /Hand it a task/ }));
+    expect(await r.findByRole("button", { name: "See the filled form" })).toBeTruthy();
+  }, 8000);
+
+  test("skipping the rest marks the tour finished, so it stops opening at launch", async () => {
+    const r = renderWithApi(<TourPage />);
+    fireEvent.click(await r.findByRole("button", { name: "Skip the rest" }));
+    await waitFor(() => expect(r.nav.map((n) => n.what)).toEqual(expect.arrayContaining(["finish-tour", "page"])));
+  });
+
+  test("someone who already took the whole tour is sent on to a new tab", async () => {
+    localStorage.setItem("perch.tour.done", JSON.stringify(["chat", "agent", "bar", "browser"]));
+    const r = renderWithApi(<TourPage />);
+    await waitFor(() => expect(r.nav.some((n) => n.what === "finish-tour")).toBe(true));
+    localStorage.removeItem("perch.tour.done");
+  });
+
   test("the command bar step opens the real command bar", async () => {
     const r = renderWithApi(<TourPage />);
     fireEvent.click(await r.findByRole("button", { name: /Find anything with the command bar/ }));

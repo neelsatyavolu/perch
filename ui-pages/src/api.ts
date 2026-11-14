@@ -589,12 +589,17 @@ export interface PerchApi {
   openCommandBar(): Promise<void>;
   /** Brings the agent's newest tab at an address starting with `url` into this window, with its side chat open. */
   showAgentTab(url: string): Promise<void>;
+  /** Brings the tab of the page that asks to the front of its window. */
+  showThisTab(): Promise<void>;
+  /** The tour was finished or skipped; it stops opening when Perch starts. */
+  finishTour(): Promise<void>;
 
   // Outside agents (the tour's last step): the perch command and Perch's skill and MCP server in
   // Claude Code, Codex and Grok
   getAgentSetup(): Promise<AgentSetup>;
   /** Build my memory (the tour): a chat that researches the user and saves as it goes, opened in a tab behind this one. */
-  startMemoryChat(): Promise<{ readonly chatId: string }>;
+  /** Starts Build my memory in a tab behind this one; chatId is null when memory (from Aside, say) already covers it. */
+  startMemoryChat(always?: boolean): Promise<{ readonly chatId: string | null }>;
   /** Links ~/.local/bin/perch (adding it to PATH in the shell's login file if needed) and installs Perch into every agent found. */
   connectAgents(): Promise<AgentSetup>;
 
@@ -714,7 +719,7 @@ export const API_METHODS = [
   "getPrivacy", "setPrivacy", "setBackgroundConnection", "removeBlockerException", "listSiteData", "forgetSite",
   "listBuiltInExtensions", "setBuiltInExtension",
   "getMemorySaver", "setMemorySaver", "addSleepRule", "listTabMemory",
-  "queryCommandBar", "runCommandBarItem", "closeCommandBar", "openCommandBar", "showAgentTab", "getAgentSetup", "connectAgents", "startMemoryChat",
+  "queryCommandBar", "runCommandBarItem", "closeCommandBar", "openCommandBar", "showAgentTab", "showThisTab", "finishTour", "getAgentSetup", "connectAgents", "startMemoryChat",
   "getSync", "startSyncPairing", "checkSyncPairing", "syncNow", "removeSyncDevice", "turnOffSync", "revealRecoveryKey",
   "getSecurity", "exportBackup", "restoreFromRecoveryKey", "startFresh",
   "getMemorySettings", "setMemorySettings", "listMemoryPages", "readMemoryPage", "writeMemoryPage", "deleteMemoryPage", "wipeMemory",

@@ -48,18 +48,17 @@ describe("Memory page", () => {
     await waitFor(async () => expect((await r.api.listMemoryPages()).length).toBe(before - 1));
   });
 
-  test("Build my memory asks Perch to research the user, with review before saving", async () => {
+  test("Build my memory starts the research chat in a tab behind this one, even when memory came over from Aside", async () => {
     const r = renderWithApi(<MemoryPage />);
-    const asked: string[] = [];
-    const submit = r.api.submitQuery.bind(r.api);
-    r.api.submitQuery = async (q) => {
-      asked.push(q.mode === "ask" ? q.text : "");
-      return submit(q);
+    const asked: (boolean | undefined)[] = [];
+    const start = r.api.startMemoryChat.bind(r.api);
+    r.api.startMemoryChat = async (always) => {
+      asked.push(always);
+      return start(always);
     };
     fireEvent.click(await r.findByRole("button", { name: "Build my memory" }));
-    await waitFor(() => expect(asked).toHaveLength(1));
-    expect(asked[0]).toContain("memory_propose");
-    expect(asked[0]).toContain("perch://memory#review");
+    await waitFor(() => expect(asked).toEqual([true]));
+    await waitFor(() => expect(r.nav.some((n) => n.what === "background-tab")).toBe(true));
   });
 
   test("pausing learning is one switch", async () => {

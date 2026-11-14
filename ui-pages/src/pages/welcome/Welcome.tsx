@@ -266,6 +266,9 @@ function Setup() {
   const [memory, setMemory] = useState(resumed?.memory ?? true);
   useEffect(() => savePlace(step ? { step, imported, memory } : null), [step, imported, memory]);
   const heading = useRef<HTMLHeadingElement>(null);
+  // Finish runs once at a time; Build my memory starts once even if finishing is tried again.
+  const [finishing, setFinishing] = useState(false);
+  const memoryNote = useRef<string | null>(null);
   const { sound, mute } = useSound();
   // The opening chime lands as the bird settles on the bar.
   useEffect(() => {
@@ -297,17 +300,26 @@ function Setup() {
     requestAnimationFrame(() => heading.current?.focus());
   };
   const finish = async () => {
-    sound.play("done");
-    await act(() => api.completeOnboardingStep("appearance"));
-    // Memory from what came over builds in a chat of its own, in a tab behind this one.
-    if (imported && memory) {
-      await act(() => api.completeOnboardingStep("memory"));
-      await act(() => api.startMemoryChat());
+    if (finishing) return;
+    setFinishing(true);
+    try {
+      sound.play("done");
+      await act(() => api.completeOnboardingStep("appearance"));
+      // Memory from what came over builds in a chat of its own, in a tab behind this one. Memory
+      // that came over from Aside may already be enough; then nothing is built ("memory-ready"). The
+      // tour says which, or that it couldn't start ("memory-failed"), since this page closes.
+      if (imported && memory && memoryNote.current === null) {
+        const started = await act(() => api.startMemoryChat());
+        memoryNote.current = started ? (started.chatId ? "memory" : "memory-ready") : "memory-failed";
+        if (started) await act(() => api.completeOnboardingStep("memory"));
+      }
+      // If saving fails, stay here (the error shows) rather than leave and see setup again next launch.
+      if (!(await act(() => api.finishOnboarding().then(() => true)))) return;
+      savePlace(null);
+      await act(() => api.openPage("tour", memoryNote.current ?? undefined));
+    } finally {
+      setFinishing(false);
     }
-    // If saving fails, stay here (the error shows) rather than leave and see setup again next launch.
-    if (!(await act(() => api.finishOnboarding().then(() => true)))) return;
-    savePlace(null);
-    await act(() => api.openPage("tour", imported && memory ? "memory" : undefined));
   };
 
   if (!step) {
@@ -330,7 +342,7 @@ function Setup() {
   const next = STEPS[at + 1] ?? null;
   const back = () => go(STEPS[at - 1] ?? null);
   const running = importStatus === "running";
-  const blocked = step === "plan" ? !connected : step === "import" ? running : false;
+  const blocked = finishing || (step === "plan" ? !connected : step === "import" ? running : false);
   const hint =
     step === "plan" && !connected ? "Sign in to Claude, ChatGPT or Grok to continue." : step === "import" && running ? "Waiting for the import to finish." : "";
   const forward = () => {
@@ -345,7 +357,9 @@ function Setup() {
         <h1 class="serif-title" ref={heading} tabIndex={-1}>{COPY[step].title}</h1>
         <p class="wl-lead">{COPY[step].lead}</p>
         <div class="wl-body">
-          {step === "plan" && providers.error && <p class="err-note">{providers.error}</p>}
+          {step === "plan" && providers.error && (
+            <p class="err-note">{providers.error} <button type="button" class="btn quiet" onClick={() => providers.reload()}>Try again</button></p>
+          )}
           {step === "plan" && providers.data && (
             <>
               <Models providers={providers.data} onChange={onProvider} />
@@ -378,7 +392,7 @@ function Setup() {
         <div class="wl-actions wl-finish">
           <button type="button" class="btn quiet" onClick={back}>Back</button>
           <span class="grow" />
-          {hint && <span class="cap" role="status">{hint}</span>}
+          <span class="cap" role="status">{hint}</span>
           {/* One way forward per step: skipping the import is the plain button, Continue once something came over. */}
           {step === "import" && !imported ? (
             <button type="button" class="btn" disabled={blocked} onClick={forward}>Skip for now</button>

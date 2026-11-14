@@ -42,6 +42,7 @@
 #include "chrome/browser/perch/settings/privacy.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+#include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/webui/webui_embedding_context.h"
 #include "chrome/browser/search_engines/template_url_service_factory.h"
 #include "components/search_engines/search_engine_type.h"
@@ -648,6 +649,24 @@ void PerchPageHandler::Dispatch(const std::string& method,
       return;
     }
     ShowAgentTab(pick, browser);
+    Resolve(std::move(id), base::Value());
+  } else if (method == "finishTour") {
+    // The tour was finished or skipped: it stops opening at launch.
+    FinishTour(profile());
+    Resolve(std::move(id), base::Value());
+  } else if (method == "showThisTab") {
+    // The tour comes back to front when the agent's task ends.
+    tabs::TabInterface* tab =
+        tabs::TabInterface::MaybeGetFromContents(web_ui()->GetWebContents());
+    BrowserWindowInterface* browser =
+        tab ? tab->GetBrowserWindowInterface() : nullptr;
+    TabStripModel* model = browser ? browser->GetTabStripModel() : nullptr;
+    const int index = model ? model->GetIndexOfTab(tab) : TabStripModel::kNoTab;
+    if (index == TabStripModel::kNoTab) {
+      Reject(std::move(id), "not-found", "This page isn't in a tab");
+      return;
+    }
+    model->ActivateTabAt(index);
     Resolve(std::move(id), base::Value());
   } else if (method == "openCommandBar") {
     // The tour shows the command bar off over its own window.

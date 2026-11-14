@@ -38,6 +38,12 @@ bool ExtensionTabsHeldBack(Profile* profile);
 // again.
 void FinishOnboarding(content::WebContents* welcome);
 
+// Whether a tab shows the tour (perch://tour, chrome://perch-tour).
+bool IsTourURL(const GURL& url);
+
+// The tour was finished or skipped: it no longer opens at launch.
+void FinishTour(Profile* profile);
+
 }  // namespace perch
 
 #endif  // CHROME_BROWSER_PERCH_ONBOARDING_ONBOARDING_H_

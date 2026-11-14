@@ -339,6 +339,8 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
       if (query.mode === "ask") {
         const chat: ChatSummary = { id: `chat-${state.chats.length + 1}`, title: query.text.slice(0, 60), snippet: "", updatedAt: new Date().toISOString(), status: "running" };
         set({ chats: [chat, ...state.chats] });
+        // The answer comes in shortly after.
+        setTimeout(() => set({ chats: state.chats.map((c) => (c.id === chat.id ? { ...c, status: "idle", snippet: "Done.", updatedAt: new Date().toISOString() } : c)) }), 300);
       }
     },
     async openChat(id) {
@@ -650,8 +652,14 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     async showAgentTab(url) {
       navigate("show-agent-tab", url);
     },
+    async showThisTab() {
+      navigate("show-this-tab", null);
+    },
+    async finishTour() {
+      navigate("finish-tour", null);
+    },
 
-    async startMemoryChat() {
+    async startMemoryChat(_always) {
       const chat: ChatSummary = { id: `chat-${state.chats.length + 1}`, title: "Build my memory", snippet: "", updatedAt: new Date().toISOString(), status: "running" };
       set({ chats: [chat, ...state.chats] });
       navigate("background-tab", `chat:${chat.id}`);

@@ -26,6 +26,10 @@ inline constexpr char kAppearanceHideChrome[] = "perch.appearance.hide_chrome";
 // Whether the welcome page has been finished or skipped (onboarding/).
 inline constexpr char kOnboardingFinished[] = "perch.onboarding_finished";
 
+// Whether the tour has been finished or skipped; until then it opens at
+// launch, so people who set up Perch before it existed take it too.
+inline constexpr char kTourFinished[] = "perch.tour_finished";
+
 // Never-sleep rules, [{"kind", "pattern"}] as in Lulltab (memory_saver/).
 inline constexpr char kMemorySaverRules[] = "perch.memory_saver.rules";
 // Local State: pinned tabs may sleep too (Chromium never sleeps them).

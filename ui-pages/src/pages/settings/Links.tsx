@@ -47,7 +47,7 @@ export function MemorySection() {
               <option value="always">Always</option>
             </select>
           </Row>
-          <Row id="dream-log" sub title="Overnight tidy log" detail="What each pass merged, updated and moved, by date">
+          <Row id="dream-log" title="Overnight tidy log" detail="What each pass merged, updated and moved, by date">
             <button type="button" class="btn" onClick={() => setReading(true)}>Read the log</button>
           </Row>
         </div>

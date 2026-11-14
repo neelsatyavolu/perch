@@ -73,6 +73,7 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {
   registry->RegisterStringPref(prefs::kAppearanceDarkTheme, "ink");
   registry->RegisterBooleanPref(prefs::kAppearanceHideChrome, false);
   registry->RegisterBooleanPref(prefs::kOnboardingFinished, false);
+  registry->RegisterBooleanPref(prefs::kTourFinished, false);
   registry->RegisterListPref(prefs::kMemorySaverRules);
   registry->RegisterListPref(prefs::kSpaces);
   registry->RegisterStringPref(prefs::kActiveSpace, "1");

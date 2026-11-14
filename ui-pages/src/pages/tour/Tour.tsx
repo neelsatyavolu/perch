@@ -63,6 +63,18 @@ function useRecentChats(): readonly ChatSummary[] {
   return chats;
 }
 
+/**
+ * A chat step's ask: when its button was pressed, the chats already busy then (Build my memory runs
+ * for a long while, and may wait on an approval), and once seen, the chat the ask went to.
+ */
+type Asked = { readonly at: number; readonly busy: ReadonlySet<string>; readonly chatId?: string; readonly failed?: true };
+
+/** The chat an ask went to: the first one, not busy when asked, that moved after it. */
+function chatFor(chats: readonly ChatSummary[], asked: Asked): ChatSummary | undefined {
+  if (asked.chatId) return chats.find((c) => c.id === asked.chatId);
+  return chats.find((c) => !asked.busy.has(c.id) && Date.parse(c.updatedAt) >= asked.at);
+}
+
 type Step = { readonly title: string; readonly body: preact.ComponentChildren; readonly action?: preact.ComponentChildren; readonly next?: string };
 
 export function TourPage() {
@@ -70,13 +82,16 @@ export function TourPage() {
   const act = useAction();
   // #memory: setup started Build my memory in a tab of its own.
   const [memoryBuilding] = useState(() => window.location.hash === "#memory");
+  // #memory-ready: what came over from Aside already covered it, so nothing is being built.
+  const [memoryReady] = useState(() => window.location.hash === "#memory-ready");
+  const [memoryFailed] = useState(() => window.location.hash === "#memory-failed");
   const order = ORDER;
   const [done, setDone] = useState<ReadonlySet<StepId>>(loadDone);
   const [open, setOpen] = useState<StepId>(() => order.find((s) => !loadDone().has(s)) ?? order[0]!);
-  // When each chat step's button was pressed; chat activity after it ticks the step off.
-  const [asked, setAsked] = useState<Partial<Record<"chat" | "agent", number>>>({});
+  // When each chat step's button was pressed, and the chats already running then (Build my memory
+  // runs for a long while): activity in any other chat after it ticks the step off.
+  const [asked, setAsked] = useState<Partial<Record<"chat" | "agent", Asked>>>({});
   const chats = useRecentChats();
-  const activity = Math.max(0, ...chats.map((c) => Date.parse(c.updatedAt)).filter(Number.isFinite));
   const [shown, setShown] = useState(false);
 
   const complete = (id: StepId, advance = true) => {
@@ -87,23 +102,61 @@ export function TourPage() {
       return next;
     });
     const after = order[order.indexOf(id) + 1];
-    if (advance && after) setOpen((o) => (o === id ? after : o));
+    if (advance && after) {
+      setOpen((o) => (o === id ? after : o));
+      // The finished step's button goes away with its body; focus moves to the next step.
+      requestAnimationFrame(() => document.getElementById(`tr-head-${after}`)?.focus());
+    }
   };
 
   useEffect(() => {
-    if (asked.chat && activity >= asked.chat) complete("chat");
-    // The form task: once its chat has finished, show the agent's tab with the side chat beside it.
-    const agentChat = asked.agent ? chats.find((c) => Date.parse(c.updatedAt) >= asked.agent!) : undefined;
-    if (agentChat && agentChat.status !== "running" && !shown) {
-      setShown(true);
-      complete("agent");
-      void api.showAgentTab(FORM_URL).catch(() => undefined);
+    for (const step of ["chat", "agent"] as const) {
+      const a = asked[step];
+      if (!a || a.failed || done.has(step)) continue;
+      const chat = chatFor(chats, a);
+      if (!chat) continue;
+      if (!a.chatId) setAsked((all) => ({ ...all, [step]: { ...a, chatId: chat.id } }));
+      if (chat.status !== "idle") continue;
+      // A run that errored or was stopped leaves the step open, to try again.
+      if (chat.failed) {
+        setAsked((all) => ({ ...all, [step]: { ...a, chatId: chat.id, failed: true } }));
+        continue;
+      }
+      complete(step);
+      // The form task: come back here (the person may be watching the agent's tab); the step then
+      // offers the filled form.
+      if (step === "agent" && !shown) {
+        setShown(true);
+        void api.showThisTab().catch(() => undefined);
+      }
     }
   }, [chats]);
 
+  // Both asks go to this tab's side chat, which takes one at a time.
+  const answering = (["chat", "agent"] as const).some((s) => {
+    const a = asked[s];
+    const chat = a && !a.failed ? chatFor(chats, a) : undefined;
+    return chat !== undefined && chat.status !== "idle";
+  });
+
   const ask = async (step: "chat" | "agent", text: string) => {
-    setAsked((a) => ({ ...a, [step]: Date.now() }));
+    if (answering || (asked[step] && !asked[step]!.failed)) return;
+    const busy = new Set(chats.filter((c) => c.status !== "idle").map((c) => c.id));
+    setAsked((a) => ({ ...a, [step]: { at: Date.now(), busy } }));
     await act(() => api.submitQuery({ text, mode: "ask", engine: "brave" }));
+  };
+
+  /** The button for a chat step, held while the side chat answers, with word if it failed. */
+  const askButton = (step: "chat" | "agent", text: string, label: string) => {
+    const a = asked[step];
+    const pending = Boolean(a && !a.failed && !done.has(step));
+    return (
+      <>
+        <button type="button" class="btn primary" disabled={answering || pending} onClick={() => ask(step, text)}>{label}</button>
+        {a?.failed && <span class="cap" role="status">That didn't finish. Try again.</span>}
+        {!a && answering && <span class="cap" role="status">Wait for the side chat to finish its answer.</span>}
+      </>
+    );
   };
 
   const steps: Record<StepId, Step> = {
@@ -115,17 +168,19 @@ export function TourPage() {
           <p class="cap">It runs on the model you connected. Ask it something now; the answer comes in on the right.</p>
         </>
       ),
-      action: <button type="button" class="btn primary" onClick={() => ask("chat", CHAT_TRY)}>Ask “What can you do?”</button>,
+      action: askButton("chat", CHAT_TRY, "Ask “What can you do?”"),
     },
     agent: {
       title: "Hand it a task",
       body: (
         <>
           <p>Unlike a chatbot, Perch's agent uses real pages: it types, picks, clicks and fills in forms, on the sites you're signed in to and with what it remembers about you. It works in tabs of its own, out of your way; the Agent Tabs button at the end of the tab strip lists them, and you can click one to watch or take over.</p>
-          <p class="cap">Try it on a sample order form. It asks before it sends, posts, buys or deletes anything, so nothing is submitted.</p>
+          <p class="cap">Try it on a sample order form. It's told not to submit, and in Guard it asks before it sends, posts, buys or deletes anything.</p>
         </>
       ),
-      action: <button type="button" class="btn primary" onClick={() => ask("agent", AGENT_TRY)}>Have it fill in an order form</button>,
+      action: shown
+        ? <button type="button" class="btn primary" onClick={() => act(() => api.showAgentTab(FORM_URL))}>See the filled form</button>
+        : askButton("agent", AGENT_TRY, "Have it fill in an order form"),
     },
     bar: {
       title: "Find anything with the command bar",
@@ -149,6 +204,16 @@ export function TourPage() {
     },
   };
 
+  // Finished or skipped, the tour stops opening when Perch starts.
+  const leave = async () => {
+    await act(() => api.finishTour());
+    await act(() => api.openPage("newtab"));
+  };
+  // Someone who took the whole tour before Perch kept track of it isn't shown it again.
+  useEffect(() => {
+    if (ORDER.every((s) => loadDone().has(s))) void leave();
+  }, []);
+
   const count = order.filter((s) => done.has(s)).length;
   const all = count === order.length;
   return (
@@ -160,6 +225,12 @@ export function TourPage() {
           <span class="cap tr-count" aria-live="polite">{count} of {order.length} done</span>
         </header>
         <p class="tr-lead">Four short steps, each one you try for real. Chats you start here open in the side chat on the right.</p>
+        {memoryFailed && (
+          <p class="tr-note" role="status"><span class="dotc" aria-hidden="true" />Build my memory couldn't start. You can start it later from perch://memory.</p>
+        )}
+        {memoryReady && (
+          <p class="tr-note" role="status"><span class="dotc" aria-hidden="true" />Your memory came over from Aside and already covers you well, so Perch didn't build it again. See it at perch://memory.</p>
+        )}
         {memoryBuilding && (
           <p class="tr-note" role="status"><span class="dotc" aria-hidden="true" />Perch is building your memory in the “Build my memory” tab. It saves as it goes; look in any time to answer its questions.</p>
         )}
@@ -170,7 +241,7 @@ export function TourPage() {
             const isDone = done.has(id);
             return (
               <li key={id} class={`tr-step${isOpen ? " open" : ""}${isDone ? " done" : ""}`}>
-                <button type="button" class="tr-head" aria-expanded={isOpen} aria-controls={`tr-${id}`} onClick={() => setOpen(id)}>
+                <button type="button" class="tr-head" id={`tr-head-${id}`} aria-expanded={isOpen} aria-controls={`tr-${id}`} onClick={() => setOpen(id)}>
                   <span class="tr-num" aria-hidden="true">{isDone ? "✓" : i + 1}</span>
                   <span class="tr-title">{s.title}</span>
                   {isDone && <span class="sr-only">, done</span>}
@@ -194,7 +265,7 @@ export function TourPage() {
         <div class="tr-foot">
           <span class="cap">Open this tour again from Settings, under About.</span>
           <span class="grow" />
-          <button type="button" class={all ? "btn primary" : "btn"} onClick={() => act(() => api.openPage("newtab"))}>{all ? "Start browsing" : "Skip the rest"}</button>
+          <button type="button" class={all ? "btn primary" : "btn"} onClick={leave}>{all ? "Start browsing" : "Skip the rest"}</button>
         </div>
       </div>
     </main>

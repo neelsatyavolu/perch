@@ -562,8 +562,15 @@ void InProfileNamed(const std::u16string& name,
 
 // Profiles share one window (toolbar/perch_profile_menu.cc): an imported
 // profile's tabs wait in its own window, put away until the person switches
-// to it from the profile menu.
+// to it from the profile menu. When the person is in that profile already
+// (its name matched the one imported), its windows stay out, as for any
+// other import.
 void PutAwayProfileWindows(Profile* profile) {
+  BrowserWindowInterface* in_front =
+      GetLastActiveBrowserWindowInterfaceWithAnyProfile();
+  if (in_front && in_front->GetProfile() == profile) {
+    return;
+  }
   for (BrowserWindowInterface* window : GetAllBrowserWindowInterfaces()) {
     if (window->GetProfile() == profile) {
       window->GetWindow()->Hide();
@@ -648,10 +655,18 @@ void ApplyImportBundle(Profile* profile,
         base::BindOnce(&ApplyToNamedProfile, *name, std::move(reply)));
     return;
   }
+  // The profile may go away while the file is read.
   base::ThreadPool::PostTaskAndReplyWithResult(
       FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_VISIBLE},
       base::BindOnce(&ReadBundle, base::FilePath(*path)),
-      base::BindOnce(&Apply, profile, std::move(reply)));
+      base::BindOnce(
+          [](base::WeakPtr<Profile> profile,
+             base::OnceCallback<void(DataResult)> reply,
+             std::optional<std::string> text) {
+            Apply(profile.get(), std::move(reply), std::move(text));
+          },
+          profile ? profile->GetWeakPtr() : base::WeakPtr<Profile>(),
+          std::move(reply)));
 }
 
 }  // namespace perch

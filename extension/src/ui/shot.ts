@@ -27,14 +27,18 @@ function markColour(): string {
   return getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#4C8DFF";
 }
 
-function redraw(): void {
-  if (!image) return;
-  ctx.drawImage(image, 0, 0);
+function setPen(): void {
   const scale = canvas.width / canvas.getBoundingClientRect().width || 1;
   ctx.strokeStyle = markColour();
   ctx.lineWidth = Math.max(3, 3 * scale);
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
+}
+
+function redraw(): void {
+  if (!image) return;
+  ctx.drawImage(image, 0, 0);
+  setPen();
   for (const mark of drawing ? [...marks, drawing] : marks) {
     ctx.beginPath();
     if (mark.kind === "pen") {
@@ -58,14 +62,46 @@ canvas.addEventListener("pointerdown", (event) => {
   const p = point(event);
   drawing = tool === "pen" ? { kind: "pen", points: [p] } : { kind: "box", from: p, to: p };
 });
+/**
+ * Repainting means drawing the whole capture again, which on a long page is a canvas tens of
+ * thousands of pixels high: a box repaints at most once a frame, and a pen stroke only adds its
+ * newest segment.
+ */
+let frame = 0;
+function redrawSoon(): void {
+  frame ||= requestAnimationFrame(() => {
+    frame = 0;
+    redraw();
+  });
+}
+
+function strokeSegment(from: Point, to: Point): void {
+  setPen();
+  ctx.beginPath();
+  ctx.moveTo(from.x, from.y);
+  ctx.lineTo(to.x, to.y);
+  ctx.stroke();
+}
+
 canvas.addEventListener("pointermove", (event) => {
   if (!drawing) return;
   const p = point(event);
-  drawing = drawing.kind === "pen" ? { ...drawing, points: [...drawing.points, p] } : { ...drawing, to: p };
-  redraw();
+  if (drawing.kind === "pen") {
+    const last = drawing.points[drawing.points.length - 1]!;
+    drawing = { ...drawing, points: [...drawing.points, p] };
+    if (!frame) strokeSegment(last, p);
+  } else {
+    drawing = { ...drawing, to: p };
+    redrawSoon();
+  }
 });
 canvas.addEventListener("pointerup", () => {
   if (drawing) marks = [...marks, drawing];
+  drawing = null;
+  redraw();
+});
+// The system took the pointer (a gesture, a dialog): drop the half-drawn mark instead of drawing on hover.
+canvas.addEventListener("pointercancel", () => {
   drawing = null;
   redraw();
 });

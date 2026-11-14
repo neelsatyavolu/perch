@@ -57,6 +57,52 @@ describe("full-page screenshot", () => {
     await page.close();
   }, 20_000);
 
+  test("a sticky element shows where it sits in the page, once, and gets its own styles back", async () => {
+    const { page, shot, viewport } = await capture("/sticky.html");
+    // The sticky nav is at the top and does not repeat on the next strip.
+    expect(near(await pixelAt(shot, 20, viewport.dpr), [0, 160, 0])).toBe(true);
+    expect(near(await pixelAt(shot, viewport.height + 20, viewport.dpr), [255, 255, 255])).toBe(true);
+    // The note sits at 1200–1300 in the page; its top: 60px does not push it down.
+    expect(near(await pixelAt(shot, 1210, viewport.dpr), [240, 140, 0])).toBe(true);
+    expect(near(await pixelAt(shot, 1340, viewport.dpr), [255, 255, 255])).toBe(true);
+    expect(await page.evaluate<string>("document.querySelector('.note').getAttribute('style')")).toBe("top: 60px;");
+    expect(await page.evaluate<string>("getComputedStyle(document.querySelector('nav')).position")).toBe("sticky");
+    expect(await page.evaluate<number>("document.querySelectorAll('[data-perch-shot-sticky]').length")).toBe(0);
+    await shot.close();
+    await page.close();
+  }, 20_000);
+
+  test("the pen and box draw on the image, and Undo takes the last mark off", async () => {
+    const { page, shot, viewport } = await capture("/long.html");
+    const rect = await shot.evaluate<{ x: number; y: number; width: number; scale: number }>(
+      "(() => { const r = canvas.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, scale: canvas.width / r.width }; })()",
+    );
+    // At page y 300 the capture is white; draw across it.
+    const y = rect.y + (300 * viewport.dpr) / rect.scale;
+    const drag = async (from: number, to: number, dy = 0) => {
+      await shot.send("Input.dispatchMouseEvent", { type: "mousePressed", x: from, y, button: "left", buttons: 1, clickCount: 1 });
+      for (let i = 1; i <= 8; i++) await shot.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: from + ((to - from) * i) / 8, y: y + (dy * i) / 8, button: "left", buttons: 1 });
+      await shot.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: to, y: y + dy, button: "left", buttons: 0, clickCount: 1 });
+    };
+    const at = (cssX: number, cssY: number) =>
+      shot.evaluate<Pixel>(
+        `Array.from(canvas.getContext('2d').getImageData(${Math.round((cssX - rect.x) * rect.scale)}, ${Math.round((cssY - rect.y) * rect.scale)}, 1, 1).data.slice(0, 3))`,
+      );
+    const isMark = (p: Pixel) => p[2] > p[0] + 60;
+    const left = rect.x + rect.width * 0.2;
+    const right = rect.x + rect.width * 0.6;
+    await drag(left, right);
+    expect(isMark(await at((left + right) / 2, y))).toBe(true);
+    await shot.evaluate("document.getElementById('box').click()");
+    await drag(left, right, 40);
+    await waitFor(async () => isMark(await at(right, y + 20)), "the box's right edge");
+    await shot.evaluate("document.getElementById('undo').click()");
+    expect(isMark(await at(right, y + 20))).toBe(false);
+    expect(isMark(await at((left + right) / 2, y))).toBe(true);
+    await shot.close();
+    await page.close();
+  }, 20_000);
+
   test("puts the page back as it was: scroll position and fixed elements", async () => {
     const page = await h.open(h.site.url("site.localhost", "/long.html"));
     await page.evaluate("scrollTo(0, 700)");

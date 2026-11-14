@@ -1,7 +1,8 @@
 /**
- * Full-page screenshots by scrolling and stitching visible-area captures. Fixed and sticky elements
- * show once, in the first strip, so headers do not repeat down the image. The Chromium build can
- * swap this for Page.captureScreenshot with captureBeyondViewport, which needs no scrolling.
+ * Full-page screenshots by scrolling and stitching visible-area captures. Fixed elements show once,
+ * in the first strip, and sticky ones where they sit in the page, so headers do not repeat down the
+ * image. The Chromium build can swap this for Page.captureScreenshot with captureBeyondViewport,
+ * which needs no scrolling.
  */
 
 import { planTiles } from "../shot/tiles";
@@ -101,11 +102,20 @@ async function scrollToY(y: number): Promise<number> {
 
 function hideFixed(): void {
   for (const el of document.querySelectorAll<HTMLElement>("body *")) {
+    // An element already marked keeps its original values; marking it again would save ours.
+    if (el.dataset.perchShotHidden !== undefined || el.dataset.perchShotSticky !== undefined) continue;
     const position = getComputedStyle(el).position;
-    // An element already marked keeps its original value; marking it again would save "hidden".
-    if ((position === "fixed" || position === "sticky") && el.dataset.perchShotHidden === undefined) {
+    if (position === "fixed") {
       el.dataset.perchShotHidden = el.style.visibility;
       el.style.setProperty("visibility", "hidden", "important");
+    } else if (position === "sticky") {
+      // Unstuck rather than hidden: it stays where it sits in the page, so a sticky sidebar or
+      // section heading is not cut out of the strips below the first. Relative keeps it in flow and
+      // a containing block; its offsets go to auto so it does not shift.
+      const props = ["position", "top", "right", "bottom", "left"];
+      el.dataset.perchShotSticky = JSON.stringify(props.map((p) => [p, el.style.getPropertyValue(p), el.style.getPropertyPriority(p)]));
+      el.style.setProperty("position", "relative", "important");
+      for (const p of props.slice(1)) el.style.setProperty(p, "auto", "important");
     }
   }
 }
@@ -114,6 +124,14 @@ function restore(x: number, y: number): void {
   for (const el of document.querySelectorAll<HTMLElement>("[data-perch-shot-hidden]")) {
     el.style.visibility = el.dataset.perchShotHidden ?? "";
     delete el.dataset.perchShotHidden;
+  }
+  for (const el of document.querySelectorAll<HTMLElement>("[data-perch-shot-sticky]")) {
+    try {
+      for (const [p, value, priority] of JSON.parse(el.dataset.perchShotSticky ?? "[]") as [string, string, string][]) el.style.setProperty(p, value, priority);
+    } catch {
+      // The page rewrote the attribute; leave its styles as they are.
+    }
+    delete el.dataset.perchShotSticky;
   }
   scrollTo({ top: y, left: x, behavior: "instant" });
 }

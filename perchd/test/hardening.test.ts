@@ -111,6 +111,27 @@ test("screenshots cover secret fields inside iframes and shadow roots", async ()
   await tab.close();
 });
 
+test("REPL results come back readable, and syntax errors are about the code itself", async () => {
+  const tab = await env.browser.newTab(env.site.url("/form.html"));
+  await Bun.sleep(300);
+  expect(await repl(tab, "new Date(0)")).toEqual({ result: "1970-01-01T00:00:00.000Z" });
+  expect(await repl(tab, "BigInt(12)")).toEqual({ result: "12n" });
+  expect(await repl(tab, "const a = { n: 1 }; a.self = a; return a")).toEqual({ result: { n: 1, self: "[Circular]" } });
+  expect(await repl(tab, "new Map([[1, 'x']])")).toEqual({ result: [[1, "x"]] });
+  expect((await repl(tab, "window")).error).toBeUndefined();
+  expect(await repl(tab, "1+")).toEqual({ result: undefined, error: "Unexpected end of input" });
+  expect(await repl(tab, "undefined")).toEqual({ result: undefined });
+  await tab.close();
+});
+
+test("code that never finishes is stopped, and the next REPL call still works", async () => {
+  const tab = await env.browser.newTab(env.site.url("/form.html"));
+  await Bun.sleep(300);
+  expect(await repl(tab, "while (true) {}")).toMatchObject({ error: "the code ran for more than 10s and was stopped" });
+  expect(await repl(tab, "return [...document.querySelectorAll('label')].length")).toEqual({ result: 6 });
+  await tab.close();
+}, 40_000);
+
 test("the REPL is read-only and cannot reach secrets through frames or attribute changes", async () => {
   const tab = await env.browser.newTab(env.site.url("/payframe.html"));
   await Bun.sleep(300);

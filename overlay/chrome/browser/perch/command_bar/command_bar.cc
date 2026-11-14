@@ -3,6 +3,7 @@
 
 #include "chrome/browser/perch/command_bar/command_bar.h"
 
+#include <algorithm>
 #include <map>
 #include <memory>
 #include <utility>
@@ -118,9 +119,14 @@ void ToggleCommandBar(BrowserWindowInterface* browser) {
     manager->CloseBubble();
     return;
   }
-  // Top centre of the page area, just below the toolbar.
+  // Centred on the page area like Spotlight: the top sits where a full-height
+  // bar (command-bar.css, 420px) is just above the middle, and stays there as
+  // results come and go, so the box doesn't move while typing.
+  constexpr int kBarMaxHeight = 420;
   const gfx::Rect page = view->contents_container()->GetBoundsInScreen();
-  manager->ShowBubble(gfx::Rect(page.CenterPoint().x(), page.y() + 12, 0, 0),
+  const int top =
+      page.y() + std::max(12, (page.height() - kBarMaxHeight) * 2 / 5);
+  manager->ShowBubble(gfx::Rect(page.CenterPoint().x(), top, 0, 0),
                       views::BubbleBorder::TOP_CENTER);
 }
 

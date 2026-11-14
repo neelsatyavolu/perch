@@ -14,28 +14,43 @@ import * as v from "../validate";
 import { allowsModel, allowsProvider, MODEL_NOT_ALLOWED, type Policy } from "../../policy/policy";
 import { managed, policyOf, type Methods } from "./common";
 import type { PagesDeps } from "./deps";
+import { providers } from "@neelsatyavolu/shared-ai-auth";
 
 const ENDPOINTS: readonly ProviderId[] = ["custom", "lmstudio", "ollama"];
 const KEY_PROVIDERS = ["anthropic", "openai", "xai", "gemini", "openrouter"] as const;
 const PAGE_IDS: readonly PageProvider[] = ["claude", "claude-code", "chatgpt", "grok", "anthropic", "openai", "xai", "gemini", "openrouter", "local"];
 const SIGN_IN_POLL_MS = 1000;
 const SIGN_IN_TIMEOUT_MS = 5 * 60_000;
+/** Where Claude's sign-in lands, with `code` and `state` in the address. */
+const CLAUDE_CALLBACK = providers.claude.redirectUri;
+
+export function isClaudeCallback(address: string): boolean {
+  if (!address.startsWith(`${CLAUDE_CALLBACK}?`)) return false;
+  const q = new URL(address).searchParams;
+  return Boolean(q.get("code") && q.get("state"));
+}
+
+/** The `code#state` Claude's page would show, from its address. */
+export function claudeCode(address: string): string {
+  const q = new URL(address).searchParams;
+  return `${q.get("code")}#${q.get("state")}`;
+}
 
 const DETAIL: Record<PageProvider, string> = {
-  claude: "Sign in with your Claude Pro or Max plan",
-  "claude-code": "Uses the Claude Code you signed in to on this Mac.",
-  chatgpt: "Sign in with your ChatGPT plan.",
-  grok: "Sign in with your Grok plan.",
-  anthropic: "Paste an Anthropic API key.",
-  openai: "Paste an OpenAI API key.",
-  xai: "Paste an xAI API key.",
-  gemini: "Paste a Google Gemini API key.",
+  claude: "Your Claude Pro or Max plan, through your claude.ai account. No API credits.",
+  "claude-code": "Runs the Claude Code app on this Mac, on whatever account it's signed in to.",
+  chatgpt: "Your ChatGPT plan, through your OpenAI account. No API credits.",
+  grok: "Your Grok plan, through your xAI account. No API credits.",
+  anthropic: "An API key from the Claude Console. Billed per use, separately from a Claude plan.",
+  openai: "An API key from the OpenAI platform. Billed per use, separately from ChatGPT.",
+  xai: "An API key from xAI. Billed per use, separately from a Grok plan.",
+  gemini: "A Google Gemini API key. Billed per use.",
   openrouter: "Paste an OpenRouter API key.",
   local: "LM Studio, Ollama, or any OpenAI-compatible server.",
 };
 const NAMES: Record<PageProvider, string> = {
-  claude: "Claude", "claude-code": "Claude Code", chatgpt: "ChatGPT", grok: "Grok", anthropic: "Anthropic", openai: "OpenAI",
-  xai: "xAI", gemini: "Google Gemini", openrouter: "OpenRouter", local: "Local or custom endpoint",
+  claude: "Claude", "claude-code": "Claude Code", chatgpt: "ChatGPT", grok: "Grok", anthropic: "Claude API", openai: "OpenAI API",
+  xai: "xAI API", gemini: "Google Gemini API", openrouter: "OpenRouter", local: "Local or custom endpoint",
 };
 
 const toPage = (id: ProviderId): PageProvider => (id === "codex" ? "chatgpt" : ENDPOINTS.includes(id) ? "local" : (id as PageProvider));
@@ -150,13 +165,23 @@ export function modelsPages(deps: PagesDeps): Methods<"listProviders" | "signIn"
       const r = await registry();
       if (id === "claude-code") await registryCall(() => r.connectClaudeCode());
       else if (id === "claude") {
-        // Claude's page shows a code instead of calling back; the person pastes it into finishSignIn.
+        // Claude's page shows a code instead of calling back. Perch opened that page in its own tab,
+        // so it reads the code off the tab's address and closes it; only without that (an older
+        // browser) does the person paste the code into finishSignIn.
         const { url } = await registryCall(() => r.startSignIn(id));
-        await deps.models.openUrl(url);
-        return { ...(await provider(page)), awaitingCode: true };
+        if (!deps.models.openAndWatch) {
+          await deps.models.openUrl(url);
+          return { ...(await provider(page)), awaitingCode: true };
+        }
+        const address = await deps.models.openAndWatch(url, isClaudeCallback, deps.models.signInTimeoutMs ?? SIGN_IN_TIMEOUT_MS);
+        if (!address) throw new AppError("The Claude sign-in didn't finish. Try again, and approve Perch on the page that opens.", 408);
+        await registryCall(() => r.finishSignIn(id, claudeCode(address)));
       } else if (id === "codex" || id === "grok") {
         const { url } = await registryCall(() => r.startSignIn(id));
-        await deps.models.openUrl(url);
+        // Their pages call Perch back on this Mac; the window closes itself once they have.
+        const callback = providers[id].redirectUri;
+        if (deps.models.openAndWatch) void deps.models.openAndWatch(url, (address) => address.startsWith(callback), deps.models.signInTimeoutMs ?? SIGN_IN_TIMEOUT_MS);
+        else await deps.models.openUrl(url);
         await waitForSignIn(r, id);
       } else throw new AppError(`${NAMES[page]} connects with a key or an endpoint`);
       return provider(page);

@@ -10,6 +10,7 @@ import { useManaged } from "../../ui/useManaged";
 import { Dialog } from "../../ui/Dialog";
 import { Group, LinkRow, Row } from "../../ui/Row";
 import { Switch } from "../../ui/Switch";
+import { BrowserIcon } from "../import/ImportSteps";
 import { DreamLogDialog } from "./DreamLogDialog";
 
 export function MemorySection() {
@@ -119,7 +120,7 @@ export function ImportSection() {
         <div class="card">
           {browsers.data && list.length === 0 && <p class="empty">No other browsers found on this Mac.</p>}
           {list.map((b) => (
-            <Row key={b.id} title={b.name} detail={b.profiles.map((p) => p.name).join(", ")} icon={<span class="tile" aria-hidden="true">{b.name.charAt(0)}</span>}>
+            <Row key={b.id} title={b.name} detail={b.profiles.map((p) => p.name).join(", ")} icon={<BrowserIcon browser={b} />}>
               <button type="button" class="btn" aria-label={`Import from ${b.name}`} onClick={() => act(() => api.openPage("import", b.id))}>Import</button>
             </Row>
           ))}

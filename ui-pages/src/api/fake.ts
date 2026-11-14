@@ -5,7 +5,7 @@
  */
 
 import type {
-  AboutInfo, Appearance, BuiltInExtension, ChatSummary, CommandBarResult, DetectedBrowser, DraftFact, FileChoice, FileKind, JobId, JobProgress, McpImportCandidate, OnePasswordSettings, McpServer,
+  AboutInfo, AgentSetup, Appearance, BuiltInExtension, ChatSummary, CommandBarResult, DetectedBrowser, DraftFact, FileChoice, FileKind, JobId, JobProgress, McpImportCandidate, OnePasswordSettings, McpServer,
   MemoryDoc, MemorySaverSettings, SyncStatus, MemorySettings, NtpLayout, Onboarding, PerchApi, PermissionMode, Permissions, PolicyProblem, PrivacySettings, Provider, Routine, RoutineInput,
   RoutineProposal, SecurityInfo, SiteData, SleepRule, Skill, SystemAccess, TaskModel, Composer } from "../api";
 import { DEFAULT_APPEARANCE } from "../theme/apply";
@@ -44,6 +44,7 @@ type State = {
   proposals: readonly RoutineProposal[];
   browsers: readonly DetectedBrowser[];
   onePassword: OnePasswordSettings;
+  agentSetup: AgentSetup;
   onboarding: Onboarding;
   about: AboutInfo;
   files: readonly (FileChoice & { readonly kind: FileKind })[];
@@ -56,6 +57,8 @@ export type FakeOptions = {
   readonly stepMs?: number;
   readonly appearance?: Partial<Appearance>;
   readonly onboarding?: Onboarding;
+  /** A first run: no model signed in yet. */
+  readonly signedOut?: boolean;
   /** Records navigation calls (submitQuery, openPage, …) so tests and the dev build can show them. */
   readonly onNavigate?: (what: string, detail: unknown) => void;
   readonly permissions?: Partial<Permissions>;
@@ -148,7 +151,7 @@ function matchCommandBar(items: readonly CommandBarResult[], text: string): read
 
 const newId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${(counter++).toString(36)}`;
 const MODE_ORDER: readonly PermissionMode[] = ["ask", "guard", "skip"];
-const DEFAULT_FILE_NAMES: Readonly<Record<FileKind, string>> = { "memory-export": "export.zip", "passwords-csv": "Passwords.csv" };
+const DEFAULT_FILE_NAMES: Readonly<Record<FileKind, string>> = { "memory-export": "export.zip", "passwords-csv": "Passwords.csv", "safari-export": "Safari Export.zip" };
 
 export function createFakeApi(options: FakeOptions = {}): PerchApi {
   const stepMs = options.stepMs ?? 400;
@@ -159,7 +162,9 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     chats: seed.CHATS,
     setupDone: [],
     dismissed: [],
-    providers: seed.PROVIDERS,
+    providers: options.signedOut
+      ? seed.PROVIDERS.map((p) => (p.state === "connected" ? { ...p, state: "signed-out" as const, account: undefined } : p))
+      : seed.PROVIDERS,
     composer: seed.COMPOSER,
     taskModels: seed.TASK_MODELS,
     servers: seed.MCP_SERVERS,
@@ -177,6 +182,14 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     routines: seed.ROUTINES,
     proposals: seed.PROPOSALS,
     browsers: seed.BROWSERS,
+    agentSetup: {
+      agents: [
+        { id: "claude", name: "Claude Code", found: true, installed: false, connected: false },
+        { id: "codex", name: "Codex", found: true, installed: false, connected: false },
+        { id: "grok", name: "Grok", found: false, installed: false, connected: false },
+      ],
+      command: { installed: false, path: "/Users/you/.local/bin/perch" },
+    },
     onePassword: {
       installed: true,
       accounts: [{ id: "FAKEUSER0000000000000001", email: "you@example.com", url: "my.1password.com" }, { id: "FAKEUSER0000000000000002", email: "you@work.example", url: "work.1password.com" }],
@@ -322,6 +335,11 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     async submitQuery(query) {
       if (!query.text.trim()) throw new Error("Type something to search or ask");
       navigate("query", query);
+      // Like perchd: asking starts a chat, which then shows as the newest one.
+      if (query.mode === "ask") {
+        const chat: ChatSummary = { id: `chat-${state.chats.length + 1}`, title: query.text.slice(0, 60), snippet: "", updatedAt: new Date().toISOString(), status: "running" };
+        set({ chats: [chat, ...state.chats] });
+      }
     },
     async openChat(id) {
       navigate("chat", id);
@@ -626,6 +644,32 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     async closeCommandBar() {
       navigate("close-command-bar", null);
     },
+    async openCommandBar() {
+      navigate("open-command-bar", null);
+    },
+    async showAgentTab(url) {
+      navigate("show-agent-tab", url);
+    },
+
+    async startMemoryChat() {
+      const chat: ChatSummary = { id: `chat-${state.chats.length + 1}`, title: "Build my memory", snippet: "", updatedAt: new Date().toISOString(), status: "running" };
+      set({ chats: [chat, ...state.chats] });
+      navigate("background-tab", `chat:${chat.id}`);
+      return { chatId: chat.id };
+    },
+    async getAgentSetup() {
+      return state.agentSetup;
+    },
+    async connectAgents() {
+      const s = state.agentSetup;
+      set({
+        agentSetup: {
+          agents: s.agents.map((a) => (a.found ? { ...a, installed: true } : a)),
+          command: { ...s.command, installed: true, shellFile: "/Users/you/.zprofile" },
+        },
+      });
+      return state.agentSetup;
+    },
 
     async getMemorySettings() {
       // As perchd: with memory off by policy, the switches show off whatever was chosen before.
@@ -778,6 +822,10 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
       const picked = browser.options.filter((o) => request.kinds.includes(o.kind) && o.available);
       if (picked.some((o) => o.needs === "csv-export") && !file(request.passwordsCsv, "passwords-csv")) {
         throw new Error("Choose the passwords file you exported, or untick Passwords");
+      }
+      if (request.safariExport !== undefined && !file(request.safariExport, "safari-export")) throw new Error("Choose the file Safari exported");
+      if (picked.some((o) => o.kind === "passwords" && o.needs === "safari-export") && request.safariExport === undefined) {
+        throw new Error("Safari's passwords come from its export file");
       }
       // Like perchd: each profile in turn, its lines named after it when there are several.
       const names = ids.map((id) => browser.profiles.find((p) => p.id === id)!.name);

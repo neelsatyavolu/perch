@@ -1,21 +1,23 @@
 import { Fragment } from "preact";
 import type preact from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { OnboardingStep, Provider } from "../../api";
+import type { Provider } from "../../api";
 import { ACCENTS, ACCENT_NAMES, THEMES, THEME_NAMES } from "../../theme/tokens";
 import { errorText, useAction, useApi, useAppearance, useLoad } from "../../ui/frame";
 import { PerchMark } from "../../ui/PerchMark";
 import { Blossom, Petals } from "../../ui/Sakura";
 import { PasteCode } from "../../ui/PasteCode";
 import { ProviderMark } from "../../ui/ProviderMark";
-import { ImportWizard } from "../import/ImportWizard";
+import { SignInButton } from "../../ui/SignInButton";
+import { ImportWizard, type ImportStatus } from "../import/ImportWizard";
+import { AgentsStep } from "../tour/TourSteps";
+import { OnePasswordGroup } from "../settings/OnePassword";
 import { RestoreForm } from "../settings/Backup";
 import { Swatches } from "../../ui/Swatches";
 import { createSound, type Sound } from "./sound";
 import "./welcome.css";
 
 const RESTORE_CHECK_MS = 3000;
-const ORDER: readonly OnboardingStep[] = ["appearance", "models", "import", "memory"];
 
 function Look() {
   const { appearance: a, update } = useAppearance();
@@ -28,19 +30,18 @@ function Look() {
       <div class="label"><span>Accent</span>
         <Swatches label="Accent" value={a.accent} onChange={(accent) => update({ accent })} options={ACCENT_NAMES.map((n) => ({ value: n, label: ACCENTS[n].label, bg: t.card, fg: t.dark ? ACCENTS[n].dark : ACCENTS[n].light }))} />
       </div>
-      <p class="note">You can change both, or follow macOS light and dark, in Settings.</p>
+      <p class="note">Change it any time in Settings. Perch reopens your tabs when it starts.</p>
     </div>
   );
 }
 
-function Models() {
+/** The model sign-ins. The list belongs to the setup screen, which needs to know when one is connected. */
+function Models({ providers, onChange }: { readonly providers: readonly Provider[]; readonly onChange: (p: Provider) => void }) {
   const api = useApi();
   const act = useAction();
-  const providers = useLoad((a) => a.listProviders());
   // Claude's sign-in page shows a code to paste back here.
   const [awaiting, setAwaiting] = useState<Provider["id"] | null>(null);
-  const list = (providers.data ?? []).filter((p) => p.kind === "subscription");
-  const replace = (p: Provider) => providers.set((providers.data ?? []).map((x) => (x.id === p.id ? p : x)));
+  const list = providers.filter((p) => p.kind === "subscription");
   return (
     <div class="card">
       {list.map((p) => (
@@ -52,34 +53,21 @@ function Models() {
             {p.state === "connected" ? (
               <span class="status ok"><span class="dotc" />Connected{p.account ? ` · ${p.account}` : ""}</span>
             ) : (
-              <button type="button" class="btn" aria-label={`Sign in to ${p.name}`} onClick={async () => {
-                const r = await act(() => api.signIn(p.id));
-                if (!r) return;
-                if (r.awaitingCode) setAwaiting(p.id);
-                else replace(r);
-              }}>Sign in</button>
+              <SignInButton provider={p} onDone={onChange} onCode={() => setAwaiting(p.id)} />
             )}
           </div>
         </div>
         {awaiting === p.id && (
           <PasteCode provider={p} onCancel={() => setAwaiting(null)} onDone={(r) => {
             setAwaiting(null);
-            replace(r);
+            onChange(r);
           }} />
         )}
         </Fragment>
       ))}
-      <p class="empty">API keys and models on this Mac are in Settings, under Models.</p>
     </div>
   );
 }
-
-const COPY: Readonly<Record<OnboardingStep, { title: string; lead: string }>> = {
-  appearance: { title: "Pick a look", lead: "Five themes and five accents. The pages you visit keep their own colours." },
-  models: { title: "Connect a model", lead: "Perch's agent runs on your own Claude, ChatGPT or Grok plan, so there's nothing new to pay for. Sign in to one now, or later in Settings." },
-  import: { title: "Bring everything over", lead: "Windows and tabs, bookmarks, history, passwords, extensions, and the cookies that keep you signed in. Each window comes over as its own window, with its tabs asleep until you click them." },
-  memory: { title: "Set up your memory", lead: "Perch can learn about you from sources you pick, so you explain less. You review every fact before it's saved, and it stays on this Mac, encrypted." },
-};
 
 /**
  * The welcome page fills the window: on first run Perch hides the tab strip and toolbar while it
@@ -87,17 +75,16 @@ const COPY: Readonly<Record<OnboardingStep, { title: string; lead: string }>> = 
  */
 type Mute = { readonly muted: boolean; readonly toggle: () => void };
 
-function Stage({ step, mute, children }: { readonly step?: number; readonly mute?: Mute; readonly children: preact.ComponentChildren }) {
+function Stage({ mute, step, children }: { readonly mute?: Mute; readonly step?: { readonly at: number; readonly of: number }; readonly children: preact.ComponentChildren }) {
   return (
     <div class="wl-stage">
       <Petals />
       <header class="wl-top">
         <span class="wl-brand"><PerchMark size={20} />Perch</span>
-        {step !== undefined && (
-          <>
-            <ol class="wl-dots" aria-hidden="true">{ORDER.map((id, i) => <li key={id} class={i < step ? "done" : i === step ? "on" : ""} />)}</ol>
-            <p class="cap">Step {step + 1} of {ORDER.length}</p>
-          </>
+        {step && (
+          <ol class="wl-dots" aria-label={`Step ${step.at + 1} of ${step.of}`}>
+            {Array.from({ length: step.of }, (_, i) => <li key={i} class={i < step.at ? "done" : i === step.at ? "on" : ""} />)}
+          </ol>
         )}
         {mute && <button type="button" class="btn quiet wl-mute" onClick={mute.toggle}>{mute.muted ? "Sound off" : "Sound on"}</button>}
       </header>
@@ -212,7 +199,7 @@ function useRestoreView() {
   return { loading, show, finish };
 }
 
-/** The first-run welcome screen. Every step can be skipped. */
+/** The first-run welcome: one screen. A model is required; importing, and with it memory, is optional. */
 export function Welcome() {
   const restore = useRestoreView();
   if (restore.loading) return null;
@@ -220,34 +207,79 @@ export function Welcome() {
   return <Setup />;
 }
 
+type StepId = "plan" | "import" | "passwords" | "agents" | "look";
+const STEPS: readonly StepId[] = ["plan", "import", "passwords", "agents", "look"];
+
+const COPY: Readonly<Record<StepId, { readonly title: string; readonly lead: string }>> = {
+  plan: {
+    title: "Connect your plan",
+    lead: "Perch runs on the Claude, ChatGPT or Grok plan you already have.",
+  },
+  import: {
+    title: "Bring everything over",
+    lead: "Tabs, bookmarks, history, passwords and your sign-ins.",
+  },
+  passwords: {
+    title: "Connect your password manager",
+    lead: "So Perch can sign in to your sites, as it builds your memory and later.",
+  },
+  agents: {
+    title: "Let your coding agents use Perch",
+    lead: "Claude Code, Codex and Grok can use this browser, signed in as you.",
+  },
+  look: { title: "Make it yours", lead: "Pick a theme and an accent." },
+};
+
 function Setup() {
   const api = useApi();
   const act = useAction();
-  const [step, setStep] = useState<OnboardingStep | null>(null);
+  const providers = useLoad((a) => a.listProviders());
+  const [step, setStep] = useState<StepId | null>(null);
+  const [importStatus, setImportStatus] = useState<ImportStatus>("idle");
+  const [imported, setImported] = useState(false);
+  const [memory, setMemory] = useState(true);
   const heading = useRef<HTMLHeadingElement>(null);
-  const focus = () => requestAnimationFrame(() => heading.current?.focus());
   const { sound, mute } = useSound();
-  // The opening chime lands as the dot settles on the bar.
+  // The opening chime lands as the bird settles on the bar.
   useEffect(() => {
     const timer = setTimeout(() => sound.play("open"), 700);
     return () => clearTimeout(timer);
   }, [sound]);
 
-  const finish = async (page: "newtab" | "memory" = "newtab") => {
+  // Claude Code runs chats but not Perch's own background work (memory, routines), so one of the
+  // plans that signs in here is what setup needs.
+  const connected = (providers.data ?? []).some((p) => p.state === "connected" && p.id !== "claude-code");
+  const onProvider = async (p: Provider) => {
+    providers.set((providers.data ?? []).map((x) => (x.id === p.id ? p : x)));
+    if (p.state === "connected") {
+      sound.play("step");
+      await act(() => api.completeOnboardingStep("models"));
+    }
+  };
+  const onImport = async (status: ImportStatus) => {
+    setImportStatus(status);
+    if (status === "done" && !imported) {
+      setImported(true);
+      sound.play("step");
+      await act(() => api.completeOnboardingStep("import"));
+    }
+  };
+
+  const go = (next: StepId | null) => {
+    setStep(next);
+    requestAnimationFrame(() => heading.current?.focus());
+  };
+  const finish = async () => {
     sound.play("done");
+    await act(() => api.completeOnboardingStep("appearance"));
+    // Memory from what came over builds in a chat of its own, in a tab behind this one.
+    if (imported && memory) {
+      await act(() => api.completeOnboardingStep("memory"));
+      await act(() => api.startMemoryChat());
+    }
     // If saving fails, stay here (the error shows) rather than leave and see setup again next launch.
     if (!(await act(() => api.finishOnboarding().then(() => true)))) return;
-    await act(() => api.openPage(page, page === "memory" ? "setup" : undefined));
-  };
-  const advance = async (completed: boolean) => {
-    if (!step) return;
-    if (completed) await act(() => api.completeOnboardingStep(step));
-    const next = ORDER[ORDER.indexOf(step) + 1];
-    if (next) {
-      sound.play("step");
-      setStep(next);
-      focus();
-    } else await finish();
+    await act(() => api.openPage("tour", imported && memory ? "memory" : undefined));
   };
 
   if (!step) {
@@ -258,49 +290,75 @@ function Setup() {
           <h1 class="serif-title" ref={heading} tabIndex={-1}>Welcome to Perch</h1>
           <p class="wl-lead">A browser with an agent that works on the sites you're signed in to. What it learns stays on this Mac, encrypted.</p>
           <div class="wl-actions">
-            <button type="button" class="btn primary" onClick={() => { sound.play("step"); setStep("appearance"); focus(); }}>Set up Perch</button>
-            <button type="button" class="btn quiet" onClick={() => finish()}>Skip setup</button>
+            <button type="button" class="btn primary" onClick={() => { sound.play("step"); go("plan"); }}>Get started</button>
           </div>
-          <p class="cap">Four short steps. You can skip any of them.</p>
+          <p class="cap">Five quick steps.</p>
         </main>
       </Stage>
     );
   }
 
-  const index = ORDER.indexOf(step);
-  const back = () => { setStep(ORDER[index - 1] ?? null); focus(); };
+  const at = STEPS.indexOf(step);
+  const next = STEPS[at + 1] ?? null;
+  const back = () => go(STEPS[at - 1] ?? null);
+  const running = importStatus === "running";
+  const blocked = step === "plan" ? !connected : step === "import" ? running : false;
+  const hint =
+    step === "plan" && !connected ? "Sign in to Claude, ChatGPT or Grok to continue." : step === "import" && running ? "Waiting for the import to finish." : "";
+  const forward = () => {
+    sound.play("step");
+    if (next) go(next);
+    else void finish();
+  };
+
   return (
-    <Stage step={index} mute={mute}>
-    <main class="wl" key={step}>
-      <h1 class="serif-title" ref={heading} tabIndex={-1}>{COPY[step].title}</h1>
-      <p class="wl-lead">{COPY[step].lead}</p>
-      {step !== "memory" && (
+    <Stage mute={mute} step={{ at, of: STEPS.length }}>
+      <main class="wl" key={step}>
+        <h1 class="serif-title" ref={heading} tabIndex={-1}>{COPY[step].title}</h1>
+        <p class="wl-lead">{COPY[step].lead}</p>
         <div class="wl-body">
-          {step === "appearance" && <Look />}
-          {step === "models" && <Models />}
-          {step === "import" && <ImportWizard embedded onFinished={() => advance(true)} onSkip={() => advance(false)} onBack={back} />}
-        </div>
-      )}
-      {/* Back at the bottom left, the primary at the bottom right, as in a Mac assistant. The import
-          wizard carries its own row. */}
-      {step !== "import" && (
-        <div class="wl-actions">
-          <button type="button" class="btn quiet" onClick={back}>Back</button>
-          <span class="grow" />
-          {step === "memory" ? (
+          {step === "plan" && providers.error && <p class="err-note">{providers.error}</p>}
+          {step === "plan" && providers.data && (
             <>
-              <button type="button" class="btn quiet" onClick={() => advance(false)}>Not now</button>
-              <button type="button" class="btn primary" onClick={async () => { await act(() => api.completeOnboardingStep("memory")); await finish("memory"); }}>Set up memory</button>
-            </>
-          ) : (
-            <>
-              {step !== "appearance" && <button type="button" class="btn quiet" onClick={() => advance(false)}>Skip</button>}
-              <button type="button" class="btn primary" onClick={() => advance(true)}>Continue</button>
+              <Models providers={providers.data} onChange={onProvider} />
+              <p class="note">Claude Code alone can't run memory or routines. API keys are in Settings.</p>
             </>
           )}
+          {step === "import" && (
+            <>
+              <ImportWizard embedded onStatus={onImport} />
+              {imported && (
+                <label class="pick data wl-check">
+                  <input type="checkbox" checked={memory} onChange={() => setMemory(!memory)} />
+                  <span class="pick-t">
+                    <span class="ink">Build my memory from what came over</span>
+                    <span class="cap">Runs in its own tab while you carry on. Stays on this Mac, encrypted.</span>
+                  </span>
+                </label>
+              )}
+            </>
+          )}
+          {step === "passwords" && (
+            <>
+              <OnePasswordGroup />
+              <p class="note">No password manager? When a site needs a login, Perch asks you in the chat and types it in itself.</p>
+            </>
+          )}
+          {step === "agents" && <AgentsStep onInstalled={() => undefined} next={null} />}
+          {step === "look" && <Look />}
         </div>
-      )}
-    </main>
+        <div class="wl-actions wl-finish">
+          <button type="button" class="btn quiet" onClick={back}>Back</button>
+          <span class="grow" />
+          {hint && <span class="cap" role="status">{hint}</span>}
+          {/* One way forward per step: skipping the import is the plain button, Continue once something came over. */}
+          {step === "import" && !imported ? (
+            <button type="button" class="btn" disabled={blocked} onClick={forward}>Skip for now</button>
+          ) : (
+            <button type="button" class="btn primary" disabled={blocked} onClick={forward}>{next ? "Continue" : "Finish setup"}</button>
+          )}
+        </div>
+      </main>
     </Stage>
   );
 }

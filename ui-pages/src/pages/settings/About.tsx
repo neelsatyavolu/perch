@@ -5,7 +5,7 @@ import { MANAGED_NOTE } from "../../lib/managed";
 import { useAction, useApi, useLoad } from "../../ui/frame";
 import { useManaged } from "../../ui/useManaged";
 import { PerchMark } from "../../ui/PerchMark";
-import { Group, Row } from "../../ui/Row";
+import { Group, LinkRow, Row } from "../../ui/Row";
 import { Switch } from "../../ui/Switch";
 
 function statusWords(s: UpdateStatus | null, lastChecked?: string): string {
@@ -61,6 +61,11 @@ export function About() {
               <a class="btn" href="perch://policy">Open policies</a>
             </Row>
           )}
+        </div>
+      </Group>
+      <Group label="Getting started">
+        <div class="card">
+          <LinkRow id="tour" title="Take the tour" detail="The side chat, Agent Tabs, the command bar, and connecting your coding agents" onClick={() => act(() => api.openPage("tour"))} />
         </div>
       </Group>
       <Group label="Components">

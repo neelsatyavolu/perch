@@ -347,7 +347,7 @@ test("models: keys go in and only a hint comes out; roles and models", async () 
   expect(listed).toContain("Key ending cdef");
 
   expect(await api.signIn("claude-code")).toMatchObject({ id: "claude-code", state: "connected" });
-  expect((await fails(api.signIn("anthropic"))).message).toBe("Anthropic connects with a key or an endpoint");
+  expect((await fails(api.signIn("anthropic"))).message).toBe("Claude API connects with a key or an endpoint");
   expect((await fails(api.signIn("chatgpt"))).status).toBe(408);
   expect(opened[0]).toStartWith("https://");
 
@@ -603,7 +603,7 @@ test("import: browsers found, progress as job events, then the suggestion goes a
   expect((await raw("getSystemAccess", [1])).status).toBe(400);
 
   expect((await fails(api.startImport({ browser: "chrome", profile: "Nobody", kinds: ["bookmarks"] }))).message).toBe("That browser profile wasn't found");
-  expect((await fails(api.startImport({ browser: "chrome", profile: "Default", kinds: ["passwords"], passwordsCsv: "file-1" }))).message).toBe("A passwords file goes with Safari or Firefox passwords only");
+  expect((await fails(api.startImport({ browser: "chrome", profile: "Default", kinds: ["passwords"], passwordsCsv: "file-1" }))).message).toBe("A passwords file goes with Firefox or Zen passwords only");
   expect((await fails(api.startImport({ browser: "netscape" as never, profile: "Default", kinds: ["bookmarks"] }))).status).toBe(400);
 
   const id = await api.startImport({ browser: "chrome", profile: "Default", kinds: ["bookmarks", "history"] });
@@ -637,33 +637,44 @@ test("import: the browser used most recently comes first, Comet and Atlas includ
   rmSync(join(home, "Library", "Application Support", "Comet"), { recursive: true, force: true });
 });
 
-test("import: Safari's passwords come from the CSV the person exported", async () => {
+test("import: Safari's bookmarks, history and passwords come from its export ZIP, for every profile", async () => {
   const home = join(dir, "home");
   mkdirSync(join(home, "Library", "Safari"), { recursive: true });
   const safari = (await api.detectBrowsers()).find((b) => b.id === "safari")!;
-  expect(safari.options.find((o) => o.kind === "passwords")).toEqual({ kind: "passwords", available: true, needs: "csv-export" });
+  for (const kind of ["bookmarks", "history", "passwords"] as const) {
+    expect(safari.options.find((o) => o.kind === kind)).toEqual({ kind, available: true, needs: "safari-export" });
+  }
+  expect((await fails(api.startImport({ browser: "safari", profile: "", kinds: ["passwords"] }))).message).toBe("Safari's passwords come from its export file. Choose it, or untick Passwords");
+  expect((await fails(api.startImport({ browser: "safari", profile: "", kinds: ["passwords"], safariExport: crypto.randomUUID() }))).status).toBe(404);
+  expect((await fails(api.startImport({ browser: "chrome", profile: "Default", kinds: ["bookmarks"], safariExport: "file-1" }))).message).toBe("Safari's export file goes with Safari only");
 
-  expect((await fails(api.startImport({ browser: "safari", profile: "", kinds: ["passwords"] }))).message).toBe("Choose the passwords file you exported");
-  expect((await fails(api.startImport({ browser: "safari", profile: "", kinds: ["passwords"], passwordsCsv: crypto.randomUUID() }))).status).toBe(404);
-
-  const csvPath = join(dir, "Passwords.csv");
-  writeFileSync(csvPath, "Title,URL,Username,Password,Notes,OTPAuth\nExample,https://example.com/,grace,hunter2,,\nNews,https://news.example.com/,ada,lovelace,,\n");
+  // Safari's export: each profile in its own folder.
+  const exportDir = join(dir, "safari-export");
+  for (const [profile, url] of [["Personal", "https://personal.example.com/"], ["School", "https://school.example.com/"]] as const) {
+    mkdirSync(join(exportDir, profile), { recursive: true });
+    writeFileSync(join(exportDir, profile, "History.json"), JSON.stringify({ history: [{ url, title: profile, time_usec: Date.now() * 1000, visit_count: 2 }] }));
+  }
+  writeFileSync(join(exportDir, "Personal", "Passwords.csv"), "Title,URL,Username,Password,Notes,OTPAuth\nExample,https://example.com/,grace,hunter2,,\nNews,https://news.example.com/,ada,lovelace,,\n");
+  const zipPath = join(dir, "Safari Export.zip");
+  expect(await Bun.spawn(["/usr/bin/zip", "-qr", zipPath, "."], { cwd: exportDir }).exited).toBe(0);
   const registered = await fetch(`${app.server.url}/api/files`, {
     method: "POST",
     headers: { authorization: `Bearer ${BROWSER_TOKEN}`, "content-type": "application/json" },
-    body: JSON.stringify({ paths: [csvPath] }),
+    body: JSON.stringify({ paths: [zipPath] }),
   }).then((r) => r.json() as Promise<{ files: { id: string }[] }>);
-  const id = await api.startImport({ browser: "safari", profile: "", kinds: ["passwords"], passwordsCsv: registered.files[0]!.id });
-  expect((await untilDone(id)).at(-1)).toMatchObject({ state: "done", summary: ["2 passwords"] });
+  const exportId = registered.files[0]!.id;
 
-  // Without Full Disk Access, Safari's history fails with the reason, and the passwords still come in.
+  // Safari's own folder is locked (no Full Disk Access): the export needs none.
   const safariDir = join(home, "Library", "Safari");
   chmodSync(safariDir, 0o000);
   try {
-    const locked = await untilDone(await api.startImport({ browser: "safari", profile: "", kinds: ["history", "passwords"], passwordsCsv: registered.files[0]!.id }));
-    const summary = locked.at(-1)!.summary!;
-    expect(summary[0]).toStartWith("History entries: Safari's files are protected by macOS.");
-    expect(summary[1]).toBe("2 passwords");
+    const done = await untilDone(await api.startImport({ browser: "safari", profile: "", kinds: ["history", "passwords"], safariExport: exportId }));
+    expect(done.at(-1)).toMatchObject({ state: "done", summary: ["2 history entries", "2 passwords"] });
+    // Cookies still need Full Disk Access; they fail with the reason, and the export still comes in.
+    const withCookies = await untilDone(await api.startImport({ browser: "safari", profile: "", kinds: ["history", "cookies"], safariExport: exportId }));
+    const summary = withCookies.at(-1)!.summary!;
+    expect(summary[0]).toStartWith("Sites with logins: Safari's files are protected by macOS.");
+    expect(summary[1]).toBe("0 history entries, 2 skipped"); // already brought over above
   } finally {
     chmodSync(safariDir, 0o755);
   }

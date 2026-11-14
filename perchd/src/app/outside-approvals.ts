@@ -48,6 +48,16 @@ export class OutsideApprovals {
     }, () => [], signal);
   }
 
+  /**
+   * A step an outside session took: it shows in the session's chat (made on its first step, named
+   * after the session), so clicking one of its agent tabs opens a chat with what it has done.
+   */
+  async observe(label: string, tabs: () => string[], step: { label: string; detail?: string }): Promise<void> {
+    const chatId = await this.chatFor(label);
+    this.tabsOf.set(chatId, tabs);
+    this.deps.runs.observeStep(chatId, `${label} is working in Perch`, step);
+  }
+
   /** The tabs a chat's outside session works in (TaskStatusReporter's targets). */
   targets(chatId: string): string[] {
     return this.tabsOf.get(chatId)?.() ?? [];

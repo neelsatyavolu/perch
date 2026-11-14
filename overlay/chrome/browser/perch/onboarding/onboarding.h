@@ -6,6 +6,7 @@
 
 class BrowserWindowInterface;
 class GURL;
+class Profile;
 
 namespace content {
 class WebContents;
@@ -22,17 +23,19 @@ namespace perch {
 // Whether `url` is the welcome page.
 bool IsWelcomeURL(const GURL& url);
 
-// Opens the welcome page in `browser` and takes the window full screen,
+// Opens the welcome page in `browser` and maximizes the window,
 // when its profile hasn't been through setup. Called once per window, after
 // its first tabs are in.
 void MaybeStartOnboarding(BrowserWindowInterface* browser);
 
-// The window showing the welcome page moved on to another tab or page without
-// finishing setup: leaves the full screen the welcome page put it in.
-void LeftWelcomeUnfinished(BrowserWindowInterface* browser);
+// Whether tabs and windows extensions ask for (chrome.tabs.create,
+// chrome.windows.create) are held back in `profile`: while its setup runs, and
+// for a few minutes after, extensions brought over by the import open their
+// welcome pages as they install, which would bury setup and the tour.
+bool ExtensionTabsHeldBack(Profile* profile);
 
 // The welcome page in `welcome` is done (finished or skipped): never start it
-// again, and leave full screen.
+// again.
 void FinishOnboarding(content::WebContents* welcome);
 
 }  // namespace perch

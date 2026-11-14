@@ -235,6 +235,10 @@ def test_the_real_config_loads_and_caveatly_updates_from_signed_releases():
     bundled = {b.name: b for b in load_bundled(repo / "build" / "bundled-extensions.json")}
     assert load_update_key(repo / "build" / "bundled-extensions.json")
     caveatly = bundled["caveatly"]
-    assert caveatly.release and caveatly.disable_rulesets
-    assert caveatly.manifest["caveatly_embed"] == {"telemetry": False, "blocker": False}
+    # Caveatly's blocker runs alongside Perch's, controlled by Perch's settings; its telemetry and
+    # the parts Perch already does (GPC, cookie-banner clicking) stay off.
+    assert caveatly.release and not caveatly.disable_rulesets
+    assert caveatly.manifest["caveatly_embed"] == {
+        "telemetry": False, "hide": ["gpc", "cookieGuard"], "controller": "ocjanjehckpdbcjamffmbeemoooamjpo",
+    }
     assert caveatly.updates and caveatly.updates["repo"] == "neelsatyavolu/caveatly"

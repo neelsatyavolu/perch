@@ -7,11 +7,15 @@ import { appTool } from "../apps/index";
 import { runScript, SCRIPT } from "./script";
 import type { ToolCall } from "../models/types";
 import type { AuditWriter } from "./audit";
-import { FILL_TOOLS, fillKind, fillSummary } from "./fill-tools";
+import { FILL_TOOLS, fillKind, fillSummary, needsTypedLogin } from "./fill-tools";
 import { classify, needsApproval, OFF_PAGE, type Kind, type Mode, type SiteRule, type Target } from "./permissions";
 import { approvalDetail, checkCall, describeTarget, focusedTarget, liveTarget, pageContext, runTool, type ToolContext, type ToolResult } from "./tools";
 
-export type ApprovalRequest = { call: ToolCall; target?: Target; kind: Kind; site: string; summary: string };
+export type ApprovalRequest = {
+  call: ToolCall; target?: Target; kind: Kind; site: string; summary: string;
+  /** sign_in with nothing saved: the card asks the person for the login (typed-logins.ts). */
+  askLogin?: true;
+};
 
 export type CallPolicy = {
   mode: Mode;
@@ -36,6 +40,12 @@ export async function prepareCall(ctx: ToolContext, opts: CallPolicy, call: Tool
   if (problem) return { kind: "answer", result: { content: problem, isError: true } };
 
   const target = call.name === "press" ? await focusedTarget(ctx) : describeTarget(ctx, call) ?? (await liveTarget(ctx, call));
+  // A ref that matches nothing on the page is a stale or mistyped ref: say so, rather than treat an
+  // unknown target as risky and ask about (or, with no one to ask, decline) something that can't run.
+  const ref = typeof call.args.ref === "string" ? call.args.ref : undefined;
+  if (ref && !target && ctx.tab && call.name !== "press" && call.name !== "type_text") {
+    return { kind: "answer", result: { content: `No element ${ref} on this page. Take a new snapshot for the current refs.`, isError: true } };
+  }
   const app = appTool(call.name);
   const fill = FILL_TOOLS.has(call.name);
   const page = READS.has(call.name) || app || fill ? {} : await pageContext(ctx);
@@ -44,7 +54,10 @@ export async function prepareCall(ctx: ToolContext, opts: CallPolicy, call: Tool
   const site = app ? app.site : destination ? hostOf(destination) : await currentHost(ctx);
   const kind = fill ? fillKind(call.name, site, ctx) : classify(call, target, page, drop);
   const ruled = needsApproval(opts.mode, kind, OFF_PAGE.has(call.name) ? undefined : opts.siteRule?.(site));
-  const decision = ruled === "run" && app?.alwaysAsks(call.args) ? "ask" : ruled;
+  // With no saved login and no password manager, sign_in can only go ahead with a login the person
+  // types into its card, so it asks whatever the mode.
+  const askLogin = call.name === "sign_in" && ruled !== "block" && (await needsTypedLogin(ctx));
+  const decision = askLogin || (ruled === "run" && app?.alwaysAsks(call.args)) ? "ask" : ruled;
   const what = [target ? `${target.role} "${target.name}"` : summarizeArgs(call), drop ? `onto ${drop.role} "${drop.name}"` : ""].filter(Boolean).join(" ");
   const detail = kind === "read" ? what : [what, await approvalDetail(ctx, call)].filter(Boolean).join(" ");
   // The audit log holds what was typed or filled only when an approval card showed it to the
@@ -58,7 +71,7 @@ export async function prepareCall(ctx: ToolContext, opts: CallPolicy, call: Tool
   }
   // A fill's card names the login or card (masked); it goes to the user only, never into the audit detail or the model.
   const summary = fill ? (decision === "ask" ? await fillSummary(ctx, call.name, site) : "") : `${verb(call)} ${detail} on ${site}`;
-  const request: ApprovalRequest = { call, target, kind, site, summary };
+  const request: ApprovalRequest = { call, target, kind, site, summary, ...(askLogin ? { askLogin: true as const } : {}) };
   return { kind: "run", call, target, site, decision, request, entry };
 }
 

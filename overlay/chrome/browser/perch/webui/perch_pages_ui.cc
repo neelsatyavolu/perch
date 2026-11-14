@@ -25,6 +25,7 @@ constexpr std::pair<std::string_view, std::string_view> kPages[] = {
     {"perch-settings", "settings.html"}, {"perch-newtab", "newtab.html"},
     {"perch-memory", "memory.html"},     {"perch-routines", "routines.html"},
     {"perch-import", "import.html"},     {"perch-welcome", "welcome.html"},
+    {"perch-tour", "tour.html"},
 };
 
 }  // namespace

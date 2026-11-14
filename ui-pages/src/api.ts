@@ -27,7 +27,7 @@ import type { AccentName, DarkThemeName, ThemeName } from "./theme/tokens";
 
 /** ISO 8601 timestamp. */
 export type Iso = string;
-export type PageId = "newtab" | "settings" | "memory" | "routines" | "import" | "welcome";
+export type PageId = "newtab" | "settings" | "memory" | "routines" | "import" | "welcome" | "tour";
 export type JobId = string;
 export type JobProgress = {
   readonly jobId: JobId;
@@ -52,7 +52,7 @@ export type SecurityInfo = {
   readonly needsRestore: boolean;
 };
 
-export type FileKind = "memory-export" | "passwords-csv";
+export type FileKind = "memory-export" | "passwords-csv" | "safari-export";
 /** A file the person picked in perchd's open panel. `id` is opaque; the path stays in perchd. */
 export type FileChoice = { readonly id: string; readonly name: string };
 
@@ -394,7 +394,23 @@ export type BrowserId =
 export type ImportKind =
   | "bookmarks" | "history" | "passwords" | "cookies" | "tabs" | "extensions" | "settings"
   | "aside-memory" | "aside-skills" | "aside-chats" | "aside-preferences";
-export type ImportNeed = "full-disk-access" | "keychain" | "csv-export" | "primary-password";
+export type OutsideAgent = "claude" | "codex" | "grok";
+export type AgentSetup = {
+  readonly agents: readonly {
+    readonly id: OutsideAgent;
+    readonly name: string;
+    /** Its CLI is on this Mac. */
+    readonly found: boolean;
+    /** Perch's skill and MCP server are in its config. */
+    readonly installed: boolean;
+    /** It has used Perch at least once. */
+    readonly connected: boolean;
+    readonly error?: string;
+  }[];
+  /** ~/.local/bin/perch; `shellFile` names the startup file Perch added ~/.local/bin to PATH in. */
+  readonly command: { readonly installed: boolean; readonly path: string; readonly shellFile?: string; readonly note?: string };
+};
+export type ImportNeed = "full-disk-access" | "keychain" | "csv-export" | "safari-export" | "primary-password";
 export type ImportOption = { readonly kind: ImportKind; readonly available: boolean; readonly needs?: ImportNeed; readonly count?: number };
 export type DetectedBrowser = {
   readonly id: BrowserId;
@@ -403,6 +419,8 @@ export type DetectedBrowser = {
   readonly options: readonly ImportOption[];
   /** When it was last browsed in (Unix ms). The list comes most recent first. */
   readonly lastUsed?: number;
+  /** Its app icon from this Mac, as a data: PNG; pages show its first letter without one. */
+  readonly icon?: string;
 };
 export type ImportRequest = {
   readonly browser: BrowserId;
@@ -410,8 +428,12 @@ export type ImportRequest = {
   readonly profile: string;
   readonly profiles?: readonly string[];
   readonly kinds: readonly ImportKind[];
-  /** A `chooseFile("passwords-csv")` id. Required when passwords are picked and their option needs "csv-export" (Safari, Firefox, Zen). */
+  /** A `chooseFile("passwords-csv")` id. Required when passwords are picked and their option needs "csv-export" (Firefox, Zen). */
   readonly passwordsCsv?: string;
+  /** A `chooseFile("safari-export")` id: the ZIP from Safari's File > Export Browsing Data to File.
+      It brings the picked options that need "safari-export" (bookmarks, history and passwords, from
+      every Safari profile); without it Safari's passwords can't come over. */
+  readonly safariExport?: string;
 };
 export type SystemAccess = { readonly fullDiskAccess: boolean };
 
@@ -432,6 +454,8 @@ export type OnePasswordSettings = {
   readonly chosen: readonly OnePasswordChoice[];
   readonly problem?: string;
   readonly detail?: string;
+  /** macOS keeps Perch out of the 1Password app's data: Full Disk Access (openFullDiskAccess) lets it in. */
+  readonly needsFullDiskAccess?: true;
 };
 
 /* ---------- Welcome and About ---------- */
@@ -559,6 +583,18 @@ export interface PerchApi {
   /** Activates a tab (tabId), opens a URL in the current tab, or runs a command by its id from commands.ts. The browser then closes the bubble. */
   runCommandBarItem(item: CommandBarItem): Promise<void>;
   closeCommandBar(): Promise<void>;
+  /** Opens the command bar over the page that asks (the tour shows it off). */
+  openCommandBar(): Promise<void>;
+  /** Brings the agent's newest tab at an address starting with `url` into this window, with its side chat open. */
+  showAgentTab(url: string): Promise<void>;
+
+  // Outside agents (the tour's last step): the perch command and Perch's skill and MCP server in
+  // Claude Code, Codex and Grok
+  getAgentSetup(): Promise<AgentSetup>;
+  /** Build my memory (the tour): a chat that researches the user and saves as it goes, opened in a tab behind this one. */
+  startMemoryChat(): Promise<{ readonly chatId: string }>;
+  /** Links ~/.local/bin/perch (adding it to PATH in the shell's login file if needed) and installs Perch into every agent found. */
+  connectAgents(): Promise<AgentSetup>;
 
   // Sync (bookmarks, history and open tabs; passwords and extensions later)
   getSync(): Promise<SyncStatus>;
@@ -676,7 +712,7 @@ export const API_METHODS = [
   "getPrivacy", "setPrivacy", "setBackgroundConnection", "removeBlockerException", "listSiteData", "forgetSite",
   "listBuiltInExtensions", "setBuiltInExtension",
   "getMemorySaver", "setMemorySaver", "addSleepRule", "listTabMemory",
-  "queryCommandBar", "runCommandBarItem", "closeCommandBar",
+  "queryCommandBar", "runCommandBarItem", "closeCommandBar", "openCommandBar", "showAgentTab", "getAgentSetup", "connectAgents", "startMemoryChat",
   "getSync", "startSyncPairing", "checkSyncPairing", "syncNow", "removeSyncDevice", "turnOffSync", "revealRecoveryKey",
   "getSecurity", "exportBackup", "restoreFromRecoveryKey", "startFresh",
   "getMemorySettings", "setMemorySettings", "listMemoryPages", "readMemoryPage", "writeMemoryPage", "deleteMemoryPage", "wipeMemory",

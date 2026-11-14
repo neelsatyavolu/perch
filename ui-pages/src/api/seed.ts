@@ -7,12 +7,12 @@ import type {
 export const SEED_NOW = "2026-11-05T09:46:00.000Z";
 
 export const PROVIDERS: readonly Provider[] = [
-  { id: "claude", name: "Claude", kind: "subscription", detail: "Sign in with your Claude Pro or Max plan", state: "signed-out" },
-  { id: "claude-code", name: "Claude Code", kind: "subscription", detail: "Subscription, through Claude Code on this Mac", state: "connected", account: "Claude Code 2.4" },
-  { id: "chatgpt", name: "ChatGPT", kind: "subscription", detail: "Subscription, signs in through OpenAI", state: "connected", account: "neel@example.com" },
-  { id: "grok", name: "Grok", kind: "subscription", detail: "Subscription, signs in through xAI", state: "signed-out" },
-  { id: "anthropic", name: "Anthropic API", kind: "api-key", detail: "Pay per use with your own key", state: "signed-out" },
-  { id: "openai", name: "OpenAI API", kind: "api-key", detail: "Pay per use with your own key", state: "signed-out" },
+  { id: "claude", name: "Claude", kind: "subscription", detail: "Your Claude Pro or Max plan, through your claude.ai account. No API credits.", state: "signed-out" },
+  { id: "claude-code", name: "Claude Code", kind: "subscription", detail: "Runs the Claude Code app on this Mac, on whatever account it's signed in to.", state: "connected", account: "Claude Code 2.4" },
+  { id: "chatgpt", name: "ChatGPT", kind: "subscription", detail: "Your ChatGPT plan, through your OpenAI account. No API credits.", state: "connected", account: "neel@example.com" },
+  { id: "grok", name: "Grok", kind: "subscription", detail: "Your Grok plan, through your xAI account. No API credits.", state: "signed-out" },
+  { id: "anthropic", name: "Claude API", kind: "api-key", detail: "An API key from the Claude Console. Billed per use, separately from a Claude plan.", state: "signed-out" },
+  { id: "openai", name: "OpenAI API", kind: "api-key", detail: "An API key from the OpenAI platform. Billed per use, separately from ChatGPT.", state: "signed-out" },
   { id: "gemini", name: "Google Gemini API", kind: "api-key", detail: "Pay per use with your own key", state: "signed-out" },
   { id: "openrouter", name: "OpenRouter", kind: "api-key", detail: "Many models through one key", state: "signed-out" },
   { id: "local", name: "Models on this Mac", kind: "local", detail: "Ollama, LM Studio or any OpenAI-compatible endpoint", state: "signed-out" },
@@ -247,9 +247,8 @@ export const BROWSERS: readonly DetectedBrowser[] = [
   {
     id: "safari", name: "Safari", profiles: [{ id: "default", name: "Safari" }],
     options: [
-      { kind: "tabs", available: true, needs: "full-disk-access" }, { kind: "bookmarks", available: true, count: 88 },
-      { kind: "history", available: true, needs: "full-disk-access" }, { kind: "passwords", available: true, needs: "csv-export" },
-      { kind: "cookies", available: true, needs: "full-disk-access" },
+      { kind: "bookmarks", available: true, needs: "safari-export" }, { kind: "history", available: true, needs: "safari-export" },
+      { kind: "passwords", available: true, needs: "safari-export" }, { kind: "cookies", available: true, needs: "full-disk-access" },
     ],
   },
 ];

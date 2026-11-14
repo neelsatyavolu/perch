@@ -41,7 +41,27 @@ test("the approval card shows what goes out and its button names the action", as
   expect(buttons.map((b) => b.textContent)).toEqual(["Type and press Enter", "Don’t allow"]);
   expect(buttons.some((b) => /^(ok|confirm)$/i.test(b.textContent ?? ""))).toBe(false);
   await act(async () => buttons[0]!.click());
-  expect(decide).toHaveBeenCalledWith(true);
+  expect(decide).toHaveBeenCalledWith(true, undefined);
+});
+
+test("a sign-in card with nothing saved asks for the login, and only sends it with Sign in", async () => {
+  const decide = mock(async (_ok: boolean, _login?: { username: string; password: string }) => {});
+  const signIn: Card = { ...card, title: "Sign in to account.proton.me", site: "account.proton.me", body: undefined, confirm: "Sign in", login: { loginKey: "c1" } };
+  const el = mount(<ApprovalCard card={signIn} onDecide={decide} />);
+  const [user, pass] = [...el.querySelectorAll("input")] as HTMLInputElement[];
+  expect(pass!.type).toBe("password");
+  const confirm = [...el.querySelectorAll("button")].find((b) => b.textContent === "Sign in")!;
+  expect(confirm.disabled).toBe(true);
+  await act(async () => {
+    user!.value = "grace@example.com";
+    user!.dispatchEvent(new Event("input", { bubbles: true }));
+    pass!.value = "hunter2";
+    pass!.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(confirm.disabled).toBe(false);
+  await act(async () => confirm.click());
+  expect(decide).toHaveBeenCalledWith(true, { username: "grace@example.com", password: "hunter2" });
+  expect(pass!.value).toBe("");
 });
 
 test("a payment card turns only the confirm text to danger and lists the fields", () => {

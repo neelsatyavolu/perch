@@ -1,0 +1,68 @@
+Keeps first run quiet: tabs and windows that extensions open on their own (welcome pages as an import's extensions install) wait while setup runs and for a few minutes after (perch::ExtensionTabsHeldBack), and the Continue where you left off bar never shows, since Perch always reopens tabs.
+diff --git a/chrome/browser/extensions/api/tabs/tabs_api.cc b/chrome/browser/extensions/api/tabs/tabs_api.cc
+index de78a212cd..c479eb87db 100644
+--- a/chrome/browser/extensions/api/tabs/tabs_api.cc
++++ b/chrome/browser/extensions/api/tabs/tabs_api.cc
+@@ -2,6 +2,7 @@
+ // Use of this source code is governed by a BSD-style license that can be
+ // found in the LICENSE file.
+ 
++#include "chrome/browser/perch/onboarding/onboarding.h"
+ #include "chrome/browser/extensions/api/tabs/tabs_api.h"
+ 
+ #include "base/memory/weak_ptr.h"
+@@ -853,6 +854,13 @@ ExtensionFunction::ResponseAction TabsCreateFunction::Run() {
+   std::optional<tabs::Create::Params> params =
+       tabs::Create::Params::Create(args());
+   EXTENSION_FUNCTION_VALIDATE(params);
++  // Perch: during setup, extensions brought over by the import open their
++  // welcome pages as they install; those wait. A tab the person asked for
++  // (a click in the extension, with a user gesture) still opens.
++  if (!user_gesture() && perch::ExtensionTabsHeldBack(
++                             Profile::FromBrowserContext(browser_context()))) {
++    return RespondNow(Error("Perch is finishing setup; try again in a few minutes"));
++  }
+ 
+   const tabs::Create::Params::CreateProperties& create_properties =
+       params->create_properties;
+diff --git a/chrome/browser/extensions/api/tabs/windows_api.cc b/chrome/browser/extensions/api/tabs/windows_api.cc
+index 1d7e8f5f4c..12c4f78f72 100644
+--- a/chrome/browser/extensions/api/tabs/windows_api.cc
++++ b/chrome/browser/extensions/api/tabs/windows_api.cc
+@@ -2,6 +2,7 @@
+ // Use of this source code is governed by a BSD-style license that can be
+ // found in the LICENSE file.
+ 
++#include "chrome/browser/perch/onboarding/onboarding.h"
+ #include "chrome/browser/extensions/api/tabs/windows_api.h"
+ 
+ #include <stdint.h>
+@@ -504,6 +505,13 @@ WindowsCreateFunction::WindowsCreateFunction() = default;
+ WindowsCreateFunction::~WindowsCreateFunction() = default;
+ 
+ ExtensionFunction::ResponseAction WindowsCreateFunction::Run() {
++  // Perch: during setup, extensions brought over by the import open their
++  // welcome pages as they install; those wait. A tab the person asked for
++  // (a click in the extension, with a user gesture) still opens.
++  if (!user_gesture() && perch::ExtensionTabsHeldBack(
++                             Profile::FromBrowserContext(browser_context()))) {
++    return RespondNow(Error("Perch is finishing setup; try again in a few minutes"));
++  }
+   std::optional<windows::Create::Params> params =
+       windows::Create::Params::Create(args());
+   EXTENSION_FUNCTION_VALIDATE(params);
+diff --git a/chrome/browser/ui/ui_features.cc b/chrome/browser/ui/ui_features.cc
+index f92a70a676..1885a50a34 100644
+--- a/chrome/browser/ui/ui_features.cc
++++ b/chrome/browser/ui/ui_features.cc
+@@ -389,7 +389,9 @@ BASE_FEATURE(kNonMilestoneUpdateToast, base::FEATURE_ENABLED_BY_DEFAULT);
+ BASE_FEATURE(kRespectShouldTriggerSessionRestoreOnDesktop,
+              base::FEATURE_ENABLED_BY_DEFAULT);
+ 
+-BASE_FEATURE(kSessionRestoreInfobar, base::FEATURE_ENABLED_BY_DEFAULT);
++// Perch: off. Perch always reopens your tabs and says so in setup; the bar
++// would cover the welcome screen on first run.
++BASE_FEATURE(kSessionRestoreInfobar, base::FEATURE_DISABLED_BY_DEFAULT);
+ 
+ BASE_FEATURE_PARAM(bool,
+                    kSetDefaultToContinueSession,

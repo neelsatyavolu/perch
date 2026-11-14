@@ -36,6 +36,10 @@ test("perch mcp is started from the compiled binary, or through bun in developme
 test("sidebar steps read as short actions", () => {
   expect(stepLabel("navigate", { url: "https://www.example.com/a?b=1" })).toBe("Open www.example.com");
   expect(stepLabel("navigate", { url: "example.com" })).toBe("Open example.com");
+  // A memory page's title says what the save is about; it isn't the step's own label.
+  expect(stepLabel("memory_save", { category: "user", title: "Neel", text: "x" })).toBe("Save to memory: Neel");
+  expect(stepLabel("mcp__perch__memory_save", { title: "Neel" })).toBe("Save to memory: Neel");
+  expect(stepLabel("repl", { title: "Collect the order emails" })).toBe("Collect the order emails");
   expect(stepLabel("click", { ref: "e12" })).toBe("Click");
   expect(stepLabel("type", { ref: "e3", text: "secret words" })).toBe("Type");
   expect(stepLabel("wait_for", {})).toBe("Wait");

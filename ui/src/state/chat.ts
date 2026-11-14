@@ -15,7 +15,8 @@ export function applyToView(view: ChatView, event: AppEvent): ChatView {
   if (!chat || !("chatId" in event) || event.chatId !== chat.id) return view;
   switch (event.type) {
     case "run.started":
-      return { ...view, chat: { ...chat, messages: [...chat.messages, event.message] }, run: { runId: event.runId, chatId: chat.id, text: "", steps: [], approval: null } };
+      // A card already waiting (held for an outside agent) stays when that agent's listed run starts.
+      return { ...view, chat: { ...chat, messages: [...chat.messages, event.message] }, run: { runId: event.runId, chatId: chat.id, text: "", steps: [], approval: view.run?.approval ?? null } };
     case "run.text":
       return view.run ? { ...view, run: { ...view.run, text: view.run.text + event.delta } } : view;
     case "run.step":

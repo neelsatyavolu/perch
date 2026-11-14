@@ -95,7 +95,8 @@ test("op's errors become plain reasons, never what it printed", async () => {
 
 test("status: not installed, no accounts yet, or the accounts to pick from", async () => {
   expect(await onePasswordStatus(null)).toMatchObject({ installed: false, accounts: [] });
-  expect(await onePasswordStatus(fakeOp(() => ok([])).run)).toEqual({ installed: true, accounts: [], error: SETUP_HELP });
+  // No accounts and nothing on op's error output: what it printed goes in the detail, for the log.
+  expect(await onePasswordStatus(fakeOp(() => ok([])).run)).toEqual({ installed: true, accounts: [], error: SETUP_HELP, detail: 'op account list printed "[]"' });
   const accounts = [{ url: "my.1password.com", email: "grace@example.com", user_uuid: ACCOUNT, account_uuid: "ACC" }, { email: "bad", user_uuid: "--evil" }];
   expect(await listAccounts(fakeOp(() => ok(accounts)).run)).toEqual([{ id: ACCOUNT, email: "grace@example.com", url: "my.1password.com" }]);
 });

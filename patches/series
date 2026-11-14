@@ -129,3 +129,5 @@ perch/shell/no-install-app-or-media-button.patch
 perch/policy/privacy-hardening.patch
 perch/policy/fingerprint-noise.patch
 perch/shell/extension-updates.patch
+perch/shell/quiet-setup.patch
+perch/shell/pinned-sound-icon.patch

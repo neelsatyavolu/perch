@@ -32,6 +32,8 @@ import { cdpTabGroups, SessionManager, type AgentSession, type TabGroups } from 
 export const VERSION = PERCH_VERSION;
 export const PERCH_APP = "/Applications/Perch.app";
 export const PERCH_BUNDLE_ID = "co.xanom.perch";
+/** What a command that needs the app answers without it; the CLI exits 3 (Perch not running) on it. */
+export const APP_NEEDED = "Tasks, memory and skills need the Perch app. Open Perch and try again.";
 
 export type DaemonOptions = {
   paths: PerchPaths;
@@ -143,7 +145,7 @@ export async function startDaemon(opts: DaemonOptions): Promise<Daemon> {
   const outsideOf = (conn: Connection): Outside => {
     if (conn.client.name === SIDEBAR_CLIENT) throw new Error("A Perch chat's agent cannot start or read tasks.");
     const outside = opts.outside?.();
-    if (!outside) throw new Error("Tasks, memory and skills need the Perch app. Open Perch and try again.");
+    if (!outside) throw new Error(APP_NEEDED);
     return outside;
   };
   const memoryOf = async (conn: Connection): Promise<MemoryApi> => {
@@ -182,7 +184,10 @@ export async function startDaemon(opts: DaemonOptions): Promise<Daemon> {
       const extras = sidebarRunOf(conn)?.extras;
       if (extras?.handles(name)) return extraCall(conn, extras, { id: `${Date.now()}`, name, args: args as Record<string, unknown> });
       if (!CLIENT_TOOL_NAMES.has(name)) return { content: `Perch has no tool "${name}" for outside agents.`, isError: true };
-      return manager.call(conn.session, { id: `${Date.now()}`, name, args: args as Record<string, unknown> }, conn.policy());
+      const call = { id: `${Date.now()}`, name, args: args as Record<string, unknown> };
+      // An outside agent's steps show in its chat, so clicking one of its agent tabs shows its work.
+      if (conn.client.name !== SIDEBAR_CLIENT && !sidebarRunOf(conn)) opts.browser?.()?.step?.(conn.session, call);
+      return manager.call(conn.session, call, conn.policy());
     },
     tabs: async (conn) => manager.tabs(conn.session),
     sessions: async () => manager.list(),
@@ -286,11 +291,19 @@ export async function startDaemon(opts: DaemonOptions): Promise<Daemon> {
   };
 }
 
-/** The browser perchd drives: a given one, Perch itself when installed, else Chrome for Testing. */
-export function browserExecutable(explicit?: string): string | undefined {
+/**
+ * The browser perchd drives: a given one; else the Perch app this perchd is inside (a copy
+ * elsewhere, such as a test build, drives itself, not the installed app); else the installed
+ * Perch; else Chrome for Testing.
+ */
+export function browserExecutable(explicit?: string, execPath: string = process.execPath, exists: (path: string) => boolean = existsSync): string | undefined {
   if (explicit) return explicit;
-  const perch = `${PERCH_APP}/Contents/MacOS/Perch`;
-  return existsSync(perch) ? perch : undefined;
+  const own = /^(.*?\.app)\/Contents\/Frameworks\//.exec(execPath)?.[1];
+  for (const app of [own, PERCH_APP]) {
+    const perch = app && `${app}/Contents/MacOS/Perch`;
+    if (perch && exists(perch)) return perch;
+  }
+  return undefined;
 }
 
 function need(params: Record<string, unknown>, key: string): string {

@@ -112,6 +112,11 @@ function words(tool: string): string {
 /** A short line for the chat's step list, like "Open example.com" or "Press Enter". What is typed is never shown. */
 export function stepLabel(tool: string, args: unknown): string {
   const a = (args && typeof args === "object" ? args : {}) as Record<string, unknown>;
+  const bare = tool.replace(/^mcp__perch__/, "");
+  // A memory page's title is what the save is about, not a description of the step.
+  if (bare === "memory_save" || bare === "memory_propose") {
+    return typeof a.title === "string" && a.title.trim() ? `${STEP_NAMES[bare]}: ${a.title.trim().slice(0, 40)}` : STEP_NAMES[bare]!;
+  }
   // The model's own few words on what a script or batch is for beat a generic name.
   if (typeof a.title === "string" && a.title.trim()) {
     const t = a.title.trim().replace(/\s+/g, " ");

@@ -1,0 +1,56 @@
+/* The tour: one column of steps, the open one expanded. It shares the window with the side chat,
+   so it stays narrow. */
+
+html:has(.tr-page), body:has(.tr-page) { background: var(--card); }
+.tr-page { min-height: 100vh; background: var(--card); padding: 0 24px; display: grid; justify-items: center; align-content: start; }
+.tr-wrap { width: 640px; max-width: 100%; padding: 48px 0 32px; display: grid; gap: 16px; align-content: start; }
+.tr-top { display: flex; align-items: center; gap: 10px; }
+.tr-top h1 { font-size: 22px; letter-spacing: -0.01em; }
+.tr-top h1:focus { outline: none; }
+.tr-count { margin-left: auto; font-family: var(--mono); }
+.tr-note { display: flex; align-items: baseline; gap: 8px; margin: 0 0 8px; padding: 10px 12px; border: 1px solid var(--hair-strong); border-radius: 8px; color: var(--body); font-size: 13px; }
+/* The perch dot (DESIGN.md): a task is running, so it breathes. */
+.tr-note .dotc { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); transform: translateY(-1px); }
+@media (prefers-reduced-motion: no-preference) {
+  .tr-note .dotc { animation: tr-breathe 2.4s var(--ease) infinite alternate; }
+}
+@keyframes tr-breathe { to { opacity: 0.35; } }
+.tr-lead { color: var(--body); max-width: 60ch; margin: -4px 0 8px; text-wrap: pretty; }
+
+.tr-steps { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--hair); }
+.tr-step { border-bottom: 1px solid var(--hair); }
+.tr-head {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px 0; border: 0; background: none;
+  color: var(--ink); font: inherit; text-align: left; cursor: default;
+}
+.tr-num {
+  width: 24px; height: 24px; flex: none; display: grid; place-items: center; border-radius: 6px;
+  border: 1px solid var(--hair-strong); color: var(--mute); font-family: var(--mono); font-size: 12px;
+}
+.tr-step.open .tr-num { border-color: var(--ink); color: var(--ink); }
+.tr-step.done .tr-num { background: var(--accent); border-color: var(--accent); color: var(--card); }
+.tr-title { font-size: 15px; font-weight: 500; }
+.tr-step:not(.open) .tr-title { color: var(--body); }
+.tr-head:hover .tr-title { color: var(--ink); }
+.tr-body { display: grid; gap: 10px; padding: 0 0 20px 36px; color: var(--body); line-height: 1.55; }
+.tr-body p { margin: 0; max-width: 62ch; text-wrap: pretty; }
+.tr-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+
+.tr-keys { display: inline-flex; gap: 2px; vertical-align: 1px; }
+.tr-keys kbd {
+  min-width: 20px; height: 20px; padding: 0 5px; display: inline-grid; place-items: center; border-radius: 4px;
+  border: 1px solid var(--hair-strong); background: var(--fill); color: var(--ink); font-family: var(--mono); font-size: 11px;
+}
+.tr-keylist { list-style: none; margin: 0; padding: 0; display: grid; }
+.tr-keylist li { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 0; border-bottom: 1px solid var(--hair); }
+.tr-keylist li:last-child { border-bottom: 0; }
+
+.tr-body code { font-family: var(--mono); font-size: 0.92em; }
+
+.tr-foot { display: flex; align-items: center; gap: 12px; padding-top: 8px; }
+
+@media (max-width: 520px) {
+  .tr-body { padding-left: 0; }
+  .tr-keylist li { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .tr-foot { flex-direction: column; align-items: stretch; }
+}

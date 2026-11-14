@@ -6,6 +6,7 @@ import { fillCodeInFrame, type FillResult } from "../totp/fill-code";
 import { createMenus, onCommand, onMenuClick, toggleReader } from "./menus";
 import { fetchPreview } from "./preview";
 import { hideOnCommit } from "./cosmetic";
+import { blockerState, isCaveatlyAsking } from "./caveatly";
 import { applySettings } from "./protection";
 import { fullPageScreenshot } from "./screenshot";
 import { forgetTab, recordBanner, tabState } from "./tabstate";
@@ -26,6 +27,13 @@ chrome.runtime.onStartup.addListener(() => void setUp().catch(report));
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && changes[SETTINGS_KEY]) void loadSettings().then(applySettings).catch(report);
+});
+
+// Caveatly, starting up, asks for Perch's blocker switch and the sites it's off for.
+chrome.runtime.onMessageExternal.addListener((raw, sender, reply) => {
+  if (!isCaveatlyAsking(raw, sender)) return false;
+  void loadSettings().then((s) => reply(blockerState(s))).catch(report);
+  return true;
 });
 
 chrome.webNavigation.onCommitted.addListener((details) => void hideOnCommit(details).catch(report));

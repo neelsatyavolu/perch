@@ -58,7 +58,9 @@ export function describeApproval(req: ApprovalRequest, ids: Ids): ApprovalCard {
     case "repl":
       return card("Run a script on the page", "Run script", { body: String(a.code ?? "") });
     case "sign_in":
-      return card(req.summary || `Sign in to ${req.site}`, "Sign in");
+      return req.askLogin
+        ? card(`Sign in to ${req.site}`, "Sign in", { login: { loginKey: req.call.id } })
+        : card(req.summary || `Sign in to ${req.site}`, "Sign in");
     case "fill_card":
       return card(req.summary || `Fill a saved card on ${req.site}`, "Fill card");
     case "fill_code":

@@ -1,6 +1,8 @@
 /**
  * `perch skill install|uninstall claude|codex|grok` (spec 9.1): the Perch skill and MCP server
- * for an agent CLI. Each change backs up the file first; running it twice changes nothing.
+ * for an agent CLI, and one marked line in the agent's own instructions file (CLAUDE.md or
+ * AGENTS.md) saying Perch does its browser tasks. Each change backs up the file first; running it
+ * twice changes nothing.
  */
 
 import { existsSync, rmdirSync, rmSync } from "node:fs";
@@ -20,14 +22,43 @@ export type InstallEnv = { home: string; env: Record<string, string | undefined>
 const AGENTS: readonly Agent[] = ["claude", "codex", "grok"];
 const MARK = "installed-by: perch";
 
-function locations(agent: Agent, ienv: InstallEnv): { config: string; skillFile: string } {
+function locations(agent: Agent, ienv: InstallEnv): { config: string; skillFile: string; notes: string } {
   const { home, env } = ienv;
   if (agent === "claude") {
     const dir = env.CLAUDE_CONFIG_DIR;
-    return { config: dir ? join(dir, ".claude.json") : join(home, ".claude.json"), skillFile: join(dir ?? join(home, ".claude"), "skills", "perch", "SKILL.md") };
+    const base = dir ?? join(home, ".claude");
+    return { config: dir ? join(dir, ".claude.json") : join(home, ".claude.json"), skillFile: join(base, "skills", "perch", "SKILL.md"), notes: join(base, "CLAUDE.md") };
   }
   const dir = agent === "codex" ? env.CODEX_HOME || join(home, ".codex") : env.GROK_HOME || join(home, ".grok");
-  return { config: join(dir, "config.toml"), skillFile: join(dir, "skills", "perch", "SKILL.md") };
+  return { config: join(dir, "config.toml"), skillFile: join(dir, "skills", "perch", "SKILL.md"), notes: join(dir, "AGENTS.md") };
+}
+
+/** The line in the agent's instructions file; the marker finds it again to update or remove it. */
+const NOTE_MARK = "<!-- added by Perch -->";
+export const NOTE =
+  `${NOTE_MARK} Perch, the browser on this Mac, can do browser tasks for you in the user's own signed-in browser: open and read pages, click, fill in forms, take screenshots. Use the perch skill or Perch's MCP tools for anything that needs a browser.`;
+
+function withoutNote(text: string): string {
+  return text.split("\n").filter((line) => !line.startsWith(NOTE_MARK)).join("\n").replace(/\n{3,}$/, "\n\n");
+}
+
+function installNote(file: string, now: Date): Change {
+  const before = readText(file);
+  const kept = before === null ? "" : withoutNote(before).replace(/\s*$/, "");
+  const next = `${kept}${kept ? "\n\n" : ""}${NOTE}\n`;
+  return before === next ? { file, action: "unchanged" } : writeSafely(file, before, next, { now, newMode: 0o644 });
+}
+
+function uninstallNote(file: string, now: Date): Change {
+  const before = readText(file);
+  if (before === null || !before.includes(NOTE_MARK)) return { file, action: "unchanged" };
+  const kept = withoutNote(before).replace(/\s*$/, "");
+  // A file that held only Perch's line goes with it.
+  if (!kept) {
+    rmSync(file);
+    return { file, action: "removed" };
+  }
+  return { ...writeSafely(file, before, `${kept}\n`, { now, newMode: 0o644 }), action: "removed" };
 }
 
 function installSkill(file: string, now: Date): Change {
@@ -57,18 +88,18 @@ export function install(agent: Agent, ienv: InstallEnv): Change[] {
   if (agent === "claude") parseClaudeConfig(where.config, readText(where.config));
   else if (existsSync(where.config)) checkToml(where.config, readText(where.config) ?? "");
   const skillChange = installSkill(where.skillFile, now);
-  return [skillChange, server()];
+  return [skillChange, server(), installNote(where.notes, now)];
 }
 
 export function uninstall(agent: Agent, ienv: InstallEnv): Change[] {
   const now = (ienv.now ?? (() => new Date()))();
   const where = locations(agent, ienv);
   const server = agent === "claude" ? uninstallClaudeServer(where.config, now) : uninstallTomlServer(where.config, now);
-  return [uninstallSkill(where.skillFile), server];
+  return [uninstallSkill(where.skillFile), server, uninstallNote(where.notes, now)];
 }
 
 function describe(change: Change): string {
-  const what = change.file.endsWith("SKILL.md") ? "Skill" : "MCP server in";
+  const what = change.file.endsWith("SKILL.md") ? "Skill" : /\/(CLAUDE|AGENTS)\.md$/.test(change.file) ? "A line about Perch in" : "MCP server in";
   const backup = change.backup ? ` (backup: ${change.backup})` : "";
   const note = change.note ? `: ${change.note}` : "";
   const verb = { created: "Added", updated: "Added", unchanged: "Already up to date", removed: "Removed", skipped: "Skipped" }[change.action];

@@ -126,3 +126,16 @@ test("@ names a tab at the end of the draft and keeps only mentions still in the
   expect(draft).toBe("compare with @Flights to Tokyo ");
   expect(keptMentions(draft, tabs)).toEqual([tabs[0]!]);
 });
+
+test("setTabState stays in the shell: it sets the tab and never reaches the browser", () => {
+  const sent: unknown[] = [];
+  const posted: unknown[] = [];
+  const states: unknown[] = [];
+  const frame = {};
+  const r = createRelay({ send: (m, a) => sent.push([m, a]), frameOrigin: FRAME, isFrame: (s) => s === frame, post: (m) => posted.push(m), onTabState: (s) => states.push(s) });
+  r.onMessage(frame, FRAME, { type: HOST_REQUEST, id: "t1", method: "setTabState", args: [{ title: "Build my memory", waiting: true }] });
+  r.onMessage(frame, FRAME, { type: HOST_REQUEST, id: "t2", method: "setTabState", args: [{ title: 5, waiting: "yes" }] });
+  expect(states).toEqual([{ title: "Build my memory", waiting: true }]);
+  expect(sent).toEqual([]);
+  expect(posted).toMatchObject([{ id: "t1", ok: true }, { id: "t2", ok: false }]);
+});

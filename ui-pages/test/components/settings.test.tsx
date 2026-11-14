@@ -96,8 +96,8 @@ describe("Models", () => {
     const r = renderWithApi(<Settings />);
     await open(r, "Models");
     fireEvent.click(await r.findByRole("button", { name: "Connect an API key or a model on this Mac" }));
-    fireEvent.click(await r.findByRole("button", { name: "Add key for Anthropic API" }));
-    const dlg = await r.findByRole("dialog", { name: "Add your Anthropic API key" });
+    fireEvent.click(await r.findByRole("button", { name: "Add key for Claude API" }));
+    const dlg = await r.findByRole("dialog", { name: "Add your Claude API key" });
     const field = within(dlg).getByLabelText("API key") as HTMLInputElement;
     expect(field.type).toBe("password");
     fireEvent.input(field, { target: { value: "bad key" } });

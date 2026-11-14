@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { claudeArgs, claudeLineToEvents, codexArgs, codexLineToEvents, otherCodexServers, runClaudeCode, runCodex } from "../src/external";
+import { claudeArgs, claudeLineToEvents, codexArgs, codexLineToEvents, otherCodexServers, runClaudeCode, runCodex, subscriptionEnv } from "../src/external";
 
 test("Claude Code stream lines become Aside-style events", () => {
   const toolUse = { type: "assistant", message: { content: [{ type: "text", text: "Opening the site." }, { type: "tool_use", id: "t1", name: "mcp__perch__navigate", input: { url: "https://example.com" } }] } };
@@ -106,4 +106,9 @@ test("Claude Code and Codex get the task on stdin and the session token in the e
     delete process.env.PERCH_CODEX_BIN;
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("Claude Code and Codex run on the signed-in plan: API-key variables are left out of their environment", () => {
+  const env = subscriptionEnv({ HOME: "/Users/x", PATH: "/bin", ANTHROPIC_API_KEY: "sk-ant", ANTHROPIC_AUTH_TOKEN: "t", OPENAI_API_KEY: "sk", CODEX_API_KEY: "c" });
+  expect(env).toEqual({ HOME: "/Users/x", PATH: "/bin" });
 });

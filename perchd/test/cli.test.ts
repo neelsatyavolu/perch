@@ -116,17 +116,18 @@ test("each terminal window gets its own session; agterm and agmux name theirs", 
 
 test("a quoted task runs as perch exec, and focus never starts perchd", async () => {
   let err = "";
-  const io: CliIO = { env: {}, cwd: "/", keychain, stdout: () => {}, stderr: (t) => void (err += t), autostart: true };
-  const original = process.stderr.write.bind(process.stderr);
-  let execErr = "";
-  process.stderr.write = ((chunk: string) => ((execErr += chunk), true)) as typeof process.stderr.write;
-  try {
-    expect(await main(["find the cheapest flight", "--model", "nope/x"], io)).toBe(64);
-  } finally {
-    process.stderr.write = original;
-  }
-  expect(execErr).toContain('provider "nope"');
+  // A home of its own, so nothing here can reach or start the person's real perchd.
+  const io: CliIO = { env: { PERCH_HOME: join(home.dir, "quoted") }, cwd: "/", keychain, stdout: () => {}, stderr: (t) => void (err += t), autostart: false };
+  // An unknown provider is a usage error, caught before perchd is asked.
+  expect(await main(["find the cheapest flight", "--model", "nope/x"], io)).toBe(64);
+  expect(err).toContain('provider "nope"');
   expect(err).not.toContain("unknown command");
+
+  // A browser command quoted by mistake is refused, not run as a task on the person's plan.
+  err = "";
+  expect(await main(["click e1"], io)).toBe(64);
+  expect(err).toContain("is a command, not a task");
+  expect(await main(["eval document.title"], io)).toBe(64);
 
   const away = await main(["focus", "--client", "agterm", "--session", "T1"], { ...io, env: { PERCH_HOME: join(home.dir, "gone") } });
   expect(away).toBe(3);

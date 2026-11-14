@@ -9,8 +9,8 @@ import { UsageError } from "./args";
 import { DaemonNotRunning } from "./client";
 import { browserCommands, sessionCommands } from "./commands";
 import { taskCommands } from "./tasks";
-import { VERSION } from "../daemon/daemon";
 import type { CliIO } from "./io";
+import { APP_NEEDED, VERSION } from "../daemon/daemon";
 
 export type { CliIO } from "./io";
 
@@ -29,12 +29,13 @@ Tasks (each is a Perch chat you can open, resume and steer):
 Browser (in this terminal's own tab group, or PERCH_SESSION's; --session <name> for another):
   perch open <url> | navigate <url> | back | tabs
   perch snapshot [--full]          read the current tab; elements have refs like e12
+  perch scroll [down | up | <px>]  scroll the page, to read past what a snapshot shows
   perch click <ref> | type <ref> <text> [--submit] | select <ref> <option> | press <key>
   perch screenshot [-o file.jpg]   save what the tab shows
   perch repl ["<js>"] [--reset]   a JavaScript session over your tabs, like aside repl:
                                    await openTab(url), snapshot(page), page.locator(ref).click();
                                    variables stay between runs. No code opens a prompt
-  perch eval "<js>"                run JavaScript in the page and print its JSON result
+  perch eval "<js>"                read the page with JavaScript (a read-only copy) and print the JSON result
   perch script "<js>"              run several browser steps in one go: await navigate(url),
                                    snapshot(), click(ref), type(ref, text), js(code), log(...)
 
@@ -140,6 +141,16 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
   // `perch <url>` opens it and `perch "<task>"` runs it, as `aside <url>` and `aside "<task>"` do.
   const looksLikeUrl = /^(https?:\/\/|[\w-]+(\.[\w-]+)+(\/|$))/i.test(name);
   const looksLikePrompt = /\s/.test(name.trim()) && !name.startsWith("-");
+  // `perch "click e1"` is a browser command quoted by mistake, not a task: running it as one would
+  // spend the person's plan on an agent. Commands that take a ref, and the script ones, are caught.
+  const [first, second] = name.trim().split(/\s+/);
+  const quotedCommand =
+    looksLikePrompt && first !== undefined && Object.hasOwn(commands, first) &&
+    (["eval", "script", "repl", "press", "screenshot", "snapshot"].includes(first) || (["click", "type", "select"].includes(first) && /^e\d+$/.test(second ?? "")));
+  if (quotedCommand) {
+    io.stderr(`perch: "${name.length > 60 ? `${name.slice(0, 60)}…` : name}" is a command, not a task. Run it without the quotes around the command: perch ${first} …\nTo hand it to the agent as a task, use perch exec "<task>".\n`);
+    return 64;
+  }
   const command: Command | undefined = Object.hasOwn(commands, name)
     ? commands[name]
     : looksLikeUrl
@@ -166,8 +177,10 @@ async function run(command: Command, rest: string[], io: CliIO): Promise<number>
       io.stderr("perchd is not running. Open Perch, or run any perch command to start it.\n");
       return 3;
     }
-    io.stderr(`${error instanceof Error ? error.message : String(error)}\n`);
-    return 1;
+    const message = error instanceof Error ? error.message : String(error);
+    io.stderr(`${message}\n`);
+    // Perch's app isn't open: the same as perchd not running, for scripts that check.
+    return message === APP_NEEDED ? 3 : 1;
   }
 }
 

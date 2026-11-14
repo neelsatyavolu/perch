@@ -16,6 +16,7 @@ import { parseArtifactBlocks, type ArtifactRecord, type ArtifactStore } from "./
 import type { ChatStore } from "./chats";
 import type { AppEvent, ApprovalCard, ArtifactMeta, Chat, ChatMessage, ChatSettings, ChatStatus, ChatSummary, QueuedMessage, RunSnapshot, ScheduledMessage, Step, TabInfo } from "./protocol";
 import { buildTask } from "./transcript";
+import { rememberTypedLogin, type TypedLogin } from "../agent/typed-logins";
 
 export type RunnerInput = {
   task: string;
@@ -65,7 +66,11 @@ export class AppError extends Error {
 
 type Pending = { card: ApprovalCard; resolve: (approved: boolean) => void; done?: Promise<void> };
 /** `holdBack`: the user asked for the work without the final submit or send ("complete it without submitting"). */
-type Run = { runId: string; chatId: string; controller: AbortController; text: string; steps: Step[]; pending: Pending | null; done: Promise<void>; startedAt: string; holdBack?: boolean };
+type Run = {
+  runId: string; chatId: string; controller: AbortController; text: string; steps: Step[]; pending: Pending | null; done: Promise<void>; startedAt: string; holdBack?: boolean;
+  /** An outside agent's work, listed as it reports it (observeStep); `quiet` ends it after a pause. */
+  observed?: true; quiet?: ReturnType<typeof setTimeout>;
+};
 
 /** "without submitting", "don't send it", "do not turn it in": the user wants the last step left to them. */
 const HOLD_BACK = /\b(without|don'?t|do not|never|not|no)\b[^.\n]{0,24}?\b(submit(ting)?|turn(ing)? (it |this |them )?in|hand(ing)? (it |this |them )?in|send(ing)?|post(ing)?|publish(ing)?)\b/i;
@@ -75,6 +80,9 @@ const HOLD_BACK_NOTE =
   "The user wants this done without the final submit or send: do everything up to that point, leave the submit, send or publish step for them, and say it is ready.";
 
 const MAX_MESSAGE = 50_000;
+/** An outside agent's run ends this long after its last step. */
+const OBSERVED_QUIET_MS = 2 * 60_000;
+const MAX_OBSERVED_STEPS = 500;
 /** Messages that can wait behind one chat's task. */
 const MAX_QUEUED = 10;
 
@@ -118,7 +126,8 @@ export class RunManager {
   snapshot(chatId: string): RunSnapshot | null {
     const run = this.runs.get(chatId);
     const queued = this.queued(chatId);
-    if (run) return { runId: run.runId, chatId, text: run.text, steps: run.steps, approval: run.pending?.card ?? null, startedAt: run.startedAt, ...(queued.length ? { queued } : {}) };
+    // A card held for an outside agent shows alongside the steps it has listed (observeStep).
+    if (run) return { runId: run.runId, chatId, text: run.text, steps: run.steps, approval: run.pending?.card ?? this.held.get(chatId)?.card ?? null, startedAt: run.startedAt, ...(queued.length ? { queued } : {}) };
     const held = this.held.get(chatId);
     return held ? { runId: held.card.runId, chatId, text: "", steps: [], approval: held.card } : null;
   }
@@ -151,6 +160,47 @@ export class RunManager {
       this.deps.emit({ type: "run.approval", chatId, runId: full.runId, card: full });
       this.announce(chatId);
     });
+  }
+
+  /**
+   * An outside agent's work (Claude Code or Codex through `perch mcp`, the perch command) shows in
+   * its chat as a run of its own: the first step starts it with a line saying who is working, each
+   * step is listed as it happens, and it ends after a quiet spell, saved like any other run.
+   */
+  observeStep(chatId: string, intro: string, step: Step): void {
+    const chat = this.deps.chats.get(chatId);
+    if (!chat) return;
+    let run = this.runs.get(chatId);
+    if (run && !run.observed) return; // A run of Perch's own is going here; it lists its own steps.
+    if (!run) {
+      const message: ChatMessage = { id: crypto.randomUUID(), role: "user", text: intro, time: new Date().toISOString() };
+      const started: Run = { runId: crypto.randomUUID(), chatId, controller: new AbortController(), text: "", steps: [], pending: null, done: Promise.resolve(), startedAt: message.time, observed: true };
+      run = started;
+      this.runs.set(chatId, started);
+      void this.deps.chats.update(chatId, (c) => ({ ...c, messages: [...c.messages, message] })).then((updated) => {
+        this.deps.emit({ type: "run.started", chatId, runId: started.runId, message });
+        this.deps.emit({ type: "chat.updated", chat: this.summary(updated) });
+        this.deps.onStatus?.(chatId, "running", null);
+      });
+    }
+    if (run.steps.length < MAX_OBSERVED_STEPS) {
+      run.steps = [...run.steps, step];
+      this.deps.emit({ type: "run.step", chatId, runId: run.runId, label: step.label, ...(step.detail ? { detail: step.detail } : {}) });
+    }
+    clearTimeout(run.quiet);
+    const observed = run;
+    run.quiet = setTimeout(() => void this.endObserved(observed), OBSERVED_QUIET_MS);
+  }
+
+  private async endObserved(run: Run): Promise<void> {
+    if (this.runs.get(run.chatId) !== run) return;
+    const n = run.steps.length;
+    try {
+      await this.finish(run, `Finished ${n} ${n === 1 ? "step" : "steps"} in Perch.`, undefined);
+    } finally {
+      this.runs.delete(run.chatId);
+      this.announce(run.chatId);
+    }
   }
 
   summary(chat: Chat): ChatSummary {
@@ -317,15 +367,16 @@ export class RunManager {
   }
 
   /** The user's answer to an approval card. False when the card is not waiting any more. */
-  decide(approvalId: string, approved: boolean): boolean {
+  /** The person's answer to a card; `login` is what they typed into a sign-in card that asked for one. */
+  decide(approvalId: string, approved: boolean, login?: TypedLogin): boolean {
     const held = [...this.held.values()].find((p) => p.card.id === approvalId);
-    if (held) {
-      held.resolve(approved);
-      return true;
-    }
-    const run = [...this.runs.values()].find((r) => r.pending?.card.id === approvalId);
-    if (!run?.pending) return false;
-    run.pending.resolve(approved);
+    const run = held ? undefined : [...this.runs.values()].find((r) => r.pending?.card.id === approvalId);
+    const card = held?.card ?? run?.pending?.card;
+    if (!card) return false;
+    // The login goes to the sign_in call that asked, before it is let go; never into the chat.
+    if (approved && login && card.login) rememberTypedLogin(card.login.loginKey, login);
+    if (held) held.resolve(approved);
+    else run!.pending!.resolve(approved);
     return true;
   }
 
@@ -344,6 +395,13 @@ export class RunManager {
   }
 
   private abort(chatId: string): boolean {
+    // An outside agent's listed work: Stop closes the list now (the agent itself isn't Perch's to stop).
+    const observed = this.runs.get(chatId);
+    if (observed?.observed) {
+      clearTimeout(observed.quiet);
+      void this.endObserved(observed);
+      return true;
+    }
     // Stop on a chat that only holds a card declines the card.
     const held = this.held.get(chatId);
     if (held && !this.runs.has(chatId)) {

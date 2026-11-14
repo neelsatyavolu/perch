@@ -14,6 +14,8 @@ import { memoryPages } from "./pages/memory";
 import { modelsPages } from "./pages/models";
 import { ntpPages } from "./pages/ntp";
 import { permissionsPages } from "./pages/permissions";
+import { agentsPages } from "./pages/agents";
+import { memoryChatPages } from "./pages/memory-chat";
 import { auditPages } from "./pages/audit";
 import { policyPages } from "./pages/policy";
 import { capMode } from "../policy/policy";
@@ -32,7 +34,7 @@ export const BROWSER_METHODS = [
   "submitQuery", "autocompleteAddress", "openAddress", "openChat", "newChat",
   "listBuiltInExtensions", "setBuiltInExtension",
   "getMemorySaver", "setMemorySaver", "addSleepRule", "listTabMemory",
-  "queryCommandBar", "runCommandBarItem", "closeCommandBar",
+  "queryCommandBar", "runCommandBarItem", "closeCommandBar", "openCommandBar", "showAgentTab",
   "revealRecoveryKey", "getSecurity", "exportBackup", "restoreFromRecoveryKey", "startFresh",
 ] as const satisfies readonly ApiMethod[];
 
@@ -63,6 +65,8 @@ export function createPagesApi(deps: PagesDeps): PagesApi {
     ...mcpPages(deps),
     ...skillsPages(deps),
     ...permissionsPages(deps),
+    ...agentsPages(deps),
+    ...memoryChatPages(deps),
     ...auditPages(deps),
     ...policyPages(deps),
     ...memoryPages(deps, forget),

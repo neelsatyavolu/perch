@@ -8,7 +8,8 @@
  * never logged, stored, or returned to the model.
  */
 
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 
 export type OpResult = { readonly code: number; readonly stdout: string; readonly stderr: string };
@@ -53,11 +54,20 @@ export function findOp(env: Readonly<Record<string, string | undefined>>, exists
   return null;
 }
 
-/** Runs `op` with arguments only, never through a shell. */
-export function opRunner(path: string, env: Readonly<Record<string, string | undefined>> = process.env): OpRun {
-  return async (args, opts = {}) => {
-    const proc = Bun.spawn([path, ...args], { stdin: "ignore", stdout: "pipe", stderr: "pipe", env: { ...env, OP_FORMAT: "json" } });
-    const timer = setTimeout(() => proc.kill(), opts.timeoutMs ?? READ_TIMEOUT_MS);
+/** The person's login shell, which `op` can be run inside to get the environment it has in Terminal. */
+const LOGIN_SHELL = "/bin/zsh";
+
+/**
+ * Runs `op` with arguments only; they are never parsed by a shell. When `op` started straight from
+ * Perch sees no accounts but works in the person's Terminal, it runs inside their login shell
+ * instead (`zsh -l -c 'exec "$0" "$@"' op …`, the arguments passed as parameters, not as text), so
+ * it gets the same environment as there; that choice sticks for the rest of the run.
+ */
+export function opRunner(path: string, env: Readonly<Record<string, string | undefined>> = process.env, shell: string | null = LOGIN_SHELL): OpRun {
+  let viaShell = false;
+  const spawn = async (argv: string[], timeoutMs: number): Promise<OpResult> => {
+    const proc = Bun.spawn(argv, { stdin: "ignore", stdout: "pipe", stderr: "pipe", env: { ...env, OP_FORMAT: "json" } });
+    const timer = setTimeout(() => proc.kill(), timeoutMs);
     try {
       const [stdout, stderr, code] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
       return { code, stdout, stderr };
@@ -65,6 +75,28 @@ export function opRunner(path: string, env: Readonly<Record<string, string | und
       clearTimeout(timer);
     }
   };
+  const inShell = (args: readonly string[]) => [shell!, "-l", "-c", 'exec "$0" "$@"', path, ...args];
+  return async (args, opts = {}) => {
+    const timeoutMs = opts.timeoutMs ?? READ_TIMEOUT_MS;
+    if (viaShell && shell) return spawn(inShell(args), timeoutMs);
+    const direct = await spawn([path, ...args], timeoutMs);
+    if (!shell || args[0] !== "account" || args[1] !== "list" || direct.code !== 0 || !noAccounts(direct.stdout)) return direct;
+    const shelled = await spawn(inShell(args), timeoutMs);
+    if (shelled.code === 0 && !noAccounts(shelled.stdout)) {
+      viaShell = true;
+      return shelled;
+    }
+    return direct;
+  };
+}
+
+function noAccounts(stdout: string): boolean {
+  try {
+    const list: unknown = JSON.parse(stdout);
+    return !Array.isArray(list) || list.length === 0;
+  } catch {
+    return true;
+  }
 }
 
 /** A person-facing reason from `op`'s error output. Never includes what `op` printed on stdout. */
@@ -197,18 +229,46 @@ export class OnePassword {
   }
 }
 
-export type OnePasswordStatus = { readonly installed: boolean; readonly accounts: readonly OpAccount[]; readonly error?: string; readonly detail?: string };
+export type OnePasswordStatus = {
+  readonly installed: boolean; readonly accounts: readonly OpAccount[]; readonly error?: string; readonly detail?: string;
+  /** macOS keeps Perch out of 1Password's app folder, which `op` needs: Full Disk Access lets it in. */
+  readonly needsFullDiskAccess?: true;
+};
+
+/** Where the 1Password app keeps what `op` reads to reach it (its app group). */
+const ONEPASSWORD_GROUP = join("Library", "Group Containers", "2BUA8C4S2C.com.1password");
+
+export const FULL_DISK_ACCESS_HELP =
+  "macOS is keeping Perch out of the 1Password app's data, so 1Password's command-line tool can't reach it from Perch. Turn on Full Disk Access for Perch in System Settings, then restart Perch.";
+
+/** Whether macOS refuses this process the 1Password app's folder (it exists, but reading it is not permitted). */
+export function appDataBlocked(home: string, read: (path: string) => unknown = readdirSync): boolean {
+  try {
+    read(join(home, ONEPASSWORD_GROUP));
+    return false;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    return code === "EPERM" || code === "EACCES";
+  }
+}
 
 /** Whether `op` is installed and which accounts the 1Password app has. Shows no prompt. */
-export async function onePasswordStatus(run: OpRun | null): Promise<OnePasswordStatus> {
+export async function onePasswordStatus(run: OpRun | null, blocked: () => boolean = () => appDataBlocked(homedir())): Promise<OnePasswordStatus> {
   if (!run) return { installed: false, accounts: [], error: INSTALL_HELP };
   try {
     const result = await run(["account", "list", "--format", "json"], { timeoutMs: STATUS_TIMEOUT_MS });
     const accounts = accountsFrom(result);
     if (accounts.length) return { installed: true, accounts };
+    // No accounts because macOS won't let `op` (started by Perch) into the 1Password app's folder.
+    if (blocked()) return { installed: true, accounts, error: FULL_DISK_ACCESS_HELP, needsFullDiskAccess: true };
     // No accounts: 1Password's own note on why (an app integration that is off, say) goes along.
-    const detail = opSaid(result);
-    return { installed: true, accounts, error: SETUP_HELP, ...(detail ? { detail } : {}) };
+    // `op` said nothing on its error output: what it printed instead says why (never a secret here;
+    // account list prints only account addresses).
+    const detail = opSaid(result) ?? `op account list printed ${result.stdout.trim() ? JSON.stringify(result.stdout.trim().slice(0, 120)) : "nothing"}`;
+    // The whole of op's error output goes to perchd's log (account list never prints a secret), so
+    // why 1Password answered nothing can be read there.
+    if (result.stderr.trim()) process.stderr.write(`perchd: 1Password: op account list said:\n${result.stderr.trim().slice(0, 4000)}\n`);
+    return { installed: true, accounts, error: SETUP_HELP, detail };
   } catch (error) {
     const detail = error instanceof OnePasswordError ? error.detail : error instanceof Error ? error.message : undefined;
     return { installed: true, accounts: [], error: error instanceof OnePasswordError ? error.message : SETUP_HELP, ...(detail ? { detail } : {}) };

@@ -1,0 +1,78 @@
+A pinned tab playing sound shows its site's icon and the sound icon side by side, centred as a pair, instead of the sound icon alone (Perch's pinned tabs are wide enough for both).
+diff --git a/chrome/browser/ui/views/tabs/tab.cc b/chrome/browser/ui/views/tabs/tab.cc
+index daadfa65a3..58540b22b6 100644
+--- a/chrome/browser/ui/views/tabs/tab.cc
++++ b/chrome/browser/ui/views/tabs/tab.cc
+@@ -493,6 +493,12 @@ bool Tab::GetHitTestMask(SkPath* mask) const {
+   return true;
+ }
+ 
++bool Tab::PerchPinnedPairFits() const {
++  return width() >= gfx::kFaviconSize + kPerchPinnedPairGap +
++                        alert_indicator_button_->GetPreferredSize().width() +
++                        2 * kPerchPinnedPairInset;
++}
++
+ void Tab::Layout(PassKey) {
+   const gfx::Rect contents_rect = GetContentsBounds();
+ 
+@@ -531,6 +537,19 @@ void Tab::Layout(PassKey) {
+     favicon_bounds.Inset(-icon_->GetInsets());
+     favicon_bounds.set_size(icon_->GetPreferredSize());
+   }
++  // Perch: a pinned tab showing both its icon and the sound icon centres them
++  // as a pair.
++  const bool perch_pair = data().pinned && showing_icon_ &&
++                          showing_alert_indicator_ && PerchPinnedPairFits();
++  const int perch_pair_left =
++      perch_pair ? Center(width(), gfx::kFaviconSize + kPerchPinnedPairGap +
++                                       alert_indicator_button_
++                                           ->GetPreferredSize()
++                                           .width())
++                 : 0;
++  if (perch_pair) {
++    favicon_bounds.set_x(perch_pair_left - icon_->GetInsets().left());
++  }
+   icon_->SetBoundsRect(favicon_bounds);
+   icon_->SetVisible(showing_icon_);
+ 
+@@ -588,7 +607,9 @@ void Tab::Layout(PassKey) {
+         std::max(contents_rect.x(), right - image_size.width()),
+         contents_rect.y() + Center(contents_rect.height(), image_size.height()),
+         image_size.width(), image_size.height());
+-    if (center_icon_) {
++    if (perch_pair) {
++      bounds.set_x(perch_pair_left + gfx::kFaviconSize + kPerchPinnedPairGap);
++    } else if (center_icon_) {
+       // When centering the alert icon, it is allowed to escape the normal
+       // contents rect.
+       bounds.set_x(Center(width(), bounds.width()));
+@@ -1342,8 +1363,10 @@ void Tab::UpdateIconVisibility() {
+   if (data().pinned || is_animating_from_pinned_) {
+     // When the tab is pinned, we can show one of the two icons; the alert icon
+     // is given priority over the favicon. The close button is never shown.
++    // Perch: pinned tabs are wide enough for both side by side (Layout pairs
++    // them), so a playing tab keeps its site's icon.
+     showing_alert_indicator_ = has_alert_icon;
+-    showing_icon_ = has_favicon && !has_alert_icon;
++    showing_icon_ = has_favicon && (!has_alert_icon || PerchPinnedPairFits());
+     showing_close_button_ = false;
+ 
+     // While animating to or from the pinned state, pinned tabs are rendered as
+diff --git a/chrome/browser/ui/views/tabs/tab.h b/chrome/browser/ui/views/tabs/tab.h
+index 4a3919b628..a6396b83d2 100644
+--- a/chrome/browser/ui/views/tabs/tab.h
++++ b/chrome/browser/ui/views/tabs/tab.h
+@@ -99,6 +99,12 @@ class Tab : public gfx::AnimationDelegate,
+ 
+   // TabSlotView:
+   void Layout(PassKey) override;
++
++  // Perch: whether a pinned tab is wide enough to show its icon and the
++  // sound icon side by side.
++  bool PerchPinnedPairFits() const;
++  static constexpr int kPerchPinnedPairGap = 4;
++  static constexpr int kPerchPinnedPairInset = 6;
+   bool OnKeyPressed(const ui::KeyEvent& event) override;
+   bool OnKeyReleased(const ui::KeyEvent& event) override;
+   bool OnMousePressed(const ui::MouseEvent& event) override;

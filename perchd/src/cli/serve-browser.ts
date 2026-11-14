@@ -152,7 +152,8 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
       return page ? pageTextContext(page) || null : null;
     },
     artifactScheme: browser.features.has("perch-artifact"),
-    agentChatFor: (targetId) => app.chats.list().find((c) => agentTabs(c.id).includes(targetId))?.id,
+    // A tab an agent works in shows its chat: Perch's own agents' tabs, and outside agents' (CLI, MCP).
+    agentChatFor: (targetId) => app.chats.list().find((c) => link.targets(c.id).includes(targetId))?.id,
   });
   services.attach(app);
   // A chat on a model Perch calls itself works in the chat's daemon session, like a CLI agent.

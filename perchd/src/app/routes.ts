@@ -274,8 +274,15 @@ export const ROUTES: Route[] = [
   }),
   route("POST", "/api/approvals/:id", (ctx, [id], body) => {
     const o = v.object(body);
-    v.onlyKeys(o, ["approved"]);
-    if (!ctx.runs.decide(id!, v.bool(o.approved, "approved"))) throw new AppError("This approval is no longer waiting", 409);
+    v.onlyKeys(o, ["approved", "login"]);
+    // A login typed into a sign-in card: checked for shape, used once to fill the page, never logged.
+    let login: { username: string; password: string } | undefined;
+    if (o.login !== undefined) {
+      const l = v.object(o.login, "login");
+      v.onlyKeys(l, ["username", "password"]);
+      login = { username: v.text(l.username, "username", 1024), password: v.text(l.password, "password", 1024) };
+    }
+    if (!ctx.runs.decide(id!, v.bool(o.approved, "approved"), login)) throw new AppError("This approval is no longer waiting", 409);
     return { ok: true };
   }),
   route("GET", "/api/windows/:id", (ctx, [id]) => ctx.windows.state(id!)),

@@ -70,29 +70,51 @@ describe("Import wizard", () => {
     expect(r.getByText("Model sign-ins are not copied. You sign in again in Settings, so tokens never move between apps.")).toBeTruthy();
   });
 
-  test("Safari: steps that need Full Disk Access say so before asking", async () => {
+  test("Safari: one export file brings bookmarks, history and passwords; cookies ask for Full Disk Access", async () => {
     window.location.hash = "#safari";
     const r = renderWithApi(<ImportWizard />);
     await r.findByRole("group", { name: "What to bring from Safari" });
     fireEvent.click(r.getByRole("button", { name: "Continue" }));
-    expect(await r.findByText(/Safari keeps its data where only apps with Full Disk Access can read it/)).toBeTruthy();
+    expect(await r.findByText(/Export Browsing Data to File/)).toBeTruthy();
+    expect(r.getByText(/Cookies keep you signed in/)).toBeTruthy();
     fireEvent.click(r.getByRole("button", { name: "Open System Settings" }));
     await waitFor(() => expect(r.nav.some((n) => n.what === "system-settings")).toBe(true));
   });
 
-  test("Safari passwords: the exported file is chosen before the import can start", async () => {
+  test("Safari: with the export chosen and no Full Disk Access, everything but the cookies comes over", async () => {
     window.location.hash = "#safari";
-    const r = renderWithApi(<ImportWizard />, { access: { fullDiskAccess: true } });
-    const data = await r.findByRole("group", { name: "What to bring from Safari" });
-    for (const box of within(data).getAllByRole("checkbox")) if (!/Passwords/.test(box.parentElement!.textContent!)) fireEvent.click(box);
+    const api = createFakeApi({ stepMs: 0, access: { fullDiskAccess: false } });
+    const requests: { kinds: string[]; safariExport?: string }[] = [];
+    const startImport = api.startImport.bind(api);
+    api.startImport = (request) => (requests.push(request as never), startImport(request));
+    const r = renderWithApi(<ImportWizard />, { api });
+    await r.findByRole("group", { name: "What to bring from Safari" });
     fireEvent.click(r.getByRole("button", { name: "Continue" }));
+    // Nothing could come over yet, so there's nothing to start.
     const start = (await r.findByRole("button", { name: "Start import" })) as HTMLButtonElement;
     expect(start.disabled).toBe(true);
-    fireEvent.click(r.getByRole("button", { name: "Choose exported file" }));
-    expect(await r.findByText("Passwords.csv")).toBeTruthy();
-    expect(start.disabled).toBe(false);
-    fireEvent.click(start);
+    fireEvent.click(r.getByRole("button", { name: "Choose Safari's export" }));
+    expect(await r.findByText("Safari Export.zip")).toBeTruthy();
+    fireEvent.click(await r.findByRole("button", { name: "Import without cookies and logins" }));
     expect(await r.findByRole("heading", { name: "Import finished" })).toBeTruthy();
+    expect(requests[0]!.kinds).toEqual(["bookmarks", "history", "passwords"]);
+    expect(requests[0]!.safariExport).toBeTruthy();
+  });
+
+  test("Safari: with Full Disk Access and no export, bookmarks and history come straight from Safari", async () => {
+    window.location.hash = "#safari";
+    const api = createFakeApi({ stepMs: 0, access: { fullDiskAccess: true } });
+    const requests: { kinds: string[]; safariExport?: string }[] = [];
+    const startImport = api.startImport.bind(api);
+    api.startImport = (request) => (requests.push(request as never), startImport(request));
+    const r = renderWithApi(<ImportWizard />, { api });
+    await r.findByRole("group", { name: "What to bring from Safari" });
+    fireEvent.click(r.getByRole("button", { name: "Continue" }));
+    expect(await r.findByText("Full Disk Access is on")).toBeTruthy();
+    fireEvent.click(r.getByRole("button", { name: "Import without passwords" }));
+    expect(await r.findByRole("heading", { name: "Import finished" })).toBeTruthy();
+    expect(requests[0]).toMatchObject({ kinds: ["bookmarks", "history", "cookies"] });
+    expect(requests[0]!.safariExport).toBeUndefined();
   });
 
   test("a failed import says why and offers Back and Try again", async () => {

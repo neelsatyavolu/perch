@@ -48,6 +48,7 @@ export function onePasswordPages(deps: PagesDeps): Methods<"getOnePassword" | "s
       chosen,
       ...(problem ? { problem } : {}),
       ...(status.detail ? { detail: status.detail } : {}),
+      ...(status.needsFullDiskAccess ? { needsFullDiskAccess: true as const } : {}),
     };
   };
 

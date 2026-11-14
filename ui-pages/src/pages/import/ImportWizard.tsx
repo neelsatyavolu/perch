@@ -3,7 +3,7 @@ import type { DetectedBrowser, FileChoice, ImportKind, ImportNeed, JobId, System
 import { useAction, useApi, useLoad } from "../../ui/frame";
 import { Progress } from "../../ui/Progress";
 import { useJob } from "../../ui/useJob";
-import { ASIDE_KINDS, BrowserStep, DataStep, PermissionStep } from "./ImportSteps";
+import { ASIDE_KINDS, BrowserStep, DataStep, importPlan, kindList, PermissionStep } from "./ImportSteps";
 import "./import.css";
 
 type Step = "browser" | "data" | "access" | "run";
@@ -13,18 +13,18 @@ const STEPS: readonly { id: Step; label: string }[] = [
 
 const defaultKinds = (b: DetectedBrowser): readonly ImportKind[] => b.options.filter((o) => o.available).map((o) => o.kind);
 
+export type ImportStatus = "idle" | "running" | "done";
+
 type Props = {
-  /** Called by Done. Without it, Done opens a new tab. */
-  readonly onFinished?: () => void;
-  /** Inside another page (the welcome flow): no <main>, an h2 title, and the URL hash is ignored. */
+  /** Inside another page (the welcome screen): no <main>, an h3 title, no Done button, and the URL
+      hash is ignored. */
   readonly embedded?: boolean;
-  /** Embedded only: the host flow's Skip and Back, shown in the wizard's own button row. */
-  readonly onSkip?: () => void;
-  readonly onBack?: () => void;
+  /** Told when an import starts running and when one finishes. */
+  readonly onStatus?: (status: ImportStatus) => void;
 };
 
 /** The import wizard (spec 10), also the first-run import step. */
-export function ImportWizard({ onFinished, embedded = false, onSkip, onBack }: Props) {
+export function ImportWizard({ embedded = false, onStatus }: Props) {
   const api = useApi();
   const act = useAction();
   const browsers = useLoad((a) => a.detectBrowsers());
@@ -35,6 +35,7 @@ export function ImportWizard({ onFinished, embedded = false, onSkip, onBack }: P
   const [kinds, setKinds] = useState<readonly ImportKind[]>([]);
   const [access, setAccess] = useState<SystemAccess | null>(null);
   const [csv, setCsv] = useState<FileChoice | null>(null);
+  const [safariExport, setSafariExport] = useState<FileChoice | null>(null);
   const [jobId, setJobId] = useState<JobId | null>(null);
   const progress = useJob(jobId);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -46,6 +47,7 @@ export function ImportWizard({ onFinished, embedded = false, onSkip, onBack }: P
     setProfiles(b.profiles[0] ? [b.profiles[0].id] : []);
     setKinds(defaultKinds(b));
     setCsv(null);
+    setSafariExport(null);
   };
 
   // perch://import#chrome opens on that browser's data step; otherwise the one used most recently
@@ -67,13 +69,22 @@ export function ImportWizard({ onFinished, embedded = false, onSkip, onBack }: P
   const needs: readonly ImportNeed[] = browser
     ? [...new Set(browser.options.filter((o) => kinds.includes(o.kind) && o.needs).map((o) => o.needs!))]
     : [];
+  // Whatever lacks its file or permission stays behind, and everything else comes over.
+  const plan = browser
+    ? importPlan({ browser, kinds, csv: Boolean(csv), safariExport: Boolean(safariExport), fullDiskAccess: access?.fullDiskAccess ?? null })
+    : { sent: kinds, left: [] };
+  const sent = plan.sent;
   const start = async () => {
     if (!browser) return;
     setJobId(null);
-    // The chosen file goes only with Passwords still ticked; unticking it on the way back drops it.
+    // A chosen file goes only with what needs it still ticked; unticking on the way back drops it.
     const passwordsCsv = needs.includes("csv-export") ? csv?.id : undefined;
+    const exportId = needs.includes("safari-export") ? safariExport?.id : undefined;
     const ordered = browser.profiles.map((p) => p.id).filter((p) => profiles.includes(p));
-    const id = await act(() => api.startImport({ browser: browser.id, profile: ordered[0] ?? "", ...(ordered.length > 1 ? { profiles: ordered } : {}), kinds, ...(passwordsCsv ? { passwordsCsv } : {}) }));
+    const id = await act(() => api.startImport({
+      browser: browser.id, profile: ordered[0] ?? "", ...(ordered.length > 1 ? { profiles: ordered } : {}), kinds: sent,
+      ...(passwordsCsv ? { passwordsCsv } : {}), ...(exportId ? { safariExport: exportId } : {}),
+    }));
     if (id) {
       setJobId(id);
       go("run");
@@ -103,14 +114,23 @@ export function ImportWizard({ onFinished, embedded = false, onSkip, onBack }: P
   const at = STEPS.findIndex((s) => s.id === step);
   const done = progress?.state === "done";
   const failed = progress?.state === "failed";
-  const csvMissing = needs.includes("csv-export") && !csv;
+  const running = step === "run" && !done && !failed;
+  useEffect(() => onStatus?.(done ? "done" : running ? "running" : "idle"), [done, running]);
+  // Coming back from System Settings, the Full Disk Access line shows what was turned on there.
+  useEffect(() => {
+    if (step !== "access") return;
+    const recheck = async () => setAccess((await api.getSystemAccess().catch(() => null)) ?? access);
+    window.addEventListener("focus", recheck);
+    return () => window.removeEventListener("focus", recheck);
+  }, [step, access]);
   const Wrap = embedded ? "div" : "main";
-  const Title = embedded ? "h2" : "h1";
+  const Title = embedded ? "h3" : "h1";
   // Embedded, the host page's heading and step dots already say where you are; the title stays for
   // screen readers and focus, and shows only to report the outcome.
   const titleClass = embedded && !done && !failed ? "sr-only" : undefined;
   const ownBack = step === "data" || step === "access" || failed;
   const backClass = embedded ? "btn quiet" : "btn";
+  const hasFoot = step !== "run" || failed || done;
 
   return (
     <Wrap class={embedded ? "imp imp-embedded" : "imp-page"}>
@@ -137,8 +157,9 @@ export function ImportWizard({ onFinished, embedded = false, onSkip, onBack }: P
             </>
           )}
           {step === "access" && browser && (
-            <PermissionStep browser={browser} needs={needs} access={access} csv={csv}
+            <PermissionStep browser={browser} needs={needs} access={access} csv={csv} safariExport={safariExport} left={plan.left} canGoAhead={sent.length > 0}
               onChooseCsv={async () => setCsv(await act(() => api.chooseFile("passwords-csv")) ?? csv)}
+              onChooseSafariExport={async () => setSafariExport(await act(() => api.chooseFile("safari-export")) ?? safariExport)}
               onOpenSettings={async () => {
                 await act(() => api.openFullDiskAccess());
                 setAccess(await act(() => api.getSystemAccess()) ?? access);
@@ -155,22 +176,26 @@ export function ImportWizard({ onFinished, embedded = false, onSkip, onBack }: P
             </ul>
           )}
         </section>
-        <div class="imp-foot">
-          {ownBack && <button type="button" class={backClass} onClick={back}>Back</button>}
-          {!ownBack && onBack && step === "browser" && <button type="button" class={backClass} onClick={onBack}>Back</button>}
-          <span class="grow" />
-          {onSkip && !done && <button type="button" class="btn quiet" onClick={onSkip}>Skip import</button>}
-          {step === "browser" && <button type="button" class="btn primary" disabled={!browser || profiles.length === 0} onClick={next}>Continue</button>}
-          {step === "data" && <button type="button" class="btn primary" disabled={kinds.length === 0} onClick={next}>Continue</button>}
-          {step === "access" && <button type="button" class="btn primary" disabled={csvMissing} onClick={next}>Start import</button>}
-          {failed && <button type="button" class="btn primary" onClick={start}>Try again</button>}
-          {done && (
-            <>
-              <button type="button" class="btn" onClick={restart}>Import from another browser</button>
-              <button type="button" class="btn primary" onClick={() => (onFinished ? onFinished() : act(() => api.openPage("newtab")))}>Done</button>
-            </>
-          )}
-        </div>
+        {hasFoot && (
+          <div class="imp-foot">
+            {ownBack && <button type="button" class={backClass} onClick={back}>Back</button>}
+            <span class="grow" />
+            {step === "browser" && browsers.data && browsers.data.length > 0 && <button type="button" class={embedded ? "btn" : "btn primary"} disabled={!browser || profiles.length === 0} onClick={next}>Continue</button>}
+            {step === "data" && <button type="button" class={embedded ? "btn" : "btn primary"} disabled={kinds.length === 0} onClick={next}>Continue</button>}
+            {step === "access" && (
+              <button type="button" class={embedded ? "btn" : "btn primary"} disabled={sent.length === 0} onClick={next}>
+                {plan.left.length > 0 && sent.length > 0 ? `Import without ${kindList(plan.left)}` : "Start import"}
+              </button>
+            )}
+            {failed && <button type="button" class={embedded ? "btn" : "btn primary"} onClick={start}>Try again</button>}
+            {done && (
+              <>
+                <button type="button" class="btn" onClick={restart}>Import from another browser</button>
+                {!embedded && <button type="button" class="btn primary" onClick={() => act(() => api.openPage("newtab"))}>Done</button>}
+              </>
+            )}
+          </div>
+        )}
       </div>
     </Wrap>
   );

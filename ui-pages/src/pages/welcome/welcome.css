@@ -10,12 +10,13 @@ html:has(.wl-stage), body:has(.wl-stage) { background: var(--card); }
 .wl-mute { margin-left: auto; font-size: 12px; }
 .cap + .wl-mute { margin-left: 0; }
 .wl-brand { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--ink); }
+/* Where you are in setup: four short bars in the middle of the bar. */
 .wl-dots { position: absolute; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .wl-dots li { width: 28px; height: 3px; border-radius: 2px; background: var(--hair-strong); transition: background-color 240ms var(--ease); }
 .wl-dots li.done { background: var(--mute); }
 .wl-dots li.on { background: var(--ink); }
 
-.wl { width: 600px; max-width: calc(100% - 48px); margin: 0 auto; padding: 96px 0 72px; display: grid; gap: 16px; align-content: start; }
+.wl { width: 600px; max-width: calc(100% - 48px); margin: 0 auto; padding: 72px 0 0; display: grid; gap: 16px; align-content: start; }
 @media (max-height: 760px) { .wl { padding-top: 48px; } }
 .wl .serif-title { font-size: 44px; }
 .wl-lead { color: var(--body); font-size: 15px; line-height: 1.6; max-width: 56ch; text-wrap: pretty; }
@@ -27,8 +28,15 @@ html:has(.wl-stage), body:has(.wl-stage) { background: var(--card); }
 /* A quiet Back at the start of the row lines its label up with the column edge. */
 .wl-actions > .btn.quiet:first-child { margin-left: -12px; }
 
-.wl-hero { justify-items: center; text-align: center; align-content: center; gap: 22px; padding-top: 0; padding-bottom: 14vh; }
-.wl-hero { width: 880px; }
+.wl-body { display: grid; gap: 16px; }
+.wl-body > .note { margin: 0; }
+.wl-check { cursor: pointer; margin-top: 4px; }
+/* Back on the left, the way forward on the right, kept in reach when a step runs long (the import). */
+.wl-finish { position: sticky; bottom: 0; margin: 8px 0 0; padding: 16px 0 24px; border-top: 1px solid var(--hair); background: var(--card); }
+.wl-finish .cap { margin: 0; }
+
+/* The opening screen: the mark lands, then the words. */
+.wl-hero { width: 880px; min-height: calc(100vh - 52px); justify-items: center; align-content: center; gap: 22px; padding: 0 0 12vh; text-align: center; }
 .wl-hero .serif-title { font-size: clamp(44px, 6vw, 76px); text-wrap: balance; }
 .wl-hero .wl-lead { font-size: 17px; max-width: 46ch; text-wrap: balance; }
 .wl-hero .wl-actions { justify-content: center; margin-top: 12px; }
@@ -47,7 +55,7 @@ html:has(.wl-stage), body:has(.wl-stage) { background: var(--card); }
 }
 @keyframes wl-in { from { opacity: 0; transform: translateY(8px); } }
 
-/* Headings take focus when a step changes, for screen readers; no ring for that. */
+/* Headings take focus for screen readers; no ring for that. */
 .wl h1:focus { outline: none; }
 
 /* The opening: the bar draws out from its middle, the dot comes down and settles on it, and the

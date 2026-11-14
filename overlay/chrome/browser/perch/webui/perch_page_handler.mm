@@ -19,6 +19,8 @@
 #include "base/strings/string_util.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
+#include "chrome/browser/perch/agent/agent_tabs.h"
+#include "components/tabs/public/tab_interface.h"
 #include "chrome/browser/perch/agent/perch_devtools.h"
 #include "chrome/browser/perch/command_bar/command_bar.h"
 #include "chrome/browser/perch/onboarding/onboarding.h"
@@ -61,8 +63,8 @@ namespace perch {
 
 namespace {
 
-constexpr std::string_view kPages[] = {"newtab",   "settings", "memory",
-                                       "routines", "import",   "welcome"};
+constexpr std::string_view kPages[] = {"newtab", "settings", "memory", "routines",
+                                       "import", "welcome",  "tour"};
 
 const char* const kAppearancePrefs[] = {
     prefs::kAppearanceTheme,       prefs::kAppearanceAccent,
@@ -624,6 +626,38 @@ void PerchPageHandler::Dispatch(const std::string& method,
     }
     Resolve(std::move(id), base::Value());
     CloseCommandBarNow(web_ui());
+  } else if (method == "showAgentTab") {
+    // The tour shows the agent's work: its newest tab at that address (or its
+    // newest tab), moved into this window with the side chat beside it.
+    const std::string* prefix = arg0 ? arg0->GetIfString() : nullptr;
+    BrowserWindowInterface* browser =
+        webui::GetBrowserWindowInterface(web_ui()->GetWebContents());
+    std::vector<tabs::TabInterface*> agent_tabs = AgentTabsFor(profile());
+    tabs::TabInterface* pick = nullptr;
+    for (auto it = agent_tabs.rbegin(); it != agent_tabs.rend(); ++it) {
+      const std::string url =
+          (*it)->GetContents()->GetLastCommittedURL().spec();
+      if (!prefix || prefix->empty() || url.starts_with(*prefix)) {
+        pick = *it;
+        break;
+      }
+    }
+    if (!browser || !pick) {
+      Reject(std::move(id), "not-found", "The agent has no tab open for that");
+      return;
+    }
+    ShowAgentTab(pick, browser);
+    Resolve(std::move(id), base::Value());
+  } else if (method == "openCommandBar") {
+    // The tour shows the command bar off over its own window.
+    BrowserWindowInterface* browser =
+        webui::GetBrowserWindowInterface(web_ui()->GetWebContents());
+    if (!browser) {
+      Reject(std::move(id), "unavailable", "There's no window to open it in");
+      return;
+    }
+    ToggleCommandBar(browser);
+    Resolve(std::move(id), base::Value());
   } else if (method == "closeCommandBar") {
     Resolve(std::move(id), base::Value());
     CloseCommandBarNow(web_ui());
@@ -643,6 +677,8 @@ void PerchPageHandler::Dispatch(const std::string& method,
     std::vector<std::string> extensions;
     if (kind && *kind == "passwords-csv") {
       extensions = {"csv"};
+    } else if (kind && *kind == "safari-export") {
+      extensions = {"zip"};
     } else if (kind && *kind == "memory-export") {
       extensions = {"zip", "json", "html"};
     } else {

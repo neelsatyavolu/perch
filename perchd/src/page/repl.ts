@@ -94,6 +94,16 @@ async function sandbox(conn: CdpConnection): Promise<Tab> {
   return sandbox(conn);
 }
 
+/** How long one REPL call may run. */
+const REPL_LIMIT_MS = 10_000;
+
+/** Stops whatever runs in the scratch tab and closes it; the next call makes a new one. */
+async function discardSandbox(conn: CdpConnection, scratch: Tab): Promise<void> {
+  sandboxes.delete(conn);
+  await scratch.send("Runtime.terminateExecution").catch(() => undefined);
+  await conn.send("Target.closeTarget", { targetId: scratch.id }).catch(() => undefined);
+}
+
 const worldsMade = new WeakMap<Tab, number>();
 /** A world's name picks it: the same name gives back the same world, so each one gets its own. */
 let worldSerial = 0;
@@ -216,17 +226,83 @@ export async function repl(tab: Tab, code: string): Promise<ReplResult> {
   const contextId = await freshWorld(scratch);
   const copy = await scratch.send<{ result: { objectId?: string } }>("Runtime.evaluate", { expression: clean, contextId, returnByValue: false });
   if (!copy.result.objectId) return { result: undefined, error: FIELDS_UNREADABLE };
-  const res = await scratch.send<{ result: { value?: unknown }; exceptionDetails?: { text: string; exception?: { description?: string } } }>("Runtime.callFunctionOn", {
-    functionDeclaration: `async function (document, href) {\n const location = new URL(href);\n ${body}\n }`,
+  type Run = { result: { value?: unknown }; exceptionDetails?: { text: string; exception?: { description?: string } } };
+  // A syntax error is the person's code's own, not the wrapper's: `1+` says "Unexpected end of input".
+  // Checked by the page's own engine, which words it as the person will see it run.
+  const syntax = (await syntaxError(scratch, contextId, body)) && ((await scriptError(scratch, contextId, code)) || "the code has a syntax error");
+  if (syntax) return { result: undefined, error: syntax };
+  const running = scratch.send<Run>("Runtime.callFunctionOn", {
+    functionDeclaration: `async function (document, href) {\n const location = new URL(href);\n const __value = await (async () => {\n ${body}\n })();\n return (${SERIALIZE})(__value);\n }`,
     executionContextId: contextId,
     arguments: [{ objectId: copy.result.objectId }, { value: url }],
     returnByValue: true,
     awaitPromise: true,
   });
+  // Code that never finishes (an endless loop) would hold the one scratch tab every later call
+  // uses: past the limit it is stopped and the tab thrown away, so the next call gets a fresh one.
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<"late">((resolve) => (timer = setTimeout(() => resolve("late"), REPL_LIMIT_MS)));
+  const res = await Promise.race([running.catch((error: unknown) => ({ failed: error }) as const), late]).finally(() => clearTimeout(timer));
+  if (res === "late") {
+    await discardSandbox(tab.conn, scratch);
+    return { result: undefined, error: `the code ran for more than ${REPL_LIMIT_MS / 1000}s and was stopped` };
+  }
+  if ("failed" in res) {
+    await discardSandbox(tab.conn, scratch);
+    throw res.failed;
+  }
   if (res.exceptionDetails) {
     const description = res.exceptionDetails.exception?.description ?? res.exceptionDetails.text;
     const first = description.split("\n")[0]!.replace(/^(Uncaught )?(Type)?Error: /, "");
     return { result: undefined, error: NETWORK_ERROR.test(first) ? NO_NETWORK_MESSAGE : first };
   }
-  return { result: res.result.value };
+  // The value came back as JSON text made in the page (SERIALIZE); undefined stays undefined.
+  const text = res.result.value;
+  return { result: typeof text === "string" ? JSON.parse(text) : undefined };
 }
+
+/** The person's code parsed exactly as written, for a syntax error that names their code's own place. */
+async function scriptError(scratch: Tab, contextId: number, code: string): Promise<string> {
+  const r = await scratch
+    .send<{ exceptionDetails?: { exception?: { description?: string }; text?: string } }>("Runtime.compileScript", { expression: code, sourceURL: "", persistScript: false, executionContextId: contextId })
+    .catch(() => null);
+  const d = r?.exceptionDetails;
+  return (d?.exception?.description ?? d?.text ?? "").split("\n")[0]!.replace(/^(Uncaught )?SyntaxError: /, "");
+}
+
+/** The message of a syntax error in `code` as an async function body, from the page's engine; "" when it parses. */
+async function syntaxError(scratch: Tab, contextId: number, code: string): Promise<string> {
+  const expression = `(() => { try { new (Object.getPrototypeOf(async function () {}).constructor)('document', 'href', ${JSON.stringify(code)}); return ''; } catch (e) { return e instanceof SyntaxError ? e.message : ''; } })()`;
+  const r = await scratch.send<{ result: { value?: unknown } }>("Runtime.evaluate", { expression, contextId, returnByValue: true }).catch(() => null);
+  return typeof r?.result.value === "string" ? r.result.value : "";
+}
+
+/**
+ * Turns the result into JSON text in the page, so anything comes back readable: dates as ISO
+ * text, BigInts as "12n", Maps and Sets as lists, functions and symbols named, repeats as
+ * "[Circular]", and very deep or very big values cut off rather than failing.
+ */
+const SERIALIZE = `(value) => {
+  if (value === undefined) return undefined;
+  const seen = new WeakSet();
+  const walk = (v, depth) => {
+    if (v === null || typeof v === 'number' || typeof v === 'string' || typeof v === 'boolean') return v;
+    if (typeof v === 'bigint') return v.toString() + 'n';
+    if (typeof v === 'undefined') return null;
+    if (typeof v === 'function') return '[Function' + (v.name ? ' ' + v.name : '') + ']';
+    if (typeof v === 'symbol') return v.toString();
+    if (v instanceof Date) return isNaN(v) ? 'Invalid Date' : v.toISOString();
+    if (v instanceof Error) return v.name + ': ' + v.message;
+    if (typeof Node !== 'undefined' && v instanceof Node) return '[' + (v.nodeName || 'Node') + ']';
+    if (seen.has(v)) return '[Circular]';
+    if (depth > 8) return '[…]';
+    seen.add(v);
+    if (v instanceof Map) return [...v].slice(0, 1000).map(([k, x]) => [walk(k, depth + 1), walk(x, depth + 1)]);
+    if (v instanceof Set || Array.isArray(v) || ArrayBuffer.isView(v)) return [...v].slice(0, 1000).map((x) => walk(x, depth + 1));
+    if (typeof Window !== 'undefined' && v instanceof Window) return '[Window]';
+    const out = {};
+    for (const k of Object.keys(v).slice(0, 1000)) { try { out[k] = walk(v[k], depth + 1); } catch { out[k] = '[unreadable]'; } }
+    return out;
+  };
+  return JSON.stringify(walk(value, 0));
+}`;

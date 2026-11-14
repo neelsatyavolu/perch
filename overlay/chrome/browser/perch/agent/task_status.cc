@@ -86,11 +86,17 @@ GURL ChatUrl(const std::string& chat_id) {
   return GURL("chrome://perch-chat/?chat=" + chat_id);
 }
 
-bool AnyWindowActive() {
+// Whether the person is looking at this chat already: its full chat page is the
+// front tab of the window in front. Then its card is in sight and no notice is
+// needed; anywhere else (another tab, a side chat, another app) it is.
+bool ChatInSight(const std::string& chat_id) {
   for (BrowserWindowInterface* browser : GetAllBrowserWindowInterfaces()) {
-    if (browser->IsActive()) {
-      return true;
+    if (!browser->IsActive()) {
+      continue;
     }
+    content::WebContents* front =
+        browser->GetTabStripModel()->GetActiveWebContents();
+    return front && front->GetLastCommittedURL() == ChatUrl(chat_id);
   }
   return false;
 }
@@ -160,10 +166,9 @@ void SetTaskStatus(const std::string& chat_id,
                                            : target_ids;
   if (state != TaskState::kWaiting) {
     chat.notified = false;
-  } else if (!was_waiting && !chat.notified && !title.empty() &&
-             !AnyWindowActive()) {
+  } else if (!was_waiting && !chat.notified && !ChatInSight(chat_id)) {
     chat.notified = true;
-    Notify(chat_id, target_ids, title);
+    Notify(chat_id, target_ids, title.empty() ? "Perch needs you" : title);
   }
   if (state == TaskState::kIdle) {
     Chats().erase(chat_id);

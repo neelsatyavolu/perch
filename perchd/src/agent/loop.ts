@@ -76,8 +76,10 @@ export async function* runTask(opts: TaskOptions): AsyncIterable<StepEvent> {
   const signal = opts.signal ?? new AbortController().signal;
   const extraPrompt = opts.extraTools?.prompt() ?? "";
   const remembered = opts.memory ? await opts.memory.context(opts.task).catch(() => "") : "";
-  const system = [systemPrompt({ mode: opts.mode, now: new Date() }), extraPrompt, remembered].filter(Boolean).join("\n\n");
-  const tools = [...agentToolSpecs(TOOL_SPECS), ...(opts.extraTools?.specs() ?? []), ...(opts.memory?.specs ?? [])];
+  const system = [systemPrompt({ mode: opts.mode, now: new Date() }), extraPrompt, opts.memory ? MEMORY_GUIDE : "", remembered].filter(Boolean).join("\n\n");
+  // Memory's tools can come both on their own and among the extras; each name goes once (the
+  // Claude API refuses a request that repeats one).
+  const tools = uniqueByName([...agentToolSpecs(TOOL_SPECS), ...(opts.extraTools?.specs() ?? []), ...(opts.memory?.specs ?? [])]);
   const maxSteps = opts.maxSteps ?? DEFAULT_MAX_STEPS;
   const progress = new Progress({ maxSteps, maxMs: opts.maxMs ?? DEFAULT_MAX_MS });
   let worked = false;
@@ -235,4 +237,17 @@ export function compact(messages: Message[]): Message[] {
     if (next.image && i !== lastImage) next = { ...next, image: undefined, content: `${next.content}\n[older screenshot removed]` };
     return next;
   });
+}
+
+/** How to use memory, as Aside's agent does: look before asking, save as you learn. */
+export const MEMORY_GUIDE = [
+  "Memory: Perch keeps what it knows about the user (people, places, accounts, sites, preferences, how they write).",
+  "- Before you ask the user anything, or fill in a form, write a message or buy something for them, search memory (memory_search) for what you need: their details, the person, the site's quirks.",
+  "- Whenever you learn something lasting about the user, someone they know, an account or a site (a detail they mention, an address on an order page, how a site behaves), save it with memory_save right away, one short fact at a time. Saving never needs their approval.",
+  "- Don't save passwords, full card numbers, one-time codes or anything only true for this task.",
+].join("\n");
+
+function uniqueByName<T extends { readonly name: string }>(specs: readonly T[]): T[] {
+  const seen = new Set<string>();
+  return specs.filter((s) => !seen.has(s.name) && Boolean(seen.add(s.name)));
 }

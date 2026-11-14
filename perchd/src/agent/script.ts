@@ -188,7 +188,9 @@ export class ScriptVm {
         ].join("\n")
       : "";
     const before = `globalThis.__out = [];\nglobalThis.__main = (async () => {\n${head}\n`;
-    const source = `${before}${code}\n})();`;
+    // In the REPL a lone expression prints its value, as Aside's does: `1 + 1` gives 2.
+    const runnable = persist && isLoneExpression(code) ? `return (${code.trim().replace(/;$/, "")}\n);` : code;
+    const source = `${before}${runnable}\n})();`;
     const offset = before.split("\n").length - 1;
 
     let output = "";
@@ -273,4 +275,10 @@ function errorText(vm: QuickJSContext, h: QuickJSHandle, offset: number): string
   if (typeof e === "string") return e;
   const where = e?.stack?.match(/script\.js:(\d+)/)?.[1];
   return `${e?.name ?? "Error"}: ${e?.message ?? String(e)}${where ? ` (line ${Number(where) - offset})` : ""}`;
+}
+
+/** One line of code that is an expression, not statements: no declarations, keywords or semicolons between statements. */
+export function isLoneExpression(code: string): boolean {
+  const c = code.trim().replace(/;$/, "");
+  return c !== "" && !c.includes("\n") && !c.includes(";") && !/^(const|let|var|return|throw|if|for|while|do|function|class|try|switch|import|export)\b/.test(c) && !/^\{/.test(c);
 }

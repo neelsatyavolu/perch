@@ -112,6 +112,7 @@ export function OnePasswordGroup() {
           {s.problem && <p>{s.problem}</p>}
           {s.detail && <p>1Password said: <span class="mono">{s.detail}</span></p>}
           <p>
+            {s.needsFullDiskAccess && <button type="button" class="btn sm" onClick={() => act(() => api.openFullDiskAccess())}>Open System Settings</button>}
             {s.installed ? <button type="button" class="btn quiet sm" disabled={busy} onClick={recheck}>Check again</button> : <a href={CLI_GUIDE} target="_blank" rel="noreferrer">How to install it</a>}
           </p>
         </div>

@@ -4,6 +4,7 @@
  */
 
 import { readText, writeSafely, type Change } from "./files";
+import { parse as parseToml } from "smol-toml";
 
 const BEGIN = "# perch:begin";
 const END = "# perch:end";
@@ -30,7 +31,8 @@ export function tomlBlock(agent: "codex" | "grok", command: string[]): string {
 
 export function checkToml(file: string, text: string): void {
   try {
-    Bun.TOML.parse(text);
+    // smol-toml follows the TOML spec; Bun's own parser rejects files Codex and Grok read fine.
+    parseToml(text);
   } catch {
     throw new Error(`${file} is not valid TOML; Perch left it unchanged`);
   }

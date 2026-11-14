@@ -46,12 +46,12 @@ describe("fake backend: the contract the review asked for", () => {
     expect(await api({ pickFile: () => null }).chooseFile("memory-export")).toBeNull();
   });
 
-  test("Safari passwords need the exported CSV", async () => {
+  test("Safari passwords come from Safari's export ZIP", async () => {
     const a = api();
     const req = { browser: "safari", profile: "default", kinds: ["passwords"] } as const;
-    await expect(a.startImport(req)).rejects.toThrow("Choose the passwords file you exported");
-    const csv = await a.chooseFile("passwords-csv");
-    expect((await settle(a, await a.startImport({ ...req, passwordsCsv: csv!.id }))).state).toBe("done");
+    await expect(a.startImport(req)).rejects.toThrow("Safari's passwords come from its export file");
+    const zip = await a.chooseFile("safari-export");
+    expect((await settle(a, await a.startImport({ ...req, safariExport: zip!.id }))).state).toBe("done");
   });
 
   test("failing jobs say why", async () => {

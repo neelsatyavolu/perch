@@ -10,6 +10,7 @@ import { parseArgs, UsageError } from "./args";
 import type { DaemonClient } from "./client";
 import { DaemonNotRunning } from "./client";
 import { openDaemon, type CliIO } from "./io";
+import { PROVIDER_IDS } from "../models/ids";
 
 type Command = (argv: string[], io: CliIO) => Promise<number>;
 
@@ -103,6 +104,11 @@ export const taskCommands: Record<string, Command> = {
     const provider = a.options.get("-p") ?? a.options.get("--provider");
     const named = a.options.get("-m") ?? a.options.get("--model");
     const model = named && provider && !named.includes("/") ? `${provider}/${named}` : named;
+    // A provider Perch doesn't know is a typo; say so here, before reaching perchd or starting anything.
+    const prefix = model?.includes("/") ? model.slice(0, model.indexOf("/")) : undefined;
+    if (prefix !== undefined && !(PROVIDER_IDS as readonly string[]).includes(prefix)) {
+      throw new UsageError(`perch: unknown model provider "${prefix}". perch models lists the ones you can use.`);
+    }
     const effort = a.options.get("--effort") ?? a.options.get("--thinking");
     const timeoutMs = a.options.has("--timeout") ? parseDuration(a.options.get("--timeout")!) : undefined;
     // Benchmark runners (`--log-dump`) and `--standalone` run one agent outside the app, as before.

@@ -3,18 +3,18 @@
 
 #include "chrome/browser/perch/onboarding/onboarding.h"
 
+#include <map>
 #include <set>
 
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/no_destructor.h"
+#include "base/time/time.h"
 #include "chrome/browser/perch/perch_pref_names.h"
 #include "chrome/browser/perch/scheme/perch_scheme.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
-#include "chrome/browser/ui/webui/webui_embedding_context.h"
 #include "chrome/common/chrome_switches.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/navigation_controller.h"
@@ -39,6 +39,15 @@ std::set<base::FilePath>& Started() {
   static base::NoDestructor<std::set<base::FilePath>> started;
   return *started;
 }
+
+// When each profile finished setup this run; extension tabs stay held back for
+// a while after, since Web Store installs from the import finish late.
+std::map<base::FilePath, base::TimeTicks>& FinishedAt() {
+  static base::NoDestructor<std::map<base::FilePath, base::TimeTicks>> at;
+  return *at;
+}
+
+constexpr base::TimeDelta kHoldAfterSetup = base::Minutes(5);
 
 bool IsNewTabURL(const GURL& url) {
   return IsPerchNewTabURL(url) ||
@@ -82,33 +91,37 @@ void MaybeStartOnboarding(BrowserWindowInterface* browser) {
                              ui::PAGE_TRANSITION_AUTO_TOPLEVEL,
                              /*is_renderer_initiated=*/false),
       {});
-  if (!browser->GetWindow()->IsFullscreen()) {
-    chrome::ToggleFullscreenMode(browser);
+  // The welcome page fills the screen by maximizing the window, not by macOS
+  // full screen: full screen moves the window to a Space of its own, and
+  // during that move (or when a sign-in window takes focus) Chromium can mark
+  // the page hidden and stop drawing it.
+  if (!browser->GetWindow()->IsFullscreen() &&
+      !browser->GetWindow()->IsMaximized()) {
+    browser->GetWindow()->Maximize();
   }
 }
 
-void LeftWelcomeUnfinished(BrowserWindowInterface* browser) {
-  // The welcome page took the window full screen. Someone who walks away
-  // from it (a new tab, another page) gets their ordinary window back; one
-  // who finishes is taken out by FinishOnboarding.
-  if (browser->GetProfile()->GetPrefs()->GetBoolean(
-          prefs::kOnboardingFinished) ||
-      !Started().contains(browser->GetProfile()->GetPath()) ||
-      !browser->GetWindow()->IsFullscreen()) {
-    return;
+bool ExtensionTabsHeldBack(Profile* profile) {
+  if (!profile) {
+    return false;
   }
-  chrome::ToggleFullscreenMode(browser);
+  const base::FilePath path = profile->GetOriginalProfile()->GetPath();
+  if (Started().contains(path) &&
+      !profile->GetPrefs()->GetBoolean(prefs::kOnboardingFinished)) {
+    return true;
+  }
+  auto finished = FinishedAt().find(path);
+  return finished != FinishedAt().end() &&
+         base::TimeTicks::Now() - finished->second < kHoldAfterSetup;
 }
 
 void FinishOnboarding(content::WebContents* welcome) {
+  FinishedAt()[Profile::FromBrowserContext(welcome->GetBrowserContext())
+                   ->GetOriginalProfile()
+                   ->GetPath()] = base::TimeTicks::Now();
   Profile::FromBrowserContext(welcome->GetBrowserContext())
       ->GetPrefs()
       ->SetBoolean(prefs::kOnboardingFinished, true);
-  // Back out of the full screen the welcome page went into.
-  BrowserWindowInterface* browser = webui::GetBrowserWindowInterface(welcome);
-  if (browser && browser->GetWindow()->IsFullscreen()) {
-    chrome::ToggleFullscreenMode(browser);
-  }
 }
 
 }  // namespace perch

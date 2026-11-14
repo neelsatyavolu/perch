@@ -360,7 +360,7 @@ async function dispatch(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
   if (call.name === "done") return { content: String(a.answer), done: true };
   const app = appTool(call.name);
   if (app) return app.run(call.args);
-  if (FILL_TOOLS.has(call.name)) return runFillTool(ctx, call.name);
+  if (FILL_TOOLS.has(call.name)) return runFillTool(ctx, call.name, call.id);
   if (call.name === "tabs") return { content: await listTabs(ctx) };
   if (call.name === "write_file") {
     // Only a plain file name: no folders, so nothing can be written outside the chat's folder.

@@ -120,6 +120,26 @@ export function openPageServices(opts: PageServicesOptions): PageServices {
   const openUrl = async (url: string) => {
     await opts.conn.send("Target.createTarget", { url });
   };
+  const openAndWatch = async (url: string, done: (address: string) => boolean, timeoutMs: number): Promise<string | null> => {
+    // A window of its own, so the page that asked (the welcome screen) keeps its place.
+    const { targetId } = await opts.conn.send<{ targetId: string }>("Target.createTarget", { url, newWindow: true });
+    return new Promise<string | null>((resolve) => {
+      const finish = (address: string | null) => {
+        clearTimeout(timer);
+        offChanged();
+        offDestroyed();
+        if (address) void opts.conn.send("Target.closeTarget", { targetId }).catch(() => undefined);
+        resolve(address);
+      };
+      const timer = setTimeout(() => finish(null), timeoutMs);
+      const offChanged = opts.conn.on("Target.targetInfoChanged", (p: { targetInfo?: { targetId?: string; url?: string } }) => {
+        if (p.targetInfo?.targetId === targetId && p.targetInfo.url && done(p.targetInfo.url)) finish(p.targetInfo.url);
+      });
+      const offDestroyed = opts.conn.on("Target.targetDestroyed", (p: { targetId?: string }) => {
+        if (p.targetId === targetId) finish(null);
+      });
+    });
+  };
   const settingsKeychain = opts.secrets?.settings ?? systemKeychain();
   let registry: Promise<ModelRegistry> | null = null;
   const models = () => (registry ??= SettingsStore.open({ dir: base, keychain: settingsKeychain }).then((store) => createModelRegistry({ store, keychain: settingsKeychain })));
@@ -211,8 +231,9 @@ export function openPageServices(opts: PageServicesOptions): PageServices {
         setDefaults: core.setDefaults,
         chatInfo: core.info,
         jobs: new Jobs(core.emit),
+        openBackgroundTab: async (url) => void (await opts.conn.send("Target.createTarget", { url, background: true })),
         state: pagesState,
-        models: { registry: models, keychain: settingsKeychain, openUrl },
+        models: { registry: models, keychain: settingsKeychain, openUrl, openAndWatch },
         mcp: { store: mcpStore, keychain: secrets, manager, findImports: () => findImports({ home, env: opts.env }) },
         skills: { store: new SkillStore(join(base, "skills"), secrets), home },
         clients: opts.clients,

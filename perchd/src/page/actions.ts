@@ -75,6 +75,9 @@ export function type(tab: Tab, refs: RefTable, ref: string, text: string, opts: 
     if (slider) return slider;
     const special = await setSpecialInput(tab, node, text);
     if (special) return special;
+    // Typing at a link or a button would send the keys to whatever has focus, where a page's own
+    // keyboard shortcuts could act; only something that takes text gets them.
+    if (!(await call<boolean>(tab, node, TAKES_TEXT))) return fail(`${await describe(tab, node)} isn't a text field; type into a field, or click this instead`);
     if (node.owner !== undefined) await tab.send("DOM.scrollIntoViewIfNeeded", { backendNodeId: node.owner }).catch(() => undefined);
     await tab.sendIn(node.session, "DOM.scrollIntoViewIfNeeded", { backendNodeId: node.backendNodeId }).catch(() => undefined);
     await tab.sendIn(node.session, "DOM.focus", { backendNodeId: node.backendNodeId });
@@ -90,6 +93,14 @@ export function type(tab: Tab, refs: RefTable, ref: string, text: string, opts: 
     return ok(`typed ${text.length} characters${opts.submit ? " and pressed Enter" : ""}${note}`);
   });
 }
+
+/** Whether the element takes typed text: a text field, a text area, or something editable. */
+const TAKES_TEXT = `function () {
+  if (this.isContentEditable) return true;
+  if (this.tagName === 'TEXTAREA') return !this.disabled && !this.readOnly;
+  if (this.tagName === 'INPUT') return !this.disabled && !this.readOnly && !['button', 'submit', 'reset', 'checkbox', 'radio', 'image', 'hidden', 'file', 'color', 'range'].includes(this.type);
+  return ['textbox', 'searchbox', 'combobox', 'spinbutton'].includes(this.getAttribute('role') || '');
+}`;
 
 const FORMATS: Record<string, [string, string]> = {
   date: ["YYYY-MM-DD", "2026-11-05"],

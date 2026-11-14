@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { install, uninstall, type InstallEnv } from "../src/cli/install/index";
+import { install, NOTE, uninstall, type InstallEnv } from "../src/cli/install/index";
 
 let home: string;
 let ienv: InstallEnv;
@@ -31,14 +31,27 @@ test("Claude Code: merges the MCP server into ~/.claude.json with a backup, and 
   expect(statSync(join(home, ".claude.json.perch-backup-20261105-102030")).mode & 0o777).toBe(0o600);
   const skill = join(home, ".claude", "skills", "perch", "SKILL.md");
   expect(readFileSync(skill, "utf8")).toContain("name: perch");
-  expect(changes.map((c) => c.action)).toEqual(["created", "updated"]);
+  expect(changes.map((c) => c.action)).toEqual(["created", "updated", "created"]);
+  expect(readFileSync(join(home, ".claude", "CLAUDE.md"), "utf8")).toBe(`${NOTE}\n`);
 
-  expect(install("claude", { ...ienv, now: () => new Date("2026-11-06T00:00:00Z") }).map((c) => c.action)).toEqual(["unchanged", "unchanged"]);
+  expect(install("claude", { ...ienv, now: () => new Date("2026-11-06T00:00:00Z") }).map((c) => c.action)).toEqual(["unchanged", "unchanged", "unchanged"]);
   expect(backups(home)).toHaveLength(1);
 
   uninstall("claude", ienv);
   expect(JSON.parse(readFileSync(file, "utf8"))).toEqual(original);
   expect(existsSync(join(home, ".claude", "skills", "perch"))).toBe(false);
+  expect(existsSync(join(home, ".claude", "CLAUDE.md"))).toBe(false);
+});
+
+test("the line about Perch joins the agent's own instructions once, and leaves the rest as it was", () => {
+  const notes = join(home, ".codex", "AGENTS.md");
+  mkdirSync(join(home, ".codex"), { recursive: true });
+  writeFileSync(notes, "# My rules\n\nAlways run the tests.\n");
+  install("codex", ienv);
+  install("codex", ienv);
+  expect(readFileSync(notes, "utf8")).toBe(`# My rules\n\nAlways run the tests.\n\n${NOTE}\n`);
+  uninstall("codex", ienv);
+  expect(readFileSync(notes, "utf8")).toBe("# My rules\n\nAlways run the tests.\n");
 });
 
 test("Claude Code: a perch server the user set up by hand, or a skill of theirs, is left alone", () => {
@@ -47,10 +60,10 @@ test("Claude Code: a perch server the user set up by hand, or a skill of theirs,
   mkdirSync(join(home, ".claude", "skills", "perch"), { recursive: true });
   writeFileSync(join(home, ".claude", "skills", "perch", "SKILL.md"), "---\nname: perch\n---\nmine\n");
   const changes = install("claude", ienv);
-  expect(changes.map((c) => c.action)).toEqual(["skipped", "skipped"]);
+  expect(changes.map((c) => c.action)).toEqual(["skipped", "skipped", "created"]);
   expect(JSON.parse(readFileSync(file, "utf8")).mcpServers.perch).toEqual({ command: "my-own-perch" });
   expect(readFileSync(join(home, ".claude", "skills", "perch", "SKILL.md"), "utf8")).toContain("mine");
-  expect(uninstall("claude", ienv).map((c) => c.action)).toEqual(["skipped", "skipped"]);
+  expect(uninstall("claude", ienv).map((c) => c.action)).toEqual(["skipped", "skipped", "removed"]);
 });
 
 test("Claude Code: a new config file is created private, and CLAUDE_CONFIG_DIR is honoured", () => {
@@ -75,7 +88,7 @@ test("Codex: a marked block in config.toml, idempotent, updated in place, remove
   expect(statSync(file).mode & 0o777).toBe(0o644);
   expect(readFileSync(join(home, ".codex", "skills", "perch", "SKILL.md"), "utf8")).toContain("installed-by: perch");
 
-  expect(install("codex", ienv).map((c) => c.action)).toEqual(["unchanged", "unchanged"]);
+  expect(install("codex", ienv).map((c) => c.action)).toEqual(["unchanged", "unchanged", "unchanged"]);
   install("codex", { ...ienv, command: ["/usr/local/bin/perch"] });
   const updated = readFileSync(file, "utf8");
   expect(updated.match(/perch:begin/g)).toHaveLength(1);

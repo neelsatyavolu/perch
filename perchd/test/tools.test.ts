@@ -1,6 +1,11 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { checkCall, describeTarget, newToolContext, runTool, TOOL_SPECS } from "../src/agent/tools";
 import { setup } from "./helpers";
+import { callTool } from "../src/agent/session";
+import { AuditLog } from "../src/agent/audit";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 let env: Awaited<ReturnType<typeof setup>>;
 beforeAll(async () => { env = await setup(); });
@@ -55,6 +60,20 @@ test("navigate adds https when needed and returns a snapshot; click returns the 
   expect(clicked.content).toContain('clicked button "Compose"');
   expect(clicked.content).toContain('textbox "To"');
   expect(await runTool(ctx, call("navigate", { url: "localhost:1" }))).toMatchObject({ isError: true });
+  await ctx.close();
+});
+
+test("a ref that matches nothing says so, and typing into a button is refused", async () => {
+  const ctx = await newToolContext(env.browser);
+  const opened = await runTool(ctx, call("navigate", { url: env.site.url("/mail.html") }));
+  const audit = new AuditLog(join(mkdtempSync(join(tmpdir(), "perch-refs-")), "audit.jsonl"));
+  // No one to ask (approve always says no): a missing ref must not read as the user declining.
+  const policy = { mode: "guard" as const, approve: async () => false, audit };
+  expect(await callTool(ctx, policy, call("click", { ref: "e999" }))).toMatchObject({ isError: true, content: "No element e999 on this page. Take a new snapshot for the current refs." });
+  const button = opened.content.match(/button "Compose" \[ref=(e\d+)\]/)![1]!;
+  const typed = await runTool(ctx, call("type", { ref: button, text: "hello" }));
+  expect(typed).toMatchObject({ isError: true });
+  expect(typed.content).toContain("isn't a text field");
   await ctx.close();
 });
 

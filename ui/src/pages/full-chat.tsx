@@ -121,6 +121,9 @@ export function FullChat({ client, initialChat = null, initialAsk = null, onNavi
   const settings: ChatSettings = view.chat?.settings ?? { ...(info?.defaults ?? { mode: "guard", model: "", effort: "medium" }), scope: "agent", ...pending };
   const summary = list.find((c) => c.id === selected);
   const status = summary?.status ?? (view.run ? (view.run.approval ? "waiting" : "running") : "idle");
+  const title = view.chat?.title ?? "";
+  // The tab shows the chat's title, and "Needs you" with a dot on its icon while a card waits.
+  useEffect(() => host?.setTabState?.({ title, waiting: Boolean(view.run?.approval) }), [host, title, Boolean(view.run?.approval)]);
   // A reply that arrives while the chat is on screen has been seen.
   useEffect(() => {
     if (selected && summary?.unread && document.visibilityState === "visible") void client.patchChat(selected, { read: true }).catch(() => undefined);

@@ -109,6 +109,17 @@ export type RunOptions = {
 
 export type McpServer = { command: string; args: string[]; env: Record<string, string> };
 
+/**
+ * The environment for Claude Code or Codex without the API-key variables that would make them bill
+ * API credits instead of the plan the user signed in with (Claude Pro or Max, ChatGPT).
+ */
+const API_KEY_VARS = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "OPENAI_API_KEY", "CODEX_API_KEY"];
+export function subscriptionEnv(env: Record<string, string | undefined> = process.env): Record<string, string | undefined> {
+  const clean = { ...env };
+  for (const name of API_KEY_VARS) delete clean[name];
+  return clean;
+}
+
 /** The MCP server for a task: the one passed in, or Perch's own server on a private browser. */
 function mcpServer(opts: RunOptions, client: string, work: string): McpServer {
   if (opts.mcp) return opts.mcp;
@@ -170,7 +181,7 @@ export async function runClaudeCode(opts: RunOptions): Promise<ExternalResult> {
     stderr: "pipe",
     stdin: Buffer.from(opts.task),
     // ENABLE_TOOL_SEARCH=false: Perch's tools are loaded up front, not found by a search turn first.
-    env: { ...process.env, CLAUDE_CODE_ENTRYPOINT: "perch-exec", ENABLE_TOOL_SEARCH: "false" },
+    env: { ...subscriptionEnv(), CLAUDE_CODE_ENTRYPOINT: "perch-exec", ENABLE_TOOL_SEARCH: "false" },
   });
   const stop = stopper(child, opts);
   const events: AsideEvent[] = [];
@@ -310,7 +321,7 @@ export async function runCodex(opts: RunOptions): Promise<ExternalResult> {
   const server = mcpServer(opts, "codex", work);
   const prompt = `${systemPrompt({ mode, now: new Date(), finish: "reply", webSearch: true })}\n\nYour tools for this task are Perch's browser tools from the "perch" MCP server. Do not run shell commands or read files. Use web search for quick public lookups and the browser for the user's own sites, signed-in pages and anything you act on, then reply with the answer, including the specific facts the task asks for.\n\nTask:\n${opts.task}`;
   const args = codexArgs({ mcpArgs: server.args, command: server.command, envNames: Object.keys(server.env), model: opts.model, effort: opts.effort, otherServers: otherCodexServers() });
-  const child = Bun.spawn([codexBinary(), ...args], { cwd: work, stdout: "pipe", stderr: "pipe", stdin: Buffer.from(prompt), env: { ...process.env, ...server.env } });
+  const child = Bun.spawn([codexBinary(), ...args], { cwd: work, stdout: "pipe", stderr: "pipe", stdin: Buffer.from(prompt), env: { ...subscriptionEnv(), ...server.env } });
   const stop = stopper(child, opts);
   const events: AsideEvent[] = [];
   let answer = "";

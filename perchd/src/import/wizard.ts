@@ -162,7 +162,11 @@ function recordImport(userDataDir: string, key: string, at: number): void {
   }
 }
 
-export type FileInput = Omit<ImportInput, "source" | "types" | "home"> & { readonly path: string };
+export type FileInput = Omit<ImportInput, "source" | "types" | "home"> & {
+  readonly path: string;
+  /** Only these from the file; everything in it when left out. */
+  readonly types?: readonly DataType[];
+};
 
 /** Safari's export ZIP, a password CSV, or a bookmarks HTML file, chosen by its extension. */
 export async function importFile(input: FileInput): Promise<Report> {
@@ -184,7 +188,7 @@ export async function importFile(input: FileInput): Promise<Report> {
       skipped = r.skipped;
     } else data = { bookmarks: parseBookmarksHtml(text) };
   } else throw new ImportError("Choose a Safari export (.zip), a passwords file (.csv) or a bookmarks file (.html).", "invalid");
-  const parts = (Object.keys(data) as DataType[]).map((type) => ({ type, data: { [type]: data[type] } as ImportData, ...(type === "passwords" && skipped ? { skipped } : {}) }));
+  const parts = (Object.keys(data) as DataType[]).filter((type) => !input.types || input.types.includes(type)).map((type) => ({ type, data: { [type]: data[type] } as ImportData, ...(type === "passwords" && skipped ? { skipped } : {}) }));
   // Names the "Imported from …" bookmarks folder.
   const from = ext === "zip" ? "Safari" : source.profile;
   const applied = await applyImport({ target: input.target, keychain: input.keychain, source: { browser: from, profile: source.profile }, parts, onProgress: input.onProgress, now: input.now, running: input.running, browser: input.browser });

@@ -34,6 +34,7 @@ export async function loadApi(win: Window): Promise<PerchApi | null> {
         ...appearanceFromQuery(win.location.search),
       },
       onboarding: params.has("welcome") ? { finished: false, done: [] } : undefined,
+      signedOut: params.has("welcome"),
     });
   }
   return null;

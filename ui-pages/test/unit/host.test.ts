@@ -59,8 +59,25 @@ describe("host bridge", () => {
     const e1 = (await createHostBridge(win as never, refusing)!.call("runRoutine", ["r1"]).catch((e) => e)) as HostError;
     expect(e1.message).toBe("That routine doesn't exist");
     const down = (async () => { throw new TypeError("fetch failed"); }) as unknown as typeof fetch;
-    const e2 = (await createHostBridge(win as never, down)!.call("listRoutines", []).catch((e) => e)) as HostError;
+    const e2 = (await createHostBridge(win as never, down, { waitMs: 0 })!.call("listRoutines", []).catch((e) => e)) as HostError;
     expect(e2.code).toBe("unavailable");
+  });
+
+  test("a page opened before perchd was up waits for it, reading config.js again until perchd answers", async () => {
+    const { win } = fakeWindow({ config: false });
+    const w = win as unknown as Record<string, unknown>;
+    w.setTimeout = (fn: () => void) => (fn(), 0);
+    let reloads = 0;
+    const reload = async () => {
+      reloads += 1;
+      // perchd comes up on the second look.
+      if (reloads === 2) w.perchApp = { api: "http://127.0.0.1:5555", token: "u".repeat(43) };
+    };
+    const urls: string[] = [];
+    const fetchFn = (async (url: string) => (urls.push(url), new Response(JSON.stringify([]), { status: 200 }))) as unknown as typeof fetch;
+    expect(await createHostBridge(win as never, fetchFn, { reload, waitMs: 5000 })!.call("listRoutines", [])).toEqual([]);
+    expect(reloads).toBe(2);
+    expect(urls).toEqual(["http://127.0.0.1:5555/api/pages/listRoutines"]);
   });
 
   test("appearance events from the browser reach subscribers", () => {

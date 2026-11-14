@@ -308,9 +308,11 @@ void AddPerchMixer(ui::ColorProvider* provider,
     m[id] = {t->card};
   }
   m[ui::kColorBubbleBorder] = {strong_on_card};
-  // Menus are frosted glass: the macOS menu material shows through a thin
-  // Perch tint, with ink-tinted rows, separators and a hairline edge.
-  m[ui::kColorMenuBackground] = {SkColorSetA(t->raised, 0x21)};
+  // Menus and bubbles are frosted glass: the macOS menu material under a Perch
+  // tint, with ink-tinted rows, separators and a hairline edge. The tint is
+  // strong enough (about 55%) that text stays readable over a bright page, as
+  // in the downloads bubble over a photo.
+  m[ui::kColorMenuBackground] = {SkColorSetA(t->raised, 0x8C)};
   m[ui::kColorMenuItemBackgroundHighlighted] = {SkColorSetA(t->ink, 0x1A)};
   m[ui::kColorMenuSeparator] = {SkColorSetA(t->ink, 0x14)};
   m[ui::kColorMenuBorder] = {SkColorSetA(t->ink, 0x1F)};

@@ -50,7 +50,7 @@
 @media (max-width: 640px) { .imp-page { padding: 0 16px; } }
 .need-file { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .imp-embedded, .imp-embedded .imp { padding: 0; width: 100%; }
-.imp-embedded h2 { font-size: 15px; }
+.imp-embedded h3 { font-size: 15px; }
 /* Embedded in the welcome flow, the button row matches the other steps' row. */
 .imp-embedded .imp-foot .btn { height: 36px; font-size: 14px; }
 .imp-embedded .imp-foot .btn.primary { padding: 0 16px; }

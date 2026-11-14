@@ -16,6 +16,8 @@ import { askFromBrowser } from "./ask";
 import { OutsideApprovals } from "./outside-approvals";
 import type { ApprovalCard, ChatStatus } from "./protocol";
 import { TaskStatusReporter } from "./task-status";
+import type { ToolCall } from "../models/types";
+import { stepLabel } from "./sidebar-runner";
 
 export type BrowserLinkOptions = {
   perch: PerchDomain;
@@ -44,6 +46,8 @@ export class BrowserLink {
     return {
       approve: (session: AgentSession, request: ApprovalRequest, signal: AbortSignal) => outside.approve(session.label, request, () => session.tabIds(), signal),
       allowClient: (name: string, signal: AbortSignal) => outside.allowClient(name, signal),
+      step: (session: AgentSession, call: ToolCall) =>
+        void outside.observe(session.label, () => session.tabIds(), { label: stepLabel(call.name, call.args) }).catch(() => undefined),
     };
   };
 
@@ -53,7 +57,9 @@ export class BrowserLink {
     this.outside = new OutsideApprovals({ chats: app.chats, runs: app.runs, defaults, perch: this.opts.perch });
     this.reporter = new TaskStatusReporter({ perch: this.opts.perch, targets: (chatId) => this.targets(chatId) });
     this.stopAsk = this.opts.perch.onAskRequested((ask) => {
-      void askFromBrowser({ chats: app.chats, runs: app.runs, tab: (id) => app.windows.tab(id), defaults, perch: this.opts.perch }, ask).catch((error: Error) =>
+      // The browser names the tab by its DevTools target id; the windows know tabs by Perch's own id.
+      const tab = (id: string) => app.windows.tab(id) ?? app.windows.tabs().find((t) => t.targetId === id);
+      void askFromBrowser({ chats: app.chats, runs: app.runs, tab, defaults, perch: this.opts.perch }, ask).catch((error: Error) =>
         this.opts.onError?.(`perchd: Ask from the browser failed: ${error.message}\n`),
       );
     });

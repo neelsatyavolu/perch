@@ -99,7 +99,7 @@ test("a lost Keychain key is reported even when only routines exist; no new key 
   expect([...emptyKeychain.accounts()]).toEqual([]);
 });
 
-test("a scheduled routine in Guard cannot save to memory: each save is declined and listed for the user", async () => {
+test("a scheduled routine saves to memory like any chat, without stopping to ask", async () => {
   const dir = mkdtempSync(join(tmpdir(), "perch-service-"));
   dirs.push(dir);
   let clock = new Date("2026-11-05T07:59:00Z");
@@ -123,8 +123,7 @@ test("a scheduled routine in Guard cannot save to memory: each save is declined 
   if (!created.ok) throw new Error(created.error);
   clock = new Date("2026-11-05T08:00:10Z");
   const [run] = await data.scheduler.tick();
-  expect(run).toMatchObject({ status: "needs_approval", trigger: "schedule" });
-  expect(run!.declined).toEqual([expect.stringContaining("USER.md"), expect.stringContaining("sites: shop.example")]);
-  expect(data.memory.list()).toEqual([]);
+  expect(run).toMatchObject({ status: "ok", trigger: "schedule", declined: [] });
+  expect(data.memory.list().map((p) => p.path).sort()).toEqual(["USER.md", expect.stringMatching(/^sites\//)]);
   data.stop();
 });

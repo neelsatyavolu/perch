@@ -91,6 +91,7 @@ export const SEARCH_INDEX: readonly SearchEntry[] = [
   { section: "import", anchor: "import-browsers", title: "Import from another browser", words: "chrome safari arc aside firefox bookmarks passwords" },
   { section: "about", anchor: "version", title: "Perch version", words: "chromium about" },
   { section: "about", anchor: "auto-update", title: "Update automatically", words: "updates sparkle" },
+  { section: "about", anchor: "tour", title: "Take the tour", words: "tour help getting started side chat agent tabs claude code codex mcp" },
 ];
 
 export function searchSettings(query: string): readonly SearchEntry[] {

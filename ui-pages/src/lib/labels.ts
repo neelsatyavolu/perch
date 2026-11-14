@@ -35,6 +35,7 @@ export const IMPORT_NEEDS: Readonly<Record<ImportNeed, string>> = {
   "full-disk-access": "Needs Full Disk Access",
   keychain: "macOS asks to unlock this browser's Keychain item",
   "csv-export": "Export a CSV from the Passwords app first",
+  "safari-export": "From Safari's export file, every profile",
   "primary-password": "Asks for your primary password",
 };
 

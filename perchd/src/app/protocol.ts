@@ -127,6 +127,12 @@ export type ApprovalCard = {
   /** The confirm button's label names the action: "Send", "Pay $42.18". Never "OK" or "Confirm". */
   confirm: string;
   danger: boolean;
+  /**
+   * Nothing is saved for this sign-in: the card asks for a username and password, which go back
+   * with the answer (POST /api/approvals/:id) to fill the page, never to the model. `loginKey`
+   * ties them to the call that asked.
+   */
+  login?: { loginKey: string };
 };
 
 export type ModelInfo = { id: string; label: string; provider: string; efforts: Effort[] };

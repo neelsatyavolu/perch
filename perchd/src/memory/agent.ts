@@ -174,10 +174,11 @@ export function chatMemory(store: MemoryStore, opts: ChatMemoryOptions = {}): Me
       return body ? `${CONTEXT_NOTE}\n\n${body}` : "";
     },
     // Proposals only fill the review draft, which the user approves on the Memory page.
-    kind: (call) => (call.name === "memory_save" ? "change" : "read"),
-    // Every save asks, in every mode: text a page planted could otherwise file itself as a fact
-    // that later chats trust. Learning without asking is the extraction pass's job (extract.ts).
-    mustAsk: (call) => call.name === "memory_save",
+    // Memory is the agent's own notebook, not the page: no mode stops to ask about it.
+    kind: () => "read",
+    // Saves go in without asking, as on Aside: memory is only useful if it fills itself. Each one
+    // is in Memory → History, where a fact a page planted can be seen and undone.
+    mustAsk: () => false,
     summary(call) {
       if (call.name === "memory_search") return `Search memory for "${str(call.args.query)}"`;
       if (call.name === "memory_propose") return "Add findings to the memory draft";

@@ -29,15 +29,17 @@ async function tool(io: CliIO, session: string | undefined, name: string, args: 
   return result.isError ? 1 : 0;
 }
 
-function one(positionals: string[], usage: string, count = 1): string[] {
+/** The positional arguments, at least `count` of them and at most `max` (extra words are a mistake, not dropped). */
+function one(positionals: string[], usage: string, count = 1, max = Infinity): string[] {
   if (positionals.length < count) throw new UsageError(`usage: ${usage}`);
+  if (positionals.length > max) throw new UsageError(`perch: unexpected "${positionals.slice(max).join(" ").slice(0, 60)}"\nusage: ${usage}`);
   return positionals;
 }
 
 export const browserCommands: Record<string, (argv: string[], io: CliIO) => Promise<number>> = {
   async open(argv, io) {
     const a = parseArgs(argv, { options: SESSION });
-    const [url] = one(a.positionals, "perch open <url> [--session <name>]");
+    const [url] = one(a.positionals, "perch open <url> [--session <name>]", 1, 1);
     return tool(io, a.options.get("--session"), "open_tab", { url });
   },
   async snapshot(argv, io) {
@@ -46,7 +48,7 @@ export const browserCommands: Record<string, (argv: string[], io: CliIO) => Prom
   },
   async click(argv, io) {
     const a = parseArgs(argv, { options: SESSION });
-    const [ref] = one(a.positionals, "perch click <ref>");
+    const [ref] = one(a.positionals, "perch click <ref>", 1, 1);
     return tool(io, a.options.get("--session"), "click", { ref });
   },
   async type(argv, io) {
@@ -56,7 +58,7 @@ export const browserCommands: Record<string, (argv: string[], io: CliIO) => Prom
   },
   async press(argv, io) {
     const a = parseArgs(argv, { options: SESSION });
-    const [key] = one(a.positionals, "perch press <key>");
+    const [key] = one(a.positionals, "perch press <key>", 1, 1);
     return tool(io, a.options.get("--session"), "press", { key });
   },
   async script(argv, io) {
@@ -66,7 +68,7 @@ export const browserCommands: Record<string, (argv: string[], io: CliIO) => Prom
   },
   async navigate(argv, io) {
     const a = parseArgs(argv, { options: SESSION });
-    const [url] = one(a.positionals, "perch navigate <url>");
+    const [url] = one(a.positionals, "perch navigate <url>", 1, 1);
     return tool(io, a.options.get("--session"), "navigate", { url });
   },
   async select(argv, io) {
@@ -74,14 +76,22 @@ export const browserCommands: Record<string, (argv: string[], io: CliIO) => Prom
     const [ref, ...value] = one(a.positionals, "perch select <ref> <option>", 2);
     return tool(io, a.options.get("--session"), "select", { ref, value: value.join(" ") });
   },
+  /** Scrolls the page: down or up a screenful, or by a number of pixels (negative is up). */
+  async scroll(argv, io) {
+    const a = parseArgs(argv, { options: SESSION });
+    const [how = "down"] = one(a.positionals.length ? a.positionals : ["down"], "perch scroll [down | up | <pixels>]", 1, 1);
+    const dy = how === "down" ? 800 : how === "up" ? -800 : Number(how);
+    if (!Number.isFinite(dy) || dy === 0) throw new UsageError("usage: perch scroll [down | up | <pixels>]");
+    return tool(io, a.options.get("--session"), "scroll", { dy });
+  },
   async back(argv, io) {
     const a = parseArgs(argv, { options: SESSION });
     return tool(io, a.options.get("--session"), "back", {});
   },
-  /** JavaScript in the page itself, with its JSON result (what `perch repl` did before it became a session). */
+  /** JavaScript on a read-only copy of the page, with its JSON result (it can read, not change, the page). */
   async eval(argv, io) {
     const a = parseArgs(argv, { options: SESSION });
-    const code = one(a.positionals, 'perch eval "<javascript run in the page>"').join(" ");
+    const code = one(a.positionals, 'perch eval "<javascript>"   (runs on a read-only copy of the page)').join(" ");
     return tool(io, a.options.get("--session"), "repl", { code });
   },
   async repl(argv, io) {
@@ -99,13 +109,22 @@ export const browserCommands: Record<string, (argv: string[], io: CliIO) => Prom
   },
   async screenshot(argv, io) {
     const a = parseArgs(argv, { options: [...SESSION, "-o", "--output"] });
+    const named = a.options.get("-o") ?? a.options.get("--output");
+    // Screenshots are JPEG: a .png name would hold JPEG data. Checked before taking one.
+    if (named && !/\.jpe?g$/i.test(named)) throw new UsageError(`perch: screenshots are JPEG; name the file .jpg (got "${named.slice(-40)}")`);
     const result = await withDaemon(io, a.options.get("--session"), (c) => c.request<ToolResult>("call", { name: "screenshot", args: {} }));
     if (result.isError || !result.image) {
       io.stderr(`${result.content}\n`);
       return 1;
     }
-    const file = resolve(io.cwd, a.options.get("-o") ?? a.options.get("--output") ?? `perch-screenshot-${Date.now()}.jpg`);
-    writeFileSync(file, Buffer.from(result.image, "base64"), { mode: 0o600 });
+    const file = resolve(io.cwd, named ?? `perch-screenshot-${Date.now()}.jpg`);
+    try {
+      writeFileSync(file, Buffer.from(result.image, "base64"), { mode: 0o600 });
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      io.stderr(`perch: can't save ${file}: ${code === "ENOENT" ? "that folder doesn't exist" : code === "EISDIR" ? "that's a folder; give a file name" : code === "EACCES" ? "no permission to write there" : (error as Error).message}\n`);
+      return 1;
+    }
     io.stdout(`Saved ${file}\n`);
     return 0;
   },

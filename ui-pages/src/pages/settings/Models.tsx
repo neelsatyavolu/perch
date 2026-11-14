@@ -11,6 +11,7 @@ import { ProviderMark } from "../../ui/ProviderMark";
 import { Switch } from "../../ui/Switch";
 import { modelName } from "../../ui/ModelMenu";
 import { ConnectDialog } from "./ConnectDialog";
+import { SignInButton } from "../../ui/SignInButton";
 
 function ProviderStatus({ p }: { readonly p: Provider }) {
   if (p.state === "connected") return <span class="status ok"><span class="dotc" />Connected{p.account ? ` · ${p.account}` : ""}</span>;
@@ -41,19 +42,7 @@ function Providers({ onModelsChanged }: { readonly onModelsChanged: () => void }
       return p.state === "connected" ? (
         <button type="button" class="btn" aria-label={`Sign out of ${p.name}`} onClick={async () => { const r = await act(() => api.signOut(p.id), `Signed out of ${p.name}`); if (r) replace(r); }}>Sign out</button>
       ) : (
-        <button
-          type="button"
-          class="btn"
-          aria-label={`Sign in to ${p.name}`}
-          onClick={async () => {
-            const r = await act(() => api.signIn(p.id), "");
-            if (!r) return;
-            if (r.awaitingCode) setAwaiting(p.id);
-            else replace(r);
-          }}
-        >
-          Sign in
-        </button>
+        <SignInButton provider={p} onDone={replace} onCode={() => setAwaiting(p.id)} />
       );
     }
     if (p.state === "connected") {

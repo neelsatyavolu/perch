@@ -124,6 +124,7 @@ textarea.field { height: auto; min-height: 88px; padding: 8px 10px; resize: vert
 .srow .n { color: var(--ink); font-size: 14px; line-height: 20px; font-weight: 500; }
 .srow .d { color: var(--mute); font-size: 12px; line-height: 16px; margin-top: 2px; text-wrap: pretty; }
 .srow .ctl { display: flex; align-items: center; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.signin { display: inline-flex; align-items: center; gap: 8px; }
 .srow.sub { min-height: 44px; padding-left: 38px; }
 /* Site hosts and patterns as row titles: mono reads wider, so one step smaller and lighter. */
 .srow .n .mono { font-size: 13px; font-weight: 400; display: inline-block; line-height: 20px; vertical-align: top; }
@@ -138,6 +139,8 @@ textarea.field { height: auto; min-height: 88px; padding: 8px 10px; resize: vert
   display: grid; place-items: center; font-weight: 500; font-size: 13px; flex: none;
 }
 :root[data-tone="light"] .tile { background: var(--raised); }
+/* A browser's own app icon: macOS icons carry their own shape and margin, so no fill behind them. */
+.tile.tile-img, :root[data-tone="light"] .tile.tile-img { background: none; border-radius: 0; object-fit: contain; }
 /* A row that opens something: the whole row is the button, with a leading icon where other rows have tiles. */
 .more-row {
   display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 10px 14px; color: var(--ink);

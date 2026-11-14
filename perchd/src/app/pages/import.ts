@@ -2,8 +2,10 @@
  * The Import page over the import wizard (src/import/wizard.ts): the browsers found on this Mac,
  * what each can bring in, and an import that reports progress as a job. Aside's memory, skills
  * and chats come from its agent folder, shown under Aside, and go into Perch's own memory, skill
- * and chat stores (import-agent.ts). Safari and Firefox don't share their passwords, so those come
- * from a CSV the person exports and picks in the browser's open panel (`chooseFile`).
+ * and chat stores (import-agent.ts). Firefox doesn't share its passwords, so those come from a CSV
+ * the person exports and picks in the browser's open panel (`chooseFile`). Safari's bookmarks,
+ * history and passwords come from the ZIP its File > Export Browsing Data to File makes, which
+ * covers every Safari profile and needs no Full Disk Access; its cookies need Full Disk Access.
  */
 
 import { readdirSync } from "node:fs";
@@ -12,6 +14,7 @@ import type { BrowserId, DetectedBrowser, ImportKind, ImportNeed, ImportOption, 
 import { failure, type TypeResult } from "../../import/apply";
 import type { DataType } from "../../import/types";
 import { asideAccountInfo } from "../../import/detect";
+import { browserIcon } from "../../import/icons";
 import { importFile, importSource, listSources, type SourceSummary } from "../../import/wizard";
 import { AppError } from "../runs";
 import * as v from "../validate";
@@ -24,7 +27,9 @@ const BROWSERS: readonly BrowserId[] = [
   "aside", "chrome", "chrome-beta", "chrome-canary", "arc", "dia", "comet", "atlas", "brave", "edge", "vivaldi", "opera", "opera-gx", "helium", "chromium", "safari", "firefox", "zen",
 ];
 /** Browsers that keep passwords to themselves; Perch reads an exported CSV instead. */
-const CSV_PASSWORDS: ReadonlySet<string> = new Set(["safari", "firefox", "zen"]);
+const CSV_PASSWORDS: ReadonlySet<string> = new Set(["firefox", "zen"]);
+/** What Safari's export ZIP brings. */
+const SAFARI_EXPORT: ReadonlySet<DataType> = new Set(["bookmarks", "history", "passwords"]);
 const ASIDE_AGENT = "aside-agent";
 /** `also`: types that ride along with the kind when the source has them. */
 const KINDS: Readonly<Record<ImportKind, { type: DataType | null; noun: string; also?: readonly DataType[] }>> = {
@@ -49,6 +54,7 @@ const nounOf = (type: DataType) => Object.values(KINDS).find((k) => k.type === t
 function option(kind: ImportKind, s: SourceSummary): ImportOption {
   const type = KINDS[kind].type!;
   if (type === "passwords" && CSV_PASSWORDS.has(s.browser)) return { kind, available: true, needs: "csv-export" };
+  if (s.browser === "safari" && SAFARI_EXPORT.has(type)) return { kind, available: true, needs: "safari-export" };
   const needs: ImportNeed | undefined =
     s.access === "full-disk-access" || s.needs.fullDiskAccess.includes(type) ? "full-disk-access" : s.needs.keychain.includes(type) ? "keychain" : undefined;
   const available = s.access === "full-disk-access" || (s.types.includes(type) && !s.unsupported[type]);
@@ -119,6 +125,15 @@ function passwordsFile(deps: PagesDeps, id: string): { path: string } {
   return { path: file.path };
 }
 
+/** The ZIP Safari exported; only a .zip, and only one the browser registered. */
+function safariExportFile(deps: PagesDeps, id: string): { path: string } {
+  const files = deps.importer.files;
+  if (!files) notYet("This build of Perch can't read a chosen file.");
+  const file = files.resolve(id);
+  if (!file.path.toLowerCase().endsWith(".zip")) throw new AppError("Choose the .zip file Safari exported");
+  return { path: file.path };
+}
+
 /** Whether perchd may read a folder macOS keeps behind Full Disk Access; null when it isn't there. */
 function readable(path: string): boolean | null {
   try {
@@ -127,6 +142,12 @@ function readable(path: string): boolean | null {
   } catch (error) {
     return (error as NodeJS.ErrnoException).code === "ENOENT" ? null : false;
   }
+}
+
+/** The browser's own app icon, when its app is on this Mac. */
+function withIcon(browser: string, home: string): { icon?: string } {
+  const icon = browserIcon(browser, home);
+  return icon ? { icon } : {};
 }
 
 export function importPages(deps: PagesDeps): Methods<"detectBrowsers" | "getSystemAccess" | "startImport"> {
@@ -149,6 +170,7 @@ export function importPages(deps: PagesDeps): Methods<"detectBrowsers" | "getSys
           id: s.browser,
           name: s.name,
           ...(s.lastUsed ? { lastUsed: s.lastUsed } : {}),
+          ...withIcon(s.browser, home),
           profiles: s.browser === "aside" ? asideProfiles(home, s, agent) : s.profiles.map((p) => ({ id: p.id, name: p.name })),
           options: [
             ...(s.browser === "aside" && s.profiles.length === 0 ? [] : BROWSER_KINDS.map((k) => option(k, s))),
@@ -162,7 +184,7 @@ export function importPages(deps: PagesDeps): Methods<"detectBrowsers" | "getSys
     },
     async startImport([request]) {
       const o = v.object(request, '"request"');
-      v.onlyKeys(o, ["browser", "profile", "profiles", "kinds", "passwordsCsv"]);
+      v.onlyKeys(o, ["browser", "profile", "profiles", "kinds", "passwordsCsv", "safariExport"]);
       const browser = v.oneOf(o.browser, "browser", BROWSERS);
       // `profiles` imports several in one go; `profile` is the single one older pages send.
       const requested = [
@@ -174,9 +196,15 @@ export function importPages(deps: PagesDeps): Methods<"detectBrowsers" | "getSys
       const policy = policyOf(deps);
       if (kinds.some((k) => !importAllowed(browser, KINDS[k].type ?? "", policy))) managed("Your organization doesn't allow importing this.");
       const csvPasswords = CSV_PASSWORDS.has(browser) && kinds.includes("passwords");
-      if (o.passwordsCsv !== undefined && !csvPasswords) throw new AppError("A passwords file goes with Safari or Firefox passwords only");
+      if (o.passwordsCsv !== undefined && !csvPasswords) throw new AppError("A passwords file goes with Firefox or Zen passwords only");
       if (csvPasswords && o.passwordsCsv === undefined) throw new AppError("Choose the passwords file you exported");
       const csv = csvPasswords ? passwordsFile(deps, v.id(o.passwordsCsv, "passwordsCsv")) : null;
+      if (o.safariExport !== undefined && browser !== "safari") throw new AppError("Safari's export file goes with Safari only");
+      if (browser === "safari" && kinds.includes("passwords") && o.safariExport === undefined) throw new AppError("Safari's passwords come from its export file. Choose it, or untick Passwords");
+      const zip = o.safariExport !== undefined ? safariExportFile(deps, v.id(o.safariExport, "safariExport")) : null;
+      // With the export, what it holds comes from it, for every Safari profile; the rest (cookies)
+      // still comes from Safari's own files.
+      const fromZip = zip ? kinds.map((k) => KINDS[k].type).filter((t): t is DataType => t !== null && SAFARI_EXPORT.has(t)) : [];
       const unbacked = kinds.find((k) => KINDS[k].type === null);
       if (unbacked) notYet("Perch can't bring in Aside's permission mode and model choices yet. Untick them to import the rest.");
       const all = sources();
@@ -187,7 +215,7 @@ export function importPages(deps: PagesDeps): Methods<"detectBrowsers" | "getSys
       for (const id of requested) if (!shown.some((p) => p.id === id)) throw new AppError("That browser profile wasn't found");
       const has = (t: DataType) => Boolean(source?.types.includes(t) && !source.unsupported[t]);
       const types = (list: readonly ImportKind[]) =>
-        kinds.filter((k) => list.includes(k) && !(csv && k === "passwords")).flatMap((k) => [KINDS[k].type!, ...(KINDS[k].also ?? []).filter(has)]);
+        kinds.filter((k) => list.includes(k) && !(csv && k === "passwords") && !fromZip.includes(KINDS[k].type!)).flatMap((k) => [KINDS[k].type!, ...(KINDS[k].also ?? []).filter(has)]);
       // Each profile brings its browser data; an Aside profile also brings the agent account it's
       // signed in to, and each account comes over once however many profiles share it.
       const accounts = new Set<string>();
@@ -198,7 +226,7 @@ export function importPages(deps: PagesDeps): Methods<"detectBrowsers" | "getSys
         const browserPart = id.startsWith(ACCOUNT_PREFIX) ? [] : [{ source: { browser, profile: id }, types: types(BROWSER_KINDS), label }];
         return [...browserPart, ...agentPart];
       }).filter((p) => p.types.length > 0);
-      const total = parts.reduce((n, p) => n + p.types.length, 0) + (csv ? 1 : 0);
+      const total = parts.reduce((n, p) => n + p.types.length, 0) + (csv ? 1 : 0) + fromZip.length;
       if (total === 0) throw new AppError(browser === "aside" ? "Aside's memory, skills and chats weren't found on this Mac" : "There is nothing to import from that profile");
       return deps.jobs.start(total, `Importing ${nounOf(parts[0]?.types[0] ?? "passwords")}`, async (job) => {
         const lines: string[] = [];
@@ -210,10 +238,20 @@ export function importPages(deps: PagesDeps): Methods<"detectBrowsers" | "getSys
           const report = await importSource({
             home, source: part.source, types: part.types, target, keychain: deps.importer.keychain, running: deps.importer.running, browser: deps.importer.browser, agent: agentWriter(deps),
             onProgress: (p) => job.step(`Importing ${nounOf(p.type)}${part.label ? ` from ${part.label}` : ""}`, base + p.index),
-          }).catch((error: unknown) => (csv || parts.length > 1 ? { results: part.types.map((t) => failure(t, error)) } : Promise.reject(error)));
+          }).catch((error: unknown) => (csv || zip || parts.length > 1 ? { results: part.types.map((t) => failure(t, error)) } : Promise.reject(error)));
           results.push(...report.results);
           lines.push(...report.results.map((r) => (part.label ? `${part.label}: ${summaryLine(r)}` : summaryLine(r))));
           base += part.types.length;
+        }
+        if (zip) {
+          job.step(`Importing ${nounOf(fromZip[0]!)}`, base);
+          const report = await importFile({
+            path: zip.path, types: fromZip, target, keychain: deps.importer.keychain, running: deps.importer.running, browser: deps.importer.browser,
+            onProgress: (p) => job.step(`Importing ${nounOf(p.type)}`, base + p.index),
+          }).catch((error: unknown) => ({ results: fromZip.map((t) => failure(t, error)) }));
+          results.push(...report.results);
+          lines.push(...report.results.map(summaryLine));
+          base += fromZip.length;
         }
         if (csv) {
           job.step("Importing passwords", base);

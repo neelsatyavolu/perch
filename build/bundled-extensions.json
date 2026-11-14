@@ -34,23 +34,26 @@
       "id": "mefnjppdmliabfgljepbdgdalmgggmid",
       "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAomVORwzaJvJVxrltfAALXklG5gciR4gfTRFSuPozomeHpFl8A7DD6QpOYRBqZqbylz3+RugL3gojbKkJftXqUTQTS0NbHNUe7TVcZEHlQ+9Wcwxw5D48V6zipOJRqpzQKRhzzjATdNfRGELj5b73S+MKfxX31K1V9E0uLX1UHq2JOKGMe1+4EZGXrBt66ylSWm3aCJ8dP4DSMDOl8Wo6BvYf+gOsQjI1iOBgtObKUulU/xS/EF9GA4Yd6gR52g1hNInmnHeTNiXBUTXntivLwTCjZhgtn23k/mrb3rXXA7Mt7CzYeVJ4VRAikK7K9I9XLABMLSxmQE5yV9pI7kH1OQIDAQAB",
       "release": {
-        "url": "https://github.com/neelsatyavolu/caveatly/releases/download/v0.2.1/caveatly.zip",
-        "sha256": "d5fd5488d66a1b39c1a18f92a048f574ac3f3011fe543ffb31b5078e7ec1293b"
+        "url": "https://github.com/neelsatyavolu/caveatly/releases/download/v0.2.3/caveatly.zip",
+        "sha256": "64bec8e82bd5656d7fac8897d8c96e7b96ed3836509023a43c00ceca808c564f"
       },
       "dist": "caveatly",
       "incognito": false,
       "manifest": {
         "caveatly_embed": {
           "telemetry": false,
-          "blocker": false
+          "hide": [
+            "gpc",
+            "cookieGuard"
+          ],
+          "controller": "ocjanjehckpdbcjamffmbeemoooamjpo"
         }
       },
-      "disable_rulesets": true,
       "updates": {
         "repo": "neelsatyavolu/caveatly",
         "asset": "caveatly.zip",
         "root": "caveatly",
-        "from_version": "0.2.1"
+        "from_version": "0.2.3"
       }
     }
   ]

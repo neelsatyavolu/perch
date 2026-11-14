@@ -27,6 +27,8 @@ export type PagesDeps = {
   chats: ChatStore;
   runs: RunManager;
   jobs: Jobs;
+  /** Opens a page in a new tab behind the current one (the Build my memory chat). */
+  openBackgroundTab?: (url: string) => Promise<void>;
   state: PagesState;
   /** Changes what new chats start with; the default permission mode lives in the pages' settings. */
   setDefaults?: (patch: { mode?: PermissionMode; model?: string; effort?: ChatEffort }) => void;
@@ -38,6 +40,12 @@ export type PagesDeps = {
     keychain: SettingsKeychain;
     /** Opens a provider's sign-in page in a tab the person can see. */
     openUrl: (url: string) => Promise<void>;
+    /**
+     * Opens a sign-in page and watches its tab until it reaches an address `done` accepts; returns
+     * that address and closes the tab, or null when the tab was closed or the time ran out first.
+     * Claude's sign-in ends on a page that shows a code to copy, which Perch reads from the tab.
+     */
+    openAndWatch?: (url: string, done: (address: string) => boolean, timeoutMs: number) => Promise<string | null>;
     /** How long signIn waits for the sign-in page to finish. */
     signInTimeoutMs?: number;
   };

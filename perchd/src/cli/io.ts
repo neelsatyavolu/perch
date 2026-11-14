@@ -8,6 +8,7 @@ import { CLIENT_NAME, FileKeychain, type Keychain } from "../daemon/keychain";
 import { perchPaths, type PerchPaths } from "../daemon/paths";
 import { connect, DaemonNotRunning, type DaemonClient } from "./client";
 import { selfCommand } from "./self";
+import { UsageError } from "./args";
 
 export type CliIO = {
   env: Record<string, string | undefined>;
@@ -78,6 +79,10 @@ async function startDaemon(io: CliIO, attempt: () => Promise<DaemonClient>): Pro
 
 /** Connects to perchd as a client, starting it first when allowed. */
 export async function openDaemon(io: CliIO, opts: SessionOptions = {}): Promise<DaemonClient> {
+  // A session name perchd would refuse is a usage mistake: say what's allowed, before connecting.
+  if (opts.session !== undefined && !SESSION_ID.test(opts.session)) {
+    throw new UsageError("perch: a session name is 1 to 80 letters, digits, dots, dashes, underscores or colons, like --session research-2");
+  }
   const paths = pathsFor(io);
   // Nothing to talk to: say so before making a token.
   if (io.autostart === false && !existsSync(paths.socket)) throw new DaemonNotRunning();

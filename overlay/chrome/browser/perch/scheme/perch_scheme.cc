@@ -20,7 +20,7 @@ constexpr std::pair<std::string_view, std::string_view> kPages[] = {
     {"settings", "perch-settings"}, {"newtab", "perch-newtab"},
     {"memory", "perch-memory"},     {"routines", "perch-routines"},
     {"import", "perch-import"},     {"welcome", "perch-welcome"},
-    {"chat", "perch-chat"},
+    {"chat", "perch-chat"},         {"tour", "perch-tour"},
 };
 
 std::optional<std::string_view> ChromeHostFor(std::string_view perch_host) {

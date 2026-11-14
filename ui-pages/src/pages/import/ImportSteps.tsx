@@ -3,6 +3,36 @@ import { IMPORT_KINDS, IMPORT_NEEDS } from "../../lib/labels";
 
 export const ASIDE_KINDS: readonly ImportKind[] = ["aside-memory", "aside-skills", "aside-chats", "aside-preferences"];
 
+/**
+ * What an import sends, and what stays behind for want of a file or a permission, so the import can
+ * always go ahead with the rest. Safari's bookmarks and history come from its export file, or
+ * straight from Safari with Full Disk Access; its passwords only from the export.
+ */
+export function importPlan({ browser, kinds, csv, safariExport, fullDiskAccess }: {
+  readonly browser: DetectedBrowser;
+  readonly kinds: readonly ImportKind[];
+  readonly csv: boolean;
+  readonly safariExport: boolean;
+  /** null while unknown: nothing is left out for it. */
+  readonly fullDiskAccess: boolean | null;
+}): { readonly sent: readonly ImportKind[]; readonly left: readonly ImportKind[] } {
+  const fda = fullDiskAccess !== false;
+  const goes = (kind: ImportKind): boolean => {
+    const needs = browser.options.find((o) => o.kind === kind)?.needs;
+    if (needs === "csv-export") return csv;
+    if (needs === "safari-export") return safariExport || (kind !== "passwords" && fullDiskAccess === true);
+    if (needs === "full-disk-access") return fda;
+    return true;
+  };
+  return { sent: kinds.filter(goes), left: kinds.filter((k) => !goes(k)) };
+}
+
+/** "passwords", "passwords and cookies", "bookmarks, history and passwords". */
+export function kindList(kinds: readonly ImportKind[]): string {
+  const words = kinds.map((k) => IMPORT_KINDS[k].label.toLowerCase());
+  return words.length < 2 ? (words[0] ?? "") : `${words.slice(0, -1).join(", ")} and ${words.at(-1)}`;
+}
+
 /** "Personal", or "2 profiles"; a lone profile named like its browser ("Safari") says "1 profile" instead. */
 export function profileLine(browser: string, profiles: readonly { readonly name: string }[]): string {
   if (profiles.length !== 1) return `${profiles.length} profiles`;
@@ -27,6 +57,13 @@ function startOfDay(t: number): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 }
 
+/** The browser's own app icon from this Mac, or its first letter. */
+export function BrowserIcon({ browser }: { readonly browser: Pick<DetectedBrowser, "name" | "icon"> }) {
+  return browser.icon
+    ? <img class="tile tile-img" src={browser.icon} alt="" width={32} height={32} />
+    : <span class="tile" aria-hidden="true">{browser.name.charAt(0)}</span>;
+}
+
 export function BrowserStep({ browsers, browser, profiles, onBrowser, onToggleProfile }: {
   readonly browsers: readonly DetectedBrowser[];
   readonly browser: DetectedBrowser | null;
@@ -41,10 +78,10 @@ export function BrowserStep({ browsers, browser, profiles, onBrowser, onTogglePr
         {browsers.map((b) => (
           <label key={b.id} class={`pick ${browser?.id === b.id ? "on" : ""}`}>
             <input type="radio" name="browser" checked={browser?.id === b.id} onChange={() => onBrowser(b)} />
-            <span class="tile" aria-hidden="true">{b.name.charAt(0)}</span>
+            <BrowserIcon browser={b} />
             <span class="pick-t">
               <span class="ink">{b.name}</span>
-              <span class="cap">{profileLine(b.name, b.profiles)}{b.lastUsed ? ` · ${lastUsedLine(b.lastUsed)}` : ""}</span>
+              <span class="cap">{b.id === "safari" ? "Every profile" : profileLine(b.name, b.profiles)}{b.lastUsed ? ` · ${lastUsedLine(b.lastUsed)}` : ""}</span>
             </span>
           </label>
         ))}
@@ -93,7 +130,11 @@ export function DataStep({ browser, kinds, onToggle }: {
 const NEED_TEXT = (need: ImportNeed, browser: string): string => {
   switch (need) {
     case "full-disk-access":
-      return `${browser} keeps its data where only apps with Full Disk Access can read it. Turn it on for Perch in System Settings, then come back.`;
+      return browser === "Safari"
+        ? "Cookies keep you signed in to your sites. Safari keeps them where only apps with Full Disk Access can read them: turn it on for Perch in System Settings, then come back."
+        : `${browser} keeps its data where only apps with Full Disk Access can read it. Turn it on for Perch in System Settings, then come back.`;
+    case "safari-export":
+      return "In Safari, choose File, then Export Browsing Data to File. Keep everything ticked, save it, then choose that file here. It has the bookmarks, history and passwords of every Safari profile, and Perch needs no special access to read it. Delete the file after the import; it isn't encrypted.";
     case "keychain":
       return `macOS asks to unlock ${browser}'s Keychain item. Choose Allow to let Perch read it once.`;
     case "csv-export":
@@ -105,13 +146,19 @@ const NEED_TEXT = (need: ImportNeed, browser: string): string => {
   }
 };
 
-export function PermissionStep({ browser, needs, access, csv, onOpenSettings, onChooseCsv }: {
+export function PermissionStep({ browser, needs, access, csv, safariExport, left, canGoAhead, onOpenSettings, onChooseCsv, onChooseSafariExport }: {
   readonly browser: DetectedBrowser;
   readonly needs: readonly ImportNeed[];
   readonly access: SystemAccess | null;
   readonly csv: FileChoice | null;
+  readonly safariExport: FileChoice | null;
+  /** What stays behind as things stand. */
+  readonly left: readonly ImportKind[];
+  /** Something would still come over, so the import can go ahead without the rest. */
+  readonly canGoAhead: boolean;
   readonly onOpenSettings: () => void;
   readonly onChooseCsv: () => void;
+  readonly onChooseSafariExport: () => void;
 }) {
   return (
     <ul class="needs">
@@ -131,8 +178,19 @@ export function PermissionStep({ browser, needs, access, csv, onOpenSettings, on
               <button type="button" class="btn" onClick={onChooseCsv}>{csv ? "Choose another file" : "Choose exported file"}</button>
             </span>
           )}
+          {n === "safari-export" && (
+            <span class="need-file">
+              {safariExport && <span class="status ok"><span class="dotc" />{safariExport.name}</span>}
+              <button type="button" class="btn" onClick={onChooseSafariExport}>{safariExport ? "Choose another file" : "Choose Safari's export"}</button>
+            </span>
+          )}
         </li>
       ))}
+      {left.length > 0 && canGoAhead && (
+        <li class="need">
+          <p class="note">Or import without the {kindList(left)}: everything else comes over now, and you can bring the rest later from Settings, under Import.</p>
+        </li>
+      )}
     </ul>
   );
 }

@@ -19,6 +19,7 @@ import type { ToolSpec } from "../models/types";
 import { rememberedSecrets, secretKey } from "../page/secrets";
 import type { Kind } from "./permissions";
 import type { ToolContext, ToolResult } from "./tools";
+import { takeTypedLogin } from "./typed-logins";
 
 const spec = (name: string, description: string): ToolSpec => ({ name, description, parameters: { type: "object", properties: {}, required: [], additionalProperties: false } });
 
@@ -130,7 +131,18 @@ function outcome(r: { readonly result: FillResult["result"] }): string {
   return r.result === "filled" ? FILLED : NEEDS_YOU;
 }
 
-export async function runFillTool(ctx: ToolContext, name: string): Promise<ToolResult> {
+/**
+ * Whether sign_in would find nothing for this page: no login saved in Perch and no password
+ * manager. Then its approval card asks the person to type one (typed-logins.ts).
+ */
+export async function needsTypedLogin(ctx: ToolContext): Promise<boolean> {
+  if (!ctx.browser.perch || !ctx.tab) return false;
+  const logins = await listLogins(ctx.browser.conn, ctx.tab.id).catch(() => []);
+  if (pickLogin(logins, await pageOrigin(ctx))) return false;
+  return !(await managerOf(ctx));
+}
+
+export async function runFillTool(ctx: ToolContext, name: string, callId = ""): Promise<ToolResult> {
   if (!ctx.browser.perch) return { content: NOT_IN_PERCH, isError: true };
   if (!ctx.tab) return { content: "No tab is open. Open the sign-in page first.", isError: true };
   // The same name session.ts gives the site when it decides whether to ask.
@@ -140,7 +152,12 @@ export async function runFillTool(ctx: ToolContext, name: string): Promise<ToolR
   let content: string;
   if (name === "sign_in") {
     const login = pickLogin(await listLogins(conn, tab.id), await pageOrigin(ctx));
-    if (!login) {
+    // A login the person typed into the approval card, used once and never shown to the model.
+    const typed = !login && callId ? takeTypedLogin(callId) : undefined;
+    if (typed) {
+      const origin = await pageOrigin(ctx);
+      content = outcome(await fillLoginFields(tab, origin, typed.username, typed.password, (fields) => hideNodes(ctx, fields)));
+    } else if (!login) {
       content = await signInFromManager(ctx);
       if (content === NO_LOGIN) return { content };
     } else {

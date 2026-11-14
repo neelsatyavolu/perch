@@ -24,6 +24,8 @@ export type PageHost = {
   /** Starts on-device dictation; `onText` gets the words so far, and `final` once speech ends. */
   startDictation?: (onText: (text: string, final: boolean) => void) => Promise<void>;
   stopDictation?: () => Promise<void>;
+  /** The tab's title and whether the chat waits for the person (the shell shows it in the tab strip). */
+  setTabState?: (state: { title: string; waiting: boolean }) => void;
 };
 
 type Win = Pick<Window, "parent" | "addEventListener"> & { location: { ancestorOrigins?: ArrayLike<string> } };
@@ -75,6 +77,7 @@ export function createFrameHost(win: Win): PageHost | undefined {
     openTab: (url) => void call("openTab", [url]).catch(() => undefined),
     openFullChat: (chatId) => void call("openFullChat", [chatId]).catch(() => undefined),
     openSettings: () => void call("openSettings").catch(() => undefined),
+    setTabState: (state) => void call("setTabState", [state]).catch(() => undefined),
     getAppearance: async () => {
       const a = await call<unknown>("getAppearance").catch(() => null);
       return isAppearance(a) ? a : null;

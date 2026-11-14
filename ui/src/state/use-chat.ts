@@ -112,7 +112,7 @@ export function useChat(client: Client) {
     });
   const unqueue = (queuedId: string) => guard(async () => view.chat && client.unqueue(view.chat.id, queuedId));
   const sendQueuedNow = (queuedId: string) => guard(async () => view.chat && client.sendQueuedNow(view.chat.id, queuedId));
-  const decide = (approvalId: string, approved: boolean) => guard(() => client.decide(approvalId, approved));
+  const decide = (approvalId: string, approved: boolean, login?: { username: string; password: string }) => guard(() => client.decide(approvalId, approved, login));
   const setSettings = (patch: Partial<ChatSettings>, apply: (patch: Partial<ChatSettings>) => void = () => {}) =>
     guard(async () => {
       if (!view.chat) apply(patch);

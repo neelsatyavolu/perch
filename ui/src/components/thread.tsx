@@ -33,7 +33,7 @@ export function shownAlready(live: string, answer: string): number {
 type ThreadProps = {
   client: Client;
   view: ChatView;
-  onDecide: (approvalId: string, approved: boolean) => Promise<void> | void;
+  onDecide: (approvalId: string, approved: boolean, login?: { username: string; password: string }) => Promise<void> | void;
   onOpenArtifact: (meta: ArtifactMeta) => void;
   onBranch?: (message: ChatMessage) => void;
   selectedArtifact?: string | null;
@@ -179,7 +179,7 @@ export function Thread({ client, view, onDecide, onOpenArtifact, onBranch, selec
         </Fragment>
       ))}
       {run && <LiveRun key={run.runId} text={run.text} steps={run.steps} waiting={Boolean(run.approval)} since={run.startedAt} />}
-      {run?.approval && <ApprovalCard key={run.approval.id} card={run.approval} onDecide={(ok) => onDecide(run.approval!.id, ok)} />}
+      {run?.approval && <ApprovalCard key={run.approval.id} card={run.approval} onDecide={(ok, login) => onDecide(run.approval!.id, ok, login)} />}
       {error && (
         <div class="note error" role="alert">
           {error}

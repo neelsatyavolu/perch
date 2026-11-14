@@ -83,3 +83,15 @@ test("in the browser, each scripted action is approved on its own", async () => 
   expect(asked.length).toBe(1);
   await ctx.close();
 });
+
+test("in the REPL a lone expression prints its value; statements still need return or log", async () => {
+  const { ScriptVm, isLoneExpression } = await import("../src/agent/script");
+  const vm = await ScriptVm.create();
+  const noCalls = (async () => ({ content: "" })) as never;
+  expect(await vm.run("1 + 1", noCalls, "r1", true)).toEqual({ content: "2" });
+  expect(await vm.run("const x = 41", noCalls, "r2", true)).toEqual({ content: "(no output)" });
+  expect(await vm.run("x + 1;", noCalls, "r3", true)).toEqual({ content: "42" });
+  expect(isLoneExpression("if (a) b")).toBe(false);
+  expect(isLoneExpression("a; b")).toBe(false);
+  vm.dispose();
+});

@@ -17,6 +17,7 @@ import type { ClientRecord, ClientRegistry } from "./clients";
 import { parseClientMessage, parseHello, type ApproveAsk, type Hello, type Request } from "./protocol";
 import type { AgentSession, SessionManager } from "./sessions";
 import { LineReader, SocketWriter } from "./wire";
+import type { ToolCall } from "../models/types";
 
 export type Handler = (conn: Connection, params: Record<string, unknown>) => Promise<unknown>;
 
@@ -73,6 +74,8 @@ export type ServerOptions = {
 export type BrowserApprovals = {
   approve(session: AgentSession, request: ApprovalRequest, signal: AbortSignal): Promise<boolean>;
   allowClient(name: string, signal: AbortSignal): Promise<boolean>;
+  /** A tool call an outside session made, for its chat's list of steps. */
+  step?(session: AgentSession, call: ToolCall): void;
 };
 
 /** Why a connection may not go on under the current policy, or null when it may. */

@@ -71,7 +71,9 @@ export function createClient(api: string, token: string, deps: Deps = {}) {
     /** Writes the newest version to Downloads (once) and returns its path; `reveal` also shows it in Finder. */
     downloadArtifact: (id: string, reveal = false) => call<{ path: string }>("POST", `/api/artifacts/${encodeURIComponent(id)}/save`, { reveal }),
     saveArtifact: (chatId: string, a: { title: string; kind: ArtifactKind; content: string; language?: string; mime?: string }) => call<ArtifactMeta>("POST", `/api/chats/${encodeURIComponent(chatId)}/artifacts`, a),
-    decide: (approvalId: string, approved: boolean) => call<{ ok: true }>("POST", `/api/approvals/${encodeURIComponent(approvalId)}`, { approved }),
+    /** `login`: what the person typed into a sign-in card that asked for one; it fills the page, never the chat. */
+    decide: (approvalId: string, approved: boolean, login?: { username: string; password: string }) =>
+      call<{ ok: true }>("POST", `/api/approvals/${encodeURIComponent(approvalId)}`, { approved, ...(login ? { login } : {}) }),
     windowState: (windowId: string) => call<WindowState>("GET", `/api/windows/${encodeURIComponent(windowId)}`),
     tabChat: (tabId: string) => call<ChatPayload>("GET", `/api/tabs/${encodeURIComponent(tabId)}/chat`),
     openSideChat: (tabId: string, windowId: string, chatId?: string, settings?: Partial<ChatSettings>) =>

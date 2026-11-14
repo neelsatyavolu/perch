@@ -23,7 +23,10 @@ export type Relay = {
   onEvent(name: string, data: unknown): void;
 };
 
-export function createRelay(opts: { send: Send; frameOrigin: string; isFrame: (source: unknown) => boolean; post: (msg: Reply) => void }): Relay {
+/** What the chat tab shows in the tab strip: the chat's title, and whether it waits for the person. */
+export type TabState = { title: string; waiting: boolean };
+
+export function createRelay(opts: { send: Send; frameOrigin: string; isFrame: (source: unknown) => boolean; post: (msg: Reply) => void; onTabState?: (state: TabState) => void }): Relay {
   const calls = new Map<string, string>();
   let next = 0;
   const reply = (id: string, ok: boolean, payload: unknown) =>
@@ -35,6 +38,13 @@ export function createRelay(opts: { send: Send; frameOrigin: string; isFrame: (s
       if (msg.type !== HOST_REQUEST || typeof msg.id !== "string" || msg.id.length > 64) return;
       if (!(HOST_METHODS as readonly unknown[]).includes(msg.method)) return reply(msg.id, false, "Perch can't do that from the chat");
       const method = msg.method as HostMethod;
+      // The tab's own title and icon are the shell's to set; nothing reaches the browser.
+      if (method === "setTabState") {
+        const s = (Array.isArray(msg.args) ? msg.args[0] : undefined) as Partial<TabState> | undefined;
+        if (typeof s?.title !== "string" || typeof s.waiting !== "boolean") return reply(msg.id, false, "Bad tab state");
+        opts.onTabState?.({ title: s.title.slice(0, 120), waiting: s.waiting });
+        return reply(msg.id, true, null);
+      }
       let args: unknown[] = [];
       if (method === "openTab") {
         const url = openableUrl(Array.isArray(msg.args) ? msg.args[0] : undefined);
@@ -79,6 +89,12 @@ export function startShell(win: ShellWindow, page: "chat.html" | "sidebar.html")
     frameOrigin,
     isFrame: (source) => source !== null && source === frame.contentWindow,
     post: (msg) => frame.contentWindow?.postMessage(msg, frameOrigin),
+    // A chat waiting for the person says so in the tab strip: "Needs you" first, and the icon's dot.
+    onTabState: ({ title, waiting }) => {
+      win.document.title = `${waiting ? "Needs you · " : ""}${title || "Chat"} · Perch`;
+      const icon = win.document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+      if (icon) icon.href = waiting ? "./favicon-waiting.svg" : "./favicon.svg";
+    },
   });
   win.addEventListener("message", (e) => relay.onMessage(e.source, e.origin, e.data));
   // The shell paints the chosen theme's canvas, so no other colour shows around or before the frame.

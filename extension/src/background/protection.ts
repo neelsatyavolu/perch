@@ -2,11 +2,12 @@
 
 import { genericExemptHosts } from "../cosmetic/data";
 import type { Settings } from "../shared/settings";
+import { syncCaveatly } from "./caveatly";
 import { cosmeticData } from "./cosmetic";
 import { contentScriptPlan, enabledRulesets, siteOffRules } from "./plan";
 
 export async function applySettings(settings: Settings): Promise<void> {
-  await Promise.all([applyRules(settings), applyContentScripts(settings)]);
+  await Promise.all([applyRules(settings), applyContentScripts(settings), syncCaveatly(settings)]);
 }
 
 async function applyRules(settings: Settings): Promise<void> {

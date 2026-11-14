@@ -20,17 +20,26 @@ function featuresPanel(settings: Settings): HTMLElement {
 }
 
 function sitesPanel(settings: Settings): HTMLElement {
+  const empty = h("div", { class: "item" }, [h("span", { class: "mute", text: "None. Turn protections off for a site from its panel in the toolbar." })]);
   const items = settings.sitesOff.map((host) => {
     const row = h("div", { class: "item" }, [h("div", { class: "grow mono", text: host })]);
     row.append(
       h("button", {
         text: "Turn protections back on",
-        on: { click: () => void loadSettings().then((s) => saveSettings(withSiteProtection(s, host, true))).then(() => row.remove()) },
+        on: {
+          click: () =>
+            void loadSettings()
+              .then((s) => saveSettings(withSiteProtection(s, host, true)))
+              .then(() => {
+                // The last site going leaves the empty state, not a bare heading.
+                if (row.parentElement?.querySelectorAll(":scope > .item").length === 1) row.replaceWith(empty);
+                else row.remove();
+              }),
+        },
       }),
     );
     return row;
   });
-  const empty = h("div", { class: "item" }, [h("span", { class: "mute", text: "None. Turn protections off for a site from its panel in the toolbar." })]);
   return panel("Sites with protections off", null, items.length ? items : [empty]);
 }
 
@@ -66,15 +75,8 @@ async function shortcutsPanel(): Promise<HTMLElement> {
 
 async function main(): Promise<void> {
   const app = document.getElementById("app")!;
-  const settings = await loadSettings();
-  app.replaceChildren(
-    h("h1", { class: "page-title", text: "Perch settings" }),
-    featuresPanel(settings),
-    sitesPanel(settings),
-    await codesPanel(),
-    await listsPanel(),
-    await shortcutsPanel(),
-  );
+  const [settings, codes, lists, shortcuts] = await Promise.all([loadSettings(), codesPanel(), listsPanel(), shortcutsPanel()]);
+  app.replaceChildren(h("h1", { class: "page-title", text: "Perch settings" }), featuresPanel(settings), sitesPanel(settings), codes, lists, shortcuts);
   if (location.hash) document.querySelector(location.hash)?.scrollIntoView();
 }
 

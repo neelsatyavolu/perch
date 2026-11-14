@@ -22,13 +22,14 @@ export async function renderSite(root: HTMLElement, tab: chrome.tabs.Tab | undef
   }
   const tabId = tab.id;
   const status = h("p", { class: "caption", attrs: { role: "status" } });
-  root.append(
-    await protectionSection(url.hostname, tabId),
-    await blockedSection(tabId, url),
-    toolsSection(tabId, status),
-    await permissionsSection(url.href),
-    await cookiesSection(url, tabId),
-  );
+  // Each section asks Chrome for its own facts; asking at once opens the panel in the time of the slowest.
+  const [protection, blocked, permissions, cookies] = await Promise.all([
+    protectionSection(url.hostname, tabId),
+    blockedSection(tabId, url),
+    permissionsSection(url.href),
+    cookiesSection(url, tabId),
+  ]);
+  root.append(protection, blocked, toolsSection(tabId, status), permissions, cookies);
 }
 
 async function protectionSection(host: string, tabId: number): Promise<HTMLElement> {
@@ -61,8 +62,10 @@ async function protectionSection(host: string, tabId: number): Promise<HTMLEleme
 }
 
 async function blockedSection(tabId: number, url: URL): Promise<HTMLElement> {
-  const counts = await matchedCounts(tabId).catch(() => null);
-  const state = await ask<TabState>({ type: "tab-state", tabId }).catch(() => null);
+  const [counts, state] = await Promise.all([
+    matchedCounts(tabId).catch(() => null),
+    ask<TabState>({ type: "tab-state", tabId }).catch(() => null),
+  ]);
   const banner = state?.banner && new URL(state.banner.url).hostname === url.hostname ? `Rejected (${state.banner.cmp})` : "None seen";
   // Counts are numbers and set in mono; the banner result is words and stays in the sans.
   const row = (label: string, value: string, id: string, numeric = true) =>

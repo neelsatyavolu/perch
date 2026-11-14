@@ -101,3 +101,17 @@ describe("site panel", () => {
     await page.close();
   });
 });
+
+describe("settings page", () => {
+  test("turning the last exempt site back on shows the empty state", async () => {
+    await h.sw(`chrome.storage.local.set({ settings: { sitesOff: ["site.localhost"] } })`);
+    const page = await h.extensionPage("options.html");
+    await waitFor(() => page.evaluate<boolean>(`[...document.querySelectorAll("button")].some((b) => b.textContent === "Turn protections back on")`), "the sites list");
+    await clickByText(page, "Turn protections back on");
+    const text = await waitFor(() => page.evaluate<string | null>(`document.body.textContent.includes("None. Turn protections off") ? document.body.textContent : null`), "the empty state");
+    expect(text).not.toContain("Turn protections back on");
+    expect((await h.sw<{ settings: { sitesOff: string[] } }>(`chrome.storage.local.get("settings")`)).settings.sitesOff).toEqual([]);
+    await h.sw(`chrome.storage.local.set({ settings: {} })`);
+    await page.close();
+  });
+});

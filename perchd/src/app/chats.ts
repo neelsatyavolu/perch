@@ -15,7 +15,7 @@ import type { Vault } from "./vault";
 
 export const DEFAULT_SETTINGS: ChatSettings = Object.freeze({ mode: "guard", model: "", effort: "medium", scope: "current" });
 const EXT = ".chat";
-/** How many chats `addAll` seals and writes at once. */
+/** How many chats `addAll` seals and writes, and `load` reads and opens, at once. */
 const ADD_BATCH = 32;
 
 /** Steps saved before they carried details were plain labels; they load as `{ label }`. */
@@ -48,16 +48,23 @@ export class ChatStore {
   static async load(dir: string, vault: Vault): Promise<ChatStore> {
     const store = new ChatStore(dir, vault);
     await ensurePrivateDir(dir);
-    for (const name of await readdir(dir)) {
-      if (!name.endsWith(EXT)) continue;
-      const id = name.slice(0, -EXT.length);
-      try {
-        const chat = await vault.openJson<Chat>(id, new Uint8Array(await readFile(join(dir, name))));
-        if (chat.id !== id) throw new Error("id mismatch");
-        store.chats.set(id, normalizeChat(chat));
-      } catch {
-        store.problems.push(name);
-      }
+    const names = (await readdir(dir)).filter((name) => name.endsWith(EXT));
+    // Read and opened a batch at a time: one by one, a long history held up Perch's start.
+    for (let at = 0; at < names.length; at += ADD_BATCH) {
+      const batch = names.slice(at, at + ADD_BATCH);
+      const opened = await Promise.all(
+        batch.map(async (name) => {
+          const id = name.slice(0, -EXT.length);
+          try {
+            const chat = await vault.openJson<Chat>(id, new Uint8Array(await readFile(join(dir, name))));
+            if (chat.id !== id) throw new Error("id mismatch");
+            return normalizeChat(chat);
+          } catch {
+            return null;
+          }
+        }),
+      );
+      opened.forEach((chat, i) => (chat ? store.chats.set(chat.id, chat) : store.problems.push(batch[i]!)));
     }
     return store;
   }

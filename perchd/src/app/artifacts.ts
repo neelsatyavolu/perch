@@ -42,6 +42,8 @@ export const IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"
 const MAX_TEXT = 2_000_000;
 const MAX_IMAGE_BASE64 = 11_000_000;
 const EXT = ".art";
+/** Artifacts read and opened at once while loading. */
+const LOAD_BATCH = 32;
 
 export type ArtifactVersion = { content: string; mime?: string; time: string };
 export type ArtifactRecord = { id: string; chatId: string; title: string; kind: ArtifactKind; language?: string; versions: ArtifactVersion[] };
@@ -61,14 +63,22 @@ export class ArtifactStore {
   static async load(dir: string, vault: Vault, inMemory: (chatId: string) => boolean = () => false): Promise<ArtifactStore> {
     const store = new ArtifactStore(dir, vault, inMemory);
     await ensurePrivateDir(dir);
-    for (const name of await readdir(dir)) {
-      if (!name.endsWith(EXT)) continue;
-      const id = name.slice(0, -EXT.length);
-      try {
-        store.records.set(id, await vault.openJson<ArtifactRecord>(id, new Uint8Array(await readFile(join(dir, name)))));
-      } catch {
-        // Left on disk; a damaged artifact must not stop the chats from loading.
-      }
+    const names = (await readdir(dir)).filter((name) => name.endsWith(EXT));
+    // A batch at a time, as chats load: one by one, many artifacts held up Perch's start.
+    for (let at = 0; at < names.length; at += LOAD_BATCH) {
+      const batch = names.slice(at, at + LOAD_BATCH);
+      const opened = await Promise.all(
+        batch.map(async (name) => {
+          const id = name.slice(0, -EXT.length);
+          try {
+            return [id, await vault.openJson<ArtifactRecord>(id, new Uint8Array(await readFile(join(dir, name))))] as const;
+          } catch {
+            // Left on disk; a damaged artifact must not stop the chats from loading.
+            return null;
+          }
+        }),
+      );
+      for (const entry of opened) if (entry) store.records.set(entry[0], entry[1]);
     }
     return store;
   }

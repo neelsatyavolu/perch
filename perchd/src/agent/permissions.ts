@@ -8,8 +8,7 @@
  *   payment  money and passwords, and anything that moves a checkout or password form forward:
  *            always asks, even in Skip confirmation. Filling a saved card (fill_card) is one.
  *
- * sign_in and fill_code are risky until the user has let the agent sign in on that site once
- * (fill-tools.ts, fillKind), then ordinary changes.
+ * sign_in and fill_code are ordinary changes (fill-tools.ts, fillKind): the logins are the user's own.
  */
 
 import { appTool } from "../apps/index";
@@ -141,8 +140,21 @@ function clickKind(target: Target | undefined, guarded: boolean): Kind {
   if (menu) return "change";
   if (PAYMENT.test(name) || PASSWORD.test(name) || charges({ ...target, name }, guarded)) return "payment";
   if (guarded && ADVANCES.test(name)) return "payment";
-  if (RISKY.test(name)) return "risky";
+  if (RISKY.test(name) && !isListing(target.role, name)) return "risky";
   return "change";
+}
+
+/** Roles of items in a list or feed: an email row, a search result, an article link. */
+const LISTINGS = new Set(["link", "row", "gridcell", "listitem", "article", "option", "treeitem"]);
+const COMMAND_WORDS = 6;
+
+/**
+ * A long label on a link or row is a listing (an email's subject and preview, a headline), not a
+ * command: "Your order is confirmed - We'll send you an update" opens a message, it sends nothing.
+ * Commands are short ("Send", "Delete draft", "Reply all").
+ */
+function isListing(role: string, name: string): boolean {
+  return LISTINGS.has(role) && name.trim().split(/\s+/).length > COMMAND_WORDS;
 }
 
 const ORDER: Kind[] = ["read", "change", "risky", "payment"];

@@ -1,5 +1,6 @@
 /** Runs the model's tool calls against the browser. Errors come back as text; nothing throws. */
 
+import { withoutPasskeys } from "../browser/no-passkeys";
 import { cachedDocument, cacheDocument, documentText, fetchDocument, forgetDocuments, freeName, makeZip, part } from "./documents";
 import { pdfPages, pdfSection } from "../page/pdf";
 import { FILL_TOOLS, runFillTool, type FillSites, type PasswordManager } from "./fill-tools";
@@ -201,6 +202,7 @@ async function followPopup(ctx: ToolContext, tab: Tab): Promise<string | null> {
   if (!id) return null;
   const popup = await Tab.attach(ctx.browser.conn, id).catch(() => null);
   if (!popup) return null;
+  await withoutPasskeys(popup);
   ctx.owned = [...ctx.owned, popup];
   ctx.tab = popup;
   for (let i = 0; i < 60 && (await popup.url().catch(() => "about:blank")) === "about:blank"; i++) await Bun.sleep(50);

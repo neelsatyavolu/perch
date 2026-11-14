@@ -8,7 +8,7 @@
  * (secure/onepassword.ts), the login or code comes from 1Password instead, which asks for Touch ID
  * itself. perchd fills it into the page (page/fill-form.ts); the model still sees only the outcome.
  *
- * Permissions (spec 7.4): signing in or filling a code on a site for the first time asks in Guard;
+ * Permissions (spec 7.4): signing in or filling a code runs without asking in Guard (asks in Ask);
  * a card fill is a payment, so it always asks.
  */
 
@@ -24,7 +24,7 @@ import { takeTypedLogin } from "./typed-logins";
 const spec = (name: string, description: string): ToolSpec => ({ name, description, parameters: { type: "object", properties: {}, required: [], additionalProperties: false } });
 
 export const FILL_TOOL_SPECS: ToolSpec[] = [
-  spec("sign_in", "Sign in on the current page with a login the user saved in Perch. Perch fills the form itself; you never see the username or password. Then click the page's sign-in button. Returns filled, no saved login, or needs you."),
+  spec("sign_in", "Sign in on this page with the user's saved login (Perch or 1Password); you never see it. Then click Sign in or Continue. Password on a next screen? Call it again. Pick a password option over a passkey."),
   spec("fill_card", "Fill the payment form on the current page with a card the user saved in Perch. The user always approves first and types the security code. Returns filled, no saved card, or needs you."),
   spec("fill_code", "Fill a one-time sign-in code from Perch's authenticator into the current page. Returns filled, no saved code, or needs you."),
 ];
@@ -76,9 +76,13 @@ async function managerOf(ctx: ToolContext): Promise<PasswordManager | null> {
   }
 }
 
-export function fillKind(name: string, site: string, ctx: ToolContext): Kind {
-  if (name === "fill_card") return "payment";
-  return sitesOf(ctx).known(site) ? "change" : "risky";
+/**
+ * A login or code the person saved (in Perch, or in the 1Password accounts they picked for the
+ * agent) is theirs to use: filling it is an ordinary change, so Guard signs in without asking
+ * (Build my memory signs in to site after site). Ask mode still asks; a card always does.
+ */
+export function fillKind(name: string, _site: string, _ctx: ToolContext): Kind {
+  return name === "fill_card" ? "payment" : "change";
 }
 
 /** "neel@…", "ne…": enough for the user to tell logins apart on the card. */

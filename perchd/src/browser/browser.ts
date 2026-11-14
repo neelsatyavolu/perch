@@ -2,6 +2,7 @@
 
 import type { CdpConnection } from "../cdp/connection";
 import { findChromeForTesting, launchChromium } from "../cdp/pipe";
+import { withoutPasskeys } from "./no-passkeys";
 import { Tab } from "./tab";
 
 export type TabInfo = { id: string; url: string; title: string };
@@ -105,6 +106,7 @@ export class Browser {
       await this.claim(targetId);
     }
     const tab = await Tab.attach(this.conn, targetId);
+    await withoutPasskeys(tab);
     if (url) await tab.navigate(url);
     return tab;
   }

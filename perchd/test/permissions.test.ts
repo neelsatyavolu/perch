@@ -206,3 +206,13 @@ test("typing at the focus is a change, a PDF is a change, and listing downloads 
   expect(classify(c("save_pdf"))).toBe("change");
   expect(classify(c("downloads"))).toBe("read");
 });
+
+test("an email row or headline that mentions sending is a listing to open, not a Send button", () => {
+  const click = { id: "c", name: "click", args: { ref: "e1" } };
+  const subject = "Your Quince order is confirmed - We're getting your order #49921404 ready to be shipped. We'll send you an update";
+  expect(classify(click, { role: "link", name: subject })).toBe("change");
+  expect(classify(click, { role: "row", name: subject })).toBe("change");
+  expect(classify(click, { role: "button", name: subject })).toBe("risky");
+  expect(classify(click, { role: "link", name: "Send" })).toBe("risky");
+  expect(classify(click, { role: "link", name: "Delete this draft now" })).toBe("risky");
+});

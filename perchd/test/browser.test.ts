@@ -46,3 +46,16 @@ test("closing a tab mid-navigation fails that call and the browser keeps working
   expect(await next.title()).toBe("Northwind Shop");
   await next.close();
 });
+
+test("in the agent's tabs a passkey request is turned down at once, so no passkey window opens", async () => {
+  const tab = await env.browser.newTab(env.site.url("/mail.html"));
+  const ask = `navigator.credentials.get({ publicKey: { challenge: new Uint8Array(32), timeout: 60000, userVerification: "preferred" } }).then(() => "got", (e) => e.name)`;
+  const started = Date.now();
+  expect(await tab.evaluate<string>(ask)).toBe("NotAllowedError");
+  expect(Date.now() - started).toBeLessThan(2000);
+  expect(await tab.evaluate<boolean>("PublicKeyCredential.isConditionalMediationAvailable()")).toBe(false);
+  // Still so after the tab loads another page.
+  await tab.navigate(env.site.url("/shop.html"));
+  expect(await tab.evaluate<string>(ask)).toBe("NotAllowedError");
+  await tab.close();
+});

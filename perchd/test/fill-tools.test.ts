@@ -104,29 +104,25 @@ test("the fill tools are offered to the model with no arguments", () => {
   }
 });
 
-test("sign_in in Guard asks the first time on a site and not the second", async () => {
+test("sign_in in Guard fills a saved login without asking; Ask mode asks with the login on its card", async () => {
   const { conn, sent } = fakeConn();
   const ctx = context(conn);
   const approvals: ApprovalRequest[] = [];
-  const p = policy("guard", approvals);
-  const first = await callTool(ctx, p.opts, call("sign_in"));
-  expect(first).toEqual({ content: "filled" });
+  expect(await callTool(ctx, policy("guard", approvals).opts, call("sign_in"))).toEqual({ content: "filled" });
+  expect(approvals.length).toBe(0);
+  expect(sent.find((s) => s.method === "Perch.fillLogin")?.params).toEqual({ targetId: "T1", loginId: "L1" });
+  expect(await callTool(ctx, policy("ask", approvals).opts, call("sign_in"))).toEqual({ content: "filled" });
   expect(approvals.length).toBe(1);
   expect(approvals[0]!.summary).toBe("Sign in to github.com as neel.satya@…");
-  expect(sent.find((s) => s.method === "Perch.fillLogin")?.params).toEqual({ targetId: "T1", loginId: "L1" });
-  const second = await callTool(ctx, p.opts, call("sign_in"));
-  expect(second).toEqual({ content: "filled" });
-  expect(approvals.length).toBe(1);
 });
 
-test("a declined sign-in fills nothing and is still asked next time", async () => {
+test("a sign-in declined in Ask mode fills nothing", async () => {
   const { conn, sent } = fakeConn();
   const ctx = context(conn);
   const approvals: ApprovalRequest[] = [];
-  await callTool(ctx, policy("guard", approvals, false).opts, call("sign_in"));
+  await callTool(ctx, policy("ask", approvals, false).opts, call("sign_in"));
   expect(sent.some((s) => s.method === "Perch.fillLogin")).toBe(false);
-  await callTool(ctx, policy("guard", approvals).opts, call("sign_in"));
-  expect(approvals.length).toBe(2);
+  expect(approvals.length).toBe(1);
 });
 
 test("fill_card asks even in skip mode, and its card names the card for the user", async () => {
@@ -218,7 +214,7 @@ function fakeManager(opts: { logins?: boolean; otp?: string | null; fail?: boole
   return { manager, calls };
 }
 
-test("sign_in with no saved login asks first, then fills a 1Password login in the page", async () => {
+test("sign_in with no saved login fills a 1Password login in the page (in Ask mode, after asking)", async () => {
   const { conn } = fakeConn({ logins: false });
   const tabSent: Sent[] = [];
   const ctx = context(conn, true, tabSent);
@@ -227,7 +223,7 @@ test("sign_in with no saved login asks first, then fills a 1Password login in th
   const approvals: ApprovalRequest[] = [];
 
   // Declined: 1Password is never asked, so no Touch ID prompt shows.
-  expect(await callTool(ctx, policy("guard", approvals, false).opts, call("sign_in"))).not.toEqual({ content: "filled" });
+  expect(await callTool(ctx, policy("ask", approvals, false).opts, call("sign_in"))).not.toEqual({ content: "filled" });
   expect(approvals[0]!.summary).toBe("Sign in to github.com with a login from 1Password");
   expect(calls).toEqual([]);
 

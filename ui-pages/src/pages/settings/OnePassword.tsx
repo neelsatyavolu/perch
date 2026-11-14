@@ -121,7 +121,7 @@ export function OnePasswordGroup() {
           </p>
         </div>
       )}
-      <p class="note">The agent sees only whether the sign-in worked, never the username, password or code. In Guard, Perch asks before the agent signs in to a site for the first time.</p>
+      <p class="note">The agent sees only whether the sign-in worked, never the username, password or code. In Guard, the agent signs in with your saved logins without asking; Ask mode asks first.</p>
     </Group>
   );
 }

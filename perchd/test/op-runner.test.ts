@@ -35,6 +35,34 @@ test("when op straight from Perch sees no accounts, it runs through the helper a
   expect(await Bun.file(join(dir, "calls")).text()).toBe("account list --format json\naccount list --format json\naccount list --format json\nvault list --format json\n");
 });
 
+test("a sign-in's item list, with no account list before it, also goes through the helper app, for later runners too", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "perch-op-"));
+  dirs.push(dir);
+  const op = join(dir, "op");
+  // Like op inside Perch: nothing works until it runs as an app of its own.
+  writeFileSync(op, `#!/bin/sh\necho "$@" >> "${dir}/calls"\nif [ -n "$IN_LOGIN_SHELL" ]; then echo '[]'; else echo "[ERROR] no account found for filter" >&2; exit 1; fi\n`);
+  chmodSync(op, 0o755);
+  const helper = opRunner(op, { PATH: "/usr/bin:/bin", IN_LOGIN_SHELL: "1" }, null);
+  const bridge = (args: readonly string[], timeoutMs: number) => helper(args, { timeoutMs });
+  const first = opRunner(op, { PATH: "/usr/bin:/bin" }, bridge);
+  expect((await first(["item", "list", "--categories", "Login"])).code).toBe(0);
+  const later = opRunner(op, { PATH: "/usr/bin:/bin" }, bridge);
+  expect((await later(["item", "get", "x"])).code).toBe(0);
+  // direct (refused), helper, then the later runner straight to the helper.
+  expect(await Bun.file(join(dir, "calls")).text()).toBe("item list --categories Login\nitem list --categories Login\nitem get x\n");
+});
+
+test("a 1Password prompt the person dismissed is not tried again through the helper app", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "perch-op-"));
+  dirs.push(dir);
+  const op = join(dir, "op");
+  writeFileSync(op, `#!/bin/sh\necho "$@" >> "${dir}/calls"\necho "[ERROR] authorization prompt dismissed" >&2\nexit 1\n`);
+  chmodSync(op, 0o755);
+  const run = opRunner(op, { PATH: "/usr/bin:/bin" }, async () => ({ code: 0, stdout: "[]", stderr: "" }));
+  expect((await run(["item", "list"])).code).toBe(1);
+  expect(await Bun.file(join(dir, "calls")).text()).toBe("item list\n");
+});
+
 test("the real helper app runs op as an app of its own and passes back its output and exit code", async () => {
   const { opBridge } = await import("../src/secure/onepassword");
   const dir = mkdtempSync(join(tmpdir(), "perch-opapp-"));

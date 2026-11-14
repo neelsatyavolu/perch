@@ -95,13 +95,25 @@ export function opBridge(app: string, opPath: string, env: Readonly<Record<strin
   };
 }
 
+/** The `op` paths that only work through Perch 1Password.app here, for every runner from now on. */
+const bridged = new Set<string>();
+
+/**
+ * Whether `op` started straight from Perch failed the way it does when macOS keeps it from
+ * 1Password's settings: no accounts, or any other failure that wasn't the person saying no.
+ */
+function blockedHere(args: readonly string[], result: OpResult): boolean {
+  if (args[0] === "account" && args[1] === "list") return result.code === 0 && noAccounts(result.stdout);
+  return result.code !== 0 && !/dismiss|denied|cancel/i.test(result.stderr);
+}
+
 /**
  * Runs `op` with arguments only; they are never parsed by a shell. When `op` started straight from
- * Perch sees no accounts, it runs through Perch 1Password.app (opBridge) instead; if that sees them,
- * every later call goes that way too.
+ * Perch can't reach the accounts (any command, not just the account list: a chat's sign_in may be
+ * the first call), it runs through Perch 1Password.app (opBridge) instead; if that works, every
+ * later call goes that way too, in this runner and every one made after it.
  */
 export function opRunner(path: string, env: Readonly<Record<string, string | undefined>> = process.env, fallback: OpSpawn | null = defaultBridge(path, env)): OpRun {
-  let viaFallback = false;
   const direct: OpSpawn = async (args, timeoutMs) => {
     const proc = Bun.spawn([path, ...args], { stdin: "ignore", stdout: "pipe", stderr: "pipe", env: { ...env, OP_FORMAT: "json" } });
     const timer = setTimeout(() => proc.kill(), timeoutMs);
@@ -114,12 +126,12 @@ export function opRunner(path: string, env: Readonly<Record<string, string | und
   };
   return async (args, opts = {}) => {
     const timeoutMs = opts.timeoutMs ?? READ_TIMEOUT_MS;
-    if (viaFallback && fallback) return fallback(args, timeoutMs);
+    if (fallback && bridged.has(path)) return fallback(args, timeoutMs);
     const first = await direct(args, timeoutMs);
-    if (!fallback || args[0] !== "account" || args[1] !== "list" || first.code !== 0 || !noAccounts(first.stdout)) return first;
+    if (!fallback || !blockedHere(args, first)) return first;
     const second = await fallback(args, timeoutMs);
-    if (second.code === 0 && !noAccounts(second.stdout)) {
-      viaFallback = true;
+    if (second.code === 0 && !blockedHere(args, second)) {
+      bridged.add(path);
       return second;
     }
     return first;

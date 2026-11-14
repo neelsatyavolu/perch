@@ -18,10 +18,10 @@ void RegisterPerchFonts();
 // Whether Geist Mono registered, for monospaced text in the browser's views.
 bool HasPerchMonoFont();
 
-// The Dock icon follows the theme: the Sakura songbird in Sakura mode
-// ("sakura", or "yozakura" at night), Perch's own icon otherwise. Pictures
-// are in the framework's Resources/perch_pages/app-icons.
-void SetPerchDockIconForTheme(const std::string& theme);
+// Shows app-icons/app-<icon>.png from the framework's Resources/perch_pages
+// as the Dock icon while Perch runs; an empty or unknown name puts back
+// Perch's own icon.
+void SetPerchDockIcon(const std::string& icon);
 
 }  // namespace perch
 

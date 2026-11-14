@@ -21,6 +21,8 @@ constexpr std::array<std::string_view, 7> kThemes = {
 constexpr std::array<std::string_view, 2> kLightThemes = {"paper", "sakura"};
 constexpr std::array<std::string_view, 6> kAccents = {"blue", "teal",  "amber",
                                                       "rose", "mono",  "sakura"};
+constexpr std::array<std::string_view, 7> kAppIcons = {
+    "auto", "paper", "ink", "blue", "mono", "sakura", "yozakura"};
 constexpr std::array<std::string_view, 2> kDensities = {"comfortable",
                                                         "compact"};
 
@@ -51,12 +53,15 @@ constexpr StringField kStrings[] = {
      }},
     {"density", prefs::kAppearanceDensity,
      [](std::string_view v) { return OneOf(kDensities, v); }},
+    {"appIcon", prefs::kAppearanceAppIcon,
+     [](std::string_view v) { return OneOf(kAppIcons, v); }},
 };
 
 constexpr BoolField kBools[] = {
     {"matchSystem", prefs::kAppearanceMatchSystem},
     {"hideChrome", prefs::kAppearanceHideChrome},
     {"revealOnHover", prefs::kAppearanceRevealOnHover},
+    {"sakuraGoodies", prefs::kAppearanceSakuraGoodies},
     // Chromium's own vertical tab strip, which switches over live.
     {"verticalTabs", ::prefs::kVerticalTabsEnabled},
 };

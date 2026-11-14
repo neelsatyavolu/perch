@@ -8,6 +8,7 @@ import type {
   AboutInfo, AgentSetup, Appearance, BuiltInExtension, ChatSummary, CommandBarResult, DetectedBrowser, DraftFact, FileChoice, FileKind, JobId, JobProgress, McpImportCandidate, OnePasswordSettings, McpServer,
   MemoryDoc, MemorySaverSettings, SyncStatus, MemorySettings, NtpLayout, Onboarding, PerchApi, PermissionMode, Permissions, PolicyProblem, PrivacySettings, Provider, Routine, RoutineInput,
   RoutineProposal, SecurityInfo, SiteData, SleepRule, Skill, SystemAccess, TaskModel, Composer } from "../api";
+import { APP_ICON_NAMES } from "../api";
 import { DEFAULT_APPEARANCE } from "../theme/apply";
 import { ACCENT_NAMES, THEME_NAMES, isLightTheme } from "../theme/tokens";
 import { IMPORT_KINDS, countOf, sleepRuleText } from "../lib/labels";
@@ -295,6 +296,7 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
       if (patch.theme && !THEME_NAMES.includes(patch.theme)) throw new Error("Unknown theme");
       if (patch.darkTheme && (!THEME_NAMES.includes(patch.darkTheme) || isLightTheme(patch.darkTheme))) throw new Error("Unknown theme");
       if (patch.accent && !ACCENT_NAMES.includes(patch.accent)) throw new Error("Unknown accent");
+      if (patch.appIcon && !APP_ICON_NAMES.includes(patch.appIcon)) throw new Error("Unknown app icon");
       set({ appearance: { ...state.appearance, ...patch } });
       return state.appearance;
     },

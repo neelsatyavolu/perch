@@ -1,12 +1,13 @@
-/* Sakura mode (DESIGN.md): shown only while the Sakura or Yozakura theme is. Only transform and
-   opacity animate; Reduce Motion stills everything. */
+/* Sakura mode (DESIGN.md): the blossom in the mark shows only while the Sakura or Yozakura theme
+   is; the petals and branch also show in any theme with Sakura petals and branch on
+   (data-blossoms). Only transform and opacity animate; Reduce Motion stills everything. */
 
 .sakura-only { display: none; }
-:root[data-sakura] .sakura-only { display: block; }
+:root[data-blossoms] .sakura-only { display: block; }
 
 /* The pages that carry decorations form their own stacking context, so petals and the branch can
    sit at z-index -1: above the page's background, below every piece of content and control. */
-:root[data-sakura] :is(.ntp-wrap, .wl-stage) { isolation: isolate; }
+:root[data-blossoms] :is(.ntp-wrap, .wl-stage) { isolation: isolate; }
 
 /* The three blush tints every decoration draws from: the accent, and two softer mixes of it. */
 :root[data-sakura] {
@@ -39,8 +40,8 @@
 
 /* ---- The branch on the new tab page ---- */
 /* Natural colours, not the accent: a cherry blossom is nearly white with a blush at its heart, on
-   dark bark. Yozakura's are lit as if by the moon behind them. */
-:root[data-sakura] {
+   dark bark. On dark themes they're lit as if by the moon behind them. */
+:root[data-blossoms] {
   --sk-petal-base: #F1A6BB; --sk-petal-mid: #FAD6DF; --sk-petal-tip: #FFF8FA;
   --sk-petal-edge: rgba(208, 112, 142, 0.32);
   --sk-eye-in: #C9365F; --sk-eye-out: #EE8FAA;
@@ -50,7 +51,7 @@
   --sk-bud-base: #D9577E; --sk-bud-tip: #F4A9BF; --sk-sepal: #6F6A3A;
   --sk-leaf: #9C8442;
 }
-:root[data-theme="yozakura"] {
+:root[data-blossoms][data-tone="dark"] {
   --sk-petal-base: #E393AB; --sk-petal-mid: #F6CFDA; --sk-petal-tip: #FFF3F6;
   --sk-petal-edge: rgba(255, 214, 226, 0.28);
   --sk-eye-in: #B8325A; --sk-eye-out: #E7869F;
@@ -95,7 +96,7 @@
 .sakura-branch .sk-bud-tip { stop-color: var(--sk-bud-tip); }
 /* The moon shows only at night. */
 .sakura-branch .sk-moon { display: none; }
-:root[data-theme="yozakura"] .sakura-branch .sk-moon { display: inline; }
+:root[data-tone="dark"] .sakura-branch .sk-moon { display: inline; }
 .sakura-branch .sk-moon-in { stop-color: rgba(255, 236, 214, 0.20); }
 .sakura-branch .sk-moon-mid { stop-color: rgba(255, 226, 214, 0.06); }
 .sakura-branch .sk-moon-out { stop-color: rgba(255, 226, 214, 0); }
@@ -109,5 +110,5 @@
 @keyframes sk-branch { from { transform: rotate(-0.6deg); } to { transform: rotate(0.8deg); } }
 @keyframes sk-cluster { from { transform: rotate(-2.2deg); } to { transform: rotate(2.4deg); } }
 @media (max-width: 899px) {
-  :root[data-sakura] .sakura-branch { display: none; }
+  :root[data-blossoms] .sakura-branch { display: none; }
 }

@@ -1,6 +1,6 @@
 /**
  * Draws Sakura mode's falling petals (engine.ts) on one canvas behind the page. It runs only while
- * a Sakura theme shows, pauses in a hidden tab, and with Reduce Motion draws one still frame. Some
+ * a Sakura theme shows or Sakura petals and branch is on, pauses in a hidden tab, and with Reduce Motion draws one still frame. Some
  * petals start at the branch's blossoms; a click on the page's empty background sends a gust.
  */
 
@@ -13,7 +13,7 @@ const SPRITE = 64;
 const BLURS = [2.2, 1.1, 0];
 
 function sakuraOn(): boolean {
-  return document.documentElement.dataset.sakura !== undefined;
+  return document.documentElement.dataset.blossoms !== undefined;
 }
 
 function reducedMotion(): boolean {
@@ -203,7 +203,7 @@ export function Petals() {
       shown = key();
       start();
     });
-    watch.observe(document.documentElement, { attributes: true, attributeFilter: ["data-sakura", "data-tone"] });
+    watch.observe(document.documentElement, { attributes: true, attributeFilter: ["data-blossoms", "data-tone"] });
     return () => {
       watch.disconnect();
       stop?.();

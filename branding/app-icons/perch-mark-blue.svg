@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Perch's songbird, blue edition: a Dock icon picked in Settings › Appearance › App icon. -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="#2A63CC"/>
+  <rect x="102" y="102" width="820" height="820" rx="183" fill="none" stroke="#16161A" stroke-opacity="0.08" stroke-width="4"/>
+  <g transform="translate(512 512) scale(.8) translate(-512 -512)">
+    <path d="M232 757L407.4 378.7A192.5 192.5 0 1 1 633.6 645ZM638 403.5a22.75 22.75 0 1 0 45.5 0a22.75 22.75 0 1 0-45.5 0ZM757 382.5L848 426.3L753.5 466.5ZM548.8 645h21v72h-21ZM601.3 634.5h21v82.5h-21Z" fill="#F7F5EF"/>
+    <rect x="169" y="708" width="686" height="42" rx="21" fill="#F7F5EF"/>
+  </g>
+</svg>

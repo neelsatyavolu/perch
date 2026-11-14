@@ -30,6 +30,9 @@ export function applyAppearance(root: HTMLElement, appearance: Appearance, prefs
   root.dataset.tone = THEMES[theme].dark ? "dark" : "light";
   if (isSakura(theme)) root.dataset.sakura = "";
   else delete root.dataset.sakura;
+  // The petals and branch: part of Sakura mode, or on their own in any theme.
+  if (isSakura(theme) || appearance.sakuraGoodies) root.dataset.blossoms = "";
+  else delete root.dataset.blossoms;
   root.dataset.accent = appearance.accent;
   root.dataset.density = appearance.density;
   return theme;

@@ -82,7 +82,8 @@ const char* const kAppearancePrefs[] = {
     prefs::kAppearanceTheme,       prefs::kAppearanceAccent,
     prefs::kAppearanceMatchSystem, prefs::kAppearanceDarkTheme,
     prefs::kAppearanceHideChrome,  prefs::kAppearanceRevealOnHover,
-    prefs::kAppearanceDensity,
+    prefs::kAppearanceDensity,     prefs::kAppearanceAppIcon,
+    prefs::kAppearanceSakuraGoodies,
 };
 
 // Perch's version from the app's Info.plist (set when packaged), else

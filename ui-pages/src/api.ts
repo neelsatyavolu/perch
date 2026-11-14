@@ -59,6 +59,9 @@ export type FileChoice = { readonly id: string; readonly name: string };
 /* ---------- Appearance (spec 5.3, 6, DESIGN.md) ---------- */
 
 export type Density = "comfortable" | "compact";
+/** The Dock icon: "auto" follows the theme (the Sakura songbird in Sakura mode), the rest are songbirds in public/app-icons. */
+export type AppIconName = "auto" | "paper" | "ink" | "blue" | "mono" | "sakura" | "yozakura";
+export const APP_ICON_NAMES: readonly AppIconName[] = ["auto", "paper", "ink", "blue", "mono", "sakura", "yozakura"];
 export type Appearance = {
   readonly theme: ThemeName;
   readonly accent: AccentName;
@@ -72,6 +75,9 @@ export type Appearance = {
   readonly density: Density;
   /** Tabs down the side of the window instead of across the top (Chromium's vertical tab strip). */
   readonly verticalTabs?: boolean;
+  readonly appIcon?: AppIconName;
+  /** Sakura mode's falling petals and branch, in any theme. */
+  readonly sakuraGoodies?: boolean;
 };
 
 /* ---------- New tab page (spec 5.5, DESIGN.md) ---------- */

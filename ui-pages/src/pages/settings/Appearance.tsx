@@ -1,4 +1,4 @@
-import type { Density } from "../../api";
+import { APP_ICON_NAMES, type AppIconName, type Density } from "../../api";
 import type { Appearance as AppearanceSettings } from "../../api";
 import { ACCENTS, ACCENT_NAMES, type DarkThemeName, THEMES, THEME_NAMES, isLightTheme, isSakura, lightPartner } from "../../theme/tokens";
 import { useAppearance } from "../../ui/frame";
@@ -23,6 +23,14 @@ export function sakuraMode(a: AppearanceSettings, on: boolean): Partial<Appearan
     ...(a.darkTheme === "yozakura" ? { darkTheme: "ink" as const } : {}),
     ...(a.accent === "sakura" ? { accent: "blue" as const } : {}),
   };
+}
+
+const APP_ICON_LABELS: Record<AppIconName, string> = { auto: "Auto", paper: "Paper", ink: "Ink", blue: "Blue", mono: "Mono", sakura: "Sakura", yozakura: "Yozakura" };
+
+/** The picture for each App icon choice; Auto shows what the theme picks now. */
+export function appIconOptions(a: AppearanceSettings) {
+  const auto: AppIconName = a.theme === "sakura" || a.theme === "yozakura" ? a.theme : THEMES[a.theme].dark ? "ink" : "paper";
+  return APP_ICON_NAMES.map((n) => ({ value: n, label: APP_ICON_LABELS[n], img: `./app-icons/app-${n === "auto" ? auto : n}.png` }));
 }
 
 export function Appearance() {
@@ -51,6 +59,16 @@ export function Appearance() {
           </div>
           <Row id="sakura-mode" title="Sakura mode" detail="Cherry-blossom colours, petals drifting down the new tab page and a blossom in the Perch mark">
             <Switch label="Sakura mode" describedBy="sakura-mode-d" checked={isSakura(a.theme) || (a.matchSystem && a.darkTheme === "yozakura")} onChange={(on) => update(sakuraMode(a, on))} />
+          </Row>
+          <div id="app-icon" class="srow noicon stack">
+            <div>
+              <div class="n">App icon</div>
+              <div class="d">The Dock icon while Perch is open. Auto follows your theme.</div>
+            </div>
+            <Swatches label="App icon" value={a.appIcon ?? "auto"} options={appIconOptions(a)} onChange={(appIcon) => update({ appIcon })} />
+          </div>
+          <Row id="sakura-goodies" title="Sakura petals and branch" detail="Falling petals and a cherry branch on the new tab page, in any theme">
+            <Switch label="Sakura petals and branch" describedBy="sakura-goodies-d" checked={isSakura(a.theme) || Boolean(a.sakuraGoodies)} disabled={isSakura(a.theme)} onChange={(sakuraGoodies) => update({ sakuraGoodies })} />
           </Row>
           <Row id="match-system" title="Match system" detail={`Use ${THEMES[lightPartner(a.darkTheme)].label} when macOS is light and your dark theme when it's dark`}>
             <Switch label="Match system" describedBy="match-system-d" checked={a.matchSystem} onChange={(matchSystem) => update({ matchSystem })} />

@@ -73,11 +73,24 @@ describe("Appearance", () => {
   test("theme and accent pickers apply at once", async () => {
     const r = renderWithApi(<Settings />);
     await r.findByRole("heading", { level: 1, name: "Appearance" });
-    fireEvent.click(r.getByRole("radio", { name: "Paper" }));
+    fireEvent.click(within(r.getByRole("radiogroup", { name: "Theme" })).getByRole("radio", { name: "Paper" }));
     await waitFor(() => expect(document.documentElement.dataset.theme).toBe("paper"));
-    fireEvent.keyDown(r.getByRole("radio", { name: "Blue" }), { key: "ArrowRight" });
+    fireEvent.keyDown(within(r.getByRole("radiogroup", { name: "Accent" })).getByRole("radio", { name: "Blue" }), { key: "ArrowRight" });
     await waitFor(() => expect(document.documentElement.style.getPropertyValue("--accent")).toBe("#0B7C73"));
     expect((await r.api.getAppearance()).accent).toBe("teal");
+  });
+
+  test("App icon and Sakura petals and branch save", async () => {
+    const r = renderWithApi(<Settings />);
+    await r.findByRole("heading", { level: 1, name: "Appearance" });
+    const icons = within(r.getByRole("radiogroup", { name: "App icon" }));
+    expect(icons.getByRole("radio", { name: "Auto" }).getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(icons.getByRole("radio", { name: "Mono" }));
+    await waitFor(async () => expect((await r.api.getAppearance()).appIcon).toBe("mono"));
+    expect(document.documentElement.dataset.blossoms).toBeUndefined();
+    fireEvent.click(r.getByRole("switch", { name: "Sakura petals and branch" }));
+    await waitFor(() => expect(document.documentElement.dataset.blossoms).toBe(""));
+    expect(document.documentElement.dataset.sakura).toBeUndefined();
   });
 
   test("Match system shows the dark theme choice; hide chrome has its hover option", async () => {

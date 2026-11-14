@@ -73,6 +73,8 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {
   registry->RegisterBooleanPref(prefs::kAppearanceMatchSystem, false);
   registry->RegisterStringPref(prefs::kAppearanceDarkTheme, "ink");
   registry->RegisterBooleanPref(prefs::kAppearanceHideChrome, false);
+  registry->RegisterStringPref(prefs::kAppearanceAppIcon, "auto");
+  registry->RegisterBooleanPref(prefs::kAppearanceSakuraGoodies, false);
   registry->RegisterBooleanPref(prefs::kOnboardingFinished, false);
   registry->RegisterBooleanPref(prefs::kTourFinished, false);
   registry->RegisterListPref(prefs::kMemorySaverRules);

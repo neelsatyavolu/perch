@@ -3,6 +3,8 @@
 
 #include "chrome/browser/perch/theme/perch_fonts_mac.h"
 
+#include <algorithm>
+
 #import <AppKit/AppKit.h>
 #import <CoreText/CoreText.h>
 #import <Foundation/Foundation.h>
@@ -75,9 +77,12 @@ bool HasPerchMonoFont() {
   return g_mono;
 }
 
-void SetPerchDockIconForTheme(const std::string& theme) {
-  const std::string want =
-      theme == "sakura" || theme == "yozakura" ? theme : std::string();
+void SetPerchDockIcon(const std::string& icon) {
+  // Only the plain names of the pictures Perch ships, never a path.
+  const bool plain =
+      !icon.empty() && std::all_of(icon.begin(), icon.end(),
+                                   [](char c) { return c >= 'a' && c <= 'z'; });
+  const std::string want = plain ? icon : std::string();
   static base::NoDestructor<std::string> shown;
   if (want == *shown) {
     return;

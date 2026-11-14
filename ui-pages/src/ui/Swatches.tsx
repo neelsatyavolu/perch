@@ -1,6 +1,6 @@
 import { focusSibling, nextIndex } from "./roving";
 
-export type Swatch<T extends string> = { readonly value: T; readonly label: string; readonly bg: string; readonly fg: string };
+export type Swatch<T extends string> = { readonly value: T; readonly label: string } & ({ readonly bg: string; readonly fg: string } | { readonly img: string });
 
 type Props<T extends string> = {
   readonly label: string;
@@ -31,9 +31,15 @@ export function Swatches<T extends string>({ label, value, options, onChange }: 
             focusSibling(e.currentTarget, "[role=radio]", next);
           }}
         >
-          <span class="sw-box" style={{ background: o.bg }} aria-hidden="true">
-            <i style={{ background: o.fg }} />
-          </span>
+          {"img" in o ? (
+            <span class="sw-box sw-box--icon" aria-hidden="true">
+              <img src={o.img} alt="" />
+            </span>
+          ) : (
+            <span class="sw-box" style={{ background: o.bg }} aria-hidden="true">
+              <i style={{ background: o.fg }} />
+            </span>
+          )}
           <span class="sw-name">{o.label}</span>
         </button>
       ))}

@@ -53,6 +53,7 @@ struct Appearance {
   std::string accent = "blue";
   bool match_system = false;
   std::string dark_theme = "ink";
+  std::string app_icon = "auto";
 };
 
 Appearance& Current() {
@@ -102,10 +103,12 @@ void AddPerchMixer(ui::ColorProvider* provider,
     name = "contrast";
   }
 #if BUILDFLAG(IS_MAC)
-  // A normal window's theme sets the Dock icon: the Sakura songbird in Sakura
-  // mode.
+  // A normal window's theme sets the Dock icon: the songbird picked in
+  // Settings, or with "auto" the Sakura songbird in Sakura mode.
   if (!incognito) {
-    SetPerchDockIconForTheme(name);
+    SetPerchDockIcon(now.app_icon != "auto" ? now.app_icon
+                     : name == "sakura" || name == "yozakura" ? name
+                                                              : std::string());
   }
 #endif
   const PerchThemeTokens* t = FindPerchTheme(name);
@@ -433,6 +436,7 @@ void Refresh(Profile* profile) {
   now.accent = prefs->GetString(prefs::kAppearanceAccent);
   now.match_system = prefs->GetBoolean(prefs::kAppearanceMatchSystem);
   now.dark_theme = prefs->GetString(prefs::kAppearanceDarkTheme);
+  now.app_icon = prefs->GetString(prefs::kAppearanceAppIcon);
   // Chromium's own colours (menus, dialogs, web contents' dark mode) follow
   // the theme's darkness.
   if (ThemeService* themes = ThemeServiceFactory::GetForProfile(profile)) {
@@ -466,7 +470,8 @@ class Watcher : public base::SupportsUserData::Data, public ProfileObserver {
     registrar_.Init(profile->GetPrefs());
     for (const char* pref :
          {prefs::kAppearanceTheme, prefs::kAppearanceAccent,
-          prefs::kAppearanceMatchSystem, prefs::kAppearanceDarkTheme}) {
+          prefs::kAppearanceMatchSystem, prefs::kAppearanceDarkTheme,
+          prefs::kAppearanceAppIcon}) {
       registrar_.Add(pref, base::BindRepeating(&Refresh, profile));
     }
     registrar_.Add(prefs::kAppearanceDensity,
@@ -535,7 +540,8 @@ void ShowPerchThemeOf(Profile* profile) {
   if (now.theme == prefs->GetString(prefs::kAppearanceTheme) &&
       now.accent == prefs->GetString(prefs::kAppearanceAccent) &&
       now.match_system == prefs->GetBoolean(prefs::kAppearanceMatchSystem) &&
-      now.dark_theme == prefs->GetString(prefs::kAppearanceDarkTheme)) {
+      now.dark_theme == prefs->GetString(prefs::kAppearanceDarkTheme) &&
+      now.app_icon == prefs->GetString(prefs::kAppearanceAppIcon)) {
     return;
   }
   Refresh(profile);

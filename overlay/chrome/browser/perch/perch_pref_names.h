@@ -22,6 +22,12 @@ inline constexpr char kAppearanceMatchSystem[] =
     "perch.appearance.match_system";
 inline constexpr char kAppearanceDarkTheme[] = "perch.appearance.dark_theme";
 inline constexpr char kAppearanceHideChrome[] = "perch.appearance.hide_chrome";
+// The Dock icon: "auto" follows the theme, or one of the songbirds in
+// ui-pages/public/app-icons.
+// Sakura mode's petals and branch on the new tab page, in any theme.
+inline constexpr char kAppearanceSakuraGoodies[] =
+    "perch.appearance.sakura_goodies";
+inline constexpr char kAppearanceAppIcon[] = "perch.appearance.app_icon";
 
 // Whether the welcome page has been finished or skipped (onboarding/).
 inline constexpr char kOnboardingFinished[] = "perch.onboarding_finished";

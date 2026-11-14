@@ -38,6 +38,8 @@ export const SEARCH_INDEX: readonly SearchEntry[] = [
   { section: "profile", anchor: "profile-name", title: "Profile name and icon", words: "profile avatar picture icon rename name switcher" },
   { section: "appearance", anchor: "theme", title: "Theme", words: "ink graphite dusk paper contrast dark light colour color" },
   { section: "appearance", anchor: "accent", title: "Accent colour", words: "blue teal amber rose mono color" },
+  { section: "appearance", anchor: "sakura-goodies", title: "Sakura petals and branch", words: "cherry blossom petals branch flowers decorations new tab" },
+  { section: "appearance", anchor: "app-icon", title: "App icon", words: "dock logo icon bird songbird paper ink blue mono sakura yozakura" },
   { section: "appearance", anchor: "sakura-mode", title: "Sakura mode", words: "cherry blossom pink petals spring yozakura theme flowers cute" },
   { section: "appearance", anchor: "match-system", title: "Match system", words: "dark mode light mode automatic macos" },
   { section: "appearance", anchor: "hide-chrome", title: "Hide tab strip and bookmarks bar", words: "chrome bars fullscreen minimal" },

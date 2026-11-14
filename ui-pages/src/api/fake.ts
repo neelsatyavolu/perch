@@ -23,7 +23,7 @@ import * as seed from "./seed";
 const FAKE_ICONS = [27, 28, 29, 30].map((index) => ({ index, url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" }));
 
 type State = {
-  profile: { name: string; icon: number };
+  profile: { name: string; icon: number; picture: string | null };
   appearance: Appearance;
   layout: NtpLayout;
   chats: readonly ChatSummary[];
@@ -161,7 +161,7 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
   const stepMs = options.stepMs ?? 400;
   const navigate = options.onNavigate ?? (() => undefined);
   let state: State = {
-    profile: { name: "Your Perch", icon: 27 },
+    profile: { name: "Your Perch", icon: 27, picture: null },
     appearance: { ...DEFAULT_APPEARANCE, ...options.appearance },
     layout: { railOpen: true, hidden: [], recentTab: "chats" },
     chats: seed.CHATS,
@@ -665,6 +665,9 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     },
     async getProfile() {
       return { ...state.profile, icons: FAKE_ICONS };
+    },
+    async setProfilePicture(png) {
+      set({ profile: { ...state.profile, picture: png === null ? null : `data:image/png;base64,${png}` } });
     },
     async setProfile(patch) {
       if (patch.name !== undefined && !patch.name.trim()) throw new Error("Give the profile a name of 1 to 50 characters");

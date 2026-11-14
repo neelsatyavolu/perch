@@ -77,7 +77,13 @@ export type Appearance = {
 /* ---------- New tab page (spec 5.5, DESIGN.md) ---------- */
 
 /** A profile's name and icon; `icons` are the pictures to pick from, as PNG data: URLs. */
-export type ProfileInfo = { readonly name: string; readonly icon: number; readonly icons: readonly { readonly index: number; readonly url: string }[] };
+export type ProfileInfo = {
+  readonly name: string;
+  readonly icon: number;
+  readonly icons: readonly { readonly index: number; readonly url: string }[];
+  /** A picture of the person's own (PNG data: URL), shown in place of the icon; null when none. */
+  readonly picture: string | null;
+};
 
 export type ChatStatus = "idle" | "running" | "waiting";
 export type ChatSummary = {
@@ -600,6 +606,8 @@ export interface PerchApi {
   getProfile(): Promise<ProfileInfo>;
   /** Renames this profile or changes its icon (an index from `getProfile().icons`). */
   setProfile(patch: { readonly name?: string; readonly icon?: number }): Promise<void>;
+  /** Uses a picture of the person's own (a square PNG, base64, at most 512 px) for this profile; null removes it. */
+  setProfilePicture(png: string | null): Promise<void>;
 
   // Outside agents (the tour's last step): the perch command and Perch's skill and MCP server in
   // Claude Code, Codex and Grok
@@ -726,7 +734,7 @@ export const API_METHODS = [
   "getPrivacy", "setPrivacy", "setBackgroundConnection", "removeBlockerException", "listSiteData", "forgetSite",
   "listBuiltInExtensions", "setBuiltInExtension",
   "getMemorySaver", "setMemorySaver", "addSleepRule", "listTabMemory",
-  "queryCommandBar", "runCommandBarItem", "closeCommandBar", "openCommandBar", "showAgentTab", "showThisTab", "finishTour", "getProfile", "setProfile", "getAgentSetup", "connectAgents", "startMemoryChat",
+  "queryCommandBar", "runCommandBarItem", "closeCommandBar", "openCommandBar", "showAgentTab", "showThisTab", "finishTour", "getProfile", "setProfile", "setProfilePicture", "getAgentSetup", "connectAgents", "startMemoryChat",
   "getSync", "startSyncPairing", "checkSyncPairing", "syncNow", "removeSyncDevice", "turnOffSync", "revealRecoveryKey",
   "getSecurity", "exportBackup", "restoreFromRecoveryKey", "startFresh",
   "getMemorySettings", "setMemorySettings", "listMemoryPages", "readMemoryPage", "writeMemoryPage", "deleteMemoryPage", "wipeMemory",

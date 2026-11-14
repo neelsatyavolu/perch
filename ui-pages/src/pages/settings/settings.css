@@ -157,3 +157,7 @@ legend.cand-src { padding: 6px 0 0; }
 .profile-icon.on { box-shadow: 0 0 0 2px var(--accent); }
 .profile-icon img { display: block; width: 44px; height: 44px; border-radius: 50%; }
 @media (max-width: 480px) { .profile-name { width: 100%; } }
+.profile-picture { display: flex; align-items: center; gap: 8px; }
+.profile-now { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; box-shadow: inset 0 0 0 1px var(--hair); }
+.profile-picture label.btn { cursor: pointer; }
+.profile-picture label.btn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }

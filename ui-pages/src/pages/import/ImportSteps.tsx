@@ -88,7 +88,7 @@ export function BrowserStep({ browsers, browser, profiles, onBrowser, onTogglePr
       </div>
       {browser && browser.profiles.length > 1 && (
         <fieldset class="pick-list profiles" aria-label={`Profiles to bring from ${browser.name}`}>
-          <p class="cap pick-sub">Profiles. The first comes into this profile; each other one becomes a Perch profile of its own, in its own window.</p>
+          <p class="cap pick-sub">Profiles. The first comes into this profile; each other one becomes a Perch profile of its own, which you switch to from the profile menu.</p>
           {browser.profiles.map((p) => {
             const picked = browser.profiles.filter((x) => profiles.includes(x.id));
             const own = picked.length > 1 && picked[0]?.id !== p.id && profiles.includes(p.id) && !p.id.startsWith("account:");
@@ -97,7 +97,7 @@ export function BrowserStep({ browsers, browser, profiles, onBrowser, onTogglePr
                 <input type="checkbox" checked={profiles.includes(p.id)} onChange={() => onToggleProfile(p.id)} />
                 <span class="pick-t">
                   <span class="ink">{p.name}</span>
-                  {own && <span class="cap">Opens as its own Perch profile</span>}
+                  {own && <span class="cap">Becomes its own Perch profile</span>}
                 </span>
               </label>
             );

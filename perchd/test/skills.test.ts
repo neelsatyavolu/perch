@@ -152,3 +152,14 @@ describe("builtInSkillsDir", () => {
     expect(builtInSkillsDir("/$bunfs/root", "/App/Versions/1/Helpers/perchd")).toBe("/App/Versions/1/Resources/perch_skills");
   });
 });
+
+test("switching two skills off at once keeps both off", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "perch-skills-switch-"));
+  try {
+    const store = new SkillStore(dir, new MemoryKeychain());
+    await Promise.all([store.setEnabled("pdf-tools", false), store.setEnabled("notes", false)]);
+    expect([...(await store.disabled())].sort()).toEqual(["notes", "pdf-tools"]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

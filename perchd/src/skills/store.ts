@@ -63,12 +63,19 @@ export class SkillStore {
     return new Set(Array.isArray(names) ? names.filter((n): n is string => typeof n === "string" && SKILL_NAME.test(n)) : []);
   }
 
-  async setEnabled(name: string, enabled: boolean): Promise<void> {
+  /** Switching skills is read-change-write; one at a time, so two quick switches both stick. */
+  private switching: Promise<unknown> = Promise.resolve();
+
+  setEnabled(name: string, enabled: boolean): Promise<void> {
     checkName(name);
-    const current = await this.disabled();
-    if (current.has(name) !== enabled) return;
-    const next = enabled ? [...current].filter((n) => n !== name) : [...current, name];
-    await writeSealedJson(join(this.dir, DISABLED_FILE), await dataKey(this.keychain), DISABLED_LABEL, next.sort());
+    const run = this.switching.then(async () => {
+      const current = await this.disabled();
+      if (current.has(name) !== enabled) return;
+      const next = enabled ? [...current].filter((n) => n !== name) : [...current, name];
+      await writeSealedJson(join(this.dir, DISABLED_FILE), await dataKey(this.keychain), DISABLED_LABEL, next.sort());
+    });
+    this.switching = run.catch(() => undefined);
+    return run;
   }
 
   /** Writes the skill as a plain folder: <dir>/<name>/SKILL.md and its files. */

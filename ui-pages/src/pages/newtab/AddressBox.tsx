@@ -45,6 +45,8 @@ export function AddressBox({ onSubmit }: { readonly onSubmit: (q: Query) => void
 
   const onKeyDown = (e: KeyboardEvent) => {
     const input = e.currentTarget as HTMLInputElement;
+    // Enter, arrows and Escape belong to an input method (Japanese, Chinese) while it composes.
+    if (e.isComposing) return;
     if (open && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
       e.preventDefault();
       sug.select(sug.selected + (e.key === "ArrowDown" ? 1 : -1));

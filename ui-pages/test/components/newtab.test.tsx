@@ -6,7 +6,10 @@ import { ago, ChatRail } from "../../src/pages/newtab/ChatRail";
 import { NewTab } from "../../src/pages/newtab/NewTab";
 import { renderWithApi } from "./render";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+});
 
 describe("New tab page", () => {
   test("while the chats load it shows no 'No chats yet', only the address box", async () => {
@@ -19,7 +22,7 @@ describe("New tab page", () => {
     expect(queryByText(/No chats yet/)).toBeNull();
     expect(document.querySelector(".ntp-sec")).toBeNull();
     release();
-    expect(await findByText("Waiting for your approval")).toBeTruthy();
+    expect(await findByText("Needs your approval")).toBeTruthy();
   });
 
   test("coming back to the tab refreshes once, though focus and visibilitychange both fire", async () => {
@@ -27,7 +30,7 @@ describe("New tab page", () => {
     let loads = 0;
     const api: PerchApi = { ...fake, listChats: (n) => (loads++, fake.listChats(n)) };
     const { findByText } = renderWithApi(<NewTab />, { api });
-    await findByText("Waiting for your approval");
+    await findByText("Needs your approval");
     expect(loads).toBe(1);
     window.dispatchEvent(new Event("focus"));
     document.dispatchEvent(new Event("visibilitychange"));
@@ -56,6 +59,15 @@ describe("New tab page", () => {
     fireEvent.keyDown(box, { key: "Tab" });
     fireEvent.keyDown(box, { key: "Enter" });
     await waitFor(() => expect(nav).toEqual([{ what: "query", detail: { text: "perch browser", mode: "search", engine: "google" } }]));
+  });
+
+  test("Enter that picks an input method's candidate doesn't search", async () => {
+    const { findByRole, nav } = renderWithApi(<NewTab />);
+    const box = (await findByRole("combobox", { name: "Search or ask" })) as HTMLInputElement;
+    fireEvent.input(box, { target: { value: "とうきょう" } });
+    fireEvent.keyDown(box, { key: "Enter", isComposing: true });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(nav).toEqual([]);
   });
 
   test("Search works as an address bar: the top site completes inline and Enter opens it", async () => {
@@ -137,8 +149,9 @@ describe("New tab page", () => {
   });
 
   test("the effort picker lists exactly the chosen model's efforts and keeps the nearest on a switch", async () => {
-    const { findByRole, getByRole, api } = renderWithApi(<NewTab />);
+    const api = createFakeApi({ stepMs: 0 });
     await api.setComposer({ model: "codex:gpt-6-astra", effort: "ultra" });
+    const { findByRole, getByRole } = renderWithApi(<NewTab />, { api });
     fireEvent.click(await findByRole("button", { name: "Model for the task" }));
     const effort = (await findByRole("combobox", { name: "Effort" })) as HTMLSelectElement;
     expect([...effort.options].map((o) => o.text)).toEqual(["Low", "Medium", "High", "Extra high", "Max", "Ultra"]);
@@ -150,7 +163,7 @@ describe("New tab page", () => {
 
   test("recent chats show three cards with state in words; Routines switches the panel", async () => {
     const { findByText, getByRole, getAllByRole, findByText: find } = renderWithApi(<NewTab />);
-    expect(await findByText("Waiting for your approval")).toBeTruthy();
+    expect(await findByText("Needs your approval")).toBeTruthy();
     const panel = getByRole("tabpanel", { name: "Chats" });
     expect(panel.querySelectorAll(".ccard").length).toBe(3);
     fireEvent.click(getByRole("tab", { name: "Routines" }));
@@ -197,6 +210,43 @@ describe("New tab page", () => {
     fireEvent.click(getByRole("button", { name: "Hide chats" }));
     await waitFor(async () => expect((await api.getNtpLayout()).railOpen).toBe(false));
     expect(getByRole("button", { name: "Show chats" }).getAttribute("aria-expanded")).toBe("false");
+  });
+
+  test("draws at once from the last layout, before perchd answers, and takes perchd's answer when it comes", async () => {
+    localStorage.setItem("perch.ntpLayout", JSON.stringify({ railOpen: false, hidden: ["suggested"], recentTab: "chats" }));
+    const fake = createFakeApi({ stepMs: 0 });
+    let answer = () => {};
+    const api: PerchApi = { ...fake, getNtpLayout: () => new Promise((done) => (answer = () => done(fake.getNtpLayout()))) };
+    const { getByRole, findByRole } = renderWithApi(<NewTab />, { api });
+    expect(getByRole("combobox", { name: "Search or ask" })).toBeTruthy();
+    expect(getByRole("button", { name: "Show chats" })).toBeTruthy();
+    expect(getByRole("button", { name: "Show suggested" })).toBeTruthy();
+    answer();
+    expect(await findByRole("button", { name: "Hide chats" })).toBeTruthy();
+    expect(JSON.parse(localStorage.getItem("perch.ntpLayout")!).railOpen).toBe(true);
+  });
+
+  test("a change made before perchd answers isn't undone by its answer", async () => {
+    const fake = createFakeApi({ stepMs: 0 });
+    let answer = () => {};
+    // perchd's answer was read before the click, so it still has the rail open.
+    const api: PerchApi = { ...fake, getNtpLayout: () => { const stale = fake.getNtpLayout(); return new Promise((done) => (answer = () => done(stale))); } };
+    const { getByRole, findByRole } = renderWithApi(<NewTab />, { api });
+    fireEvent.click(getByRole("button", { name: "Hide chats" }));
+    answer();
+    await new Promise((r) => setTimeout(r, 10));
+    expect(await findByRole("button", { name: "Show chats" })).toBeTruthy();
+  });
+
+  test("a section hidden before perchd answers is added to the saved ones, not put in their place", async () => {
+    const fake = createFakeApi({ stepMs: 0 });
+    await fake.setNtpLayout({ hidden: ["suggested"] });
+    let answer = () => {};
+    const api: PerchApi = { ...fake, getNtpLayout: () => { const saved = fake.getNtpLayout(); return new Promise((done) => (answer = () => done(saved))); } };
+    const { findByRole } = renderWithApi(<NewTab />, { api });
+    fireEvent.click(await findByRole("button", { name: "Hide recent" }));
+    answer();
+    await waitFor(async () => expect([...(await fake.getNtpLayout()).hidden].sort()).toEqual(["recent", "suggested"]));
   });
 
   test("the chat rail lists pinned chats first and marks new and failed replies", () => {

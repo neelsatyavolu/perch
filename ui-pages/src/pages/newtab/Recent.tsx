@@ -7,7 +7,7 @@ import { TabList } from "../../ui/TabList";
 /** The digits of a time or schedule in mono, the words around them in the caption face. */
 const digits = (s: string) => s.split(/(\d[\d:]*)/).map((part, i) => (i % 2 ? <span key={i} class="mono">{part}</span> : part));
 
-const STATUS: Readonly<Record<ChatStatus, string | null>> = { idle: null, running: "Working", waiting: "Waiting for your approval" };
+const STATUS: Readonly<Record<ChatStatus, string | null>> = { idle: null, running: "Working", waiting: "Needs your approval" };
 
 type Props = {
   readonly chats: readonly ChatSummary[];

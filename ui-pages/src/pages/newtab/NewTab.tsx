@@ -15,6 +15,43 @@ const SECTION_NAMES: Readonly<Record<NtpSection, string>> = { recent: "recent", 
 /** Matches newtab.css: below this width the rail becomes a drawer over the page. */
 const NARROW = "(max-width: 760px)";
 
+const LAYOUT_KEY = "perch.ntpLayout";
+const DEFAULT_LAYOUT: NtpLayout = { railOpen: true, hidden: [], recentTab: "chats" };
+
+function isLayout(v: unknown): v is NtpLayout {
+  const l = v as Partial<NtpLayout> | null;
+  return (
+    typeof l?.railOpen === "boolean" &&
+    Array.isArray(l.hidden) && l.hidden.every((h) => Object.hasOwn(SECTION_NAMES, h)) &&
+    (l.recentTab === "chats" || l.recentTab === "routines")
+  );
+}
+
+/**
+ * The last layout, kept in this profile's storage so the page draws at once, before perchd answers
+ * (it can take seconds while Perch starts). Not secret; a bad or missing copy gives the defaults.
+ */
+export function readCachedLayout(): NtpLayout {
+  try {
+    const v: unknown = JSON.parse(window.localStorage.getItem(LAYOUT_KEY) ?? "null");
+    return isLayout(v) ? v : DEFAULT_LAYOUT;
+  } catch {
+    return DEFAULT_LAYOUT;
+  }
+}
+
+/** A layout edit, as a function of the layout it applies to (see `pending` in NewTab). */
+type LayoutChange = (layout: NtpLayout) => Partial<NtpLayout>;
+const apply = (layout: NtpLayout, change: LayoutChange): NtpLayout => ({ ...layout, ...change(layout) });
+
+function cacheLayout(layout: NtpLayout): void {
+  try {
+    window.localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout));
+  } catch {
+    // No storage: the next page waits for nothing worse than the defaults.
+  }
+}
+
 function useMedia(query: string): boolean {
   const mq = typeof matchMedia === "function" ? matchMedia(query) : null;
   const [matches, setMatches] = useState(() => mq?.matches ?? false);
@@ -32,7 +69,14 @@ function useMedia(query: string): boolean {
 export function NewTab() {
   const api = useApi();
   const act = useAction();
-  const [layout, setLayout] = useState<NtpLayout | null>(null);
+  const [layout, setLayout] = useState<NtpLayout>(readCachedLayout);
+  /**
+   * Changes made before perchd's saved layout arrives. The cached copy they were shown on may be
+   * stale, so they're replayed on the saved layout when it comes and only then sent; null once loaded.
+   */
+  const pending = useRef<LayoutChange[] | null>([]);
+  const shown = useRef(layout);
+  shown.current = layout;
   // Null until the lists first load: the page never says "No chats yet" to someone who has chats.
   const [data, setData] = useState<Data | null>(null);
   /** The refresh started by the tab coming back, so focus and visibilitychange run it once. */
@@ -76,7 +120,16 @@ export function NewTab() {
     );
 
   useEffect(() => {
-    api.getNtpLayout().then(setLayout, () => setLayout({ railOpen: true, hidden: [], recentTab: "chats" }));
+    // Saved layout plus anything changed meanwhile; if perchd can't say, what's on screen stands.
+    const settle = (base: NtpLayout | null) => {
+      const queued = pending.current ?? [];
+      pending.current = null;
+      const next = base ? queued.reduce(apply, base) : shown.current;
+      setLayout(next);
+      cacheLayout(next);
+      if (queued.length) act(() => api.setNtpLayout(next));
+    };
+    api.getNtpLayout().then(settle, () => settle(null));
     refresh();
     // The page is reused when the tab comes back; suggestions may have finished in the meantime.
     const onShow = () => {
@@ -91,16 +144,20 @@ export function NewTab() {
     };
   }, []);
 
-  if (!layout) return <main class="ntp-wrap" aria-busy="true" />;
-
-  const update = (patch: Partial<NtpLayout>) => {
-    setLayout({ ...layout, ...patch });
-    act(() => api.setNtpLayout(patch));
+  const update = (change: LayoutChange) => {
+    const next = apply(layout, change);
+    setLayout(next);
+    if (pending.current) {
+      pending.current = [...pending.current, change];
+      return;
+    }
+    cacheLayout(next);
+    act(() => api.setNtpLayout(change(layout)));
   };
-  const hide = (s: NtpSection) => update({ hidden: [...layout.hidden.filter((h) => h !== s), s] });
-  const show = (s: NtpSection) => update({ hidden: layout.hidden.filter((h) => h !== s) });
+  const hide = (s: NtpSection) => update((l) => ({ hidden: [...l.hidden.filter((h) => h !== s), s] }));
+  const show = (s: NtpSection) => update((l) => ({ hidden: l.hidden.filter((h) => h !== s) }));
   const railOpen = narrow ? drawer : layout.railOpen;
-  const toggleRail = () => (narrow ? setDrawer(!drawer) : update({ railOpen: !layout.railOpen }));
+  const toggleRail = () => (narrow ? setDrawer(!drawer) : update((l) => ({ railOpen: !l.railOpen })));
 
   return (
     <div class="ntp-wrap">
@@ -127,7 +184,7 @@ export function NewTab() {
           <PerchMark />
           <AddressBox onSubmit={(q) => act(() => api.submitQuery(q))} />
           {data && !layout.hidden.includes("recent") && (
-            <Recent chats={data.chats} routines={data.routines} tab={layout.recentTab} onTab={(recentTab) => update({ recentTab })} onHide={() => hide("recent")} />
+            <Recent chats={data.chats} routines={data.routines} tab={layout.recentTab} onTab={(recentTab) => update(() => ({ recentTab }))} onHide={() => hide("recent")} />
           )}
           {data && !layout.hidden.includes("suggested") && <Suggested items={data.suggestions} onHide={() => hide("suggested")} onDismissed={() => refresh()} />}
           {layout.hidden.length > 0 && (

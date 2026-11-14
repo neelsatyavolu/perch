@@ -13,7 +13,9 @@ test("chat models come from shared-ai-auth: CLIs when installed, Claude and Grok
     "claude-code:claude-fable-5-2", "claude-code:claude-opus-5-5", "claude-code:claude-sonnet-5-5", "claude-code:claude-haiku-5-5",
   ]);
   const all = sidebarModels(bundledModels, ["claude", "grok"], () => true);
-  expect(all.find((m) => m.id === "codex:gpt-6.1-sol")?.label).toBe("GPT-6.1 Sol");
+  // The Codex CLI's models show under ChatGPT, the subscription they run on; Codex's own default is not offered.
+  expect(all.find((m) => m.id === "codex:gpt-6.1-sol")).toMatchObject({ label: "GPT-6.1 Sol", provider: "ChatGPT" });
+  expect(all.some((m) => m.id === "codex:default" || m.provider === "Codex")).toBe(false);
   expect(all.some((m) => m.id === "grok:grok-4.7")).toBe(true);
   expect(all.find((m) => m.id === "claude:claude-fable-5-2")).toMatchObject({ label: "Claude Fable 5.2", provider: "Claude" });
 });

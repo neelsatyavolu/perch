@@ -170,6 +170,12 @@ export function keptInMemory(chats: Pick<ChatStore, "get">): (chatId: string) =>
   };
 }
 
+/** "codex:default" (Codex's own default model, no longer offered) runs on the first ChatGPT model. */
+export function currentModel(id: string, models: readonly ModelInfo[]): string {
+  if (id !== "codex:default") return id;
+  return models.find((m) => m.id.startsWith("codex:"))?.id ?? id;
+}
+
 export async function startApp(opts: AppOptions): Promise<App> {
   const chats = await ChatStore.load(join(opts.dataDir, "chats"), opts.vault);
   const artifacts = await ArtifactStore.load(join(opts.dataDir, "artifacts"), opts.vault, keptInMemory(chats));
@@ -182,7 +188,10 @@ export async function startApp(opts: AppOptions): Promise<App> {
     chats,
     artifacts,
     // A chat keeps its effort when it changes model; each run gets the nearest one the model takes.
-    runner: (input) => opts.runner({ ...input, settings: { ...input.settings, effort: fitEffort(models().find((m) => m.id === input.settings.model)?.efforts, input.settings.effort) } }),
+    runner: (input) => {
+      const model = currentModel(input.settings.model, models());
+      return opts.runner({ ...input, settings: { ...input.settings, model, effort: fitEffort(models().find((m) => m.id === model)?.efforts, input.settings.effort) } });
+    },
     emit: (event) => publish(event),
     artifactUrl: artifactServer.urlFor,
     tabs: () => windows.tabs(),
@@ -194,6 +203,12 @@ export async function startApp(opts: AppOptions): Promise<App> {
   if (opts.scheduler !== false) runs.scheduler.start();
   const models = typeof opts.models === "function" ? opts.models : () => opts.models as ModelInfo[];
   let defaults: ChatSettings = { ...DEFAULT_SETTINGS, model: models()[0]?.id ?? "", ...opts.defaults };
+  defaults = { ...defaults, model: currentModel(defaults.model, models()) };
+  // Chats saved on a model no longer offered move to its replacement.
+  for (const chat of chats.list()) {
+    const model = currentModel(chat.settings.model, models());
+    if (model !== chat.settings.model) await chats.update(chat.id, (c) => ({ ...c, settings: { ...c.settings, model } }), { touch: false });
+  }
   const info = (): AppInfo => ({ models: models(), defaults, artifactOrigin: artifactServer.origin });
   const applyDefaults = (patch: Partial<ChatSettings>) => {
     defaults = { ...defaults, ...patch };

@@ -273,9 +273,9 @@ export const RECOVERY_KEY = "7KQ2D-M9XHT-4WB3N-PZ6RC-V8JFA-1GHK5-N0QRS-T3VWX-YZ8
 /** The new tab page's composer: the models a task can use and what the next one starts with. */
 export const COMPOSER: Composer = {
   models: [
-    { id: "codex:gpt-6-astra", label: "GPT-6 Astra", provider: "Codex", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"] },
-    { id: "codex:gpt-6.1-sol", label: "GPT-6.1 Sol", provider: "Codex", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"] },
-    { id: "codex:gpt-6-luna", label: "GPT-6 Luna", provider: "Codex", efforts: ["low", "medium", "high", "xhigh", "max"] },
+    { id: "codex:gpt-6-astra", label: "GPT-6 Astra", provider: "ChatGPT", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"] },
+    { id: "codex:gpt-6.1-sol", label: "GPT-6.1 Sol", provider: "ChatGPT", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"] },
+    { id: "codex:gpt-6-luna", label: "GPT-6 Luna", provider: "ChatGPT", efforts: ["low", "medium", "high", "xhigh", "max"] },
     { id: "claude:claude-fable-5-2", label: "Claude Fable 5.2", provider: "Claude", efforts: ["low", "medium", "high", "xhigh", "max"] },
     { id: "claude:claude-opus-5-5", label: "Claude Opus 5.5", provider: "Claude", efforts: ["low", "medium", "high", "xhigh", "max"] },
     { id: "claude:claude-sonnet-5-5", label: "Claude Sonnet 5.5", provider: "Claude", efforts: ["low", "medium", "high", "xhigh", "max"] },

@@ -14,7 +14,8 @@ import type { AttachedFile } from "../host/protocol";
 import { Icon } from "./icon";
 import { applyMention, keptMentions, matchTabs, mentionLabel, mentionQuery } from "./mentions";
 import { Menu, type Choice } from "./menu";
-import { EFFORT_LABEL, fitEffort, ModelMenu, modelName } from "./model-menu";
+import { EffortMenu, takesFastMode } from "./effort-menu";
+import { fitEffort, ModelMenu, modelName } from "./model-menu";
 import { ProviderMark } from "./provider-mark";
 
 /** What a message carries besides its text. `when`, while a task runs: wait for it, or steer it now. */
@@ -201,9 +202,23 @@ export function Composer(p: ComposerProps) {
   };
   const onPaste = (e: ClipboardEvent) => {
     const pasted = [...(e.clipboardData?.files ?? [])];
-    if (!pasted.length || !p.uploadFile) return;
-    e.preventDefault();
-    void takeFiles(pasted);
+    if (pasted.length && p.uploadFile) {
+      e.preventDefault();
+      void takeFiles(pasted);
+      return;
+    }
+    // Files copied in Finder reach the page only as their names: the browser reads the clipboard's
+    // file paths and attaches them, and the names typed in by the paste are taken back out.
+    if (!p.host?.pastedFiles) return;
+    const before = p.draft;
+    void p.host.pastedFiles().then((added) => {
+      if (!added.length) return;
+      addFiles(added);
+      p.onDraft(before);
+      for (const f of added.filter((x) => IMAGE_NAME.test(x.name))) {
+        void p.previewFile?.(f.id).then((url) => url && setThumbs((t) => ({ ...t, [f.id]: url }))).catch(() => undefined);
+      }
+    });
   };
   const onDrop = (e: DragEvent) => {
     setDropping(false);
@@ -240,7 +255,6 @@ export function Composer(p: ComposerProps) {
   const canAttach = Boolean(p.host?.chooseFiles);
   const canDictate = Boolean(p.host?.startDictation);
   const model = p.models.find((m) => m.id === p.settings.model);
-  const effortChoices: Choice<Effort>[] = (model?.efforts ?? []).map((e) => ({ value: e, label: EFFORT_LABEL[e] }));
   const modelLabel = model ? modelName(model.label) : p.models.length ? "Pick a model" : "No model signed in";
   // The round button: stop while a task runs, the microphone while there is nothing to send, send
   // otherwise (with a small microphone beside it, to dictate after what is typed).
@@ -349,13 +363,13 @@ export function Composer(p: ComposerProps) {
             {model && <ProviderMark provider={model.provider} size={12} />}
             {modelLabel}
           </ModelMenu>
-          {effortChoices.length > 0 && (
-            <Menu label="Effort" align="end" choices={effortChoices} selected={[p.settings.effort]} onPick={(c) => p.onSettings({ effort: c.value })}>
-              <span class="eff-i">
-                <Icon name="gauge" size={14} />
-              </span>
-              <span class="eff-t">{EFFORT_LABEL[p.settings.effort]}</span>
-            </Menu>
+          {model && model.efforts.length > 0 && (
+            <EffortMenu
+              efforts={model.efforts}
+              effort={p.settings.effort}
+              onEffort={(effort) => p.onSettings({ effort })}
+              {...(takesFastMode(model.id) ? { fast: p.settings.fast === true, onFast: (fast: boolean) => p.onSettings({ fast }) } : {})}
+            />
           )}
           {p.running && typed ? (
             <>

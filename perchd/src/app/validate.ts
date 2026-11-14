@@ -111,12 +111,13 @@ const FAVICON = /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/;
 
 export function settingsPatch(value: unknown, models: string[]): Partial<ChatSettings> {
   const o = object(value, '"settings"');
-  onlyKeys(o, ["mode", "model", "effort", "scope"]);
+  onlyKeys(o, ["mode", "model", "effort", "scope", "fast"]);
   const out: Partial<ChatSettings> = {};
   if (o.mode !== undefined) out.mode = oneOf<Mode>(o.mode, "mode", ["ask", "guard", "skip"]);
   if (o.effort !== undefined) out.effort = oneOf<Effort>(o.effort, "effort", EFFORTS);
   if (o.scope !== undefined) out.scope = oneOf<Scope>(o.scope, "scope", ["current", "all", "agent"]);
   if (o.model !== undefined) out.model = oneOf(o.model, "model", models);
+  if (o.fast !== undefined) out.fast = bool(o.fast, "fast");
   return out;
 }
 

@@ -26,7 +26,8 @@ export type TabInfo = {
 /** The tab a side chat belongs to. */
 export type TabRef = { id: string; windowId: string };
 
-export type ChatSettings = { mode: Mode; model: string; effort: Effort; scope: Scope };
+/** `fast`: OpenAI's fast service tier, for ChatGPT models only; off when absent. */
+export type ChatSettings = { mode: Mode; model: string; effort: Effort; scope: Scope; fast?: boolean };
 
 /**
  * One thing the agent did in a run. `detail`: the code, query or URL the step ran (never what was

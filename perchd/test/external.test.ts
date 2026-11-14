@@ -65,6 +65,14 @@ test("the Codex command sets the model and, when given, the reasoning effort", (
   expect(() => codexArgs({ ...base, effort: 'low" x' })).toThrow();
 });
 
+test("fast mode asks Codex for OpenAI's fast service tier, and only when on", () => {
+  const base = { mcpArgs: ["run", "mcp.ts"], otherServers: [] as string[] };
+  const fast = codexArgs({ ...base, fast: true });
+  expect(fast[fast.indexOf('service_tier="fast"') - 1]).toBe("-c");
+  expect(codexArgs(base).some((a) => a.startsWith("service_tier"))).toBe(false);
+  expect(codexArgs({ ...base, fast: false }).some((a) => a.startsWith("service_tier"))).toBe(false);
+});
+
 test("other Codex MCP servers are found so they can be switched off", () => {
   const dir = mkdtempSync(join(tmpdir(), "codex-cfg-"));
   writeFileSync(join(dir, "config.toml"), '[mcp_servers.parallel]\ncommand = "x"\n[mcp_servers.parallel.env]\nA = "1"\n[mcp_servers.firecrawl]\n[mcp_servers.perch]\n');

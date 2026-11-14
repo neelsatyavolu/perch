@@ -157,6 +157,34 @@ test("a run gets the nearest effort its model takes, and the chat keeps the one 
   ws.close();
 });
 
+test("fast mode is a per-chat setting: off by default, checked, kept, and given to the run", async () => {
+  const { ws, events } = await socket();
+  const chat = (await (await api("/api/chats", { method: "POST", json: { settings: { model: "fake" } } })).json()) as Chat;
+  expect(chat.settings.fast).toBeUndefined();
+  expect((await api(`/api/chats/${chat.id}`, { method: "PATCH", json: { settings: { fast: "yes" } } })).status).toBe(400);
+  expect((await api(`/api/chats/${chat.id}`, { method: "PATCH", json: { settings: { fast: true } } })).status).toBe(200);
+  const view = await (await api(`/api/chats/${chat.id}`)).json();
+  expect(view.chat.settings).toMatchObject({ model: "fake", fast: true });
+  const before = inputs.length;
+  await api(`/api/chats/${chat.id}/messages`, { method: "POST", json: { text: "Quick one" } });
+  await until(() => events.find((e) => e.type === "run.finished"));
+  expect(inputs[before]!.settings.fast).toBe(true);
+  ws.close();
+});
+
+test("a chat saved on the retired Codex default moves to the first ChatGPT model", async () => {
+  const data = mkdtempSync(join(tmpdir(), "perch-app-"));
+  const vault = await Vault.open(memoryKeychain(), "Default");
+  const models = [{ id: "codex:gpt-6.1-sol", label: "GPT-6.1 Sol", provider: "ChatGPT", efforts: ["low" as const] }];
+  const first = await startApp({ dataDir: data, vault, runner, models, allowedOrigins: [] });
+  const old = await first.chats.create({ settings: { model: "codex:default" } });
+  await first.stop();
+  const again = await startApp({ dataDir: data, vault, runner, models, allowedOrigins: [], defaults: { model: "codex:default" } });
+  expect(again.chats.get(old.id)?.settings.model).toBe("codex:gpt-6.1-sol");
+  await again.stop();
+  rmSync(data, { recursive: true, force: true });
+});
+
 test("an approval goes through the API, and a stale one is refused", async () => {
   const { ws, events } = await socket();
   const chat = (await (await api("/api/chats", { method: "POST", json: {} })).json()) as Chat;

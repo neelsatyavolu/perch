@@ -377,7 +377,7 @@ test("a failed delete in the full-page chat says so instead of failing silently"
 
 const pickEffort = async (el: HTMLElement, label: string) => {
   await act(async () => (el.querySelector('[aria-label="Effort"]') as HTMLElement).click());
-  await act(async () => ([...el.querySelectorAll('[role="option"]')].find((o) => o.textContent!.startsWith(label)) as HTMLElement).click());
+  await act(async () => ([...el.querySelectorAll(".eff-labels > span")].find((o) => o.textContent === label) as HTMLElement).click());
   await settle();
 };
 

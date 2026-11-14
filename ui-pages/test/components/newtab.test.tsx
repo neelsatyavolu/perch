@@ -120,11 +120,11 @@ describe("New tab page", () => {
     const search = getByRole("combobox", { name: "Search models" });
     expect(document.activeElement).toBe(search);
     const options = () => [...document.querySelectorAll(".mm [role='option']")].map((o) => o.textContent);
-    expect(options()).toEqual(["Codex", "Claude", "Claude Code", "Grok", "Settings"]);
-    fireEvent.click(getByRole("option", { name: "Codex" }));
-    expect(options()).toEqual(["Codex", "GPT-6 Astra", "GPT-6.1 Sol", "GPT-6 Luna"]);
+    expect(options()).toEqual(["ChatGPT", "Claude", "Claude Code", "Grok", "Settings"]);
+    fireEvent.click(getByRole("option", { name: "ChatGPT" }));
+    expect(options()).toEqual(["ChatGPT", "GPT-6 Astra", "GPT-6.1 Sol", "GPT-6 Luna"]);
     fireEvent.keyDown(search, { key: "Escape" });
-    expect(options()[0]).toBe("Codex");
+    expect(options()[0]).toBe("ChatGPT");
     fireEvent.input(search, { target: { value: "opus" } });
     expect(options()).toEqual(["Opus 5.5Claude", "Opus 5.5Claude Code"]);
     fireEvent.keyDown(search, { key: "ArrowDown" });

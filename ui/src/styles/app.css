@@ -98,6 +98,40 @@ svg.pmark { flex: none; }
 .mm ul { margin: 0; padding: 4px; list-style: none; overflow-y: auto; max-height: 320px; }
 .mm li.mm-provider, .mm li.mm-head { color: var(--ink); }
 .mm li.mm-sep { height: 1px; margin: 4px; background: var(--hair); }
+/* The effort picker (effort-menu.tsx): a slider with a stop per effort, labels under the stops, and for a
+   ChatGPT model the Fast mode switch under a hairline. The track is a rule; the chosen part is ink, not the accent. */
+/* In the composer it hangs from the composer's right edge, just above the row of pills, so it keeps its
+   width in a 320px side chat instead of running off the left edge from the pill near the send button. */
+.composer .eff-wrap { position: static; }
+.composer .menu.eff-pop { bottom: 42px; right: 8px; max-width: calc(100% - 16px); }
+.menu.eff-pop { width: 280px; max-width: calc(100vw - 24px); padding: 10px 12px 12px; overflow: visible; }
+.eff-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; color: var(--mute); }
+.eff-now { color: var(--ink); font-weight: 500; }
+.eff-slider { position: relative; height: 28px; margin-top: 4px; border-radius: 6px; touch-action: none; cursor: default; }
+.eff-slider:focus { outline: none; }
+.eff-slider:focus-visible .eff-knob { outline: 2px solid var(--accent); outline-offset: 2px; }
+.eff-track { position: absolute; top: 13px; left: var(--from); right: calc(100% - var(--to)); height: 2px; border-radius: 1px; background: var(--hair-strong); }
+.eff-fill { position: absolute; inset: 0 auto 0 0; width: calc(var(--share) * 100%); background: var(--ink); border-radius: 1px; transition: width var(--t-hover) var(--ease); }
+.eff-stop { position: absolute; top: 11px; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: var(--hair-strong); }
+.eff-stop.on { background: var(--ink); }
+.eff-knob { position: absolute; top: 7px; left: var(--at); width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; background: var(--btn-bg); box-shadow: 0 0 0 2px var(--raised);
+  transition: left var(--t-hover) var(--ease); }
+.eff-labels { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); font-size: 12px; line-height: 14px; color: var(--mute); }
+.eff-labels > span { display: flex; justify-content: center; text-align: center; padding-top: 2px; cursor: default; }
+.eff-labels > span > span { flex: none; max-width: 48px; }
+.eff-labels > span:hover { color: var(--body); }
+.eff-labels > span.now { color: var(--ink); font-weight: 500; }
+.eff-fast { display: flex; align-items: center; gap: 12px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--hair); }
+.eff-fast-t { flex: 1; min-width: 0; display: grid; gap: 2px; color: var(--ink); }
+.eff-fast-h { color: var(--mute); font-size: 12px; line-height: 16px; }
+.eff-fast-mark { color: var(--mute); }
+.switch { width: 36px; height: 20px; border-radius: 10px; background: var(--hair-strong); border: 0; padding: 0; position: relative; flex: none; transition: background var(--t-hover) var(--ease); }
+.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--ink); transition: transform var(--t-hover) var(--ease); }
+.switch:hover { background: color-mix(in srgb, var(--hair-strong) 80%, var(--ink)); }
+.switch[aria-checked="true"] { background: var(--btn-bg); }
+.switch[aria-checked="true"]:hover { background: color-mix(in srgb, var(--btn-bg) 88%, var(--btn-fg)); }
+.switch[aria-checked="true"]::after { transform: translateX(16px); background: var(--btn-fg); }
+:root[data-tone="light"] .switch::after { background: #FFFFFF; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12); }
 .mm li svg.i { color: var(--mute); }
 .mm li[aria-selected="true"] svg.i { color: var(--ink); }
 
@@ -342,7 +376,9 @@ button.artifact-card:hover { background: var(--fill-hover); }
 .side-h .title, .art-h .title { margin: 0; flex: 1; min-width: 0; color: var(--ink); font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* The side chat's title opens its past chats (chat-menu.tsx); the h1 must not clip the list. */
 .side-h .title-menu { overflow: visible; display: flex; }
-.title-menu > .menu-wrap { max-width: 100%; }
+/* The wrap takes the title's whole width, so the button (pulled 6px left to line its text up) is only cut
+   off when the title really runs out of room. */
+.title-menu > .menu-wrap { flex: 1 1 auto; min-width: 0; }
 .title-btn { height: 28px; max-width: 100%; display: inline-flex; align-items: center; gap: 4px; margin-left: -6px; padding: 0 6px; border: 0; border-radius: var(--r-control);
   background: none; color: var(--ink); font-weight: 500; transition: background var(--t-hover) var(--ease); }
 .title-btn:hover, .title-btn[aria-expanded="true"] { background: var(--hover); }

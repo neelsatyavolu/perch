@@ -213,7 +213,7 @@ test("mode, effort and model pickers change the chat's settings", () => {
   expect(calls.settings.at(-1)).toEqual({ mode: "skip" });
   expect(el.querySelector('[aria-label="Tabs the agent may use"]')).toBeNull();
   click(el.querySelector('[aria-label="Effort"]'));
-  click([...el.querySelectorAll('[role="option"]')].find((o) => o.textContent!.startsWith("Medium"))!);
+  click([...el.querySelectorAll(".eff-labels > span")].find((o) => o.textContent === "Medium")!);
   expect(calls.settings.at(-1)).toEqual({ effort: "medium" });
   click(el.querySelector('[aria-label="Model"]'));
   // The picker opens on the providers; a provider opens its models.
@@ -246,13 +246,64 @@ test("the model picker searches across providers and works from the keyboard", (
   expect(el.querySelector(".mm")).toBeNull();
 });
 
-test("efforts follow the model: the picker lists the model's own, and a switch keeps the nearest", () => {
-  const { el } = composer({ models: [{ id: "a", label: "GPT-6 Astra", provider: "Codex", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"] }], settings: { ...settings, model: "a" } });
+test("efforts follow the model: the slider has a stop per effort the model takes, and a switch keeps the nearest", () => {
+  const { el } = composer({ models: [{ id: "a", label: "GPT-6 Astra", provider: "ChatGPT", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"] }], settings: { ...settings, model: "a" } });
   click(el.querySelector('[aria-label="Effort"]'));
-  expect([...el.querySelectorAll('[role="option"] .opt-label')].map((o) => o.textContent)).toEqual(["Low", "Medium", "High", "Extra high", "Max", "Ultra"]);
+  expect([...el.querySelectorAll(".eff-labels > span")].map((o) => o.textContent)).toEqual(["Low", "Medium", "High", "Extra high", "Max", "Ultra"]);
+  expect(el.querySelectorAll(".eff-stop")).toHaveLength(6);
+  expect(el.querySelector(".eff-labels .now")!.textContent).toBe("High");
   expect(fitEffort(["low", "medium", "high", "xhigh", "max"], "ultra")).toBe("max");
   expect(fitEffort(["medium"], "low")).toBe("medium");
   expect(matchModels(models, "claude code").map((m) => m.id)).toEqual(["opus"]);
+});
+
+test("the effort slider is a slider: arrows, Home and End move it, and Escape closes it", () => {
+  const efforts = ["low", "medium", "high", "xhigh", "max"] as const;
+  const { el, calls } = composer({ models: [{ id: "a", label: "GPT-6 Astra", provider: "ChatGPT", efforts: [...efforts] }], settings: { ...settings, model: "a", effort: "medium" } });
+  click(el.querySelector('[aria-label="Effort"]'));
+  const slider = el.querySelector<HTMLElement>('[role="slider"]')!;
+  expect(document.activeElement).toBe(slider);
+  expect(slider.getAttribute("aria-valuetext")).toBe("Medium");
+  expect(slider.getAttribute("aria-valuenow")).toBe("1");
+  expect(slider.getAttribute("aria-valuemax")).toBe("4");
+  const key = (k: string) => act(() => void slider.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true })));
+  key("ArrowRight");
+  expect(calls.settings.at(-1)).toEqual({ effort: "high" });
+  key("ArrowLeft");
+  expect(calls.settings.at(-1)).toEqual({ effort: "low" });
+  key("End");
+  expect(calls.settings.at(-1)).toEqual({ effort: "max" });
+  key("Home");
+  expect(calls.settings.at(-1)).toEqual({ effort: "low" });
+  key("Escape");
+  expect(el.querySelector(".eff-pop")).toBeNull();
+  expect(document.activeElement).toBe(el.querySelector('[aria-label="Effort"]'));
+});
+
+test("Fast mode shows in the effort picker only for ChatGPT models, and is kept with the chat", () => {
+  const chatgpt: ModelInfo = { id: "codex:gpt-6-astra", label: "GPT-6 Astra", provider: "ChatGPT", efforts: ["low", "medium", "high"] };
+  const claude: ModelInfo = { id: "claude-code:opus", label: "Claude Opus 5.5", provider: "Claude Code", efforts: ["low", "medium", "high"] };
+  const off = composer({ models: [chatgpt, claude], settings: { ...settings, model: chatgpt.id } });
+  click(off.el.querySelector('[aria-label="Effort"]'));
+  const sw = off.el.querySelector<HTMLElement>('[role="switch"]')!;
+  expect(sw.getAttribute("aria-checked")).toBe("false");
+  expect(document.getElementById(sw.getAttribute("aria-labelledby")!)!.textContent).toBe("Fast mode");
+  click(sw);
+  expect(off.calls.settings.at(-1)).toEqual({ fast: true });
+  render(null, root);
+  root.remove();
+  const on = composer({ models: [chatgpt, claude], settings: { ...settings, model: chatgpt.id, fast: true } });
+  expect(on.el.querySelector(".eff-t")!.textContent).toBe("High · Fast");
+  click(on.el.querySelector('[aria-label="Effort"]'));
+  click(on.el.querySelector('[role="switch"]'));
+  expect(on.calls.settings.at(-1)).toEqual({ fast: false });
+  render(null, root);
+  root.remove();
+  const other = composer({ models: [chatgpt, claude], settings: { ...settings, model: claude.id, fast: true } });
+  click(other.el.querySelector('[aria-label="Effort"]'));
+  expect(other.el.querySelector('[role="slider"]')).not.toBeNull();
+  expect(other.el.querySelector('[role="switch"]')).toBeNull();
+  expect(other.el.querySelector(".eff-t")!.textContent).toBe("High");
 });
 
 test("the picker menu works from the keyboard and closes on Escape", () => {
@@ -514,4 +565,25 @@ test("pasting plain text into the chat box is left to the text field", async () 
   Object.defineProperty(paste, "clipboardData", { value: { files: [] } });
   el.querySelector("textarea")!.dispatchEvent(paste);
   expect(paste.defaultPrevented).toBe(false);
+});
+
+test("a file copied in Finder and pasted is attached, and its pasted name is taken back out", async () => {
+  const drafts: string[] = [];
+  const { el } = composer({
+    draft: "look at ",
+    onDraft: (t) => void drafts.push(t),
+    host: { pastedFiles: async () => [{ id: "f9", name: "window.jpg", size: 2048 }] },
+    previewFile: async () => "data:image/jpeg;base64,AAAA",
+  });
+  const paste = new Event("paste", { bubbles: true, cancelable: true }) as Event & { clipboardData: unknown };
+  Object.defineProperty(paste, "clipboardData", { value: { files: [] } });
+  await act(async () => {
+    el.querySelector("textarea")!.dispatchEvent(paste);
+    await new Promise((r) => setTimeout(r, 20));
+  });
+  expect(paste.defaultPrevented).toBe(false);
+  expect(drafts.at(-1)).toBe("look at ");
+  const chip = el.querySelector(".chip.file")!;
+  expect(chip.textContent).toContain("window.jpg");
+  expect(chip.querySelector("img.thumb")!.getAttribute("src")).toBe("data:image/jpeg;base64,AAAA");
 });

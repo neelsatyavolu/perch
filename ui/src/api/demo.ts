@@ -11,9 +11,9 @@ const DEFAULTS: ChatSettings = { mode: "guard", model: "claude-code:claude-opus-
 
 const INFO: AppInfo = {
   models: [
-    { id: "codex:gpt-6-astra", label: "GPT-6 Astra", provider: "Codex", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"] },
-    { id: "codex:gpt-6.1-sol", label: "GPT-6.1 Sol", provider: "Codex", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"] },
-    { id: "codex:gpt-6-luna", label: "GPT-6 Luna", provider: "Codex", efforts: ["low", "medium", "high", "xhigh", "max"] },
+    { id: "codex:gpt-6-astra", label: "GPT-6 Astra", provider: "ChatGPT", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"] },
+    { id: "codex:gpt-6.1-sol", label: "GPT-6.1 Sol", provider: "ChatGPT", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"] },
+    { id: "codex:gpt-6-luna", label: "GPT-6 Luna", provider: "ChatGPT", efforts: ["low", "medium", "high", "xhigh", "max"] },
     { id: "claude-code:claude-fable-5-2", label: "Claude Fable 5.2", provider: "Claude Code", efforts: ["low", "medium", "high", "xhigh", "max"] },
     { id: "claude-code:claude-opus-5-5", label: "Claude Opus 5.5", provider: "Claude Code", efforts: ["low", "medium", "high", "xhigh", "max"] },
     { id: "claude-code:claude-haiku-5-5", label: "Claude Haiku 5.5", provider: "Claude Code", efforts: ["low", "medium", "high"] },

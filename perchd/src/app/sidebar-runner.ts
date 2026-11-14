@@ -55,7 +55,7 @@ function installed(agent: Agent): boolean {
 }
 
 /**
- * The chat models, from shared-ai-auth's catalog: Codex and Claude Code when installed (they run
+ * The chat models, from shared-ai-auth's catalog: Codex (listed as ChatGPT) and Claude Code when installed (they run
  * whole tasks), and the Claude and Grok sign-ins Perch calls itself. `signedIn` names the
  * subscriptions signed in now.
  */
@@ -63,10 +63,8 @@ export function sidebarModels(catalog: ModelCatalog = bundledModels, signedIn: r
   const claude = catalog.claude ?? bundledModels.claude ?? [];
   const list = (prefix: string, provider: string, models: readonly { id: string; label: string; efforts?: string[] }[]) =>
     models.map((m) => ({ id: `${prefix}:${m.id}`, label: m.label, provider, efforts: catalogEfforts(m.efforts) }));
-  // Codex's own default model takes what its first catalog model takes.
-  const codexDefault = { id: "codex:default", label: "Codex default", provider: "Codex", efforts: catalogEfforts(catalog.codex[0]?.efforts) };
   return [
-    ...(has("codex") ? [...list("codex", "Codex", catalog.codex), codexDefault] : []),
+    ...(has("codex") ? list("codex", "ChatGPT", catalog.codex) : []),
     ...(signedIn.includes("claude") ? list("claude", "Claude", claude) : []),
     ...(has("claude-code") ? list("claude-code", "Claude Code", claude) : []),
     ...(signedIn.includes("grok") ? list("grok", "Grok", catalog.grok) : []),
@@ -265,6 +263,7 @@ export function sidebarRunner(opts: SidebarRunnerOptions): Runner {
       task: [input.task, known, skillList].filter(Boolean).join("\n\n"),
       model: model && model !== "default" ? model : undefined,
       effort: input.settings.effort,
+      ...(agent === "codex" && input.settings.fast ? { fast: true } : {}),
       mode,
       timeoutMs: opts.timeoutMs ?? 20 * 60_000,
       auditPath: opts.auditPath,

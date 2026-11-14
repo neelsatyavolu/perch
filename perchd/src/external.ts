@@ -90,6 +90,8 @@ export type RunOptions = {
   model?: string;
   /** Reasoning effort ("low", "medium", "high"), for Codex and Claude Code alike. */
   effort?: string;
+  /** Codex only: OpenAI's fast service tier (Codex's `service_tier = "fast"`). */
+  fast?: boolean;
   timeoutMs: number;
   auditPath: string;
   /** Permission mode for the MCP server; delegated whole tasks use "skip" (payments still ask). */
@@ -288,7 +290,7 @@ const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
  * runner and any plugin servers the user installed. So it runs read-only, and is not offered for
  * private chats (sidebar-runner.ts).
  */
-export function codexArgs(opts: { mcpArgs: string[]; model?: string; effort?: string; otherServers: string[]; command?: string; envNames?: string[] }): string[] {
+export function codexArgs(opts: { mcpArgs: string[]; model?: string; effort?: string; fast?: boolean; otherServers: string[]; command?: string; envNames?: string[] }): string[] {
   if (opts.effort !== undefined && !EFFORT.test(opts.effort)) throw new Error(`unknown reasoning effort "${opts.effort}"`);
   const envNames = opts.envNames ?? [];
   for (const name of envNames) if (!ENV_NAME.test(name)) throw new Error(`bad environment name "${name}"`);
@@ -311,6 +313,8 @@ export function codexArgs(opts: { mcpArgs: string[]; model?: string; effort?: st
     "-c", 'web_search="live"',
     ...(opts.model ? ["-m", opts.model] : []),
     ...(opts.effort ? ["-c", `model_reasoning_effort="${opts.effort}"`] : []),
+    // Codex's name for OpenAI's fast tier; it sends it to ChatGPT as service_tier "priority".
+    ...(opts.fast ? ["-c", 'service_tier="fast"'] : []),
   ];
 }
 
@@ -320,7 +324,7 @@ export async function runCodex(opts: RunOptions): Promise<ExternalResult> {
   const mode = opts.mode ?? "guard";
   const server = mcpServer(opts, "codex", work);
   const prompt = `${systemPrompt({ mode, now: new Date(), finish: "reply", webSearch: true })}\n\nYour tools for this task are Perch's browser tools from the "perch" MCP server. Do not run shell commands or read files. Use web search for quick public lookups and the browser for the user's own sites, signed-in pages and anything you act on, then reply with the answer, including the specific facts the task asks for.\n\nTask:\n${opts.task}`;
-  const args = codexArgs({ mcpArgs: server.args, command: server.command, envNames: Object.keys(server.env), model: opts.model, effort: opts.effort, otherServers: otherCodexServers() });
+  const args = codexArgs({ mcpArgs: server.args, command: server.command, envNames: Object.keys(server.env), model: opts.model, effort: opts.effort, fast: opts.fast, otherServers: otherCodexServers() });
   const child = Bun.spawn([codexBinary(), ...args], { cwd: work, stdout: "pipe", stderr: "pipe", stdin: Buffer.from(prompt), env: { ...subscriptionEnv(), ...server.env } });
   const stop = stopper(child, opts);
   const events: AsideEvent[] = [];

@@ -220,7 +220,7 @@ export function importPages(deps: PagesDeps): Methods<"detectBrowsers" | "getSys
       // signed in to, and each account comes over once however many profiles share it.
       const accounts = new Set<string>();
       // The first browser profile comes into this Perch profile; each other one gets a Perch
-      // profile of its own name, which opens in a window with its tabs, so they stay apart.
+      // profile of its own name, with its tabs, switched to from the profile menu.
       const browserProfiles = requested.filter((id) => !id.startsWith(ACCOUNT_PREFIX));
       const parts: { source: { browser: string; profile: string }; types: DataType[]; label?: string; intoProfile?: string }[] = requested.flatMap((id) => {
         const label = requested.length > 1 ? named(id) : undefined;
@@ -246,7 +246,7 @@ export function importPages(deps: PagesDeps): Methods<"detectBrowsers" | "getSys
           }).catch((error: unknown) => (csv || zip || parts.length > 1 ? { results: part.types.map((t) => failure(t, error)) } : Promise.reject(error)));
           results.push(...report.results);
           lines.push(...report.results.map((r) => (part.label ? `${part.label}: ${summaryLine(r)}` : summaryLine(r))));
-          if (part.intoProfile && report.results.some((r) => r.status === "written")) lines.push(`${part.label}: opened as its own Perch profile, "${part.intoProfile}", in a new window`);
+          if (part.intoProfile && report.results.some((r) => r.status === "written")) lines.push(`${part.label}: added as its own Perch profile, "${part.intoProfile}"; switch to it from the profile menu`);
           base += part.types.length;
         }
         if (zip) {

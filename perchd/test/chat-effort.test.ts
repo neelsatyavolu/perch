@@ -23,7 +23,7 @@ test("each chat model offers exactly the efforts the catalog lists for it", () =
   const efforts = (id: string) => all.find((m) => m.id === id)?.efforts;
   expect(efforts("codex:gpt-6-astra")).toEqual(["low", "medium", "high", "xhigh", "max", "ultra"]);
   expect(efforts("codex:gpt-6-luna")).toEqual(["low", "medium", "high", "xhigh", "max"]);
-  expect(efforts("codex:default")).toEqual(["low", "medium", "high", "xhigh", "max", "ultra"]);
+  expect(efforts("codex:default")).toBeUndefined();
   expect(efforts("claude-code:claude-opus-5-5")).toEqual(["low", "medium", "high", "xhigh", "max"]);
   expect(efforts("claude:claude-haiku-5-5")).toEqual(["low", "medium", "high"]);
   expect(efforts("grok:grok-4.7")).toEqual(["low", "medium", "high"]);

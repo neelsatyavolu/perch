@@ -51,6 +51,9 @@ export function OnePasswordGroup() {
 
   if (!s) return status.error ? <Group label="1Password" id="one-password"><p class="err-note">{status.error}</p></Group> : null;
   const unreachable = s.installed && s.accounts.length === 0;
+  // With several accounts the person picks which ones: the main switch never picks one for them
+  // (that would ask 1Password for an account they didn't mean). It only turns them all off.
+  const several = s.accounts.length > 1;
 
   return (
     <Group label="1Password" id="one-password">
@@ -58,17 +61,17 @@ export function OnePasswordGroup() {
         <Row
           id="one-password-on"
           title="Sign in with 1Password"
-          detail={on ? "When Perch has no saved login for a site, the agent asks 1Password. You approve with Touch ID." : "Let the agent use logins and one-time codes from the 1Password app."}
+          detail={on ? "When Perch has no saved login for a site, the agent asks 1Password. You approve with Touch ID." : several ? "Pick the accounts the agent may use below." : "Let the agent use logins and one-time codes from the 1Password app."}
         >
           <Switch
             label="Sign in with 1Password"
             checked={on}
-            disabled={busy || !s.installed || (!on && unreachable)}
+            disabled={busy || !s.installed || (!on && (unreachable || several))}
             describedBy="one-password-on-d"
             onChange={(next) => save(next && s.accounts[0] ? [{ account: s.accounts[0].id, vaults: null }] : [], next ? "The agent can sign in with 1Password" : "1Password is off for the agent")}
           />
         </Row>
-        {on && s.accounts.map((a) => {
+        {(on || several) && s.accounts.map((a) => {
           const choice = choiceOf(a.id);
           const scope: Scope = choice?.vaults ? "some" : "all";
           const loaded = vaults[a.id];

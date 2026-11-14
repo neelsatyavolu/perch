@@ -2,6 +2,7 @@
 // Use of this source code is governed by the MIT license in Perch's LICENSE file.
 
 #include "chrome/browser/perch/extensions/perch_component_extensions.h"
+#include "chrome/browser/perch/extensions/perch_extension_updates.h"
 
 #include <memory>
 #include <optional>
@@ -147,12 +148,17 @@ std::vector<std::pair<int, int>> IndexRulesets(const base::FilePath& dir,
 
 // Runs on the extension file task runner: refreshes the copy when the bundled
 // extension changed (a Perch update), then reads its manifest.
-std::optional<Prepared> Prepare(const base::FilePath& bundled,
+std::optional<Prepared> Prepare(base::FilePath bundled,
                                 const base::FilePath& run_dir) {
   const std::string version = VersionOf(bundled);
   if (version.empty()) {
     LOG(ERROR) << "Perch: no built-in extension in " << bundled;
     return std::nullopt;
+  }
+  // A verified release newer than the bundled copy runs instead of it.
+  if (std::optional<base::FilePath> update =
+          NewerUpdateFor(bundled.BaseName().AsUTF8Unsafe(), version)) {
+    bundled = *update;
   }
   // Any change to the bundled manifest (a new version, or a development
   // build) replaces the copy. Both folders carry the extension's name.
@@ -307,6 +313,7 @@ void AddPerchComponentExtensions(Profile* profile) {
   if (!profile || profile->IsOffTheRecord() || profile->IsSystemProfile()) {
     return;
   }
+  StartExtensionUpdates();
   if (!profile->GetUserData(kWatcherKey)) {
     profile->SetUserData(kWatcherKey, std::make_unique<Watcher>(profile));
   }

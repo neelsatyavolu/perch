@@ -1,0 +1,23 @@
+Builds Perch's built-in extension updater (overlay chrome/browser/perch/extensions/perch_extension_updates.cc), which takes signed GitHub releases of Caveatly between Perch releases.
+diff --git a/chrome/browser/extensions/BUILD.gn b/chrome/browser/extensions/BUILD.gn
+index d6db05af54..1cced9fbf1 100644
+--- a/chrome/browser/extensions/BUILD.gn
++++ b/chrome/browser/extensions/BUILD.gn
+@@ -258,6 +258,8 @@ source_set("extensions") {
+     # Perch: the extensions it ships built in.
+     "//chrome/browser/perch/extensions/perch_component_extensions.cc",
+     "//chrome/browser/perch/extensions/perch_component_extensions.h",
++    "//chrome/browser/perch/extensions/perch_extension_updates.cc",
++    "//chrome/browser/perch/extensions/perch_extension_updates.h",
+     "component_extensions_allowlist/allowlist.h",
+     "component_loader.cc",
+     "component_loader.h",
+@@ -651,6 +653,8 @@ source_set("extensions") {
+     "//net:extras",
+     "//services/metrics/public/cpp:ukm_builders",
+     "//storage/browser",
++    "//services/network/public/cpp",
++    "//third_party/boringssl",
+     "//third_party/zlib/google:zip",
+     "//ui/base/accelerators/global_accelerator_listener",
+     "//ui/base/unowned_user_data",

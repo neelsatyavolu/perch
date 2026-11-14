@@ -23,6 +23,7 @@ enum class Connection {
   kTranslationPacks,
   kPerchUpdates,
   kPushMessaging,
+  kBuiltInExtensionUpdates,
 };
 
 void RegisterAllowedConnectionPrefs(PrefRegistrySimple* registry);

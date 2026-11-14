@@ -1,5 +1,6 @@
 {
-  "_comment": "Extensions Perch ships built in (spec 5.7, 5.9; the memory saver of spec 5.6 is native). perch-build stage-extensions builds each one at the pinned commit into out/<config>/perch_extensions/<name>, and package copies them into the app. The keys are public keys that fix each extension's id; no private key exists.",
+  "_comment": "Extensions Perch ships built in (spec 5.7, 5.9; the memory saver of spec 5.6 is native). perch-build stage-extensions builds each one at the pinned commit into out/<config>/perch_extensions/<name>, and package copies them into the app. The keys are public keys that fix each extension's id; no private key exists. An entry with updates also takes newer signed releases from its GitHub repo between Perch releases; update_public_key is the Ed25519 key they must be signed with (the private key is in 1Password).",
+  "update_public_key": "ZAhFSipRm7B6RuItyopWK2kiV8dUIZEvgVocRyaOyqk=",
   "extensions": [
     {
       "name": "perch",
@@ -32,29 +33,25 @@
       "name": "caveatly",
       "id": "mefnjppdmliabfgljepbdgdalmgggmid",
       "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAomVORwzaJvJVxrltfAALXklG5gciR4gfTRFSuPozomeHpFl8A7DD6QpOYRBqZqbylz3+RugL3gojbKkJftXqUTQTS0NbHNUe7TVcZEHlQ+9Wcwxw5D48V6zipOJRqpzQKRhzzjATdNfRGELj5b73S+MKfxX31K1V9E0uLX1UHq2JOKGMe1+4EZGXrBt66ylSWm3aCJ8dP4DSMDOl8Wo6BvYf+gOsQjI1iOBgtObKUulU/xS/EF9GA4Yd6gR52g1hNInmnHeTNiXBUTXntivLwTCjZhgtn23k/mrb3rXXA7Mt7CzYeVJ4VRAikK7K9I9XLABMLSxmQE5yV9pI7kH1OQIDAQAB",
-      "repo": "https://github.com/neelsatyavolu/caveatly.git",
-      "commit": "b4e2bf2cf96374f1fd1a055689517fa1eadbe8a7",
-      "install": [
-        "npm",
-        "ci"
-      ],
-      "build": [
-        "npm",
-        "run",
-        "build"
-      ],
-      "dist": "dist",
-      "stubs": {
-        "src/lib/heartbeat.js": "caveatly-heartbeat.js"
+      "release": {
+        "url": "https://github.com/neelsatyavolu/caveatly/releases/download/v0.2.1/caveatly.zip",
+        "sha256": "d5fd5488d66a1b39c1a18f92a048f574ac3f3011fe543ffb31b5078e7ec1293b"
       },
+      "dist": "caveatly",
       "incognito": false,
-      "edits": [
-        {
-          "file": "src/screens/SettingsPanel.jsx",
-          "find": "      <Section title=\"Usage stats\">\n        <Toggle checked={settings.usageStats} onChange={v => onSettingChange('usageStats', v)} label=\"Share anonymous usage stats\" description=\"Sends a daily ping with a random install ID, extension version and Chrome version. No personal data.\" />\n      </Section>\n",
-          "replace": ""
+      "manifest": {
+        "caveatly_embed": {
+          "telemetry": false,
+          "blocker": false
         }
-      ]
+      },
+      "disable_rulesets": true,
+      "updates": {
+        "repo": "neelsatyavolu/caveatly",
+        "asset": "caveatly.zip",
+        "root": "caveatly",
+        "from_version": "0.2.1"
+      }
     }
   ]
 }

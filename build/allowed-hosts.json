@@ -25,6 +25,12 @@
       "objects.githubusercontent.com",
       "release-assets.githubusercontent.com"
     ],
+    "builtin_extension_updates": [
+      "api.github.com",
+      "github.com",
+      "objects.githubusercontent.com",
+      "release-assets.githubusercontent.com"
+    ],
     "encrypted_dns": [
       "chrome.cloudflare-dns.com",
       "dns.quad9.net",

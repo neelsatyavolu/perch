@@ -4,7 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from perchtools.stage import Bundled, StageError, apply_edits, load_bundled, stage_extensions, stage_keyhelper, write_manifest
+from perchtools.stage import (
+    Bundled, StageError, apply_edits, load_bundled, load_update_key, stage_extensions, stage_keyhelper, write_manifest,
+)
 
 
 def _entry(**over):
@@ -140,3 +142,99 @@ def test_stage_keyhelper_fails_when_the_build_made_nothing(tmp_path: Path):
     with pytest.raises(StageError, match="PerchKeys"):
         stage_keyhelper(repo=repo, out=tmp_path / "out",
                         run=lambda cmd, **_: subprocess.CompletedProcess(cmd, 0, stdout=str(tmp_path / "none"), stderr=""))
+
+
+def _release_zip(manifest: dict) -> bytes:
+    import io
+    import zipfile as z
+
+    buf = io.BytesIO()
+    with z.ZipFile(buf, "w") as f:
+        f.writestr("caveatly/manifest.json", json.dumps(manifest))
+        f.writestr("caveatly/background.js", "// built")
+    return buf.getvalue()
+
+
+def test_a_release_is_pinned_by_hash_and_gets_perchs_manifest_switches(tmp_path: Path):
+    import hashlib
+
+    data = _release_zip({"name": "Caveatly", "declarative_net_request": {"rule_resources": [{"id": "easylist", "enabled": True, "path": "r.json"}]}})
+    digest = hashlib.sha256(data).hexdigest()
+    b = Bundled.from_json(_entry(
+        release={"url": "https://github.com/x/y/releases/download/v1/caveatly.zip", "sha256": digest},
+        dist="caveatly", manifest={"caveatly_embed": {"telemetry": False, "blocker": False}}, disable_rulesets=True,
+    ))
+    fetched = []
+    [dest] = stage_extensions([b], repo=tmp_path, out=tmp_path / "out", cache=tmp_path / "cache", local={}, run=None,
+                              fetch=lambda url: fetched.append(url) or data)
+    m = json.loads((dest / "manifest.json").read_text())
+    assert fetched == ["https://github.com/x/y/releases/download/v1/caveatly.zip"]
+    assert m["caveatly_embed"] == {"telemetry": False, "blocker": False} and m["key"] == "S0VZ"
+    assert m["declarative_net_request"]["rule_resources"][0]["enabled"] is False
+    assert (dest / "background.js").exists()
+    # A second stage reuses the verified download.
+    stage_extensions([b], repo=tmp_path, out=tmp_path / "out", cache=tmp_path / "cache", local={}, run=None,
+                     fetch=lambda url: pytest.fail("downloaded again"))
+
+
+def test_a_release_whose_download_changed_fails_the_build(tmp_path: Path):
+    b = Bundled.from_json(_entry(release={"url": "https://x/r.zip", "sha256": "0" * 64}, dist="caveatly"))
+    with pytest.raises(StageError, match="sha256"):
+        stage_extensions([b], repo=tmp_path, out=tmp_path / "out", cache=tmp_path / "cache", local={}, run=None,
+                         fetch=lambda url: _release_zip({"name": "C"}))
+
+
+def test_a_release_needs_https_and_a_hash_and_takes_no_patches():
+    with pytest.raises(StageError, match="https url"):
+        Bundled.from_json(_entry(release={"url": "http://x/r.zip", "sha256": "0" * 64}))
+    with pytest.raises(StageError, match="stubs"):
+        Bundled.from_json(_entry(release={"url": "https://x/r.zip", "sha256": "0" * 64}, stubs={"a": "b"}))
+    with pytest.raises(StageError, match="exactly one"):
+        Bundled.from_json(_entry(release={"url": "https://x/r.zip", "sha256": "0" * 64}, repo="https://x/y.git", commit="c" * 40))
+
+
+KEY = "ZAhFSipRm7B6RuItyopWK2kiV8dUIZEvgVocRyaOyqk="
+
+
+def test_staging_writes_updates_json_for_extensions_that_update(tmp_path: Path):
+    import hashlib
+
+    data = _release_zip({"name": "Caveatly", "version": "1.0"})
+    updating = Bundled.from_json(_entry(
+        release={"url": "https://x/r.zip", "sha256": hashlib.sha256(data).hexdigest()}, dist="caveatly",
+        manifest={"caveatly_embed": {"telemetry": False}}, disable_rulesets=True,
+        updates={"repo": "o/caveatly", "asset": "caveatly.zip", "root": "caveatly", "from_version": "1.0"},
+    ))
+    stage_extensions([updating], repo=tmp_path, out=tmp_path / "out", cache=tmp_path / "cache", local={}, run=None,
+                     fetch=lambda url: data, update_key=KEY)
+    config = json.loads((tmp_path / "out" / "updates.json").read_text())
+    assert config == {"public_key": KEY, "extensions": [{
+        "name": "demo", "repo": "o/caveatly", "asset": "caveatly.zip", "root": "caveatly", "from_version": "1.0",
+        "key": "S0VZ", "incognito": False, "manifest": {"caveatly_embed": {"telemetry": False}}, "disable_rulesets": True,
+    }]}
+
+
+def test_updates_need_an_owner_and_name_repo_and_an_asset():
+    with pytest.raises(StageError, match="owner/name"):
+        Bundled.from_json(_entry(source="ext", updates={"repo": "https://github.com/o/r", "asset": "a.zip"}))
+    with pytest.raises(StageError, match="owner/name"):
+        Bundled.from_json(_entry(source="ext", updates={"repo": "o/r"}))
+
+
+def test_the_update_key_must_be_an_ed25519_public_key(tmp_path: Path):
+    f = tmp_path / "b.json"
+    f.write_text(json.dumps({"update_public_key": KEY, "extensions": []}))
+    assert load_update_key(f) == KEY
+    f.write_text(json.dumps({"update_public_key": "S0VZ", "extensions": []}))
+    with pytest.raises(StageError, match="Ed25519"):
+        load_update_key(f)
+
+
+def test_the_real_config_loads_and_caveatly_updates_from_signed_releases():
+    repo = Path(__file__).resolve().parents[1]
+    bundled = {b.name: b for b in load_bundled(repo / "build" / "bundled-extensions.json")}
+    assert load_update_key(repo / "build" / "bundled-extensions.json")
+    caveatly = bundled["caveatly"]
+    assert caveatly.release and caveatly.disable_rulesets
+    assert caveatly.manifest["caveatly_embed"] == {"telemetry": False, "blocker": False}
+    assert caveatly.updates and caveatly.updates["repo"] == "neelsatyavolu/caveatly"

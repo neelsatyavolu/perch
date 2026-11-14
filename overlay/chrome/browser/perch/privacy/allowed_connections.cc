@@ -43,6 +43,9 @@ constexpr Row kRows[] = {
      "Lets sites send notifications while they're closed. These go through "
      "Google's servers, which learn which sites you subscribed to",
      /*on_by_default=*/false},
+    {Connection::kBuiltInExtensionUpdates, "builtin_extension_updates",
+     "Built-in extension updates",
+     "Checks GitHub for new signed releases of Caveatly and Backrow"},
 };
 
 const Row* RowFor(Connection connection) {

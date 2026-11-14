@@ -41,6 +41,8 @@ export function ImportWizard({ embedded = false, onStatus }: Props) {
   const heading = useRef<HTMLHeadingElement>(null);
   // Set once the person picks a browser, so the automatic pick below never overrides theirs.
   const picked = useRef(false);
+  /** An import is being asked for: a second click on Continue or Start mustn't start another. */
+  const starting = useRef(false);
 
   const choose = (b: DetectedBrowser) => {
     setBrowser(b);
@@ -75,7 +77,8 @@ export function ImportWizard({ embedded = false, onStatus }: Props) {
     : { sent: kinds, left: [] };
   const sent = plan.sent;
   const start = async () => {
-    if (!browser) return;
+    if (!browser || starting.current) return;
+    starting.current = true;
     setJobId(null);
     // A chosen file goes only with what needs it still ticked; unticking on the way back drops it.
     const passwordsCsv = needs.includes("csv-export") ? csv?.id : undefined;
@@ -84,7 +87,7 @@ export function ImportWizard({ embedded = false, onStatus }: Props) {
     const id = await act(() => api.startImport({
       browser: browser.id, profile: ordered[0] ?? "", ...(ordered.length > 1 ? { profiles: ordered } : {}), kinds: sent,
       ...(passwordsCsv ? { passwordsCsv } : {}), ...(exportId ? { safariExport: exportId } : {}),
-    }));
+    })).finally(() => (starting.current = false));
     if (id) {
       setJobId(id);
       go("run");
@@ -143,6 +146,7 @@ export function ImportWizard({ embedded = false, onStatus }: Props) {
         </ol>
         <section class="panel imp-body">
           {browsers.error && <p class="err-note">{browsers.error}</p>}
+          {step === "browser" && !browsers.data && !browsers.error && <p class="mute" aria-busy="true">Looking for browsers on this Mac</p>}
           {step === "browser" && browsers.data && (
             <BrowserStep browsers={browsers.data} browser={browser} profiles={profiles} onBrowser={(b) => { picked.current = true; choose(b); }}
               onToggleProfile={(id) => setProfiles((x) => (x.includes(id) ? x.filter((p) => p !== id) : [...x, id]))} />

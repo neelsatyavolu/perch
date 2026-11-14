@@ -32,6 +32,24 @@ describe("Import wizard", () => {
     expect(r.getByText("Passwords")).toBeTruthy();
   });
 
+  test("a second click on Start import while the first is asked for starts nothing more", async () => {
+    const fake = createFakeApi({ stepMs: 0 });
+    let starts = 0;
+    let release = () => {};
+    const api = { ...fake, startImport: (o: Parameters<typeof fake.startImport>[0]) => (starts++, new Promise<Awaited<ReturnType<typeof fake.startImport>>>((done) => (release = () => done(fake.startImport(o))))) };
+    const r = renderWithApi(<ImportWizard />, { api });
+    fireEvent.click(await r.findByRole("radio", { name: /Chrome/ }));
+    fireEvent.click(r.getByRole("button", { name: "Continue" }));
+    await r.findByRole("group", { name: "What to bring from Chrome" });
+    fireEvent.click(r.getByRole("button", { name: "Continue" }));
+    const go = await r.findByRole("button", { name: "Start import" });
+    fireEvent.click(go);
+    fireEvent.click(go);
+    release();
+    expect(await r.findByRole("heading", { name: "Import finished" })).toBeTruthy();
+    expect(starts).toBe(1);
+  });
+
   test("several profiles import together, each summary line named after its profile", async () => {
     const r = renderWithApi(<ImportWizard />);
     fireEvent.click(await r.findByRole("radio", { name: /Chrome/ }));

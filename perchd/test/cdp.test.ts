@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { chromiumArgs, encode, FrameDecoder } from "../src/cdp/pipe";
 import { findChromeForTesting, launchChromium } from "../src/cdp/pipe";
-import type { CdpConnection } from "../src/cdp/connection";
+import { CdpConnection } from "../src/cdp/connection";
 import { tempProfile } from "./helpers";
 
 describe("framing", () => {
@@ -24,6 +24,27 @@ describe("framing", () => {
     expect(decoder.push(bytes.subarray(5, 12))).toEqual([]);
     expect(decoder.push(bytes.subarray(12))).toEqual([{ id: 7, result: { product: "x" } }]);
   });
+
+  test("a frame that is not JSON is dropped alone; the frames after it still arrive", () => {
+    const decoder = new FrameDecoder();
+    const chunk = Buffer.concat([encode({ id: 1 }), Buffer.from("{oops"), Buffer.from([0]), encode({ id: 2 })]);
+    expect(decoder.push(chunk)).toEqual([{ id: 1 }, { id: 2 }]);
+    expect(decoder.push(encode({ id: 3 }))).toEqual([{ id: 3 }]);
+  });
+});
+
+test("a listener that throws does not stop other listeners or replies", async () => {
+  const conn = new CdpConnection(() => undefined, async () => undefined);
+  const seen: string[] = [];
+  conn.on("Page.loadEventFired", () => {
+    throw new Error("boom");
+  });
+  conn.on("Page.loadEventFired", () => seen.push("second"));
+  const reply = conn.send("Browser.getVersion");
+  conn.handle({ method: "Page.loadEventFired", params: {} });
+  conn.handle({ id: 1, result: { product: "x" } });
+  expect(seen).toEqual(["second"]);
+  expect(await reply).toEqual({ product: "x" });
 });
 
 test("agent windows keep drawing when covered, so clicks, wheel scrolls and screenshots do not stall", () => {

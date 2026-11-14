@@ -86,3 +86,29 @@ test("if the browser goes away, the next call starts a new one instead of failin
   expect(again.result.content[0].text).toContain("started it again");
   expect(again.result.content[0].text).toContain('button "Compose"');
 }, 60_000);
+
+test("a browser that failed to start is started again on the next call", async () => {
+  const { createServer } = await import("../src/mcp");
+  const { findChromeForTesting } = await import("../src/cdp/pipe");
+  const { chmodSync, writeFileSync } = await import("node:fs");
+  const own = tempProfile();
+  const executable = join(own.dir, "chrome");
+  const server = createServer({
+    profileDir: join(own.dir, "profile"),
+    headless: true,
+    executable,
+    policy: { mode: "guard", audit: { append: async () => undefined } as never, approve: async () => false },
+  });
+  try {
+    const call = (id: number) => server.message({ jsonrpc: "2.0", id, method: "tools/call", params: { name: "navigate", arguments: { url: site.url("/mail.html") } } }) as Promise<any>;
+    expect((await call(1)).error).toMatchObject({ code: -32603, message: expect.stringContaining("ENOENT") });
+    writeFileSync(executable, `#!/bin/sh\nexec "${await findChromeForTesting()}" "$@"\n`);
+    chmodSync(executable, 0o755);
+    const again = await call(2);
+    expect(again.result.isError).toBeFalsy();
+    expect(again.result.content[0].text).toContain('button "Compose"');
+  } finally {
+    await server.close().catch(() => undefined);
+    own.cleanup();
+  }
+}, 60_000);

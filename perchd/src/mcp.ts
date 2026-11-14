@@ -49,7 +49,15 @@ export function createServer(opts: ServerOptions) {
       return newToolContext(browser);
     });
   let closing = false;
-  const context = () => (ctx ??= launch());
+  const context = () => {
+    if (ctx) return ctx;
+    const starting = launch();
+    // A browser that failed to start is not kept: the next call tries again.
+    starting.catch(() => {
+      if (ctx === starting) ctx = null;
+    });
+    return (ctx = starting);
+  };
 
   async function handle(req: Request): Promise<object | null> {
     switch (req.method) {
@@ -75,7 +83,7 @@ export function createServer(opts: ServerOptions) {
         const result = await run;
         const notes = progress.after({ id: String(req.id), name, args }, result.content);
         const content: object[] = [{ type: "text", text: notes.length ? `${notes.join("\n")}\n\n${result.content}` : result.content }];
-        if (result.image) content.push({ type: "image", data: result.image, mimeType: "image/jpeg" });
+        if (result.image) content.push({ type: "image", data: result.image, mimeType: result.imageType ?? "image/jpeg" });
         return { content, isError: Boolean(result.isError) };
       }
       default:
@@ -89,8 +97,9 @@ export function createServer(opts: ServerOptions) {
       try {
         return { jsonrpc: "2.0", id: req.id, result: await handle(req) };
       } catch (error) {
-        const e = error as Error & { code?: number };
-        return { jsonrpc: "2.0", id: req.id, error: { code: e.code ?? -32603, message: e.message } };
+        const e = error as Error & { code?: unknown };
+        // JSON-RPC codes are numbers; a system error's code ("ENOENT") is not one.
+        return { jsonrpc: "2.0", id: req.id, error: { code: typeof e.code === "number" ? e.code : -32603, message: e.message } };
       }
     },
     async close(): Promise<void> {

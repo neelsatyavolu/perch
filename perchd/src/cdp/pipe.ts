@@ -20,9 +20,15 @@ export class FrameDecoder {
     let start = 0;
     for (let i = chunk.indexOf(0); i !== -1; i = chunk.indexOf(0, start)) {
       this.buffered.push(chunk.subarray(start, i));
-      messages.push(JSON.parse(Buffer.concat(this.buffered).toString("utf8")));
+      const frame = Buffer.concat(this.buffered).toString("utf8");
       this.buffered = [];
       start = i + 1;
+      // A frame that is not JSON is dropped alone; throwing here would lose the frames after it.
+      try {
+        messages.push(JSON.parse(frame));
+      } catch {
+        process.stderr.write(`perchd: dropped a CDP message that is not JSON (${frame.length} characters)\n`);
+      }
     }
     if (start < chunk.length) this.buffered.push(chunk.subarray(start));
     return messages;
@@ -57,8 +63,13 @@ export function chromiumArgs(opts: LaunchOptions): string[] {
 export async function launchChromium(opts: LaunchOptions): Promise<CdpConnection> {
   const args = chromiumArgs(opts);
   const child = spawn(opts.executable, args, { stdio: ["ignore", "ignore", "pipe", "pipe", "pipe"] });
-  const toBrowser = child.stdio[3] as Writable;
-  const fromBrowser = child.stdio[4] as Readable;
+  // A browser that could not start (a missing or broken executable) has no pipes and reports why
+  // in an "error" event, which would otherwise go unheard and crash the process.
+  const spawnFailed = new Promise<never>((_, reject) => child.once("error", reject));
+  spawnFailed.catch(() => undefined);
+  const toBrowser = child.stdio[3] as Writable | null;
+  const fromBrowser = child.stdio[4] as Readable | null;
+  if (!toBrowser || !fromBrowser) return spawnFailed;
   if (process.env.PERCH_CHROME_LOG) {
     const { createWriteStream } = await import("node:fs");
     child.stderr?.pipe(createWriteStream(`${process.env.PERCH_CHROME_LOG}.${child.pid}.log`));

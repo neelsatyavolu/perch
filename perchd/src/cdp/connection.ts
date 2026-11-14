@@ -59,7 +59,14 @@ export class CdpConnection {
       return;
     }
     if (typeof message.method === "string") {
-      for (const listener of this.listeners.get(message.method) ?? []) listener(message.params ?? {}, message.sessionId);
+      for (const listener of this.listeners.get(message.method) ?? []) {
+        // One listener's failure must not stop the others, or the rest of the messages read with it.
+        try {
+          listener(message.params ?? {}, message.sessionId);
+        } catch (error) {
+          process.stderr.write(`perchd: a ${message.method} listener failed: ${error instanceof Error ? error.message : String(error)}\n`);
+        }
+      }
     }
   }
 

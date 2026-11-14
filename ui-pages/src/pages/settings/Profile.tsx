@@ -7,13 +7,14 @@ import { useEffect, useState } from "preact/hooks";
 import type { ProfileInfo } from "../../api";
 import { useAction, useApi, useLoad } from "../../ui/frame";
 import { Group, Row } from "../../ui/Row";
+import { focusSibling, nextIndex } from "../../ui/roving";
 
 const PICTURE_PX = 128;
 const MAX_FILE = 20 * 1024 * 1024;
 
 /** The picture as Perch keeps it: the middle square of the image, 128 px, as base64 PNG. */
 export async function squarePng(file: Blob): Promise<string> {
-  if (!file.type.startsWith("image/")) throw new Error("Choose a picture: a PNG, JPEG, HEIC or similar image");
+  if (!file.type.startsWith("image/")) throw new Error("Choose a picture: a PNG, JPEG or similar image");
   if (file.size > MAX_FILE) throw new Error("That picture is over 20 MB. Choose a smaller one");
   const image = await createImageBitmap(file).catch(() => {
     throw new Error("That picture couldn't be opened. Try a PNG or JPEG");
@@ -57,7 +58,9 @@ export function ProfileSection() {
       await api.setProfile({ icon });
       return true;
     }, "Icon changed");
+    // Removing the picture may have worked even if setting the icon didn't, so ask again.
     if (ok) profile.set({ ...p, icon, picture: null });
+    else if (p.picture) profile.reload();
   };
   const upload = async (file: File | undefined) => {
     if (!file) return;
@@ -73,6 +76,8 @@ export function ProfileSection() {
     if (ok) profile.set({ ...p, picture: null });
   };
   const shown = p.picture ?? p.icons.find((i) => i.index === p.icon)?.url;
+  // One tab stop for the group: the chosen icon, or the first while a picture stands in for it.
+  const focusable = p.picture ? 0 : Math.max(0, p.icons.findIndex((i) => i.index === p.icon));
 
   return (
     <div class="sec">
@@ -86,7 +91,7 @@ export function ProfileSection() {
               maxLength={50}
               onInput={(e) => setName((e.target as HTMLInputElement).value)}
               onBlur={() => void saveName()}
-              onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+              onKeyDown={(e) => e.key === "Enter" && !e.isComposing && (e.target as HTMLInputElement).blur()}
             />
           </Row>
         </div>
@@ -116,15 +121,23 @@ export function ProfileSection() {
       </Group>
       <Group label="Icon">
         <div class="card profile-icons" role="radiogroup" aria-label="Profile icon">
-          {p.icons.map((i) => (
+          {p.icons.map((i, n) => (
             <button
               key={i.index}
               type="button"
               role="radio"
               aria-checked={!p.picture && i.index === p.icon}
-              aria-label={`Icon ${i.index}`}
+              aria-label={`Icon ${n + 1}`}
+              tabIndex={n === focusable ? 0 : -1}
               class={`profile-icon${!p.picture && i.index === p.icon ? " on" : ""}`}
               onClick={() => void pick(i.index)}
+              onKeyDown={(e) => {
+                const next = nextIndex(e.key, n, p.icons.length);
+                if (next === null) return;
+                e.preventDefault();
+                void pick(p.icons[next]!.index);
+                focusSibling(e.currentTarget, "[role=radio]", next);
+              }}
             >
               <img src={i.url} alt="" width={40} height={40} />
             </button>

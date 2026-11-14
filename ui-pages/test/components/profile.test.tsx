@@ -47,3 +47,14 @@ test("a file that isn't a picture is refused with a reason", async () => {
   await expect(squarePng(new Blob(["hi"], { type: "text/plain" }))).rejects.toThrow("Choose a picture");
   await expect(squarePng(new Blob([new Uint8Array(21 * 1024 * 1024)], { type: "image/png" }))).rejects.toThrow("over 20 MB");
 });
+
+test("the icons are one tab stop, and arrow keys choose the next icon", async () => {
+  const r = renderWithApi(<ProfileSection />);
+  await r.findByLabelText("Profile name");
+  const icons = r.getAllByRole("radio");
+  expect(icons.map((i) => i.tabIndex)).toEqual([0, -1, -1, -1]);
+  expect(icons[0]!.getAttribute("aria-label")).toBe("Icon 1");
+  fireEvent.keyDown(icons[0]!, { key: "ArrowRight" });
+  await waitFor(async () => expect((await r.api.getProfile()).icon).toBe(28));
+  await waitFor(() => expect(r.getAllByRole("radio").map((i) => i.tabIndex)).toEqual([-1, 0, -1, -1]));
+});

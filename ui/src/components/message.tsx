@@ -34,11 +34,19 @@ function StepRow({ step, current }: { step: StepItem; current?: boolean }) {
   );
 }
 
-export function StepList({ steps, live = false }: { steps: StepItem[]; live?: boolean }) {
+/** `notes[i]`: what the agent said just before step i, shown above it in the list. */
+export function StepList({ steps, notes = [], live = false }: { steps: StepItem[]; notes?: string[]; live?: boolean }) {
   return (
     <ul class={live ? "steplist now" : "steplist"}>
       {steps.map((s, i) => (
-        <StepRow key={i} step={s} current={live && i === steps.length - 1} />
+        <Fragment key={i}>
+          {notes[i] && (
+            <li class="note">
+              <Markdown text={notes[i]} />
+            </li>
+          )}
+          <StepRow step={s} current={live && i === steps.length - 1} />
+        </Fragment>
       ))}
     </ul>
   );
@@ -61,20 +69,70 @@ export function Steps({ steps: raw, open: initial = false }: { steps: StepLike[]
 }
 
 const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+const pageHidden = () => typeof document !== "undefined" && document.hidden;
+
+/** The slowest reveal, in characters a second, for the last few characters of a backlog. */
+const TYPE_MIN_CPS = 120;
+/** How fast a backlog drains: about 13% of it a frame at 60fps, so it never falls far behind. */
+const TYPE_TAU_MS = 120;
 
 /**
- * `text` revealed a few characters a frame, so an answer that arrives in one piece reads as typed.
- * Speeds up when far behind, so a long answer never takes more than about a second to catch up.
+ * How many more characters to reveal after `ms` with `behind` still hidden: a share of the backlog,
+ * by elapsed time rather than frames, so slow frames or a page coming back catch up at once.
+ */
+export function typeStep(behind: number, ms: number): number {
+  if (behind <= 0) return 0;
+  const dt = Math.max(0, ms);
+  const share = Math.ceil(behind * (1 - Math.exp(-dt / TYPE_TAU_MS)));
+  return Math.min(behind, Math.max(1, share, Math.ceil((TYPE_MIN_CPS * dt) / 1000)));
+}
+
+/**
+ * `text` revealed a little each frame, so an answer that arrives in one piece reads as typed. Only
+ * ever moves forward; shows everything at once with reduced motion or while the page is hidden.
  */
 export function useTyped(text: string, from: number | null): string {
   const [n, setN] = useState(from === null || reducedMotion() ? text.length : from);
+  const lastFrame = useRef(0);
   const shown = Math.min(n, text.length);
   useEffect(() => {
-    if (shown >= text.length) return;
-    const id = requestAnimationFrame(() => setN((k) => Math.min(text.length, k + Math.max(2, Math.ceil((text.length - k) / 45)))));
-    return () => cancelAnimationFrame(id);
+    if (shown >= text.length) {
+      lastFrame.current = 0;
+      return;
+    }
+    const all = () => setN((k) => Math.max(k, text.length));
+    if (pageHidden()) return all();
+    const id = requestAnimationFrame((now) => {
+      const ms = lastFrame.current ? now - lastFrame.current : 16;
+      lastFrame.current = now;
+      setN((k) => Math.max(k, Math.min(text.length, k + typeStep(text.length - k, ms))));
+    });
+    const onHide = () => pageHidden() && all();
+    document.addEventListener("visibilitychange", onHide);
+    return () => {
+      cancelAnimationFrame(id);
+      document.removeEventListener("visibilitychange", onHide);
+    };
   }, [text, shown]);
   return text.slice(0, shown);
+}
+
+/** A first reply's `Title:` line names the chat; it isn't part of the answer, even half-streamed. */
+const TITLE_LINE = /^\s*\**\s*title\s*:[^\n]*(\n+|$)/i;
+
+/**
+ * A live run's text in order with its steps: `notes[i]` is what the agent said just before step i,
+ * and `tail` what it has said since the last step (more narration, or the answer coming in).
+ */
+export function liveOrder(text: string, count: number, marks: readonly number[] = []): { notes: string[]; tail: string } {
+  let at = text.match(TITLE_LINE)?.[0].length ?? 0;
+  const notes = Array.from({ length: count }, (_, i) => {
+    const end = Math.min(text.length, Math.max(at, marks[i] ?? 0));
+    const note = text.slice(at, end).trim();
+    at = end;
+    return note;
+  });
+  return { notes, tail: text.slice(at).replace(/^\s+/, "") };
 }
 
 /** The time in the user's own clock style, such as "2:09 AM" or "02:09". */
@@ -191,12 +249,19 @@ function elapsed(ms: number): string {
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
 }
 
+/** The text since the last step, typing out; a new one starts with each step. */
+function LiveText({ text }: { text: string }) {
+  const typed = useTyped(text, 0);
+  return typed ? <Markdown text={typed} /> : null;
+}
+
 /**
- * The run in progress: how long it has worked, what the agent has said so far, and its steps as a
- * list with the current one marked. Older steps fold away once the list gets long. While an approval
- * waits, every step folds into one line so the card is what the eye lands on.
+ * The run in progress: how long it has worked, its steps as a list with the current one marked and
+ * what the agent said before each step above it, then what it has said since the last step. Older
+ * steps fold away once the list gets long. While an approval waits, every step folds into one line
+ * so the card is what the eye lands on.
  */
-export function LiveRun({ text, steps: raw, waiting, since }: { text: string; steps: StepLike[]; waiting: boolean; since?: string }) {
+export function LiveRun({ text, steps: raw, marks, waiting, since }: { text: string; steps: StepLike[]; marks?: readonly number[]; waiting: boolean; since?: string }) {
   const start = useRef(since ? Date.parse(since) || Date.now() : Date.now());
   const [now, setNow] = useState(Date.now());
   const [all, setAll] = useState(false);
@@ -204,9 +269,8 @@ export function LiveRun({ text, steps: raw, waiting, since }: { text: string; st
     const tick = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(tick);
   }, []);
-  // The first reply's `Title:` line names the chat; it isn't part of the answer.
-  const typed = useTyped(text.replace(/^\s*\**\s*title\s*:[^\n]*\n+/i, ""), 0);
   const steps = raw.map(asStep);
+  const { notes, tail } = liveOrder(text, steps.length, marks);
   const hidden = all ? 0 : Math.max(0, steps.length - LIVE_STEPS);
   return (
     <div class="reply live">
@@ -217,7 +281,6 @@ export function LiveRun({ text, steps: raw, waiting, since }: { text: string; st
           <span>Working for {elapsed(now - start.current)}</span>
         </div>
       )}
-      {typed && <Markdown text={typed} />}
       {waiting ? (
         <Steps steps={steps} />
       ) : (
@@ -229,10 +292,11 @@ export function LiveRun({ text, steps: raw, waiting, since }: { text: string; st
                 <span>{`Show ${hidden} earlier ${hidden === 1 ? "step" : "steps"}`}</span>
               </button>
             )}
-            <StepList steps={steps.slice(hidden)} live />
+            <StepList steps={steps.slice(hidden)} notes={notes.slice(hidden)} live />
           </div>
         )
       )}
+      <LiveText key={steps.length} text={tail} />
     </div>
   );
 }

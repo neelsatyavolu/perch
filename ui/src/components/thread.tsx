@@ -8,7 +8,7 @@ import { ApprovalCard } from "./approval";
 import { PerchMark } from "./icon";
 import type { Client } from "../api/client";
 import { FileCard } from "./files";
-import { LiveRun, Message, dayLabel, newDay } from "./message";
+import { LiveRun, Message, dayLabel, liveOrder, newDay } from "./message";
 
 /**
  * How much of the final answer the live run already showed. The live text can start with what the
@@ -63,9 +63,10 @@ export function Thread({ client, view, onDecide, onOpenArtifact, onBranch, selec
   const run = view.run;
   const last = messages.at(-1);
 
-  // While a run works, remember what it has said; when it ends, its reply types on from there.
+  // While a run works, remember what it has said since its last step (where the answer streams in);
+  // when it ends, its reply types on from there.
   if (run) {
-    liveText.current = run.text.replace(/^\s*\**\s*title\s*:[^\n]*\n+/i, "").trim();
+    liveText.current = liveOrder(run.text, run.steps.length, run.marks).tail.trim();
     ranFor.current = chatId;
   } else if (ranFor.current !== null) {
     if (ranFor.current === chatId && last?.role === "assistant") fresh.current = { id: last.id, from: shownAlready(liveText.current, last.text) };
@@ -178,7 +179,7 @@ export function Thread({ client, view, onDecide, onOpenArtifact, onBranch, selec
           <Message message={m} artifact={artifact} onBranch={onBranch} typeFrom={fresh.current?.id === m.id ? fresh.current.from : undefined} />
         </Fragment>
       ))}
-      {run && <LiveRun key={run.runId} text={run.text} steps={run.steps} waiting={Boolean(run.approval)} since={run.startedAt} />}
+      {run && <LiveRun key={run.runId} text={run.text} steps={run.steps} marks={run.marks} waiting={Boolean(run.approval)} since={run.startedAt} />}
       {run?.approval && <ApprovalCard key={run.approval.id} card={run.approval} onDecide={(ok, login) => onDecide(run.approval!.id, ok, login)} />}
       {error && (
         <div class="note error" role="alert">

@@ -96,3 +96,16 @@ test("the queue of waiting messages follows run.queue events and outlives each r
   view = applyToView(view, { type: "run.queue", chatId: "c1", queued: [] });
   expect(view.queued).toEqual([]);
 });
+
+test("each step remembers how much the agent had said when it came, so the text shows in order with the steps", () => {
+  let v: ChatView = { ...emptyView, chat };
+  v = applyToView(v, { type: "run.started", chatId: "c1", runId: "r1", message: user });
+  v = applyToView(v, { type: "run.text", chatId: "c1", runId: "r1", delta: "Opening it." });
+  v = applyToView(v, { type: "run.step", chatId: "c1", runId: "r1", label: "Opened x" });
+  v = applyToView(v, { type: "run.text", chatId: "c1", runId: "r1", delta: "Reading." });
+  v = applyToView(v, { type: "run.step", chatId: "c1", runId: "r1", label: "Read x" });
+  expect(v.run!.marks).toEqual([11, 19]);
+  // A run shown from a snapshot has no marks: its earlier steps count as 0.
+  const snap: ChatView = { ...v, run: { runId: "r1", chatId: "c1", text: "Said.", steps: [{ label: "a" }], approval: null } };
+  expect(applyToView(snap, { type: "run.step", chatId: "c1", runId: "r1", label: "b" }).run!.marks).toEqual([0, 5]);
+});

@@ -2,8 +2,14 @@
 
 import type { AppEvent, ArtifactMeta, Chat, ChatSummary, QueuedMessage, RunSnapshot } from "../api/types";
 
+/**
+ * A run on screen. `marks[i]`: how long `text` was when step i came, so what the agent said between
+ * steps shows in order with them. A step with no mark (a snapshot from perchd has none) counts as 0.
+ */
+export type RunView = RunSnapshot & { marks?: readonly number[] };
+
 /** `queued`: messages sent while the task ran, waiting to go out as the next turns. */
-export type ChatView = { chat: Chat | null; run: RunSnapshot | null; artifacts: ArtifactMeta[]; queued: readonly QueuedMessage[] };
+export type ChatView = { chat: Chat | null; run: RunView | null; artifacts: ArtifactMeta[]; queued: readonly QueuedMessage[] };
 export const emptyView: ChatView = Object.freeze({ chat: null, run: null, artifacts: [], queued: [] });
 
 export function applyToView(view: ChatView, event: AppEvent): ChatView {
@@ -20,7 +26,15 @@ export function applyToView(view: ChatView, event: AppEvent): ChatView {
     case "run.text":
       return view.run ? { ...view, run: { ...view.run, text: view.run.text + event.delta } } : view;
     case "run.step":
-      return view.run ? { ...view, run: { ...view.run, steps: [...view.run.steps, { label: event.label, ...(event.detail ? { detail: event.detail } : {}) }] } } : view;
+      if (!view.run) return view;
+      return {
+        ...view,
+        run: {
+          ...view.run,
+          steps: [...view.run.steps, { label: event.label, ...(event.detail ? { detail: event.detail } : {}) }],
+          marks: [...view.run.steps.map((_, i) => view.run!.marks?.[i] ?? 0), view.run.text.length],
+        },
+      };
     case "run.step.output": {
       const steps = view.run?.steps ?? [];
       const last = steps.at(-1);

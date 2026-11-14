@@ -453,3 +453,31 @@ test("the past chats menu lists pinned chats first with a pin, newest first, and
   expect(marks[1]!.querySelector('.opt-dot[aria-label="New reply"]')).not.toBeNull();
   expect(marks[2]!.innerHTML).toBe("");
 });
+
+test("a live run shows what the agent said in order with its steps, and what came after the last step below them", () => {
+  const text = "I'll open the shop.Now the reviews.Found it";
+  const el = mount(<LiveRun text={text} steps={["Open shop", "Read reviews"]} marks={[19, 35]} waiting={false} />);
+  expect([...el.querySelectorAll(".steplist.now > li")].map((li) => li.textContent)).toEqual(["I'll open the shop.", "Open shop", "Now the reviews.", "Read reviews"]);
+  expect(el.querySelector(".steplist.now li.current")?.textContent).toBe("Read reviews");
+  const after = el.querySelector(".steps-wrap")!.nextElementSibling;
+  expect(after?.textContent).toBe("Found it");
+});
+
+test("a finished reply types on from what was already shown, never from the start, and shows at once while the page is hidden", () => {
+  const motion = window.matchMedia;
+  const noReduce = (q: string) => ({ ...motion(q), matches: false, media: q }) as MediaQueryList;
+  window.matchMedia = globalThis.matchMedia = noReduce;
+  const answer: ChatMessage = { id: "a9", role: "assistant", text: "The best pen is the Kaweco Sport, at twenty-five dollars.", time: "2026-11-05T09:00:02Z" };
+  try {
+    const typing = mount(<Message message={answer} artifact={() => null} typeFrom={20} />);
+    expect(typing.querySelector(".md")?.textContent).toBe(answer.text.slice(0, 20));
+    render(null, root);
+    root.remove();
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
+    const hidden = mount(<Message message={answer} artifact={() => null} typeFrom={0} />);
+    expect(hidden.querySelector(".md")?.textContent).toBe(answer.text);
+  } finally {
+    delete (document as { hidden?: boolean }).hidden;
+    window.matchMedia = globalThis.matchMedia = motion;
+  }
+});

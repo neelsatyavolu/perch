@@ -139,6 +139,9 @@ svg.pmark { flex: none; }
 .steplist.now li.current { color: var(--ink); }
 /* A long step (a search query, a URL) ends in an ellipsis on one line; its full text is in the title. */
 .steplist > li { min-width: 0; }
+/* What the agent said before a step: it reads as the agent's voice, at the list's size, wrapping. */
+.steplist > li.note { color: var(--ink); }
+.steplist > li.note .md { gap: 6px; }
 .step-l { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-width: 0; }
 .step-l span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .step-l.more { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-align: left; }

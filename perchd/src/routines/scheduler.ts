@@ -22,6 +22,8 @@ export class Scheduler {
   private readonly active = new Set<string>();
   private ticking = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
+  /** Bumped by stop, so a loop whose tick was still going when it stopped never schedules again. */
+  private generation = 0;
   private readonly now: () => Date;
   private readonly grace: number;
 
@@ -118,17 +120,19 @@ export class Scheduler {
   /** Ticks now and then at least once a minute, so runs missed during sleep are caught on wake. */
   start(): void {
     if (this.timer) return;
+    const generation = this.generation;
     const loop = async () => {
       // Not waiting for the runs: a long run must not stop routines that come due meanwhile from being checked.
       const started = await this.enqueueDue().catch(() => []);
       for (const run of started) run.catch(() => undefined);
-      if (!this.timer) return;
+      if (generation !== this.generation) return;
       this.timer = setTimeout(loop, this.delay());
     };
     this.timer = setTimeout(loop, 0);
   }
 
   stop(): void {
+    this.generation++;
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
   }

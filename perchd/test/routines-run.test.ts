@@ -209,6 +209,35 @@ test("start and stop leave no timer behind", async () => {
   expect(s.started()).toBe(false);
 });
 
+test("stop then start during a tick leaves one loop, which stop ends", async () => {
+  const r = routine({ nextRunAt: "2026-11-05T07:00:00.000Z" });
+  let updates = 0;
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  const store = {
+    list: () => [r],
+    get: () => r,
+    addRun: async () => undefined,
+    update: async () => {
+      if (++updates === 1) await gate;
+      return r;
+    },
+  } as unknown as RoutineStore;
+  const s = new Scheduler({ store, now: () => new Date("2026-11-05T08:00:00Z"), run: async () => Promise.reject(new Error("not used")) });
+  const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+  s.start();
+  await wait(20);
+  s.stop();
+  s.start();
+  await wait(20);
+  release();
+  await wait(20);
+  s.stop();
+  const before = updates;
+  await wait(1200);
+  expect(updates).toBe(before);
+});
+
 test("concurrent saves of one routine all land, and the last one wins", async () => {
   const { store, dir, keys } = await openStore();
   await Promise.all(Array.from({ length: 20 }, (_, i) => store.save(routine({ name: `Name ${i}` }))));

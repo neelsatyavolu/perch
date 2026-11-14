@@ -1,0 +1,4 @@
+{"label":"chromium-perch-ext","startMs":305,"pageLoadMs":41,"idleMb":214,"idleProcesses":8,"with10TabsMb":984}
+{"label":"chromium-caveatly","startMs":317,"pageLoadMs":41,"idleMb":301,"idleProcesses":8,"with10TabsMb":1142}
+{"label":"chromium-caveatly-optin","startMs":313,"pageLoadMs":40,"idleMb":301,"idleProcesses":8,"with10TabsMb":1082}
+{"label":"chromium-both-optin","startMs":380,"pageLoadMs":42,"idleMb":309,"idleProcesses":8,"with10TabsMb":1172}

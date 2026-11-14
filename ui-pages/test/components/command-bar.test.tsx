@@ -62,6 +62,34 @@ describe("Command bar", () => {
     await waitFor(() => expect(nav).toEqual([{ what: "command-bar", detail: { kind: "tab", tabId: 105 } }]));
   });
 
+  test("Tab and Shift+Tab move through the results as Down and Up do, and keep focus in the field", async () => {
+    const { box } = await open();
+    fireEvent.keyDown(box, { key: "Tab" });
+    expect(selected()).not.toBe("Inbox (12) - Example Mail");
+    fireEvent.keyDown(box, { key: "Tab", shiftKey: true });
+    expect(selected()).toBe("Inbox (12) - Example Mail");
+    fireEvent.keyDown(box, { key: "Tab", shiftKey: true });
+    expect(selected()).toBe("Close duplicate tabs");
+  });
+
+  test("Enter that picks an input method's candidate runs nothing", async () => {
+    const { box, nav } = await open();
+    fireEvent.keyDown(box, { key: "Enter", isComposing: true });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(nav).toEqual([]);
+  });
+
+  test("says nothing until the browser first answers, then No matches if there are none", async () => {
+    const { api, calls } = controlledApi();
+    const r = renderWithApi(<CommandBar />, { api });
+    const box = await r.findByRole("combobox", { name: PLACEHOLDER });
+    fireEvent.input(box, { target: { value: "zzqx" } });
+    expect(r.queryByText("No matches")).toBeNull();
+    await waitFor(() => expect(calls.length).toBe(2));
+    calls[1]!.answer([]);
+    expect(await r.findByText("No matches")).toBeTruthy();
+  });
+
   test("Enter runs a command by its id, and a history result by its URL", async () => {
     const { box, nav, findByRole } = await open();
     fireEvent.input(box, { target: { value: "markdown" } });

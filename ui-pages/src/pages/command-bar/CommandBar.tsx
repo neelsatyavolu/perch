@@ -30,6 +30,8 @@ export function CommandBar() {
   const [text, setText] = useState("");
   const [results, setResults] = useState<readonly CommandBarResult[]>([]);
   const [sel, setSel] = useState(0);
+  /** The browser has answered once: until then an empty list means "not yet", not "No matches". */
+  const [answered, setAnswered] = useState(false);
 
   const query = (value: string) => {
     const n = ++latest.current;
@@ -37,6 +39,7 @@ export function CommandBar() {
       (r) => {
         if (n !== latest.current) return;
         pending.current = null;
+        setAnswered(true);
         setResults(r);
         setSel(0);
         if (runOnArrive.current) {
@@ -48,6 +51,7 @@ export function CommandBar() {
         if (n !== latest.current) return;
         pending.current = null;
         runOnArrive.current = false;
+        setAnswered(true);
         setResults([]);
         announce(errorText(e), "error");
       },
@@ -91,9 +95,13 @@ export function CommandBar() {
 
   const onKeyDown = (e: KeyboardEvent) => {
     const count = entries.length;
-    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    // Keys that pick a candidate in an input method (Japanese, Chinese) are the input method's.
+    if (e.isComposing) return;
+    // Tab moves through the results as in the address bar; there is nothing else here to focus.
+    const down = e.key === "ArrowDown" || (e.key === "Tab" && !e.shiftKey);
+    if (down || e.key === "ArrowUp" || e.key === "Tab") {
       e.preventDefault();
-      if (count) setSel((s) => (s + (e.key === "ArrowDown" ? 1 : count - 1)) % count);
+      if (count) setSel((s) => (s + (down ? 1 : count - 1)) % count);
     } else if (e.key === "Enter") {
       e.preventDefault();
       // The shown results are for older text: wait for this text's, asking now if not yet asked.
@@ -172,7 +180,7 @@ export function CommandBar() {
           })}
         </div>
       ) : (
-        <p id="cb-list" class="cb-none">No matches</p>
+        <p id="cb-list" class="cb-none">{answered ? "No matches" : ""}</p>
       )}
     </main>
   );

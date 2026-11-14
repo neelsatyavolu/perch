@@ -91,6 +91,19 @@ test("a settings file whose key is gone is set aside", async () => {
   expect(existsSync(join(dir, SETTINGS_FILE))).toBe(false);
 });
 
+test("a Keychain that fails to answer (locked, say) leaves the settings file alone", async () => {
+  const dir = tempDir();
+  const keychain = memoryKeychain();
+  const store = await SettingsStore.open({ dir, keychain });
+  await store.update((s) => ({ ...s, lastUsed: { provider: "grok", model: "grok-4.7" } }));
+  const locked = { ...keychain, get: async () => Promise.reject(new Error("Perch could not read from the Keychain. Unlock it and try again.")) };
+  await expect(SettingsStore.open({ dir, keychain: locked })).rejects.toThrow("Unlock it");
+  expect(readdirSync(dir).some((f) => f.includes(".unreadable-"))).toBe(false);
+  const again = await SettingsStore.open({ dir, keychain });
+  expect(again.recovered).toBe(false);
+  expect(again.get().lastUsed).toEqual({ provider: "grok", model: "grok-4.7" });
+});
+
 test("update rejects a result that fails validation and keeps the old settings", async () => {
   const store = await SettingsStore.open({ dir: tempDir(), keychain: memoryKeychain() });
   await expect(store.update((s) => ({ ...s, roles: { deep: { provider: "nope", model: "x" } } }) as never)).rejects.toThrow("provider");

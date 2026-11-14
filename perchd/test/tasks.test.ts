@@ -93,6 +93,12 @@ test("a task cannot run in a freer mode than its client", async () => {
   await expect(tasks.start({ client: "cli", clientMode: "guard", task: "x", effort: "huge" })).rejects.toThrow(/Effort/);
 });
 
+test("a task that cannot start leaves no empty chat behind", async () => {
+  const { tasks } = setup(echo().runner);
+  await expect(tasks.start({ client: "cli", clientMode: "guard", task: "   " })).rejects.toThrow(/empty/);
+  expect(tasks.list("cli")).toEqual([]);
+});
+
 test("resume continues the same chat with its history; it refuses while running", async () => {
   let release!: () => void;
   const { runner, seen } = echo(new Promise((r) => (release = r)));

@@ -324,7 +324,8 @@ export async function runTool(ctx: ToolContext, call: ToolCall): Promise<ToolRes
     return await dispatch(ctx, call);
   } catch (error) {
     if (error instanceof PageTimeoutError && tab && tab === ctx.tab) {
-      const recovered = await replaceIfFrozen(ctx, tab, call.name === "navigate" ? normalizeUrl(String(call.args.url)) : undefined);
+      // A browser that can't open the fresh tab either leaves the timeout as the answer.
+      const recovered = await replaceIfFrozen(ctx, tab, call.name === "navigate" ? normalizeUrl(String(call.args.url)) : undefined).catch(() => null);
       if (recovered) return recovered;
     }
     return { content: error instanceof Error ? error.message : String(error), isError: true };

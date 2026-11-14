@@ -52,7 +52,13 @@ export class Tasks {
       scope: "agent",
     };
     const chat = await this.app.chats.create({ settings, origin: input.client });
-    await this.app.runs.send(chat.id, input.task);
+    try {
+      await this.app.runs.send(chat.id, input.task);
+    } catch (error) {
+      // A task that could not start (an empty or too long message) leaves no empty chat behind.
+      await this.app.chats.remove(chat.id);
+      throw error;
+    }
     return this.view(this.app.chats.get(chat.id)!);
   }
 

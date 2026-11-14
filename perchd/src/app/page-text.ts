@@ -26,11 +26,16 @@ export async function readPageText(conn: CdpConnection, targetId: string): Promi
     const { result } = await conn.send<{ result: { value?: string } }>("Runtime.evaluate", { expression: READ, returnByValue: true }, sessionId);
     return result.value ? (JSON.parse(result.value) as PageText) : null;
   })();
-  const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), TIMEOUT_MS));
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<null>((resolve) => (timer = setTimeout(() => resolve(null), TIMEOUT_MS)));
+  const detach = () => sessionId && conn.send("Target.detachFromTarget", { sessionId }).catch(() => undefined);
   try {
     return await Promise.race([work, timeout]).catch(() => null);
   } finally {
-    void work.finally(() => sessionId && conn.send("Target.detachFromTarget", { sessionId }).catch(() => undefined)).catch(() => undefined);
+    clearTimeout(timer);
+    // A page that never answers would otherwise keep this session attached for good.
+    if (sessionId) void detach();
+    else void work.finally(detach).catch(() => undefined);
   }
 }
 

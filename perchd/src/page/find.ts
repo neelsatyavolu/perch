@@ -41,6 +41,7 @@ export async function find(tab: Tab, opts: { role?: string; name?: string; conta
 /** One line per element, in the snapshot's own form, so refs read the same way. */
 export function foundText(found: readonly Found[], opts: { role?: string; name?: string }): string {
   if (!found.length) return `nothing on the page is ${opts.role ? `a ${opts.role} ` : ""}named "${opts.name ?? ""}"; take a snapshot to see what is there`;
-  const lines = found.map((f) => `- ${f.role} "${f.name.replace(/"/g, '\\"')}" [ref=${f.ref}]`);
+  // Escaped as the snapshot escapes names, so a name with a backslash or quote reads back whole.
+  const lines = found.map((f) => `- ${f.role} "${f.name.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}" [ref=${f.ref}]`);
   return `${found.length === MAX_FOUND ? `the first ${MAX_FOUND} matches` : `${found.length} found`}:\n${lines.join("\n")}`;
 }

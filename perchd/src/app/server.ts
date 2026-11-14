@@ -86,6 +86,8 @@ export function startServer(opts: Options): Server {
       return json(result, 200, headers);
     } catch (error) {
       const status = error instanceof AppError ? error.status : 500;
+      // The page gets a plain message; the log keeps what went wrong, or a 500 can't be traced.
+      if (status === 500) console.error(`app api: ${req.method} ${url.pathname} failed: ${error instanceof Error ? error.message : String(error)}`);
       const message = error instanceof AppError ? error.message : "Something went wrong in Perch. Try again; if it keeps happening, restart Perch";
       return json({ error: message }, status, headers);
     }

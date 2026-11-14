@@ -49,6 +49,14 @@ test("describeTarget notes when the element opens a menu", () => {
   expect(describeTarget(ctx, call("click", { ref: "e11" }))).toEqual({ role: "link", name: "Deals" });
 });
 
+test("found elements are escaped as the snapshot escapes them, so names with backslashes read back whole", async () => {
+  const { foundText } = await import("../src/page/find");
+  const tab = {};
+  const text = foundText([{ ref: "e4", role: "link", name: 'C:\\ drive "home"\\' }], { name: "drive" });
+  const ctx = { tab, lastSnapshot: new Map([[tab, text]]) } as never;
+  expect(describeTarget(ctx, call("click", { ref: "e4" }))).toEqual({ role: "link", name: 'C:\\ drive "home"\\' });
+});
+
 test("navigate adds https when needed and returns a snapshot; click returns the page after", async () => {
   const ctx = await newToolContext(env.browser);
   const opened = await runTool(ctx, call("navigate", { url: env.site.url("/mail.html") }));

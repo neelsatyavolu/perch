@@ -16,6 +16,7 @@
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_service.h"
+#include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/mojom/menu_source_type.mojom.h"
@@ -82,6 +83,8 @@ class SpacesButton : public views::Button,
     SetProperty(views::kCrossAxisAlignmentKey,
                 views::LayoutAlignment::kCenter);
     SetProperty(views::kMarginsKey, gfx::Insets::TLBR(0, 4, 0, 8));
+    // VoiceOver says it opens a menu.
+    GetViewAccessibility().SetHasPopup(ax::mojom::HasPopup::kMenu);
     if (ProfileManager* manager = g_browser_process->profile_manager()) {
       observation_.Observe(&manager->GetProfileAttributesStorage());
     }

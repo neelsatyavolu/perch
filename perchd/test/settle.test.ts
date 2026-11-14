@@ -90,3 +90,14 @@ test("one script fills a dozen rows of a long table and their comment dialogs, u
   console.log(`12 rows in ${took} ms`);
   await ctx.close();
 }, 120_000);
+
+test("a click whose page navigates a moment later returns the new page, not the old one", async () => {
+  const ctx = await newToolContext(env.browser);
+  const opened = await runTool(ctx, call("navigate", { url: env.site.url("/late-nav.html") }));
+  const ref = opened.content.match(/button "Show results" \[ref=(e\d+)\]/)![1];
+  const clicked = await runTool(ctx, call("click", { ref }));
+  expect(clicked.content).toContain("Page: Results (");
+  expect(clicked.content).toContain("Result one");
+  expect(clicked.content).not.toContain("The page looks the same");
+  await ctx.close();
+});

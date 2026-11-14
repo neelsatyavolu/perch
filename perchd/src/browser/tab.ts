@@ -7,6 +7,8 @@ const LIFECYCLE: Record<WaitUntil, string> = { load: "load", networkidle: "netwo
 const NAV_TIMEOUT_MS = 30_000;
 const COMMAND_TIMEOUT_MS = 30_000;
 const SETTLE_LIMIT_MS = 10_000;
+/** Lifecycle events kept per tab: a navigation sends about ten per frame. */
+const MAX_LIFECYCLE = 500;
 /** After load, how long the page must go without new content before it counts as drawn. */
 const QUIET_MS = 200;
 /** The most an action waits for a loaded page's own data requests and redrawing. */
@@ -61,7 +63,10 @@ export class Tab {
   private constructor(readonly conn: CdpConnection, readonly id: string, readonly session: string) {
     const listen = (event: string, listener: Parameters<CdpConnection["on"]>[1]) => this.unsubscribe.push(conn.on(event, listener));
     listen("Page.lifecycleEvent", (p: { loaderId: string; name: string; frameId: string }, sid) => {
-      if (sid === session) this.lifecycle.push({ loaderId: p.loaderId, name: p.name });
+      if (sid !== session) return;
+      this.lifecycle.push({ loaderId: p.loaderId, name: p.name });
+      // Only recent loads are waited for; a long-lived tab would otherwise keep every event.
+      if (this.lifecycle.length > MAX_LIFECYCLE) this.lifecycle.splice(0, this.lifecycle.length - MAX_LIFECYCLE);
     });
     // Dialogs block the page until answered, so answer at once and tell the model what happened.
     listen("Page.javascriptDialogOpening", (p: { type: string; message: string }, sid) => {
@@ -104,6 +109,8 @@ export class Tab {
       if (this.isClosed) return;
       this.isClosed = true;
       for (const reject of this.closedReject) reject(new TabClosedError());
+      // A closed tab hears nothing more; its listeners would otherwise keep it, and run, for good.
+      for (const off of this.unsubscribe.splice(0)) off();
     };
     listen("Target.detachedFromTarget", (p: { sessionId: string }) => p.sessionId === session && markClosed());
     listen("Target.targetDestroyed", (p: { targetId: string }) => p.targetId === id && markClosed());
@@ -112,17 +119,24 @@ export class Tab {
   static async attach(conn: CdpConnection, targetId: string): Promise<Tab> {
     const { sessionId } = await conn.send<{ sessionId: string }>("Target.attachToTarget", { targetId, flatten: true });
     const tab = new Tab(conn, targetId, sessionId);
-    await Promise.all([
-      tab.send("Page.enable"),
-      tab.send("Runtime.enable"),
-      tab.send("Page.setLifecycleEventsEnabled", { enabled: true }),
-      // Request events only, for settle: no response bodies are kept.
-      tab.send("Network.enable", { maxTotalBufferSize: 0, maxResourceBufferSize: 0 }).catch(() => undefined),
-    ]);
-    const { frameTree } = await tab.send<{ frameTree: { frame: { id: string } } }>("Page.getFrameTree");
-    tab.mainFrameId = frameTree.frame.id;
-    // Cross-site iframes get their own sessions, so their content can be read and acted on.
-    await tab.send("Target.setAutoAttach", { autoAttach: true, waitForDebuggerOnStart: false, flatten: true });
+    try {
+      await Promise.all([
+        tab.send("Page.enable"),
+        tab.send("Runtime.enable"),
+        tab.send("Page.setLifecycleEventsEnabled", { enabled: true }),
+        // Request events only, for settle: no response bodies are kept.
+        tab.send("Network.enable", { maxTotalBufferSize: 0, maxResourceBufferSize: 0 }).catch(() => undefined),
+      ]);
+      const { frameTree } = await tab.send<{ frameTree: { frame: { id: string } } }>("Page.getFrameTree");
+      tab.mainFrameId = frameTree.frame.id;
+      // Cross-site iframes get their own sessions, so their content can be read and acted on.
+      await tab.send("Target.setAutoAttach", { autoAttach: true, waitForDebuggerOnStart: false, flatten: true });
+    } catch (error) {
+      // A tab that could not be set up is let go, so its listeners do not stay behind. detach drops
+      // them at once; its CDP call isn't awaited, since a page too stuck to set up may never answer.
+      void tab.detach();
+      throw error;
+    }
     return tab;
   }
 
@@ -179,13 +193,19 @@ export class Tab {
     // Long enough for a click's navigation to be requested; the quiet wait below covers the rest.
     await Bun.sleep(50);
     const started = Date.now();
-    while ((this.navigationPending || this.loading) && Date.now() - started < SETTLE_LIMIT_MS && !this.isClosed) await Bun.sleep(50);
-    while (Date.now() - started < SETTLE_LIMIT_MS) {
-      const state = await this.evaluate<string>("document.readyState").catch(() => "loading");
-      if (state === "complete" || this.isClosed) break;
-      await Bun.sleep(100);
+    const within = () => Date.now() - started < SETTLE_LIMIT_MS && !this.isClosed;
+    for (;;) {
+      while ((this.navigationPending || this.loading) && within()) await Bun.sleep(50);
+      while (within()) {
+        const state = await this.evaluate<string>("document.readyState").catch(() => "loading");
+        if (state === "complete" || this.isClosed) break;
+        await Bun.sleep(100);
+      }
+      await this.drawn();
+      // A page that set off a navigation while it was being watched (a click handler that waits
+      // before it moves on) is waited for too, or the agent sees it half loaded.
+      if (!(this.navigationPending || this.loading) || !within()) break;
     }
-    await this.drawn();
   }
 
   /** Waits, up to 3 s, until no data request is open and the page has stopped changing. */

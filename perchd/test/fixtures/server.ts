@@ -15,6 +15,18 @@ export function startFixtures(): { url: (path: string) => string; stop: () => vo
       if (pathname === "/never-loads") return new Response('<title>Listings</title><h1>Listings</h1><p>Apartment on Elm Street</p><img src="/hang">', { headers: { "content-type": "text/html" } });
       if (pathname === "/api/group/1") return Bun.sleep(900).then(() => Response.json({ name: "Eastern Part of Cities", doc: "Not uploaded" }));
       if (pathname === "/hang") return new Promise<Response>(() => undefined);
+      // Its heading arrives at once and its results a second later, in the same response.
+      if (pathname === "/streaming") {
+        const body = new ReadableStream({
+          async start(controller) {
+            controller.enqueue(new TextEncoder().encode(`<title>Results</title><h1>Results</h1>${" ".repeat(4096)}`));
+            await Bun.sleep(1000);
+            controller.enqueue(new TextEncoder().encode("<p>Result one</p>"));
+            controller.close();
+          },
+        });
+        return new Response(body, { headers: { "content-type": "text/html" } });
+      }
       if (pathname === "/slow") return new Promise((resolve) => setTimeout(() => resolve(new Response("<title>Slow</title>", { headers: { "content-type": "text/html" } })), 2000));
       const file = Bun.file(join(PAGES, pathname.replace(/^\/+/, "") || "mail.html"));
       if (!(await file.exists()) || pathname.includes("..")) return new Response("not found", { status: 404 });

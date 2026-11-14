@@ -69,3 +69,32 @@ test("a browser page that opens with no opener during an action is found, a web 
   expect(await env.browser.internalOpenedSince(Date.now() + 1000)).toBeNull();
   for (const id of [web, internal]) await env.browser.conn.send("Target.closeTarget", { targetId: id });
 });
+
+test("a closed tab stops listening, so tabs opened and closed over a day are not all kept", async () => {
+  const listeners = () => [...((env.browser.conn as unknown as { listeners: Map<string, Set<unknown>> }).listeners.values())].reduce((n, set) => n + set.size, 0);
+  const before = listeners();
+  const tab = await env.browser.newTab(env.site.url("/mail.html"));
+  expect(listeners()).toBeGreaterThan(before);
+  await tab.close();
+  for (let i = 0; i < 100 && !tab.closed; i++) await Bun.sleep(20);
+  expect(tab.closed).toBe(true);
+  expect(listeners()).toBe(before);
+});
+
+test("a tab that fails to set up leaves no listeners behind", async () => {
+  const { Tab } = await import("../src/browser/tab");
+  const conn = env.browser.conn;
+  const listeners = () => [...((conn as unknown as { listeners: Map<string, Set<unknown>> }).listeners.values())].reduce((n, set) => n + set.size, 0);
+  const { targetId } = await conn.send<{ targetId: string }>("Target.createTarget", { url: "about:blank" });
+  const before = listeners();
+  const send = conn.send.bind(conn);
+  conn.send = ((method: string, params?: object, sessionId?: string) =>
+    method === "Page.getFrameTree" ? Promise.reject(new Error("Page.getFrameTree: no")) : send(method, params, sessionId)) as typeof conn.send;
+  try {
+    await expect(Tab.attach(conn, targetId)).rejects.toThrow(/no/);
+  } finally {
+    conn.send = send;
+  }
+  expect(listeners()).toBe(before);
+  await conn.send("Target.closeTarget", { targetId });
+});

@@ -80,9 +80,25 @@ window.addEventListener(
   },
   true,
 );
-window.addEventListener("keyup", (event) => event.key === "Shift" && (shiftDown = false), true);
+// Letting go of Shift, or clicking (Shift-click opens a window), before the delay is up cancels the card.
+window.addEventListener(
+  "keyup",
+  (event) => {
+    if (event.key !== "Shift") return;
+    shiftDown = false;
+    clearTimeout(timer);
+  },
+  true,
+);
 window.addEventListener("scroll", () => card && close(), { capture: true, passive: true });
-window.addEventListener("pointerdown", (event) => card && !event.composedPath().includes(card.overlay.host) && close(), true);
+window.addEventListener(
+  "pointerdown",
+  (event) => {
+    clearTimeout(timer);
+    if (card && !event.composedPath().includes(card.overlay.host)) close();
+  },
+  true,
+);
 
 async function show(link: HTMLAnchorElement): Promise<void> {
   close();

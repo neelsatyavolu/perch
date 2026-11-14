@@ -98,6 +98,16 @@ describe("link preview", () => {
     await tab.close();
   });
 
+  test("letting go of Shift before the delay cancels the card", async () => {
+    const tab = await h.open(h.site.url("site.localhost", "/links.html"));
+    await hover(tab, await center(tab, "#story"));
+    await tab.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Shift", code: "ShiftLeft", windowsVirtualKeyCode: 16, modifiers: SHIFT });
+    await tab.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Shift", code: "ShiftLeft", windowsVirtualKeyCode: 16 });
+    await Bun.sleep(800);
+    expect(await tab.evaluate<boolean>("!!document.querySelector('perch-link-preview')")).toBe(false);
+    await tab.close();
+  });
+
   test("a link to a file shows its name and type", async () => {
     const tab = await h.open(h.site.url("site.localhost", "/links.html"));
     await hover(tab, await center(tab, "#report"), SHIFT);

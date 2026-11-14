@@ -1,21 +1,20 @@
 import { Blossom } from "./Sakura";
 
-/** The bird, a pointer whose tip is its beak and whose stem its tail, set on the branch (branding/perch-mark.svg). */
-const BIRD = "M352.0 258.0 L352.0 654.0 Q352 676 368.6 661.5 L445.4 594.5 Q462 580 471.3 599.9 L536.7 740.1 Q546 760 566.3 751.6 L593.7 740.4 Q614 732 604.7 712.1 L541.3 575.9 Q532 556 554.0 556.0 L658.0 556.0 Q680 556 664.3 540.6 L367.7 251.4 Q352 236 352.0 258.0 Z";
-const PERCHED = "translate(40 -45) rotate(-40 512 512)";
+/** The songbird: one circle for head and breast, a straight tail, a beak, its eye a hole (branding/perch-mark.svg). */
+const BIRD = "M232 757L407.4 378.7A192.5 192.5 0 1 1 633.6 645ZM638 403.5a22.75 22.75 0 1 0 45.5 0a22.75 22.75 0 1 0-45.5 0ZM757 382.5L848 426.3L753.5 466.5ZM548.8 645h21v72h-21ZM601.3 634.5h21v82.5h-21Z";
 
 /**
- * The Perch mark: a pointer that is also a bird, perched on a branch, drawn in the theme's colours.
+ * The Perch mark: a songbird perched on a branch, the bird in the theme's ink and the branch in its accent.
  * In Sakura mode a blossom sits on its head.
  */
 export function PerchMark({ size = 48, tile = true }: { readonly size?: number; readonly tile?: boolean }) {
   return (
     <svg class="mark" width={size} height={size} viewBox="0 0 1024 1024" aria-hidden="true">
       {tile && <rect width="1024" height="1024" rx="228" style={{ fill: "var(--raised)" }} />}
-      <g transform="translate(512 512) scale(1.32) translate(-512 -518)">
-        <rect x="176" y="686" width="672" height="30" rx="15" style={{ fill: "var(--ink)", opacity: 0.45 }} />
-        <path transform={PERCHED} d={BIRD} style={{ fill: "var(--ink)" }} />
-        <g transform="translate(384 438)">
+      <g transform="translate(512 512) scale(1.2) translate(-512 -512)">
+        <path d={BIRD} style={{ fill: "var(--ink)" }} />
+        <rect x="169" y="708" width="686" height="42" rx="21" style={{ fill: "var(--accent)" }} />
+        <g transform="translate(520 280)">
           <Blossom r={64} class="blossom" />
         </g>
       </g>

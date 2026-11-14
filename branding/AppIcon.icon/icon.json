@@ -1,19 +1,24 @@
 {
-  "fill": {
-    "solid": "srgb:0.07843,0.07843,0.07451,1.00000"
-  },
+  "fill-specializations": [
+    { "value": { "solid": "srgb:0.96863,0.96078,0.93725,1.00000" } },
+    { "appearance": "dark", "value": { "solid": "srgb:0.07843,0.07843,0.07451,1.00000" } }
+  ],
   "groups": [
     {
       "layers": [
         {
+          "fill-specializations": [
+            { "value": { "solid": "srgb:0.08627,0.08627,0.10196,1.00000" } },
+            { "appearance": "dark", "value": { "solid": "srgb:0.96863,0.96078,0.93725,1.00000" } }
+          ],
           "glass": false,
           "image-name": "bird.svg",
           "name": "bird"
         }
       ],
       "shadow": {
-        "kind": "neutral",
-        "opacity": 0.5
+        "kind": "none",
+        "opacity": 0
       },
       "specular": false,
       "translucency": {
@@ -24,6 +29,10 @@
     {
       "layers": [
         {
+          "fill-specializations": [
+            { "value": { "solid": "srgb:0.16471,0.38824,0.80000,1.00000" } },
+            { "appearance": "dark", "value": { "solid": "srgb:0.29804,0.55294,1.00000,1.00000" } }
+          ],
           "glass": false,
           "image-name": "branch.svg",
           "name": "branch"

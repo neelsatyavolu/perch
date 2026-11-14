@@ -96,12 +96,12 @@ function Stage({ mute, step, children }: { readonly mute?: Mute; readonly step?:
 /** The mark assembling itself: the branch draws out, then the bird glides in and lands on it. */
 function LandingMark() {
   return (
-    <svg class="wl-mark" viewBox="160 290 700 450" width="240" height="154" aria-hidden="true">
-      <rect class="wl-mark-bar" x="176" y="686" width="672" height="30" rx="15" />
+    <svg class="wl-mark" viewBox="145 243 734 538" width="240" height="176" aria-hidden="true">
+      <rect class="wl-mark-bar" x="169" y="708" width="686" height="42" rx="21" />
       <g class="wl-mark-bird">
-        <path transform="translate(40 -45) rotate(-40 512 512)" d="M352.0 258.0 L352.0 654.0 Q352 676 368.6 661.5 L445.4 594.5 Q462 580 471.3 599.9 L536.7 740.1 Q546 760 566.3 751.6 L593.7 740.4 Q614 732 604.7 712.1 L541.3 575.9 Q532 556 554.0 556.0 L658.0 556.0 Q680 556 664.3 540.6 L367.7 251.4 Q352 236 352.0 258.0 Z" />
-        {/* Sakura mode: a blossom in the bird's eye. */}
-        <g transform="translate(384 438)">
+        <path d="M232 757L407.4 378.7A192.5 192.5 0 1 1 633.6 645ZM638 403.5a22.75 22.75 0 1 0 45.5 0a22.75 22.75 0 1 0-45.5 0ZM757 382.5L848 426.3L753.5 466.5ZM548.8 645h21v72h-21ZM601.3 634.5h21v82.5h-21Z" />
+        {/* Sakura mode: a blossom on the bird's head. */}
+        <g transform="translate(520 280)">
           <g class="wl-mark-blossom">
             <Blossom r={64} />
           </g>

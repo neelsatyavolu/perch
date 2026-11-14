@@ -1,16 +1,21 @@
 // Copyright 2026 The Perch Authors
 // Use of this source code is governed by the MIT license in Perch's LICENSE file.
 
-// The Perch mark in one colour: a pointer that is also a bird, perched on a
-// branch (branding/perch-mark.svg).
+// The Perch mark in one colour: a songbird perched on a branch, its eye a hole
+// (branding/perch-mark.svg).
 CANVAS_DIMENSIONS, 24,
-ROUND_RECT, 2, 17.9, 20, 1.5, 0.75,
+MOVE_TO, 3.83f, 19.14f,
+LINE_TO, 8.95f, 8.11f,
+ARC_TO, 5.61f, 5.61f, 0, 1, 1, 15.54f, 15.87f,
+CLOSE,
+CIRCLE, 16.33f, 8.83f, 0.75f,
 NEW_PATH,
-MOVE_TO, 3.13f, 6.34f,
-LINE_TO, 12.78f, 17.84f,
-LINE_TO, 13.55f, 12.92f,
-LINE_TO, 19.69f, 15.78f,
-LINE_TO, 20.85f, 13.55f,
-LINE_TO, 14.86f, 10.75f,
-LINE_TO, 18.72f, 7.51f,
-CLOSE
+MOVE_TO, 19.14f, 8.22f,
+LINE_TO, 21.79f, 9.5f,
+LINE_TO, 19.04f, 10.67f,
+CLOSE,
+NEW_PATH,
+ROUND_RECT, 12.9f, 15.6f, 0.9f, 2.4f, 0.45f,
+ROUND_RECT, 14.45f, 15.3f, 0.9f, 2.7f, 0.45f,
+NEW_PATH,
+ROUND_RECT, 2, 17.6f, 20, 1.4f, 0.7f

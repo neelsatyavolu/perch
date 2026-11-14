@@ -94,7 +94,7 @@ h1, h2, h3 { color: var(--ink); text-wrap: balance; }
 
 /* The mark: ink bar, accent dot. */
 .mark-bar { fill: var(--ink); }
-.mark-branch { opacity: 0.45; }
+.mark-branch { fill: var(--accent); }
 .mark-bird { fill: var(--ink); }
 .mark-dot { fill: var(--accent); }
 

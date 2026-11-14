@@ -97,7 +97,11 @@ export function Settings() {
             placeholder="Search settings"
             value={query}
             onInput={(e) => setQuery((e.currentTarget as HTMLInputElement).value)}
-            onKeyDown={(e) => e.key === "Escape" && setQuery("")}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setQuery("");
+              // Enter opens the top result, as in System Settings.
+              else if (e.key === "Enter" && !e.isComposing && results[0]) go(results[0].section, results[0].anchor);
+            }}
           />
         </div>
         {NAV_GROUPS.map((g) => (

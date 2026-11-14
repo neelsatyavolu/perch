@@ -89,6 +89,7 @@ export function RoutinesSection() {
     <div class="sec">
       <Group label="Routines" id="routines-list" bare>
         <div class="card">
+          {routines.error && <p class="empty">{routines.error}</p>}
           {routines.data && list.length === 0 && <p class="empty">No routines yet. Open Routines to set one up.</p>}
           {list.map((r) => (
             <Row key={r.id} title={r.title} detail={describeSchedule(r.schedule)}>
@@ -118,6 +119,7 @@ export function ImportSection() {
     <div class="sec">
       <Group label="Browsers on this Mac" id="import-browsers">
         <div class="card">
+          {browsers.error && <p class="empty">{browsers.error}</p>}
           {browsers.data && list.length === 0 && <p class="empty">No other browsers found on this Mac.</p>}
           {list.map((b) => (
             <Row key={b.id} title={b.name} detail={b.profiles.map((p) => p.name).join(", ")} icon={<BrowserIcon browser={b} />}>

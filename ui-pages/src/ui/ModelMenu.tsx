@@ -97,6 +97,8 @@ export function ModelMenu({ models, selected, onPick, onSettings, children }: Pr
     }
   };
   const onKey = (e: KeyboardEvent) => {
+    // Enter and the arrows pick an input method's candidate while it composes.
+    if (e.isComposing) return;
     const atStart = (e.currentTarget as HTMLInputElement).selectionStart === 0;
     const row = rows[active];
     if (e.key === "Tab") return setOpen(false);

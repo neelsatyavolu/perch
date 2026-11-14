@@ -117,6 +117,7 @@ function TaskModels({ models: loaded }: { readonly models: readonly Model[] | un
   return (
     <Group label="Task models" id="task-models">
       <div class="card">
+        {tasks.error && <p class="empty">{tasks.error}</p>}
         {loaded && models.length === 0 && <p class="empty">Sign in to a provider above to pick models.</p>}
         {models.length > 0 && (tasks.data ?? []).map((t) => {
           const options = models.filter((m) => fitsRole(t.role, m));

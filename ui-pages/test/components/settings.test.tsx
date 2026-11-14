@@ -43,6 +43,15 @@ describe("Settings shell", () => {
     await waitFor(() => expect(document.getElementById("cookie-banners")?.classList.contains("hit")).toBe(true));
   });
 
+  test("Enter in the search field opens the top result", async () => {
+    const r = renderWithApi(<Settings />);
+    const search = await r.findByRole("searchbox", { name: "Search settings" });
+    fireEvent.input(search, { target: { value: "vertical tabs" } });
+    fireEvent.keyDown(search, { key: "Enter" });
+    expect(await r.findByRole("heading", { level: 1, name: "Appearance" })).toBeTruthy();
+    await waitFor(() => expect(document.getElementById("vertical-tabs")?.classList.contains("hit")).toBe(true));
+  });
+
   test("search says so when nothing matches", async () => {
     const r = renderWithApi(<Settings />);
     fireEvent.input(await r.findByRole("searchbox", { name: "Search settings" }), { target: { value: "zzzz" } });

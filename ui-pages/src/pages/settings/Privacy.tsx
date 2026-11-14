@@ -31,6 +31,7 @@ function SiteDataCard() {
   return (
     <Group label="Site data" id="site-data">
       <div class="card">
+        {sites.error && <p class="empty">{sites.error}</p>}
         {sites.data && list.length === 0 && <p class="empty">No sites have stored data.</p>}
         {list.map((s) => (
           <Row key={s.host} title={<span class="mono">{s.host}</span>} detail={`${formatBytes(s.bytes)} · ${s.cookies} cookies${s.lastUsed ? ` · used ${inlineTime(s.lastUsed)}` : ""}`}>

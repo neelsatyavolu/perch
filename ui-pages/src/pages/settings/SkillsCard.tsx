@@ -64,6 +64,7 @@ export function SkillsCard() {
   return (
     <Group label="Skills" id="skills-list">
       <div class="card">
+        {skills.error && <p class="empty">{skills.error}</p>}
         <Row title="Built-in site skills" detail={`Gmail, Google Docs, GitHub, YouTube and more. ${builtIn.filter((s) => s.enabled).length} of ${builtIn.length} on`}>
           <button type="button" class="btn" aria-expanded={showBuiltIn ? "true" : "false"} onClick={() => setShowBuiltIn((x) => !x)}>
             {showBuiltIn ? "Hide list" : "Show list"}

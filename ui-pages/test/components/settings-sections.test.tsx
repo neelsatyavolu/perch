@@ -232,3 +232,18 @@ describe("Memory, Routines, Import and About", () => {
     expect(await r.findByText("Perch is up to date")).toBeTruthy();
   });
 });
+
+describe("Lists that fail to load", () => {
+  test("say why instead of showing an empty card", async () => {
+    const fake = createFakeApi({ stepMs: 0 });
+    const fail = () => Promise.reject(new Error("Perch's agent isn't running. Restart Perch and try again."));
+    const api = { ...fake, listRoutines: fail, detectBrowsers: fail, listSiteData: fail, listSkills: fail };
+    for (const section of ["routines", "import", "privacy", "skills"]) {
+      window.location.hash = section;
+      const r = renderWithApi(<Settings />, { api });
+      expect(await r.findByText("Perch's agent isn't running. Restart Perch and try again.")).toBeTruthy();
+      cleanup();
+    }
+    window.location.hash = "";
+  });
+});

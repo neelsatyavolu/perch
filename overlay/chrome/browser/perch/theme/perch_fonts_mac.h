@@ -4,6 +4,8 @@
 #ifndef CHROME_BROWSER_PERCH_THEME_PERCH_FONTS_MAC_H_
 #define CHROME_BROWSER_PERCH_THEME_PERCH_FONTS_MAC_H_
 
+#include <string>
+
 namespace perch {
 
 // Registers the Geist fonts Perch ships (SIL OFL, in the framework's
@@ -15,6 +17,11 @@ void RegisterPerchFonts();
 
 // Whether Geist Mono registered, for monospaced text in the browser's views.
 bool HasPerchMonoFont();
+
+// The Dock icon follows the theme: the Sakura songbird in Sakura mode
+// ("sakura", or "yozakura" at night), Perch's own icon otherwise. Pictures
+// are in the framework's Resources/perch_pages/app-icons.
+void SetPerchDockIconForTheme(const std::string& theme);
 
 }  // namespace perch
 

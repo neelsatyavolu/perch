@@ -16,7 +16,11 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_attributes_entry.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
+#include "base/base64.h"
 #include "chrome/browser/perch/perch_pref_names.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
+#include "ui/base/base_window.h"
+#include "ui/gfx/geometry/rect.h"
 #include "content/public/browser/page_navigator.h"
 #include "content/public/common/referrer.h"
 #include "ui/base/page_transition_types.h"
@@ -24,7 +28,6 @@
 #include "url/gurl.h"
 #include "chrome/browser/profiles/profile_avatar_icon_util.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/profiles/profile_window.h"
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/profiles/profile_picker.h"
@@ -67,9 +70,37 @@ OpenMenu& Current() {
   return *open;
 }
 
-void NewProfile();
+void NewProfile(BrowserWindowInterface* from);
+void SwitchInPlace(BrowserWindowInterface* from, const base::FilePath& path);
 
 }  // namespace
+
+ui::ImageModel ProfilePicture(const base::FilePath& profile_path, int size) {
+  gfx::Image picture;
+  if (PrefService* local = g_browser_process->local_state()) {
+    const std::string* stored =
+        local->GetDict(prefs::kProfilePictures)
+            .FindString(profile_path.BaseName().AsUTF8Unsafe());
+    std::optional<std::vector<uint8_t>> png =
+        stored ? base::Base64Decode(*stored) : std::nullopt;
+    if (png) {
+      picture = gfx::Image::CreateFrom1xPNGBytes(*png);
+    }
+  }
+  if (picture.IsEmpty()) {
+    ProfileManager* manager = g_browser_process->profile_manager();
+    ProfileAttributesEntry* entry =
+        manager ? manager->GetProfileAttributesStorage()
+                      .GetProfileAttributesWithPath(profile_path)
+                : nullptr;
+    if (!entry) {
+      return Icon(vector_icons::kAccountCircleIcon);
+    }
+    picture = entry->GetAvatarIcon(size);
+  }
+  return ui::ImageModel::FromImage(
+      profiles::GetSizedAvatarIcon(picture, size, size, profiles::SHAPE_CIRCLE));
+}
 
 ui::ImageModel Icon(const gfx::VectorIcon& icon) {
   return ui::ImageModel::FromVectorIcon(icon, ui::kColorMenuIcon, 16);
@@ -142,9 +173,7 @@ void PerchProfileMenuModel::BuildProfiles() {
       // Each profile with its picture, as Aside lists them; the one in this
       // window carries the check.
       AddCheckItem(id, entry->GetName());
-      SetIconForCommandId(
-          id, ui::ImageModel::FromImage(profiles::GetSizedAvatarIcon(
-                  entry->GetAvatarIcon(16), 16, 16, profiles::SHAPE_CIRCLE)));
+      SetIconForCommandId(id, ProfilePicture(entry->GetPath(), 16));
     }
   }
   AddItemWithIcon(IDC_PERCH_EDIT_PROFILE, u"Edit profile\u2026",
@@ -267,7 +296,7 @@ void PerchProfileMenuModel::ExecuteCommand(int command_id, int event_flags) {
   if (IsProfileRow(command_id)) {
     const size_t row = command_id - IDC_PERCH_PROFILE_FIRST;
     if (row < profiles_.size()) {
-      profiles::SwitchToProfile(profiles_[row], /*always_create=*/false);
+      SwitchInPlace(browser_, profiles_[row]);
     }
     return;
   }
@@ -287,7 +316,7 @@ void PerchProfileMenuModel::ExecuteCommand(int command_id, int event_flags) {
   }
   switch (command_id) {
     case IDC_PERCH_NEW_PROFILE:
-      NewProfile();
+      NewProfile(browser_);
       return;
     case IDC_PERCH_EDIT_PROFILE:
       // Settings › Profile: this window's profile's name and icon.
@@ -311,10 +340,59 @@ void PerchProfileMenuModel::ExecuteCommand(int command_id, int event_flags) {
 
 namespace {
 
-// A new profile opens straight away in a window of its own, as on Aside: no
+// Profiles share one window, as on Aside: switching shows the other
+// profile's window where this one is, at its size, and puts this one away
+// (hidden, tabs and all) until it is switched back to.
+void ShowInPlace(base::WeakPtr<BrowserWindowInterface> from,
+                 gfx::Rect bounds,
+                 bool maximized,
+                 Profile* profile) {
+  if (!profile) {
+    return;
+  }
+  BrowserWindowInterface* target = nullptr;
+  for (BrowserWindowInterface* window : GetAllBrowserWindowInterfaces()) {
+    if (window->GetProfile() == profile &&
+        window->GetType() == BrowserWindowInterface::TYPE_NORMAL) {
+      target = window;
+      break;
+    }
+  }
+  if (!target) {
+    // Its tabs from last time come back, as when Perch starts.
+    target = chrome::OpenEmptyWindow(profile,
+                                     /*should_trigger_session_restore=*/true);
+  }
+  if (!target || (from && target == from.get())) {
+    return;
+  }
+  if (maximized) {
+    target->GetWindow()->Maximize();
+  } else {
+    target->GetWindow()->SetBounds(bounds);
+  }
+  target->GetWindow()->Show();
+  target->GetWindow()->Activate();
+  if (from) {
+    from->GetWindow()->Hide();
+  }
+}
+
+void SwitchInPlace(BrowserWindowInterface* from, const base::FilePath& path) {
+  ProfileManager* manager = g_browser_process->profile_manager();
+  if (!manager || from->GetProfile()->GetOriginalProfile()->GetPath() == path) {
+    return;
+  }
+  manager->CreateProfileAsync(
+      path, base::BindOnce(&ShowInPlace, from->GetWeakPtr(),
+                           from->GetWindow()->GetBounds(),
+                           from->GetWindow()->IsMaximized()));
+}
+
+// A new profile opens straight away, in this window's place, as on Aside: no
 // picker. Perch's setup and tour were done once for this Mac (the models are
-// shared), so its window opens on a new tab.
-void NewProfile() {
+// shared), so it opens on a new tab.
+void NewProfile(BrowserWindowInterface* from) {
   ProfileManager* manager = g_browser_process->profile_manager();
   if (!manager) {
     return;
@@ -323,14 +401,18 @@ void NewProfile() {
   ProfileManager::CreateMultiProfileAsync(
       storage.ChooseNameForNewProfile(),
       storage.ChooseAvatarIconIndexForNewProfile(), /*is_hidden=*/false,
-      base::BindOnce([](Profile* profile) {
-        if (!profile) {
-          return;
-        }
-        profile->GetPrefs()->SetBoolean(prefs::kOnboardingFinished, true);
-        profile->GetPrefs()->SetBoolean(prefs::kTourFinished, true);
-        chrome::NewEmptyWindow(profile);
-      }));
+      base::BindOnce(
+          [](base::WeakPtr<BrowserWindowInterface> from, gfx::Rect bounds,
+             bool maximized, Profile* profile) {
+            if (!profile) {
+              return;
+            }
+            profile->GetPrefs()->SetBoolean(prefs::kOnboardingFinished, true);
+            profile->GetPrefs()->SetBoolean(prefs::kTourFinished, true);
+            ShowInPlace(from, bounds, maximized, profile);
+          },
+          from->GetWeakPtr(), from->GetWindow()->GetBounds(),
+          from->GetWindow()->IsMaximized()));
 }
 
 void ShowMenu(BrowserWindowInterface* browser,

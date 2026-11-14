@@ -47,6 +47,7 @@ void SetDefault(PrefRegistry* registry, const char* name, base::Value value) {
 
 void RegisterLocalStatePrefs(PrefRegistrySimple* registry) {
   RegisterAllowedConnectionPrefs(registry);
+  registry->RegisterDictionaryPref(prefs::kProfilePictures);
   registry->RegisterBooleanPref(prefs::kMemorySaverSleepPinned, false);
   SetDefault(registry, ::prefs::kDnsOverHttpsMode, base::Value("automatic"));
   // Memory saver is on, and a background tab sleeps after 15 minutes.

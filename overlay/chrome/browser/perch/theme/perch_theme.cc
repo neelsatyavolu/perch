@@ -3,6 +3,11 @@
 
 #include "chrome/browser/perch/theme/perch_theme.h"
 
+#include "build/build_config.h"
+#if BUILDFLAG(IS_MAC)
+#include "chrome/browser/perch/theme/perch_fonts_mac.h"
+#endif
+
 #include <initializer_list>
 #include <memory>
 #include <string>
@@ -96,6 +101,13 @@ void AddPerchMixer(ui::ColorProvider* provider,
   if (key.contrast_mode == ui::ColorProviderKey::ContrastMode::kHigh) {
     name = "contrast";
   }
+#if BUILDFLAG(IS_MAC)
+  // A normal window's theme sets the Dock icon: the Sakura songbird in Sakura
+  // mode.
+  if (!incognito) {
+    SetPerchDockIconForTheme(name);
+  }
+#endif
   const PerchThemeTokens* t = FindPerchTheme(name);
   const PerchAccentTokens* a =
       FindPerchAccent(incognito ? std::string("mono") : now.accent);

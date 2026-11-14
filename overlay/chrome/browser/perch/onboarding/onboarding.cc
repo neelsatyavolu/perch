@@ -5,6 +5,7 @@
 
 #include <map>
 #include <set>
+#include <vector>
 
 #include "base/command_line.h"
 #include "base/files/file_path.h"
@@ -12,7 +13,12 @@
 #include "base/time/time.h"
 #include "chrome/browser/perch/perch_pref_names.h"
 #include "chrome/browser/perch/scheme/perch_scheme.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
+#include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/common/chrome_switches.h"
@@ -97,7 +103,47 @@ void MaybeStartTour(BrowserWindowInterface* browser) {
 
 }  // namespace
 
+namespace {
+
+// Profiles share one window (toolbar/perch_profile_menu.cc), but Chromium
+// reopens a window for every profile that had one, hidden ones included. A
+// moment after startup, only the last-used profile's windows stay out.
+void KeepOneProfileOut() {
+  ProfileManager* manager = g_browser_process->profile_manager();
+  if (!manager) {
+    return;
+  }
+  const base::FilePath last = manager->GetLastUsedProfileDir();
+  std::vector<BrowserWindowInterface*> others;
+  bool last_shown = false;
+  for (BrowserWindowInterface* window : GetAllBrowserWindowInterfaces()) {
+    if (window->GetType() != BrowserWindowInterface::TYPE_NORMAL ||
+        !window->GetWindow()->IsVisible()) {
+      continue;
+    }
+    if (window->GetProfile()->GetOriginalProfile()->GetPath() == last) {
+      last_shown = true;
+    } else {
+      others.push_back(window);
+    }
+  }
+  if (!last_shown) {
+    return;
+  }
+  for (BrowserWindowInterface* window : others) {
+    window->GetWindow()->Hide();
+  }
+}
+
+}  // namespace
+
 void MaybeStartOnboarding(BrowserWindowInterface* browser) {
+  static bool tidy_scheduled = false;
+  if (!tidy_scheduled) {
+    tidy_scheduled = true;
+    base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
+        FROM_HERE, base::BindOnce(&KeepOneProfileOut), base::Seconds(3));
+  }
   // Headless runs add --no-first-run themselves; --force-first-run wins.
   const base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
   if (command_line->HasSwitch(switches::kNoFirstRun) &&

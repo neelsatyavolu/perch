@@ -25,7 +25,6 @@
 #include "chrome/browser/autofill/personal_data_manager_factory.h"
 #include "chrome/browser/bookmarks/bookmark_model_factory.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/perch/perch_pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "components/bookmarks/browser/bookmark_model.h"
@@ -561,17 +560,15 @@ void InProfileNamed(const std::u16string& name,
       /*is_hidden=*/false, std::move(then));
 }
 
-// An imported profile opens in a window of its own, with its tabs if it
-// brought any, so the person sees it and can switch to it.
-void ShowProfile(Profile* profile) {
+// Profiles share one window (toolbar/perch_profile_menu.cc): an imported
+// profile's tabs wait in its own window, put away until the person switches
+// to it from the profile menu.
+void PutAwayProfileWindows(Profile* profile) {
   for (BrowserWindowInterface* window : GetAllBrowserWindowInterfaces()) {
     if (window->GetProfile() == profile) {
-      window->GetWindow()->Show();
-      return;
+      window->GetWindow()->Hide();
     }
   }
-  // No tabs came over: the window opens on a new tab.
-  chrome::NewEmptyWindow(profile);
 }
 
 // A profile made a moment ago is still loading its bookmarks, and the
@@ -624,7 +621,7 @@ void ApplyToNamedProfile(std::string name,
                       profile->GetPrefs()->SetBoolean(prefs::kTourFinished,
                                                       true);
                       Apply(profile, std::move(reply), std::move(text));
-                      ShowProfile(profile);
+                      PutAwayProfileWindows(profile);
                     },
                     std::move(reply), std::move(text)));
           },

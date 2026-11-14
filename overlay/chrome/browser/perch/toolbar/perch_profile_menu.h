@@ -73,6 +73,10 @@ class PerchProfileMenuModel : public ui::SimpleMenuModel,
 // A line icon for a toolbar menu item, in the menu's icon colour.
 ui::ImageModel Icon(const gfx::VectorIcon& icon);
 
+// A profile's picture as Perch shows it, round, `size` DIPs across: the one
+// uploaded in Settings › Profile, or else Chromium's.
+ui::ImageModel ProfilePicture(const base::FilePath& profile_path, int size);
+
 // Runs `model` as a frosted Perch menu just below `anchor`, keeping the
 // runner in `runner`. Every Perch toolbar menu opens this way.
 void RunToolbarMenu(ui::MenuModel* model,

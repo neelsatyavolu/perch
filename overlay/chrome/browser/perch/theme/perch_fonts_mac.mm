@@ -3,11 +3,13 @@
 
 #include "chrome/browser/perch/theme/perch_fonts_mac.h"
 
+#import <AppKit/AppKit.h>
 #import <CoreText/CoreText.h>
 #import <Foundation/Foundation.h>
 
 #include "base/apple/bundle_locations.h"
 #include "base/apple/foundation_util.h"
+#include "base/no_destructor.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_util.h"
 #include "base/path_service.h"
@@ -71,6 +73,28 @@ void RegisterPerchFonts() {
 
 bool HasPerchMonoFont() {
   return g_mono;
+}
+
+void SetPerchDockIconForTheme(const std::string& theme) {
+  const std::string want =
+      theme == "sakura" || theme == "yozakura" ? theme : std::string();
+  static base::NoDestructor<std::string> shown;
+  if (want == *shown) {
+    return;
+  }
+  *shown = want;
+  NSImage* image = nil;
+  if (!want.empty()) {
+    const base::FilePath png = base::apple::FrameworkBundlePath()
+                                   .Append("Resources")
+                                   .Append("perch_pages")
+                                   .Append("app-icons")
+                                   .Append("app-" + want + ".png");
+    image = [[NSImage alloc]
+        initWithContentsOfFile:base::apple::FilePathToNSString(png)];
+  }
+  // Nil puts back the app's own icon.
+  NSApp.applicationIconImage = image;
 }
 
 }  // namespace perch

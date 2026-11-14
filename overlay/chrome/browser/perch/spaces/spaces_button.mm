@@ -85,6 +85,12 @@ class SpacesButton : public views::Button,
     if (ProfileManager* manager = g_browser_process->profile_manager()) {
       observation_.Observe(&manager->GetProfileAttributesStorage());
     }
+    if (PrefService* local = g_browser_process->local_state()) {
+      pictures_.Init(local);
+      pictures_.Add(prefs::kProfilePictures,
+                    base::BindRepeating(&SpacesButton::Update,
+                                        base::Unretained(this)));
+    }
     Update();
   }
 
@@ -109,10 +115,8 @@ class SpacesButton : public views::Button,
                           browser_->GetProfile()->GetOriginalProfile()
                               ->GetPath())
                 : nullptr;
-    if (entry) {
-      avatar_->SetImage(ui::ImageModel::FromImage(profiles::GetSizedAvatarIcon(
-          entry->GetAvatarIcon(18), 18, 18, profiles::SHAPE_CIRCLE)));
-    }
+    avatar_->SetImage(ProfilePicture(
+        browser_->GetProfile()->GetOriginalProfile()->GetPath(), 18));
     const std::u16string name =
         entry ? entry->GetName() + u": profiles and more" : u"Profiles and more";
     SetTooltipText(name);
@@ -123,6 +127,7 @@ class SpacesButton : public views::Button,
 
   raw_ptr<BrowserWindowInterface> browser_;
   raw_ptr<views::ImageView> avatar_ = nullptr;
+  PrefChangeRegistrar pictures_;
   base::ScopedObservation<ProfileAttributesStorage,
                           ProfileAttributesStorage::Observer>
       observation_{this};

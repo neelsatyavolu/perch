@@ -1,0 +1,26 @@
+diff --git a/chrome/browser/ui/views/tabs/common/horizontal_tab_style_views.cc b/chrome/browser/ui/views/tabs/common/horizontal_tab_style_views.cc
+index 7241946c83..92b6e71911 100644
+--- a/chrome/browser/ui/views/tabs/common/horizontal_tab_style_views.cc
++++ b/chrome/browser/ui/views/tabs/common/horizontal_tab_style_views.cc
+@@ -62,6 +62,11 @@ HorizontalTabStyleViews::GetSeparatorOpacitiesForTesting() const {  // IN-TEST
+   return GetSeparatorOpacities(/*for_layout=*/false);
+ }
+ 
++namespace {
++// Perch: space between a hovered tab's pill and the toolbar, in DIPs.
++constexpr float kPerchPillBottomGap = 3;
++}  // namespace
++
+ SkPath HorizontalTabStyleViews::GetPath(TabStyle::PathType path_type,
+                                         float scale,
+                                         const TabPathFlags& flags) const {
+@@ -102,6 +107,9 @@ SkPath HorizontalTabStyleViews::GetPath(TabStyle::PathType path_type,
+       tab_height -= GetLayoutConstant(LayoutConstant::kTabStripPadding) * scale;
+       tab_height -=
+           GetLayoutConstant(LayoutConstant::kTabstripToolbarOverlap) * scale;
++      // Perch: the hover and inactive pill floats with room below it as well
++      // as above, so it doesn't look cut off where it meets the toolbar.
++      tab_height -= kPerchPillBottomGap * scale;
+     }
+ 
+     // Don't round the bottom corners to avoid creating dead space between tabs.

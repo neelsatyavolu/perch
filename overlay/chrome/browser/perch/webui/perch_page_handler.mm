@@ -41,6 +41,7 @@
 #include "chrome/browser/perch/settings/appearance.h"
 #include "chrome/browser/perch/settings/privacy.h"
 #include "base/base64.h"
+#include "components/prefs/scoped_user_pref_update.h"
 #include "base/memory/ref_counted_memory.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
@@ -690,12 +691,48 @@ void PerchPageHandler::Dispatch(const std::string& method,
                        .Set("url", "data:image/png;base64," +
                                        base::Base64Encode(*png)));
     }
+    const std::string* picture =
+        g_browser_process->local_state()
+            ->GetDict(prefs::kProfilePictures)
+            .FindString(entry->GetPath().BaseName().AsUTF8Unsafe());
     Resolve(std::move(id),
             base::Value(base::DictValue()
+                            .Set("picture", picture ? base::Value(
+                                                          "data:image/png;base64," +
+                                                          *picture)
+                                                    : base::Value())
                             .Set("name", entry->GetLocalProfileName())
                             .Set("icon", static_cast<int>(
                                              entry->GetAvatarIconIndex()))
                             .Set("icons", std::move(icons))));
+  } else if (method == "setProfilePicture") {
+    // A picture of the person's own (Settings › Profile): a square PNG the
+    // page made from their file, or null to go back to the chosen icon.
+    ProfileAttributesEntry* entry = ProfileEntry();
+    if (!entry) {
+      Reject(std::move(id), "unavailable", "This profile can't be edited");
+      return;
+    }
+    const std::string key = entry->GetPath().BaseName().AsUTF8Unsafe();
+    ScopedDictPrefUpdate pictures(g_browser_process->local_state(),
+                                  prefs::kProfilePictures);
+    const std::string* png = arg0 ? arg0->GetIfString() : nullptr;
+    if (!png) {
+      pictures->Remove(key);
+      Resolve(std::move(id), base::Value());
+      return;
+    }
+    std::optional<std::vector<uint8_t>> bytes =
+        png->size() <= 400 * 1024 ? base::Base64Decode(*png) : std::nullopt;
+    const gfx::Image image =
+        bytes ? gfx::Image::CreateFrom1xPNGBytes(*bytes) : gfx::Image();
+    if (image.IsEmpty() || image.Width() > 512 || image.Height() > 512) {
+      Reject(std::move(id), "invalid",
+             "That picture couldn't be used. Try a PNG or JPEG image");
+      return;
+    }
+    pictures->Set(key, *png);
+    Resolve(std::move(id), base::Value());
   } else if (method == "setProfile") {
     ProfileAttributesEntry* entry = ProfileEntry();
     const base::DictValue* patch = arg0 ? arg0->GetIfDict() : nullptr;

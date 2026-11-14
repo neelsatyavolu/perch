@@ -30,6 +30,11 @@ inline constexpr char kOnboardingFinished[] = "perch.onboarding_finished";
 // launch, so people who set up Perch before it existed take it too.
 inline constexpr char kTourFinished[] = "perch.tour_finished";
 
+// Local State: each profile's own picture, uploaded in Settings › Profile, as
+// {profile folder name: base64 PNG (128 px square)}. Chromium only knows its
+// built-in pictures, so Perch keeps these itself.
+inline constexpr char kProfilePictures[] = "perch.profile_pictures";
+
 // Never-sleep rules, [{"kind", "pattern"}] as in Lulltab (memory_saver/).
 inline constexpr char kMemorySaverRules[] = "perch.memory_saver.rules";
 // Local State: pinned tabs may sleep too (Chromium never sleeps them).

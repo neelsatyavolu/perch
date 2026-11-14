@@ -34,6 +34,11 @@ const PerchAccentTokens* FindPerchAccent(std::string_view name);
 // every new window.
 void ApplyPerchTheme(Profile* profile);
 
+// Profiles share one window (toolbar/perch_profile_menu.cc): the window takes
+// the appearance of the profile now shown in it. Nothing happens when that is
+// the appearance already showing.
+void ShowPerchThemeOf(Profile* profile);
+
 }  // namespace perch
 
 #endif  // CHROME_BROWSER_PERCH_THEME_PERCH_THEME_H_

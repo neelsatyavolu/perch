@@ -526,4 +526,19 @@ void ApplyPerchTheme(Profile* profile) {
   Refresh(profile);
 }
 
+void ShowPerchThemeOf(Profile* profile) {
+  if (!profile || profile->IsOffTheRecord()) {
+    return;
+  }
+  const PrefService* prefs = profile->GetPrefs();
+  const Appearance& now = Current();
+  if (now.theme == prefs->GetString(prefs::kAppearanceTheme) &&
+      now.accent == prefs->GetString(prefs::kAppearanceAccent) &&
+      now.match_system == prefs->GetBoolean(prefs::kAppearanceMatchSystem) &&
+      now.dark_theme == prefs->GetString(prefs::kAppearanceDarkTheme)) {
+    return;
+  }
+  Refresh(profile);
+}
+
 }  // namespace perch

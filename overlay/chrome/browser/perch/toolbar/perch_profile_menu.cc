@@ -9,10 +9,14 @@
 #include <algorithm>
 
 #include "base/no_destructor.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/perch/perch_command_ids.h"
 #include "chrome/browser/perch/perch_commands.h"
+#include "chrome/browser/perch/agent/agent_tabs.h"
+#include "chrome/browser/perch/theme/perch_theme.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_attributes_entry.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
@@ -73,6 +77,27 @@ OpenMenu& Current() {
 void NewProfile(BrowserWindowInterface* from);
 void SwitchInPlace(BrowserWindowInterface* from, const base::FilePath& path);
 
+// A closed menu's model is let go, as Chromium's app menu is: its History
+// submenu keeps watching the profile's recently closed tabs and rebuilds from
+// its window, which may since have closed. `key` is the model's address, so a
+// newer menu (or one still open) is left alone.
+void ReleaseMenu(uintptr_t key) {
+  OpenMenu& open = Current();
+  if (reinterpret_cast<uintptr_t>(open.model.get()) != key ||
+      (open.runner && open.runner->IsRunning())) {
+    return;
+  }
+  open.runner.reset();
+  open.model.reset();
+}
+
+void ReleaseMenuSoon(uintptr_t key) {
+  // The menu's runner is still unwinding when it reports the close, and the
+  // chosen command may still be running (in a nested loop, for a dialog).
+  base::SequencedTaskRunner::GetCurrentDefault()->PostNonNestableTask(
+      FROM_HERE, base::BindOnce(&ReleaseMenu, key));
+}
+
 }  // namespace
 
 ui::ImageModel ProfilePicture(const base::FilePath& profile_path, int size) {
@@ -108,22 +133,28 @@ ui::ImageModel Icon(const gfx::VectorIcon& icon) {
 
 void RunToolbarMenu(ui::MenuModel* model,
                     std::unique_ptr<views::MenuRunner>& runner,
-                    views::View* anchor) {
+                    views::View* anchor,
+                    base::RepeatingClosure after_close) {
   // A Perch menu drawn by views (frosted, rounded, in Perch's type and
   // tokens) just below the button, not a system NSMenu.
   // The button looks pressed while its menu is open and goes back to rest when
   // it closes. The open menu takes the mouse, so the button never hears the
   // pointer leave; without this its highlight would stay on.
   base::RepeatingClosure on_closed = base::BindRepeating(
-      [](views::ViewTracker* tracker) {
+      [](views::ViewTracker* tracker,
+         const base::RepeatingClosure& after_close) {
         if (auto* button = views::Button::AsButton(tracker->view())) {
           button->SetState(views::Button::STATE_NORMAL);
           if (auto* ink_drop = views::InkDrop::Get(button)) {
             ink_drop->AnimateToState(views::InkDropState::HIDDEN, nullptr);
           }
         }
+        if (after_close) {
+          after_close.Run();
+        }
       },
-      base::Owned(std::make_unique<views::ViewTracker>(anchor)));
+      base::Owned(std::make_unique<views::ViewTracker>(anchor)),
+      std::move(after_close));
   runner = std::make_unique<views::MenuRunner>(
       model, views::MenuRunner::HAS_MNEMONICS, std::move(on_closed));
   // Below the whole button, 4px down, lined up with the edge nearer the
@@ -352,8 +383,11 @@ void ShowInPlace(base::WeakPtr<BrowserWindowInterface> from,
   }
   BrowserWindowInterface* target = nullptr;
   for (BrowserWindowInterface* window : GetAllBrowserWindowInterfaces()) {
+    // Not the profile's hidden agent window (agent/agent_tabs.h), which is a
+    // normal window too.
     if (window->GetProfile() == profile &&
-        window->GetType() == BrowserWindowInterface::TYPE_NORMAL) {
+        window->GetType() == BrowserWindowInterface::TYPE_NORMAL &&
+        !IsAgentWindow(window)) {
       target = window;
       break;
     }
@@ -373,6 +407,7 @@ void ShowInPlace(base::WeakPtr<BrowserWindowInterface> from,
   }
   target->GetWindow()->Show();
   target->GetWindow()->Activate();
+  ShowPerchThemeOf(profile);
   if (from) {
     from->GetWindow()->Hide();
   }
@@ -424,7 +459,10 @@ void ShowMenu(BrowserWindowInterface* browser,
   }
   open.runner.reset();
   open.model = std::make_unique<PerchProfileMenuModel>(browser, kind);
-  RunToolbarMenu(open.model.get(), open.runner, anchor);
+  RunToolbarMenu(
+      open.model.get(), open.runner, anchor,
+      base::BindRepeating(&ReleaseMenuSoon,
+                          reinterpret_cast<uintptr_t>(open.model.get())));
 }
 
 }  // namespace

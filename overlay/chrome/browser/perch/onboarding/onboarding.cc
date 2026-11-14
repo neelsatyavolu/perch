@@ -11,7 +11,9 @@
 #include "base/files/file_path.h"
 #include "base/no_destructor.h"
 #include "base/time/time.h"
+#include "chrome/browser/lifetime/browser_shutdown.h"
 #include "chrome/browser/perch/perch_pref_names.h"
+#include "chrome/browser/perch/theme/perch_theme.h"
 #include "chrome/browser/perch/scheme/perch_scheme.h"
 #include "base/functional/bind.h"
 #include "base/task/sequenced_task_runner.h"
@@ -109,20 +111,26 @@ namespace {
 // reopens a window for every profile that had one, hidden ones included. A
 // moment after startup, only the last-used profile's windows stay out.
 void KeepOneProfileOut() {
+  // Quitting in the first moments: the windows are closing anyway.
+  if (browser_shutdown::IsTryingToQuit() ||
+      browser_shutdown::HasShutdownStarted()) {
+    return;
+  }
   ProfileManager* manager = g_browser_process->profile_manager();
   if (!manager) {
     return;
   }
   const base::FilePath last = manager->GetLastUsedProfileDir();
   std::vector<BrowserWindowInterface*> others;
-  bool last_shown = false;
+  Profile* last_shown = nullptr;
   for (BrowserWindowInterface* window : GetAllBrowserWindowInterfaces()) {
     if (window->GetType() != BrowserWindowInterface::TYPE_NORMAL ||
-        !window->GetWindow()->IsVisible()) {
+        window->IsDeleteScheduled() || !window->GetWindow()->IsVisible()) {
       continue;
     }
-    if (window->GetProfile()->GetOriginalProfile()->GetPath() == last) {
-      last_shown = true;
+    Profile* profile = window->GetProfile()->GetOriginalProfile();
+    if (profile->GetPath() == last) {
+      last_shown = profile;
     } else {
       others.push_back(window);
     }
@@ -133,6 +141,9 @@ void KeepOneProfileOut() {
   for (BrowserWindowInterface* window : others) {
     window->GetWindow()->Hide();
   }
+  // Each profile's window took its own appearance as it opened; the one left
+  // out is the one to show.
+  ShowPerchThemeOf(last_shown);
 }
 
 }  // namespace

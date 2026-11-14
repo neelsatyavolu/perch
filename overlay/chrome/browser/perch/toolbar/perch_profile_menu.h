@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "ui/menus/simple_menu_model.h"
 
@@ -78,10 +79,12 @@ ui::ImageModel Icon(const gfx::VectorIcon& icon);
 ui::ImageModel ProfilePicture(const base::FilePath& profile_path, int size);
 
 // Runs `model` as a frosted Perch menu just below `anchor`, keeping the
-// runner in `runner`. Every Perch toolbar menu opens this way.
+// runner in `runner`. Every Perch toolbar menu opens this way. `after_close`
+// runs once the menu has closed.
 void RunToolbarMenu(ui::MenuModel* model,
                     std::unique_ptr<views::MenuRunner>& runner,
-                    views::View* anchor);
+                    views::View* anchor,
+                    base::RepeatingClosure after_close = {});
 
 // Open the menus below `anchor`: the profile button, or the menu button.
 void ShowPerchProfileMenu(BrowserWindowInterface* browser, views::View* anchor);

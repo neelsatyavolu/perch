@@ -230,14 +230,41 @@ const COPY: Readonly<Record<StepId, { readonly title: string; readonly lead: str
   look: { title: "Make it yours", lead: "Pick a theme and an accent." },
 };
 
+/**
+ * Where setup was, kept in this page's storage: Full Disk Access (Safari's data, 1Password) only
+ * takes effect after Perch restarts, and setup opens again on that step afterwards.
+ */
+const PLACE = "perch.welcome.place";
+type Place = { step: StepId; imported: boolean; memory: boolean };
+
+function loadPlace(): Place | null {
+  try {
+    const p = JSON.parse(localStorage.getItem(PLACE) ?? "null") as Partial<Place> | null;
+    return p && STEPS.includes(p.step as StepId) ? { step: p.step as StepId, imported: p.imported === true, memory: p.memory !== false } : null;
+  } catch {
+    return null;
+  }
+}
+
+function savePlace(place: Place | null): void {
+  try {
+    if (place) localStorage.setItem(PLACE, JSON.stringify(place));
+    else localStorage.removeItem(PLACE);
+  } catch {
+    // Without storage, setup starts over after a restart; nothing is lost but the place.
+  }
+}
+
 function Setup() {
   const api = useApi();
   const act = useAction();
   const providers = useLoad((a) => a.listProviders());
-  const [step, setStep] = useState<StepId | null>(null);
+  const [resumed] = useState(loadPlace);
+  const [step, setStep] = useState<StepId | null>(resumed?.step ?? null);
   const [importStatus, setImportStatus] = useState<ImportStatus>("idle");
-  const [imported, setImported] = useState(false);
-  const [memory, setMemory] = useState(true);
+  const [imported, setImported] = useState(resumed?.imported ?? false);
+  const [memory, setMemory] = useState(resumed?.memory ?? true);
+  useEffect(() => savePlace(step ? { step, imported, memory } : null), [step, imported, memory]);
   const heading = useRef<HTMLHeadingElement>(null);
   const { sound, mute } = useSound();
   // The opening chime lands as the bird settles on the bar.
@@ -279,6 +306,7 @@ function Setup() {
     }
     // If saving fails, stay here (the error shows) rather than leave and see setup again next launch.
     if (!(await act(() => api.finishOnboarding().then(() => true)))) return;
+    savePlace(null);
     await act(() => api.openPage("tour", imported && memory ? "memory" : undefined));
   };
 

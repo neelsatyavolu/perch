@@ -3,7 +3,10 @@ import { cleanup, fireEvent, waitFor, within } from "@testing-library/preact";
 import { Welcome } from "../../src/pages/welcome/Welcome";
 import { renderWithApi } from "./render";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+});
 
 type R = ReturnType<typeof renderWithApi>;
 /** The finish row's buttons; the import wizard has a Continue of its own. */
@@ -98,5 +101,16 @@ describe("Welcome", () => {
     fireEvent.input(field, { target: { value: "abc#def" } });
     fireEvent.submit(field.closest("form")!);
     await waitFor(async () => expect((await r.api.listProviders()).find((p) => p.id === "claude")?.state).toBe("connected"));
+  });
+
+  test("after a restart (Full Disk Access) setup opens on the step it was on", async () => {
+    const r = renderWithApi(<Welcome />);
+    await toPlan(r);
+    await connectGrok(r);
+    fireEvent.click(row().getByRole("button", { name: "Continue" }));
+    await heading(r, "Bring everything over");
+    cleanup();
+    const again = renderWithApi(<Welcome />);
+    expect(await heading(again, "Bring everything over")).toBeTruthy();
   });
 });

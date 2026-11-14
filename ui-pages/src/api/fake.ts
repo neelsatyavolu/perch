@@ -811,6 +811,9 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     async getSystemAccess() {
       return options.access ?? { fullDiskAccess: false };
     },
+    async restartPerch() {
+      navigate("restart", null);
+    },
     async openFullDiskAccess() {
       navigate("system-settings", "full-disk-access");
     },

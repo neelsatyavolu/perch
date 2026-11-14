@@ -583,6 +583,8 @@ export interface PerchApi {
   /** Activates a tab (tabId), opens a URL in the current tab, or runs a command by its id from commands.ts. The browser then closes the bubble. */
   runCommandBarItem(item: CommandBarItem): Promise<void>;
   closeCommandBar(): Promise<void>;
+  /** Restarts Perch: Full Disk Access takes effect, and tabs (and setup, where it was) come back. */
+  restartPerch(): Promise<void>;
   /** Opens the command bar over the page that asks (the tour shows it off). */
   openCommandBar(): Promise<void>;
   /** Brings the agent's newest tab at an address starting with `url` into this window, with its side chat open. */
@@ -718,7 +720,7 @@ export const API_METHODS = [
   "getMemorySettings", "setMemorySettings", "listMemoryPages", "readMemoryPage", "writeMemoryPage", "deleteMemoryPage", "wipeMemory",
   "listDreamLogs", "listMemoryChanges", "undoMemoryChange", "searchMemory", "listSetupSources", "startProfileBuild", "getProfileBuild", "getProfileDraft", "saveProfileDraft", "discardProfileDraft",
   "listRoutines", "saveRoutine", "setRoutineEnabled", "deleteRoutine", "runRoutine", "findRoutineProposals", "acceptProposal", "dismissProposal",
-  "detectBrowsers", "getSystemAccess", "openFullDiskAccess", "startImport", "getJob",
+  "detectBrowsers", "getSystemAccess", "openFullDiskAccess", "restartPerch", "startImport", "getJob",
   "getOnePassword", "setOnePassword", "listOnePasswordVaults",
   "getOnboarding", "completeOnboardingStep", "finishOnboarding", "getAbout", "checkForUpdates", "installUpdate", "setAutoUpdate",
 ] as const satisfies readonly Exclude<keyof PerchApi, "watchJob">[];

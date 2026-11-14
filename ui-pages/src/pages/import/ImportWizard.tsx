@@ -160,6 +160,7 @@ export function ImportWizard({ embedded = false, onStatus }: Props) {
             <PermissionStep browser={browser} needs={needs} access={access} csv={csv} safariExport={safariExport} left={plan.left} canGoAhead={sent.length > 0}
               onChooseCsv={async () => setCsv(await act(() => api.chooseFile("passwords-csv")) ?? csv)}
               onChooseSafariExport={async () => setSafariExport(await act(() => api.chooseFile("safari-export")) ?? safariExport)}
+              onRestart={() => act(() => api.restartPerch())}
               onOpenSettings={async () => {
                 await act(() => api.openFullDiskAccess());
                 setAccess(await act(() => api.getSystemAccess()) ?? access);

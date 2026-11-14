@@ -79,6 +79,21 @@ void MaybeStartOnboarding(BrowserWindowInterface* browser) {
       !Started().insert(profile->GetPath()).second) {
     return;
   }
+  // After a restart in the middle of setup (Full Disk Access applies only
+  // then), the restored welcome tab is brought forward; the page picks up on
+  // the step it was on.
+  TabStripModel* strip = browser->GetTabStripModel();
+  for (int i = 0; i < strip->count(); ++i) {
+    // Restored tabs may not have loaded yet: their visible URL is the one to read.
+    if (IsWelcomeURL(strip->GetWebContentsAt(i)->GetVisibleURL())) {
+      strip->ActivateTabAt(i);
+      if (!browser->GetWindow()->IsFullscreen() &&
+          !browser->GetWindow()->IsMaximized()) {
+        browser->GetWindow()->Maximize();
+      }
+      return;
+    }
+  }
   // A window that opened on the new tab page shows the welcome page in its
   // place; one that opened on something else keeps it, in a tab behind.
   content::WebContents* active =

@@ -30,7 +30,7 @@ import * as v from "./validate";
 /** Methods the browser answers itself (appearance, privacy, site data, navigation, files, updates). */
 export const BROWSER_METHODS = [
   "getAppearance", "setAppearance", "getPrivacy", "setPrivacy", "setBackgroundConnection", "removeBlockerException", "listSiteData", "forgetSite",
-  "openPage", "chooseFile", "openFullDiskAccess", "getAbout", "checkForUpdates", "installUpdate", "setAutoUpdate",
+  "openPage", "chooseFile", "openFullDiskAccess", "restartPerch", "getAbout", "checkForUpdates", "installUpdate", "setAutoUpdate",
   "submitQuery", "autocompleteAddress", "openAddress", "openChat", "newChat",
   "listBuiltInExtensions", "setBuiltInExtension",
   "getMemorySaver", "setMemorySaver", "addSleepRule", "listTabMemory",

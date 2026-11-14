@@ -19,6 +19,7 @@
 #include "base/strings/string_util.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
+#include "chrome/browser/lifetime/application_lifetime.h"
 #include "chrome/browser/perch/agent/agent_tabs.h"
 #include "components/tabs/public/tab_interface.h"
 #include "chrome/browser/perch/agent/perch_devtools.h"
@@ -696,6 +697,11 @@ void PerchPageHandler::Dispatch(const std::string& method,
                         }
                       },
                       weak_factory_.GetWeakPtr(), id.Clone()));
+  } else if (method == "restartPerch") {
+    // Full Disk Access applies from the next launch; Perch reopens its tabs
+    // (and setup, where it was) after restarting.
+    Resolve(std::move(id), base::Value());
+    chrome::AttemptRestart();
   } else if (method == "openFullDiskAccess") {
     [NSWorkspace.sharedWorkspace
         openURL:[NSURL URLWithString:@"x-apple.systempreferences:com.apple."

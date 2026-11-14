@@ -146,7 +146,7 @@ const NEED_TEXT = (need: ImportNeed, browser: string): string => {
   }
 };
 
-export function PermissionStep({ browser, needs, access, csv, safariExport, left, canGoAhead, onOpenSettings, onChooseCsv, onChooseSafariExport }: {
+export function PermissionStep({ browser, needs, access, csv, safariExport, left, canGoAhead, onOpenSettings, onChooseCsv, onChooseSafariExport, onRestart }: {
   readonly browser: DetectedBrowser;
   readonly needs: readonly ImportNeed[];
   readonly access: SystemAccess | null;
@@ -159,6 +159,8 @@ export function PermissionStep({ browser, needs, access, csv, safariExport, left
   readonly onOpenSettings: () => void;
   readonly onChooseCsv: () => void;
   readonly onChooseSafariExport: () => void;
+  /** Restarts Perch so Full Disk Access takes effect; it reopens where it was. */
+  readonly onRestart?: () => void;
 }) {
   return (
     <ul class="needs">
@@ -169,7 +171,11 @@ export function PermissionStep({ browser, needs, access, csv, safariExport, left
             access?.fullDiskAccess ? (
               <span class="status ok"><span class="dotc" />Full Disk Access is on</span>
             ) : (
-              <button type="button" class="btn" onClick={onOpenSettings}>Open System Settings</button>
+              <span class="need-file">
+                <button type="button" class="btn" onClick={onOpenSettings}>Open System Settings</button>
+                {onRestart && <button type="button" class="btn quiet" onClick={onRestart}>Restart Perch</button>}
+                <span class="cap">macOS applies it after Perch restarts; you come back right here.</span>
+              </span>
             )
           )}
           {n === "csv-export" && (

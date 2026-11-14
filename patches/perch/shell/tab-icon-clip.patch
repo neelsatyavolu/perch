@@ -1,0 +1,17 @@
+diff --git a/chrome/browser/ui/views/tabs/tab.cc b/chrome/browser/ui/views/tabs/tab.cc
+index 6159e7ae87..04e2a7edcb 100644
+--- a/chrome/browser/ui/views/tabs/tab.cc
++++ b/chrome/browser/ui/views/tabs/tab.cc
+@@ -946,8 +946,11 @@ void Tab::PaintChildren(const views::PaintInfo& info) {
+   // The paint recording scale for tabs is consistent along the x and y axis.
+   const float paint_recording_scale = info.paint_recording_scale_x();
+ 
++  // Perch: clip to the full-height hit area, not the hover pill. The pill
++  // stops short of the toolbar (tab-pill-gap.patch), which cut off the bottom
++  // of every favicon; the sides match, so narrow tabs still clip as before.
+   const SkPath clip_path = tab_style_views()->GetPath(
+-      TabStyle::PathType::kHighlight, paint_recording_scale, {});
++      TabStyle::PathType::kHitTest, paint_recording_scale, {});
+ 
+   clip_recorder.ClipPathWithAntiAliasing(clip_path);
+   View::PaintChildren(info);

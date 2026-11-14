@@ -135,3 +135,4 @@ perch/shell/no-profile-picker.patch
 perch/shell/tab-title-smoothing.patch
 perch/shell/pinned-icon-only.patch
 perch/shell/tab-pill-gap.patch
+perch/shell/tab-icon-clip.patch

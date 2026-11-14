@@ -202,6 +202,8 @@ export function Sidebar({ client, windowId, fallbackTab = null, host }: Props) {
         onSend={(text, extras) => chat.send(text, tab ?? undefined, () => attach(), extras)}
         host={host}
         listTabs={() => client.tabs()}
+        uploadFile={(name, data) => client.pasteFile(name, data)}
+        previewFile={(id) => client.filePreview(id)}
         onStop={() => void chat.stop()}
         running={Boolean(view.run)}
         queued={view.queued}

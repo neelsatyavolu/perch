@@ -58,3 +58,26 @@ test("the browser registers picked files; pages get ids, and the task gets the p
   expect((await call("POST", `/api/chats/${chat.id}/messages`, TOKEN, { text: "x", files: ["no-such-id"] })).status).toBe(404);
   expect((await call("POST", `/api/chats/${chat.id}/messages`, TOKEN, { text: "x", mentions: ["closed-tab"] })).status).toBe(400);
 });
+
+test("an image pasted into the chat is stored privately, attached by id, and has a preview", async () => {
+  const png = Buffer.from("89504e470d0a1a0a0000000d49484452", "hex");
+  const res = await call("POST", "/api/files/paste", TOKEN, { name: "../Screen Shot.png", data: png.toString("base64") });
+  const { file } = (await res.json()) as { file: { id: string; name: string; size: number } };
+  expect(file).toEqual({ id: expect.any(String), name: "Screen Shot.png", size: png.length });
+  const preview = await call("GET", `/api/files/${file.id}/preview`, TOKEN);
+  expect(preview.headers.get("content-type")).toBe("image/png");
+  expect(Buffer.from(await preview.arrayBuffer())).toEqual(png);
+  // The stored copy is readable by this user only, and the task sees its path.
+  const { statSync } = await import("node:fs");
+  const chat = (await (await call("POST", "/api/chats", TOKEN, {})).json()) as { id: string };
+  expect((await call("POST", `/api/chats/${chat.id}/messages`, TOKEN, { text: "what's this?", files: [file.id] })).status).toBe(200);
+  await app.runs.idle();
+  const path = inputs.at(-1)!.task.match(/\/\S*perch-pasted-\S*Screen Shot\.png/)?.[0] ?? inputs.at(-1)!.task.match(/(\/[^\n]*perch-pasted-[^\n]*?Screen Shot\.png)/)?.[1];
+  expect(path).toBeDefined();
+  expect(statSync(path!).mode & 0o777).toBe(0o600);
+  expect(statSync(join(path!, "..", "..")).mode & 0o777).toBe(0o700);
+
+  expect((await call("POST", "/api/files/paste", TOKEN, { name: "x.txt", data: "not base64!" })).status).toBe(400);
+  const text = (await (await call("POST", "/api/files/paste", TOKEN, { name: "notes.txt", data: Buffer.from("hi").toString("base64") })).json()) as { file: { id: string } };
+  expect((await call("GET", `/api/files/${text.file.id}/preview`, TOKEN)).status).toBe(404);
+});

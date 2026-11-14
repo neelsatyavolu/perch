@@ -1,7 +1,7 @@
 /** The app API's routes. Each handler gets checked input and returns JSON (or text for export). */
 
 import type { ArtifactServer } from "./artifact-server";
-import type { FileRegistry } from "./attachments";
+import { MAX_PASTED, type FileRegistry } from "./attachments";
 import { artifactFileName, isBinaryKind, type ArtifactStore } from "./artifacts";
 import { saveArtifactFile } from "./artifact-files";
 import type { Windows } from "./app";
@@ -195,6 +195,20 @@ export const ROUTES: Route[] = [
   }),
   route("DELETE", "/api/chats/:id/queue/:queued", (ctx, [id, queued]) => ({ removed: ctx.runs.unqueue(chatOf(ctx, id!).id, v.id(queued, "queued")) })),
   route("POST", "/api/chats/:id/queue/:queued/steer", (ctx, [id, queued]) => ctx.runs.steerQueued(chatOf(ctx, id!).id, v.id(queued, "queued"))),
+  // A file pasted or dropped into the chat: its bytes, base64 in JSON; the page gets an id only.
+  route("POST", "/api/files/paste", (ctx, _, body) => {
+    const o = v.object(body);
+    v.onlyKeys(o, ["name", "data"]);
+    const data = v.text(o.data, "data", Math.ceil((MAX_PASTED * 4) / 3) + 4);
+    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(data)) throw new AppError("The file's data isn't base64");
+    return { file: ctx.files.store(v.text(o.name, "name", 300), Buffer.from(data, "base64")) };
+  }),
+  // An attached image's bytes, for its thumbnail in the chat box.
+  route("GET", "/api/files/:id/preview", (ctx, [id]) => {
+    const image = ctx.files.preview(id!);
+    if (!image) throw new AppError("No preview for this file", 404);
+    return new Response(new Blob([new Uint8Array(image.bytes)]), { headers: { "content-type": image.type, "cache-control": "no-store", "x-content-type-options": "nosniff" } });
+  }),
   // The browser registers the files the user picked in its open panel; the page gets ids only.
   browserRoute("POST", "/api/files", (ctx, _, body) => {
     const o = v.object(body);

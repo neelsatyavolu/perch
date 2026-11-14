@@ -481,3 +481,37 @@ test("a finished reply types on from what was already shown, never from the star
     window.matchMedia = globalThis.matchMedia = motion;
   }
 });
+
+test("an image pasted into the chat box is attached with a thumbnail, then sent with the message", async () => {
+  const uploads: { name: string; base64: string }[] = [];
+  const sent: string[][] = [];
+  const { el } = composer({
+    draft: "what's this?",
+    uploadFile: async (name, base64) => (uploads.push({ name, base64 }), { id: "f1", name, size: 4 }),
+    onSend: (_t, extras) => void sent.push(extras.files.map((f) => f.id)),
+  });
+  const file = new File([new Uint8Array([137, 80, 78, 71])], "shot.png", { type: "image/png" });
+  const paste = new Event("paste", { bubbles: true, cancelable: true }) as Event & { clipboardData: unknown };
+  Object.defineProperty(paste, "clipboardData", { value: { files: [file] } });
+  await act(async () => {
+    el.querySelector("textarea")!.dispatchEvent(paste);
+    await new Promise((r) => setTimeout(r, 50));
+  });
+  expect(paste.defaultPrevented).toBe(true);
+  expect(uploads).toEqual([{ name: "shot.png", base64: "iVBORw==" }]);
+  const chip = el.querySelector(".chip.file.has-thumb")!;
+  expect(chip.querySelector("img.thumb")!.getAttribute("src")).toStartWith("data:image/png;base64,");
+  expect(chip.textContent).toContain("shot.png");
+  await act(async () => {
+    el.querySelector<HTMLTextAreaElement>("textarea")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  });
+  expect(sent).toEqual([["f1"]]);
+});
+
+test("pasting plain text into the chat box is left to the text field", async () => {
+  const { el } = composer({ uploadFile: async () => { throw new Error("must not upload"); } });
+  const paste = new Event("paste", { bubbles: true, cancelable: true }) as Event & { clipboardData: unknown };
+  Object.defineProperty(paste, "clipboardData", { value: { files: [] } });
+  el.querySelector("textarea")!.dispatchEvent(paste);
+  expect(paste.defaultPrevented).toBe(false);
+});

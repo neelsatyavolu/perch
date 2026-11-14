@@ -319,6 +319,11 @@ button.artifact-card:hover { background: var(--fill-hover); }
 .crow > .steer { flex: none; color: var(--ink); }
 .chip.file { padding-left: 8px; padding-right: 2px; max-width: 220px; }
 .chip.file .ib.x { width: 20px; height: 20px; }
+/* An attached image shows what it is: a small square of the picture before its name. */
+.chip.file.has-thumb { height: 48px; padding: 4px 2px 4px 4px; gap: 8px; }
+.chip.file .thumb { width: 40px; height: 40px; object-fit: cover; border-radius: 4px; flex: none; box-shadow: inset 0 0 0 1px var(--hair); }
+/* Files dragged over the chat box: the box says it will take them. */
+.composer.dropping { box-shadow: inset 0 0 0 2px var(--accent); }
 .cnote { color: var(--mute); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 /* Sidebar */
 /* The side chat is one surface: header, thread and composer all on the card colour. */

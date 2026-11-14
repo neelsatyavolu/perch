@@ -48,7 +48,27 @@ type ComposerProps = {
   host?: PageHost;
   /** The open tabs, for `@`. */
   listTabs?: () => Promise<TabInfo[]>;
+  /** Attaches a pasted or dropped file (its bytes, base64); without it pasting files is off. */
+  uploadFile?: (name: string, base64: string) => Promise<AttachedFile>;
+  /** An attached image as a data: URL, for its thumbnail; null for other files. */
+  previewFile?: (id: string) => Promise<string | null>;
 };
+
+/** A file read in the page: its data: URL (the thumbnail of an image) and its base64 bytes. */
+function readFile(file: File): Promise<{ url: string; base64: string }> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const url = String(reader.result);
+      resolve({ url, base64: url.slice(url.indexOf(",") + 1) });
+    };
+    reader.onerror = () => reject(new Error(`${file.name || "That file"} couldn't be read`));
+    reader.readAsDataURL(file);
+  });
+}
+
+const IMAGE_NAME = /\.(png|jpe?g|gif|webp)$/i;
+const PASTED_LIMIT = 8 * 1024 * 1024;
 
 function fileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -76,6 +96,9 @@ export function Composer(p: ComposerProps) {
     if (p.autoFocus) field.current?.focus();
   }, []);
   const [files, setFiles] = useState<AttachedFile[]>([]);
+  /** Thumbnails of attached images, by attachment id. */
+  const [thumbs, setThumbs] = useState<Readonly<Record<string, string>>>({});
+  const [dropping, setDropping] = useState(false);
   const [picked, setPicked] = useState<TabInfo[]>([]);
   const [tabs, setTabs] = useState<TabInfo[] | null>(null);
   const [active, setActive] = useState(0);
@@ -140,14 +163,59 @@ export function Composer(p: ComposerProps) {
     }
   };
 
+  const addFiles = (added: readonly AttachedFile[]) =>
+    setFiles((list) => [...list, ...added.filter((f) => !list.some((x) => x.id === f.id))].slice(0, 20));
   const attach = async () => {
     setNote(null);
     try {
       const added = (await p.host?.chooseFiles?.()) ?? [];
-      setFiles((list) => [...list, ...added.filter((f) => !list.some((x) => x.id === f.id))].slice(0, 20));
+      addFiles(added);
+      // Picked images get a thumbnail too.
+      for (const f of added.filter((x) => IMAGE_NAME.test(x.name))) {
+        void p.previewFile?.(f.id).then((url) => url && setThumbs((t) => ({ ...t, [f.id]: url }))).catch(() => undefined);
+      }
     } catch (e) {
       setNote((e as Error).message);
     }
+  };
+  /** Pasted or dropped files: each is uploaded and attached, an image with its thumbnail. */
+  const takeFiles = async (list: readonly File[]) => {
+    if (!list.length || !p.uploadFile) return;
+    setNote(null);
+    for (const file of list.slice(0, 20)) {
+      if (file.size > PASTED_LIMIT) {
+        setNote(`${file.name || "That file"} is over 8 MB. Attach it with + instead.`);
+        continue;
+      }
+      try {
+        const { url, base64 } = await readFile(file);
+        const ext = (file.type.split("/")[1] ?? "png").replace("jpeg", "jpg");
+        const name = file.name && file.name !== "image.png" ? file.name : `Pasted image ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.${ext}`;
+        const added = await p.uploadFile(name, base64);
+        addFiles([added]);
+        if (file.type.startsWith("image/")) setThumbs((t) => ({ ...t, [added.id]: url }));
+      } catch (e) {
+        setNote((e as Error).message);
+      }
+    }
+  };
+  const onPaste = (e: ClipboardEvent) => {
+    const pasted = [...(e.clipboardData?.files ?? [])];
+    if (!pasted.length || !p.uploadFile) return;
+    e.preventDefault();
+    void takeFiles(pasted);
+  };
+  const onDrop = (e: DragEvent) => {
+    setDropping(false);
+    const dropped = [...(e.dataTransfer?.files ?? [])];
+    if (!dropped.length || !p.uploadFile) return;
+    e.preventDefault();
+    void takeFiles(dropped);
+  };
+  const onDragOver = (e: DragEvent) => {
+    if (!p.uploadFile || ![...(e.dataTransfer?.types ?? [])].includes("Files")) return;
+    e.preventDefault();
+    setDropping(true);
   };
   const stopDictation = async () => {
     setDictating(false);
@@ -196,7 +264,7 @@ export function Composer(p: ComposerProps) {
           ))}
         </ol>
       )}
-      <div class="composer">
+      <div class={`composer${dropping ? " dropping" : ""}`} onDragOver={onDragOver} onDragLeave={() => setDropping(false)} onDrop={onDrop}>
         {choices.length > 0 && (
           <ul class="menu start mentions" role="listbox" aria-label="Tabs to mention">
             {choices.map((t, i) => (
@@ -219,7 +287,8 @@ export function Composer(p: ComposerProps) {
         {files.length > 0 && (
           <div class="files">
             {files.map((f) => (
-              <span class="chip file" key={f.id} title={f.name}>
+              <span class={`chip file${thumbs[f.id] ? " has-thumb" : ""}`} key={f.id} title={f.name}>
+                {thumbs[f.id] && <img class="thumb" src={thumbs[f.id]} alt="" />}
                 <span class="chip-t">{f.name}</span>
                 <span class="d">{fileSize(f.size)}</span>
                 <button type="button" class="ib x" aria-label={`Remove ${f.name}`} onClick={() => setFiles((list) => list.filter((x) => x.id !== f.id))}>
@@ -249,6 +318,7 @@ export function Composer(p: ComposerProps) {
           aria-label="Message"
           onInput={(e) => p.onDraft((e.target as HTMLTextAreaElement).value)}
           onKeyDown={onKey}
+          onPaste={onPaste}
         />
         <div class="crow">
           <button

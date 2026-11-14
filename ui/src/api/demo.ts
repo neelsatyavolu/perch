@@ -140,6 +140,8 @@ export function createDemoClient(windowId: string): Client {
     sendQueuedNow: () => attempt(() => {
       throw new ApiError("That message is no longer waiting", 404);
     }),
+    pasteFile: (name: string, data: string) => ok({ id: `pasted-${name}`, name, size: Math.floor((data.length * 3) / 4) }),
+    filePreview: async (_id: string): Promise<string | null> => null,
     tabs: () => ok([tab]),
     cancel: (id) => attempt(() => {
       if (run?.chatId !== id) return { stopped: false };

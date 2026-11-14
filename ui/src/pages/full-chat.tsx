@@ -253,6 +253,8 @@ export function FullChat({ client, initialChat = null, initialAsk = null, onNavi
           onSend={(text, extras) => chat.send(text, undefined, create, extras)}
           host={host}
           listTabs={() => client.tabs()}
+        uploadFile={(name, data) => client.pasteFile(name, data)}
+        previewFile={(id) => client.filePreview(id)}
           onStop={() => void chat.stop()}
           running={Boolean(view.run)}
           queued={view.queued}

@@ -57,6 +57,19 @@ export function createClient(api: string, token: string, deps: Deps = {}) {
       }),
     unqueue: (id: string, queuedId: string) => call<{ removed: boolean }>("DELETE", `/api/chats/${encodeURIComponent(id)}/queue/${encodeURIComponent(queuedId)}`),
     sendQueuedNow: (id: string, queuedId: string) => call<{ runId: string; message: ChatMessage }>("POST", `/api/chats/${encodeURIComponent(id)}/queue/${encodeURIComponent(queuedId)}/steer`, {}),
+    /** Attaches a file pasted or dropped into the chat; its bytes go as base64. */
+    pasteFile: (name: string, data: string) => call<{ file: { id: string; name: string; size: number } }>("POST", "/api/files/paste", { name, data }).then((r) => r.file),
+    /** An attached image as a data: URL for its thumbnail, or null when it has none. */
+    filePreview: (id: string) =>
+      request("GET", `/api/files/${encodeURIComponent(id)}/preview`)
+        .then((r) => r.blob())
+        .then((b) => new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result));
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(b);
+        }))
+        .catch(() => null),
     /** Every open tab the browser reported, for @. */
     tabs: () => call<TabInfo[]>("GET", "/api/tabs"),
     /** Stops the task; `unsent` is the text of messages that were waiting behind it. */

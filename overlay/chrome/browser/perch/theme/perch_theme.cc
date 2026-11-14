@@ -75,6 +75,18 @@ SkColor Over(SkColor line, SkColor base) {
   return Mix(line | 0xFF000000, base, SkColorGetA(line) / 255.0f);
 }
 
+#if BUILDFLAG(IS_MAC)
+// The Dock icon while `shown` is the theme on screen: the songbird picked in
+// Settings, or with "auto" the Sakura songbird in Sakura mode and Perch's own
+// icon otherwise.
+std::string DockIconFor(const Appearance& now, const std::string& shown) {
+  if (now.app_icon != "auto") {
+    return now.app_icon;
+  }
+  return shown == "sakura" || shown == "yozakura" ? shown : std::string();
+}
+#endif
+
 void AddPerchMixer(ui::ColorProvider* provider,
                    const ui::ColorProviderKey& key) {
   // A theme from the Chrome Web Store wins, as do forced colours.
@@ -106,12 +118,10 @@ void AddPerchMixer(ui::ColorProvider* provider,
     name = "contrast";
   }
 #if BUILDFLAG(IS_MAC)
-  // A normal window's theme sets the Dock icon: the songbird picked in
-  // Settings, or with "auto" the Sakura songbird in Sakura mode.
+  // A normal window's theme sets the Dock icon, so it follows macOS turning
+  // light or dark under Match system.
   if (!incognito) {
-    SetPerchDockIcon(now.app_icon != "auto" ? now.app_icon
-                     : name == "sakura" || name == "yozakura" ? name
-                                                              : std::string());
+    SetPerchDockIcon(DockIconFor(now, name));
   }
 #endif
   const PerchThemeTokens* t = FindPerchTheme(name);
@@ -449,6 +459,19 @@ void Refresh(Profile* profile) {
         : t && !t->dark  ? ThemeService::BrowserColorScheme::kLight
                          : ThemeService::BrowserColorScheme::kDark);
   }
+#if BUILDFLAG(IS_MAC)
+  // The Dock icon changes the moment the setting does; the colour mixer above
+  // only runs when a window next repaints.
+  std::string shown = now.theme;
+  if (now.match_system) {
+    const bool dark =
+        ui::NativeTheme::GetInstanceForNativeUi()->preferred_color_scheme() ==
+        ui::NativeTheme::PreferredColorScheme::kDark;
+    shown = dark ? now.dark_theme
+                 : std::string(now.dark_theme == "yozakura" ? "sakura" : "paper");
+  }
+  SetPerchDockIcon(DockIconFor(now, shown));
+#endif
   ui::ColorProviderManager::Get().ResetColorProviderCache();
   ui::NativeTheme::GetInstanceForNativeUi()->NotifyOnNativeThemeUpdated();
 }

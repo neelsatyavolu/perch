@@ -725,6 +725,9 @@ test("import: two Chrome profiles come over together, each named in the summary"
   expect(summary).toHaveLength(2);
   expect(summary[0]).toStartWith("Person 1: ");
   expect(summary[1]).toStartWith("Work: ");
+  // The second profile goes to a Perch profile of its own, which only the browser can reach; with
+  // no browser here its history waits sealed. Cleared so later tests start with none.
+  rmSync(bundleDir(join(dir, "user-data")), { recursive: true, force: true });
   rmSync(join(root, "Profile 1"), { recursive: true, force: true });
   writeFileSync(join(root, "Local State"), JSON.stringify({ profile: { info_cache: { Default: { name: "Person 1" } } } }));
 });

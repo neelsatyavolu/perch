@@ -16,6 +16,8 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_attributes_entry.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
+#include "chrome/browser/perch/perch_pref_names.h"
+#include "chrome/browser/profiles/profile_avatar_icon_util.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profile_window.h"
 #include "chrome/browser/ui/browser_commands.h"
@@ -59,6 +61,8 @@ OpenMenu& Current() {
   static base::NoDestructor<OpenMenu> open;
   return *open;
 }
+
+void NewProfile();
 
 }  // namespace
 
@@ -130,47 +134,28 @@ void PerchProfileMenuModel::BuildProfiles() {
         break;
       }
       profiles_.push_back(entry->GetPath());
+      // Each profile with its picture, as Aside lists them; the one in this
+      // window carries the check.
       AddCheckItem(id, entry->GetName());
+      SetIconForCommandId(
+          id, ui::ImageModel::FromImage(profiles::GetSizedAvatarIcon(
+                  entry->GetAvatarIcon(16), 16, 16, profiles::SHAPE_CIRCLE)));
     }
   }
-  AddSeparator(ui::NORMAL_SEPARATOR);
-  AddItemWithIcon(IDC_PERCH_NEW_PROFILE, u"New Profile",
+  AddItemWithIcon(IDC_PERCH_NEW_PROFILE, u"New profile",
                   Icon(vector_icons::kAccountCircleIcon));
-  AddItemWithIcon(IDC_PERCH_MANAGE_PROFILES, u"Manage Profiles",
-                  Icon(kManageAccountsIcon));
+  if (kind_ == Kind::kProfile) {
+    AddItemWithIcon(IDC_PERCH_MANAGE_PROFILES, u"Manage profiles",
+                    Icon(kManageAccountsIcon));
+  }
 }
 
-// The chevron that ends the tab strip: profiles, then Perch's own short menu
-// in place of Chromium's app menu.
+// The chevron that ends the tab strip, laid out as Aside's: profiles, then
+// the browser's places (bookmarks, downloads, extensions, history, developer
+// tools) and Settings, then a new tab or incognito window.
 void PerchProfileMenuModel::BuildApp() {
   BuildProfiles();
   AddSeparator(ui::NORMAL_SEPARATOR);
-  AddItemWithIcon(IDC_NEW_TAB, u"New Tab", Icon(kAddIcon));
-  AddItemWithIcon(IDC_NEW_WINDOW, u"New Window", Icon(kNewWindowIcon));
-  AddItemWithIcon(IDC_NEW_INCOGNITO_WINDOW, u"New Incognito Window",
-                  Icon(kIncognitoIcon));
-  AddSeparator(ui::NORMAL_SEPARATOR);
-
-  zoom_ = std::make_unique<ui::SimpleMenuModel>(this);
-  zoom_->AddItem(IDC_ZOOM_PLUS, u"Zoom In");
-  zoom_->AddItem(IDC_ZOOM_NORMAL, u"Actual Size");
-  zoom_->AddItem(IDC_ZOOM_MINUS, u"Zoom Out");
-  AddSubMenuWithIcon(IDC_ZOOM_MENU, u"Zoom", zoom_.get(), Icon(kZoomInIcon));
-  AddItemWithIcon(IDC_FIND, u"Find\u2026", Icon(vector_icons::kSearchIcon));
-  AddItemWithIcon(IDC_PRINT, u"Print\u2026", Icon(vector_icons::kPrintIcon));
-  AddSeparator(ui::NORMAL_SEPARATOR);
-
-  BrowserView* view = BrowserView::GetBrowserViewForBrowser(browser_);
-  history_ = std::make_unique<RecentTabsSubMenuModel>(view, browser_);
-  AddSubMenuWithIcon(IDC_RECENT_TABS_MENU, u"History",
-                     static_cast<ui::SimpleMenuModel*>(history_.get()),
-                     Icon(vector_icons::kHistoryIcon));
-
-  downloads_menu_ = std::make_unique<ui::SimpleMenuModel>(this);
-  AddRecentDownloads();
-  downloads_menu_->AddItem(IDC_SHOW_DOWNLOADS, u"Show All Downloads");
-  AddSubMenuWithIcon(IDC_PERCH_DOWNLOADS_MENU, u"Downloads",
-                     downloads_menu_.get(), Icon(vector_icons::kDownloadIcon));
 
   bookmarks_ = std::make_unique<ui::SimpleMenuModel>(this);
   bookmarks_->AddItem(IDC_BOOKMARK_THIS_TAB, u"Bookmark This Tab");
@@ -179,6 +164,12 @@ void PerchProfileMenuModel::BuildApp() {
   AddSubMenuWithIcon(IDC_BOOKMARKS_MENU, u"Bookmarks", bookmarks_.get(),
                      Icon(kBookmarkManagerIcon));
 
+  downloads_menu_ = std::make_unique<ui::SimpleMenuModel>(this);
+  AddRecentDownloads();
+  downloads_menu_->AddItem(IDC_SHOW_DOWNLOADS, u"Show All Downloads");
+  AddSubMenuWithIcon(IDC_PERCH_DOWNLOADS_MENU, u"Downloads",
+                     downloads_menu_.get(), Icon(vector_icons::kDownloadIcon));
+
   extensions_ = std::make_unique<ui::SimpleMenuModel>(this);
   extensions_->AddItem(IDC_MANAGE_EXTENSIONS, u"Manage Extensions");
   extensions_->AddItem(IDC_FIND_EXTENSIONS, u"Get Extensions");
@@ -186,22 +177,28 @@ void PerchProfileMenuModel::BuildApp() {
                      extensions_.get(),
                      Icon(vector_icons::kExtensionChromeRefreshOldIcon));
 
+  BrowserView* view = BrowserView::GetBrowserViewForBrowser(browser_);
+  history_ = std::make_unique<RecentTabsSubMenuModel>(view, browser_);
+  AddSubMenuWithIcon(IDC_RECENT_TABS_MENU, u"History",
+                     static_cast<ui::SimpleMenuModel*>(history_.get()),
+                     Icon(vector_icons::kHistoryIcon));
+
   // Only the tools Perch keeps (no Customize Chrome, Labs or vertical tabs).
   developers_ = std::make_unique<ui::SimpleMenuModel>(this);
-  developers_->AddItem(IDC_NAME_WINDOW, u"Name Window\u2026");
-  developers_->AddItem(IDC_PERFORMANCE, u"Performance");
+  developers_->AddItem(IDC_DEV_TOOLS, u"Developer Tools");
   if (chrome::CanOpenTaskManager()) {
     developers_->AddItem(IDC_TASK_MANAGER_APP_MENU, u"Task Manager");
   }
-  developers_->AddSeparator(ui::NORMAL_SEPARATOR);
-  developers_->AddItem(IDC_DEV_TOOLS, u"Developer Tools");
-  AddSubMenuWithIcon(IDC_PERCH_DEVELOPERS_MENU, u"More Tools",
+  developers_->AddItem(IDC_PERFORMANCE, u"Performance");
+  AddSubMenuWithIcon(IDC_PERCH_DEVELOPERS_MENU, u"Developers",
                      developers_.get(), Icon(vector_icons::kCodeIcon));
-  AddSeparator(ui::NORMAL_SEPARATOR);
   AddItemWithIcon(IDC_PERCH_OPEN_SETTINGS, u"Settings",
                   Icon(vector_icons::kSettingsIcon));
-  AddItemWithIcon(IDC_PERCH_ABOUT, u"About Perch",
-                  Icon(vector_icons::kInfoIcon));
+  AddSeparator(ui::NORMAL_SEPARATOR);
+
+  AddItemWithIcon(IDC_NEW_TAB, u"New Tab", Icon(kAddIcon));
+  AddItemWithIcon(IDC_NEW_INCOGNITO_WINDOW, u"Incognito Window",
+                  Icon(kIncognitoIcon));
 }
 
 void PerchProfileMenuModel::AddRecentDownloads() {
@@ -283,8 +280,7 @@ void PerchProfileMenuModel::ExecuteCommand(int command_id, int event_flags) {
   }
   switch (command_id) {
     case IDC_PERCH_NEW_PROFILE:
-      ProfilePicker::Show(ProfilePicker::Params::FromEntryPoint(
-          ProfilePicker::EntryPoint::kProfileMenuAddNewProfile));
+      NewProfile();
       return;
     case IDC_PERCH_MANAGE_PROFILES:
       ProfilePicker::Show(ProfilePicker::Params::FromEntryPoint(
@@ -298,6 +294,28 @@ void PerchProfileMenuModel::ExecuteCommand(int command_id, int event_flags) {
 }
 
 namespace {
+
+// A new profile opens straight away in a window of its own, as on Aside: no
+// picker. Perch's setup and tour were done once for this Mac (the models are
+// shared), so its window opens on a new tab.
+void NewProfile() {
+  ProfileManager* manager = g_browser_process->profile_manager();
+  if (!manager) {
+    return;
+  }
+  ProfileAttributesStorage& storage = manager->GetProfileAttributesStorage();
+  ProfileManager::CreateMultiProfileAsync(
+      storage.ChooseNameForNewProfile(),
+      storage.ChooseAvatarIconIndexForNewProfile(), /*is_hidden=*/false,
+      base::BindOnce([](Profile* profile) {
+        if (!profile) {
+          return;
+        }
+        profile->GetPrefs()->SetBoolean(prefs::kOnboardingFinished, true);
+        profile->GetPrefs()->SetBoolean(prefs::kTourFinished, true);
+        chrome::NewEmptyWindow(profile);
+      }));
+}
 
 void ShowMenu(BrowserWindowInterface* browser,
               views::View* anchor,

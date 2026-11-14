@@ -21,7 +21,24 @@
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
+#include "base/functional/callback_helpers.h"
 #include "chrome/browser/autofill/personal_data_manager_factory.h"
+#include "chrome/browser/bookmarks/bookmark_model_factory.h"
+#include "chrome/browser/browser_process.h"
+#include "chrome/browser/ui/browser_commands.h"
+#include "chrome/browser/perch/perch_pref_names.h"
+#include "components/prefs/pref_service.h"
+#include "components/bookmarks/browser/bookmark_model.h"
+#include "chrome/browser/profiles/profile_attributes_entry.h"
+#include "chrome/browser/profiles/profile_attributes_storage.h"
+#include "chrome/browser/profiles/profile_manager.h"
+#include "content/public/browser/storage_partition.h"
+#include "net/cookies/canonical_cookie.h"
+#include "net/cookies/cookie_constants.h"
+#include "net/cookies/cookie_inclusion_status.h"
+#include "net/cookies/cookie_options.h"
+#include "net/cookies/cookie_partition_key.h"
+#include "services/network/public/mojom/cookie_manager.mojom.h"
 #include "chrome/browser/extensions/webstore_install_with_prompt.h"
 #include "chrome/browser/importer/profile_writer.h"
 #include "chrome/browser/perch/spaces/spaces.h"
@@ -269,6 +286,82 @@ int ApplyTabs(Profile* profile, const base::ListValue& windows) {
   return count;
 }
 
+// Sign-ins (cookies) for a profile perchd can't reach over the DevTools pipe:
+// one imported into a Perch profile of its own. Each goes straight into that
+// profile's cookie store; one that isn't a valid cookie is left out.
+int ApplyCookies(Profile* profile, const base::ListValue& cookies) {
+  network::mojom::CookieManager* manager =
+      profile->GetDefaultStoragePartition()
+          ->GetCookieManagerForBrowserProcess();
+  if (!manager) {
+    return 0;
+  }
+  int count = 0;
+  for (const base::Value& item : cookies) {
+    const base::DictValue* c = item.GetIfDict();
+    const std::string* name = c ? c->FindString("name") : nullptr;
+    const std::string* value = c ? c->FindString("value") : nullptr;
+    const std::string* domain = c ? c->FindString("domain") : nullptr;
+    if (!name || !value || !domain || domain->empty()) {
+      continue;
+    }
+    const std::string* path_value = c->FindString("path");
+    const std::string path =
+        path_value && !path_value->empty() ? *path_value : "/";
+    const bool secure = c->FindBool("secure").value_or(false);
+    const bool http_only = c->FindBool("httpOnly").value_or(false);
+    // ".example.com" is for the domain and its subdomains; "example.com" for
+    // that host only, which a cookie gets by naming no domain.
+    const bool domain_wide = domain->starts_with(".");
+    const std::string host = domain_wide ? domain->substr(1) : *domain;
+    const GURL url((secure ? "https://" : "http://") + host + path);
+    if (!url.is_valid()) {
+      continue;
+    }
+    net::CookieSameSite same_site = net::CookieSameSite::UNSPECIFIED;
+    if (const std::string* mode = c->FindString("sameSite")) {
+      if (*mode == "Strict") {
+        same_site = net::CookieSameSite::STRICT_MODE;
+      } else if (*mode == "Lax") {
+        same_site = net::CookieSameSite::LAX_MODE;
+      } else if (*mode == "None" && secure) {
+        same_site = net::CookieSameSite::NO_RESTRICTION;
+      }
+    }
+    std::optional<net::CookiePartitionKey> partition;
+    if (const base::DictValue* p = c->FindDict("partition")) {
+      const std::string* site = p->FindString("site");
+      if (!site) {
+        continue;
+      }
+      auto key = net::CookiePartitionKey::FromUntrustedInput(
+          *site, p->FindBool("crossSite").value_or(false));
+      if (!key.has_value()) {
+        continue;
+      }
+      partition = *key;
+    }
+    const std::optional<double> expires = c->FindDouble("expires");
+    const base::Time now = base::Time::Now();
+    net::CookieInclusionStatus status;
+    std::unique_ptr<net::CanonicalCookie> cookie =
+        net::CanonicalCookie::CreateSanitizedCookie(
+            url, *name, *value, domain_wide ? *domain : "", path, now,
+            expires ? base::Time::FromSecondsSinceUnixEpoch(*expires)
+                    : base::Time(),
+            now, secure, http_only, same_site, net::COOKIE_PRIORITY_DEFAULT,
+            partition, &status);
+    if (!cookie) {
+      continue;
+    }
+    manager->SetCanonicalCookie(*cookie, url,
+                                net::CookieOptions::MakeAllInclusive(),
+                                base::DoNothing());
+    ++count;
+  }
+  return count;
+}
+
 // Pins or unpins a newly installed extension. The toolbar learns of it a
 // moment after the install reports success, so this waits for that.
 void ApplyPin(base::WeakPtr<Profile> profile,
@@ -421,7 +514,8 @@ void Apply(Profile* profile,
   applied.Set("history", history ? ApplyHistory(*writer, *history) : 0);
   const base::ListValue* passwords = data->FindList("passwords");
   applied.Set("passwords", passwords ? ApplyPasswords(*writer, *passwords) : 0);
-  applied.Set("cookies", 0);
+  const base::ListValue* cookies = data->FindList("cookies");
+  applied.Set("cookies", cookies ? ApplyCookies(profile, *cookies) : 0);
   const base::ListValue* tabs = data->FindList("tabs");
   applied.Set("tabs", tabs ? ApplyTabs(profile, *tabs) : 0);
   const base::ListValue* engines = data->FindList("searchEngines");
@@ -437,13 +531,104 @@ void Apply(Profile* profile,
   for (const auto [key, value] : *data) {
     if (key != "bookmarks" && key != "history" && key != "passwords" &&
         key != "tabs" && key != "searchEngines" && key != "extensions" &&
-        key != "addresses") {
+        key != "addresses" && key != "cookies") {
       skipped.Append(key);
     }
   }
   std::move(reply).Run(base::DictValue()
                            .Set("applied", std::move(applied))
                            .Set("skipped", std::move(skipped)));
+}
+
+// The Perch profile with this name, made the first time a browser profile of
+// that name is imported. Null when no profile can be made.
+void InProfileNamed(const std::u16string& name,
+                    base::OnceCallback<void(Profile*)> then) {
+  ProfileManager* manager = g_browser_process->profile_manager();
+  if (!manager) {
+    std::move(then).Run(nullptr);
+    return;
+  }
+  ProfileAttributesStorage& storage = manager->GetProfileAttributesStorage();
+  for (ProfileAttributesEntry* entry : storage.GetAllProfilesAttributes()) {
+    if (entry->GetName() == name) {
+      manager->CreateProfileAsync(entry->GetPath(), std::move(then));
+      return;
+    }
+  }
+  ProfileManager::CreateMultiProfileAsync(
+      name, storage.ChooseAvatarIconIndexForNewProfile(),
+      /*is_hidden=*/false, std::move(then));
+}
+
+// An imported profile opens in a window of its own, with its tabs if it
+// brought any, so the person sees it and can switch to it.
+void ShowProfile(Profile* profile) {
+  for (BrowserWindowInterface* window : GetAllBrowserWindowInterfaces()) {
+    if (window->GetProfile() == profile) {
+      window->GetWindow()->Show();
+      return;
+    }
+  }
+  // No tabs came over: the window opens on a new tab.
+  chrome::NewEmptyWindow(profile);
+}
+
+// A profile made a moment ago is still loading its bookmarks, and the
+// importer adds to the loaded bookmark tree; this waits for it (up to 30 s).
+void WhenBookmarksLoaded(base::WeakPtr<Profile> profile,
+                         int tries_left,
+                         base::OnceCallback<void(Profile*)> then) {
+  bookmarks::BookmarkModel* model =
+      profile ? BookmarkModelFactory::GetForBrowserContext(profile.get())
+              : nullptr;
+  if (!profile || !model || model->loaded() || tries_left <= 0) {
+    std::move(then).Run(profile && model && model->loaded() ? profile.get()
+                                                             : nullptr);
+    return;
+  }
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
+      FROM_HERE,
+      base::BindOnce(&WhenBookmarksLoaded, profile, tries_left - 1,
+                     std::move(then)),
+      base::Milliseconds(100));
+}
+
+void ApplyToNamedProfile(std::string name,
+                         base::OnceCallback<void(DataResult)> reply,
+                         std::optional<std::string> text) {
+  InProfileNamed(
+      base::UTF8ToUTF16(name),
+      base::BindOnce(
+          [](base::OnceCallback<void(DataResult)> reply,
+             std::optional<std::string> text, Profile* profile) {
+            if (!profile) {
+              std::move(reply).Run(
+                  base::unexpected("Perch couldn't make a profile for it"));
+              return;
+            }
+            WhenBookmarksLoaded(
+                profile->GetWeakPtr(), 300,
+                base::BindOnce(
+                    [](base::OnceCallback<void(DataResult)> reply,
+                       std::optional<std::string> text, Profile* profile) {
+                      if (!profile) {
+                        std::move(reply).Run(base::unexpected(
+                            "The new profile didn't finish opening"));
+                        return;
+                      }
+                      // Set up already, in the profile it was imported
+                      // from: its window opens on its tabs, not on setup.
+                      profile->GetPrefs()->SetBoolean(
+                          prefs::kOnboardingFinished, true);
+                      profile->GetPrefs()->SetBoolean(prefs::kTourFinished,
+                                                      true);
+                      Apply(profile, std::move(reply), std::move(text));
+                      ShowProfile(profile);
+                    },
+                    std::move(reply), std::move(text)));
+          },
+          std::move(reply), std::move(text)));
 }
 
 }  // namespace
@@ -454,6 +639,16 @@ void ApplyImportBundle(Profile* profile,
   const std::string* path = params.FindString("path");
   if (!path) {
     std::move(reply).Run(base::unexpected("path is required"));
+    return;
+  }
+  // One of several profiles imported together goes into a Perch profile of
+  // its own name, not the one perchd works in.
+  const std::string* name = params.FindString("profileName");
+  if (name && !name->empty() && name->size() <= 100) {
+    base::ThreadPool::PostTaskAndReplyWithResult(
+        FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_VISIBLE},
+        base::BindOnce(&ReadBundle, base::FilePath(*path)),
+        base::BindOnce(&ApplyToNamedProfile, *name, std::move(reply)));
     return;
   }
   base::ThreadPool::PostTaskAndReplyWithResult(

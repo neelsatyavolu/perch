@@ -219,11 +219,15 @@ export function importPages(deps: PagesDeps): Methods<"detectBrowsers" | "getSys
       // Each profile brings its browser data; an Aside profile also brings the agent account it's
       // signed in to, and each account comes over once however many profiles share it.
       const accounts = new Set<string>();
-      const parts = requested.flatMap((id) => {
+      // The first browser profile comes into this Perch profile; each other one gets a Perch
+      // profile of its own name, which opens in a window with its tabs, so they stay apart.
+      const browserProfiles = requested.filter((id) => !id.startsWith(ACCOUNT_PREFIX));
+      const parts: { source: { browser: string; profile: string }; types: DataType[]; label?: string; intoProfile?: string }[] = requested.flatMap((id) => {
         const label = requested.length > 1 ? named(id) : undefined;
         const account = browser === "aside" && agent ? accountOf(home, id, agent) : undefined;
         const agentPart = account !== undefined && !accounts.has(account) ? (accounts.add(account), [{ source: { browser: ASIDE_AGENT, profile: account }, types: types(AGENT_KINDS), label }]) : [];
-        const browserPart = id.startsWith(ACCOUNT_PREFIX) ? [] : [{ source: { browser, profile: id }, types: types(BROWSER_KINDS), label }];
+        const own = browserProfiles.indexOf(id) > 0 ? { intoProfile: named(id) } : {};
+        const browserPart = id.startsWith(ACCOUNT_PREFIX) ? [] : [{ source: { browser, profile: id }, types: types(BROWSER_KINDS), label, ...own }];
         return [...browserPart, ...agentPart];
       }).filter((p) => p.types.length > 0);
       const total = parts.reduce((n, p) => n + p.types.length, 0) + (csv ? 1 : 0) + fromZip.length;
@@ -237,10 +241,12 @@ export function importPages(deps: PagesDeps): Methods<"detectBrowsers" | "getSys
           // passwords file and the other parts come in; its types report the reason.
           const report = await importSource({
             home, source: part.source, types: part.types, target, keychain: deps.importer.keychain, running: deps.importer.running, browser: deps.importer.browser, agent: agentWriter(deps),
+            ...(part.intoProfile ? { intoProfile: part.intoProfile } : {}),
             onProgress: (p) => job.step(`Importing ${nounOf(p.type)}${part.label ? ` from ${part.label}` : ""}`, base + p.index),
           }).catch((error: unknown) => (csv || zip || parts.length > 1 ? { results: part.types.map((t) => failure(t, error)) } : Promise.reject(error)));
           results.push(...report.results);
           lines.push(...report.results.map((r) => (part.label ? `${part.label}: ${summaryLine(r)}` : summaryLine(r))));
+          if (part.intoProfile && report.results.some((r) => r.status === "written")) lines.push(`${part.label}: opened as its own Perch profile, "${part.intoProfile}", in a new window`);
           base += part.types.length;
         }
         if (zip) {

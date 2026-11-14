@@ -112,6 +112,8 @@ export type ImportInput = {
   readonly browser?: ApplyInput["browser"];
   /** Perch's memory, skills and chats, for Aside's agent data (apply.ts); without it they are bundled. */
   readonly agent?: ApplyInput["agent"];
+  /** Into a Perch profile of this name instead of the current one (apply.ts). */
+  readonly intoProfile?: string;
 };
 
 export type Report = { readonly source: SourceRef; readonly results: readonly TypeResult[]; readonly bundle?: { readonly id: string; readonly path: string } };
@@ -145,8 +147,8 @@ export async function importSource(input: ImportInput): Promise<Report> {
   }
   // Each extension's own data goes over before Perch installs it, so it starts as it was left.
   const extensions = parts.find((p) => p.type === "extensions")?.data.extensions;
-  if (browser.family === "chromium" && extensions?.length) copyExtensionData(profile.path, join(input.target.userDataDir, input.target.profileDir ?? "Default"), extensions.map((e) => e.id));
-  const applied = await applyImport({ target: input.target, keychain: input.keychain, source: { browser: from, profile: profile.name }, parts, onProgress: input.onProgress, now: input.now, running: input.running, browser: input.browser, agent: input.agent });
+  if (browser.family === "chromium" && extensions?.length && !input.intoProfile) copyExtensionData(profile.path, join(input.target.userDataDir, input.target.profileDir ?? "Default"), extensions.map((e) => e.id));
+  const applied = await applyImport({ target: input.target, keychain: input.keychain, source: { browser: from, profile: profile.name }, parts, onProgress: input.onProgress, now: input.now, running: input.running, browser: input.browser, agent: input.agent, ...(input.intoProfile ? { intoProfile: input.intoProfile } : {}) });
   const order = (r: TypeResult) => types.indexOf(r.type);
   const results = [...applied.results, ...failed].sort((a, b) => order(a) - order(b));
   results.forEach((r, index) => input.onProgress?.({ type: r.type, state: r.status === "failed" ? "failed" : "done", index, total: types.length }));

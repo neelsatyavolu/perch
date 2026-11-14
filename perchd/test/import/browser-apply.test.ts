@@ -103,3 +103,23 @@ test("a browser that adds addresses and extensions leaves nothing sealed", async
   expect(out.bundle).toBeUndefined();
   expect(pendingBundles(dir)).toEqual([]);
 });
+
+test("a profile imported into a Perch profile of its own goes to the browser with that name, cookies and all", async () => {
+  const keychain = memoryKeychain();
+  const names: (string | undefined)[] = [];
+  const cookieSent: unknown[] = [];
+  const browser: Pick<PerchDomainApi, "applyImportBundle"> = {
+    async applyImportBundle({ path, profileName }) {
+      names.push(profileName);
+      cookieSent.push(...(JSON.parse(readFileSync(path, "utf8")).data.cookies ?? []));
+      return { applied: { ...none, cookies: 1 }, skipped: [] };
+    },
+  };
+  // The pipe to the running Perch reaches only its current profile, so it isn't used.
+  const running = { send: async () => { throw new Error("must not be used"); }, on: () => () => {} } as never;
+  const cookie = { name: "sid", value: "v", domain: ".school.example", path: "/", secure: true, httpOnly: true };
+  const r = await applyImport({ target: { userDataDir: dir }, keychain, source: { browser: "Aside (School)", profile: "School" }, parts: [{ type: "cookies", data: { cookies: [cookie] } }], browser, running, intoProfile: "School" });
+  expect(names).toEqual(["School"]);
+  expect(cookieSent).toEqual([cookie]);
+  expect(r.results).toEqual([{ type: "cookies", status: "written", count: 1 }]);
+});

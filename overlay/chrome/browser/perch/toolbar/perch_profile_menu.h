@@ -63,7 +63,6 @@ class PerchProfileMenuModel : public ui::SimpleMenuModel,
   std::vector<base::FilePath> profiles_;
   // Recent finished downloads, by row of the Downloads submenu.
   std::vector<std::string> downloads_;
-  std::unique_ptr<ui::SimpleMenuModel> zoom_;
   std::unique_ptr<ui::SimpleMenuModel> bookmarks_;
   std::unique_ptr<ui::SimpleMenuModel> downloads_menu_;
   std::unique_ptr<ui::SimpleMenuModel> extensions_;

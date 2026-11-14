@@ -38,7 +38,8 @@ export type PerchDomainApi = {
   /** Visits other devices made (sync); the browser adds them as synced visits. */
   addHistory(p: { visits: HistoryVisit[] }): Promise<{ added: number } | null>;
   getOpenTabs(): Promise<{ windows: OpenWindow[] } | null>;
-  applyImportBundle(p: { path: string }): Promise<{ applied: ImportApplied; skipped: string[] } | null>;
+  /** `profileName`: apply into the Perch profile of that name (made if missing), which opens in a window. */
+  applyImportBundle(p: { path: string; profileName?: string }): Promise<{ applied: ImportApplied; skipped: string[] } | null>;
   /** The address bar's ⌘↵ and the new tab page's Ask. Returns a function that stops listening. */
   onAskRequested(listener: (ask: AskRequest) => void): () => void;
 };
@@ -94,7 +95,7 @@ export class PerchDomain implements PerchDomainApi {
     return this.call<{ windows: OpenWindow[] }>("getOpenTabs");
   }
 
-  applyImportBundle(p: { path: string }) {
+  applyImportBundle(p: { path: string; profileName?: string }) {
     return this.call<{ applied: ImportApplied; skipped: string[] }>("applyImportBundle", p);
   }
 

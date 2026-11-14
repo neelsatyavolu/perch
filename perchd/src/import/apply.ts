@@ -105,6 +105,12 @@ export type ApplyInput = {
   readonly browser?: Pick<PerchDomainApi, "applyImportBundle">;
   /** Perch's memory, skills and chats; tried before bundling those types. */
   readonly agent?: AgentWriter;
+  /**
+   * One of several browser profiles imported together: its browser data goes into the Perch
+   * profile of this name (made the first time), which opens in a window of its own. All of it
+   * goes through the browser, since only the browser can reach that profile.
+   */
+  readonly intoProfile?: string;
 };
 
 /** The types the browser writes from a bundle; the rest wait in it. */
@@ -117,7 +123,7 @@ type BrowserOutcome = { applied: ImportApplied; skipped: readonly string[] };
  * folder beside the bundles, and that file is deleted when the call ends, however it ends.
  * Null when the browser lacks the method or the call failed; the bundle then stays as it is.
  */
-async function applyInBrowser(userDataDir: string, keychain: Keychain, id: string, browser: NonNullable<ApplyInput["browser"]>): Promise<BrowserOutcome | null> {
+async function applyInBrowser(userDataDir: string, keychain: Keychain, id: string, browser: NonNullable<ApplyInput["browser"]>, intoProfile?: string): Promise<BrowserOutcome | null> {
   const bundle = await openBundle(userDataDir, keychain, id);
   const dir = join(bundleDir(userDataDir), "applying");
   mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -125,7 +131,7 @@ async function applyInBrowser(userDataDir: string, keychain: Keychain, id: strin
   const path = join(dir, `${randomUUID()}.json`);
   try {
     writeFileSync(path, JSON.stringify(bundle), { mode: 0o600, flag: "wx" });
-    return await browser.applyImportBundle({ path });
+    return await browser.applyImportBundle({ path, ...(intoProfile ? { profileName: intoProfile } : {}) });
   } catch {
     return null;
   } finally {
@@ -149,7 +155,8 @@ async function writeLive(type: DataType, data: ImportData, running: CdpConnectio
 }
 
 export async function applyImport(input: ApplyInput): Promise<{ results: TypeResult[]; bundle?: { id: string; path: string } }> {
-  const closed = !profileInUse(input.target.userDataDir);
+  const closed = !input.intoProfile && !profileInUse(input.target.userDataDir);
+  const running = input.intoProfile ? undefined : input.running;
   const label = `Imported from ${input.source.browser}`;
   const results: TypeResult[] = [];
   const toBundle: { type: DataType; data: ImportData; skipped?: number }[] = [];
@@ -162,7 +169,7 @@ export async function applyImport(input: ApplyInput): Promise<{ results: TypeRes
     }
     input.onProgress?.({ type: part.type, state: "writing", index, total: input.parts.length });
     try {
-      const direct = writeDirect(part.type, part.data, input.target, label, closed) ?? (await writeLive(part.type, part.data, input.running, closed));
+      const direct = writeDirect(part.type, part.data, input.target, label, closed) ?? (await writeLive(part.type, part.data, running, closed));
       const written = direct ?? (await writeAgent(part.type, part.data, input.agent));
       if (written && !direct) inStores.push(part.type);
       if (written) results.push(part.skipped ? { ...written, skipped: (written.skipped ?? 0) + part.skipped } : written);
@@ -180,7 +187,7 @@ export async function applyImport(input: ApplyInput): Promise<{ results: TypeRes
     const data = Object.assign({}, ...toBundle.map((p) => p.data)) as ImportData;
     const bundle = await sealReplacingBundle(input.target.userDataDir, input.keychain, input.source, data, input.now);
     const bundled = toBundle.map((p): TypeResult => ({ type: p.type, status: "bundled", count: itemCount(p.type, p.data), ...(p.skipped ? { skipped: p.skipped } : {}), message: BUNDLED_MESSAGE }));
-    const outcome = input.browser ? await applyInBrowser(input.target.userDataDir, input.keychain, bundle.id, input.browser) : null;
+    const outcome = input.browser ? await applyInBrowser(input.target.userDataDir, input.keychain, bundle.id, input.browser, input.intoProfile) : null;
     if (!outcome) return { results: sorted([...results, ...bundled]), bundle };
     const done = new Set<DataType>(BROWSER_TYPES.filter((t) => typeof outcome.applied[t] === "number" && !outcome.skipped.includes(t)));
     const written = bundled.map((r): TypeResult => {

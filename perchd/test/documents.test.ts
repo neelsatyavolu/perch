@@ -83,6 +83,14 @@ test("documents download with the browser's cookies, through redirects", async (
   await expect(fetchDocument("file:///etc/passwd", async () => "", "Perch")).rejects.toThrow(/http/);
 });
 
+test("a server that never sends the file gives up with a plain error instead of holding the agent", async () => {
+  const hang = async (_url: string, init: RequestInit) =>
+    new Promise<Response>((_, reject) => init.signal?.addEventListener("abort", () => reject(init.signal!.reason)));
+  await expect(fetchDocument("https://slow.example/x.pdf", async () => "", "Perch", { fetch: hang, resolve: publicDns, timeoutMs: 50 })).rejects.toThrow(
+    /the server did not send the file within/,
+  );
+});
+
 test("cookies never go over plain http, even after a redirect from https", async () => {
   const web = fakeWeb({
     "https://lms.example/start": redirect("http://lms.example/plain.txt"),

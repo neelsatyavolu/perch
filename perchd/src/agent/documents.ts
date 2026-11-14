@@ -13,6 +13,8 @@ import { textOf as pdfText } from "../page/pdf";
 
 const MAX_BYTES = 50_000_000;
 const MAX_HOPS = 8;
+/** The most one download may take, redirects and all: a server that never answers must not hold the agent. */
+const DOWNLOAD_MS = 120_000;
 /** Text returned per call; `from` reads on. */
 export const PART_CHARS = 30_000;
 
@@ -21,7 +23,7 @@ export type Fetched = { bytes: Uint8Array; type: string; name: string; url: stri
 export type CookieSource = (url: string) => Promise<string>;
 /** Every address a host name resolves to. */
 export type Resolver = (host: string) => Promise<string[]>;
-export type FetchOptions = { resolve?: Resolver; fetch?: (url: string, init: RequestInit) => Promise<Response> };
+export type FetchOptions = { resolve?: Resolver; fetch?: (url: string, init: RequestInit) => Promise<Response>; timeoutMs?: number };
 
 const resolveAll: Resolver = async (host) => (await lookup(host, { all: true, verbatim: true })).map((a) => a.address);
 
@@ -32,12 +34,21 @@ const resolveAll: Resolver = async (host) => (await lookup(host, { all: true, ve
  */
 export async function fetchDocument(url: string, cookies: CookieSource, userAgent: string, opts: FetchOptions = {}): Promise<Fetched> {
   const get = opts.fetch ?? ((u: string, init: RequestInit) => fetch(u, init));
-  let current = new URL(url);
+  const signal = AbortSignal.timeout(opts.timeoutMs ?? DOWNLOAD_MS);
+  try {
+    return await download(new URL(url), cookies, userAgent, get, opts.resolve ?? resolveAll, signal);
+  } catch (error) {
+    if (signal.aborted) throw new Error(`the server did not send the file within ${Math.round((opts.timeoutMs ?? DOWNLOAD_MS) / 1000)} s`);
+    throw error;
+  }
+}
+
+async function download(current: URL, cookies: CookieSource, userAgent: string, get: NonNullable<FetchOptions["fetch"]>, resolve: Resolver, signal: AbortSignal): Promise<Fetched> {
   for (let hop = 0; hop <= MAX_HOPS; hop++) {
     if (current.protocol !== "https:" && current.protocol !== "http:") throw new Error("only http and https addresses can be read");
-    await publicHost(current, opts.resolve ?? resolveAll);
+    await publicHost(current, resolve);
     const cookie = current.protocol === "https:" ? await cookies(current.href).catch(() => "") : "";
-    const res = await get(current.href, { redirect: "manual", headers: { "user-agent": userAgent, accept: "*/*", ...(cookie ? { cookie } : {}) } });
+    const res = await get(current.href, { redirect: "manual", signal, headers: { "user-agent": userAgent, accept: "*/*", ...(cookie ? { cookie } : {}) } });
     const location = res.headers.get("location");
     if (res.status >= 300 && res.status < 400 && location) {
       current = new URL(location, current);

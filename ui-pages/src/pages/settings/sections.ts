@@ -1,6 +1,7 @@
 /** Settings sections and the search index. A test checks every anchor here exists on its page. */
 
 export const SECTIONS = [
+  { id: "profile", label: "Profile", group: "Personal" },
   { id: "appearance", label: "Appearance", group: "Personal" },
   { id: "privacy", label: "Privacy and security", group: "Personal" },
   { id: "sync", label: "Sync", group: "Personal" },
@@ -34,6 +35,7 @@ export const sectionLabel = (id: SectionId) => SECTIONS.find((s) => s.id === id)
 export type SearchEntry = { readonly section: SectionId; readonly anchor: string; readonly title: string; readonly words?: string };
 
 export const SEARCH_INDEX: readonly SearchEntry[] = [
+  { section: "profile", anchor: "profile-name", title: "Profile name and icon", words: "profile avatar picture icon rename name switcher" },
   { section: "appearance", anchor: "theme", title: "Theme", words: "ink graphite dusk paper contrast dark light colour color" },
   { section: "appearance", anchor: "accent", title: "Accent colour", words: "blue teal amber rose mono color" },
   { section: "appearance", anchor: "sakura-mode", title: "Sakura mode", words: "cherry blossom pink petals spring yozakura theme flowers cute" },

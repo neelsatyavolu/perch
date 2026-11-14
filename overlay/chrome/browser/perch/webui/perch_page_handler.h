@@ -15,6 +15,7 @@
 
 class GURL;
 class Profile;
+class ProfileAttributesEntry;
 
 namespace perch {
 
@@ -60,6 +61,8 @@ class PerchPageHandler : public content::WebUIMessageHandler {
   void Navigate(const GURL& url, bool typed = false);
 
   Profile* profile();
+  // This profile's row in the profile list (name, icon), or null.
+  ProfileAttributesEntry* ProfileEntry();
 
   PrefChangeRegistrar appearance_registrar_;
   // The new tab page's Search box suggestions, made on first use.

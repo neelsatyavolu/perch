@@ -40,7 +40,16 @@
 #include "chrome/browser/perch/perch_pref_names.h"
 #include "chrome/browser/perch/settings/appearance.h"
 #include "chrome/browser/perch/settings/privacy.h"
+#include "base/base64.h"
+#include "base/memory/ref_counted_memory.h"
+#include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/profiles/profile_attributes_entry.h"
+#include "chrome/browser/profiles/profile_attributes_storage.h"
+#include "chrome/browser/profiles/profile_avatar_icon_util.h"
+#include "chrome/browser/profiles/profile_manager.h"
+#include "ui/base/resource/resource_bundle.h"
+#include "ui/gfx/image/image.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/webui/webui_embedding_context.h"
@@ -157,6 +166,14 @@ void PerchPageHandler::Navigate(const GURL& url, bool typed) {
                 : ui::PAGE_TRANSITION_LINK,
           false),
       {});
+}
+
+ProfileAttributesEntry* PerchPageHandler::ProfileEntry() {
+  ProfileManager* manager = g_browser_process->profile_manager();
+  return manager ? manager->GetProfileAttributesStorage()
+                       .GetProfileAttributesWithPath(
+                           profile()->GetOriginalProfile()->GetPath())
+                 : nullptr;
 }
 
 Profile* PerchPageHandler::profile() {
@@ -649,6 +666,60 @@ void PerchPageHandler::Dispatch(const std::string& method,
       return;
     }
     ShowAgentTab(pick, browser);
+    Resolve(std::move(id), base::Value());
+  } else if (method == "getProfile") {
+    // Settings › Profile: this profile's name and icon, and the icons to pick
+    // from (Chromium's profile pictures), each as a PNG data: URL.
+    ProfileAttributesEntry* entry = ProfileEntry();
+    if (!entry) {
+      Reject(std::move(id), "unavailable", "This profile can't be edited");
+      return;
+    }
+    base::ListValue icons;
+    for (size_t i = profiles::GetModernAvatarIconStartIndex();
+         i < profiles::GetDefaultAvatarIconCount(); ++i) {
+      const gfx::Image& image =
+          ui::ResourceBundle::GetSharedInstance().GetImageNamed(
+              profiles::GetDefaultAvatarIconResourceIDAtIndex(i));
+      scoped_refptr<base::RefCountedMemory> png = image.As1xPNGBytes();
+      if (!png || png->size() == 0) {
+        continue;
+      }
+      icons.Append(base::DictValue()
+                       .Set("index", static_cast<int>(i))
+                       .Set("url", "data:image/png;base64," +
+                                       base::Base64Encode(*png)));
+    }
+    Resolve(std::move(id),
+            base::Value(base::DictValue()
+                            .Set("name", entry->GetLocalProfileName())
+                            .Set("icon", static_cast<int>(
+                                             entry->GetAvatarIconIndex()))
+                            .Set("icons", std::move(icons))));
+  } else if (method == "setProfile") {
+    ProfileAttributesEntry* entry = ProfileEntry();
+    const base::DictValue* patch = arg0 ? arg0->GetIfDict() : nullptr;
+    if (!entry || !patch) {
+      Reject(std::move(id), "invalid", "Nothing to change");
+      return;
+    }
+    if (const std::string* name = patch->FindString("name")) {
+      const std::u16string trimmed = base::CollapseWhitespace(
+          base::UTF8ToUTF16(*name), /*trim_sequences_with_line_breaks=*/true);
+      if (trimmed.empty() || trimmed.size() > 50) {
+        Reject(std::move(id), "invalid", "Give the profile a name of 1 to 50 characters");
+        return;
+      }
+      entry->SetLocalProfileName(trimmed, /*is_default_name=*/false);
+    }
+    if (std::optional<int> icon = patch->FindInt("icon")) {
+      if (*icon < static_cast<int>(profiles::GetModernAvatarIconStartIndex()) ||
+          *icon >= static_cast<int>(profiles::GetDefaultAvatarIconCount())) {
+        Reject(std::move(id), "invalid", "That isn't one of the icons");
+        return;
+      }
+      entry->SetAvatarIconIndex(static_cast<size_t>(*icon));
+    }
     Resolve(std::move(id), base::Value());
   } else if (method == "finishTour") {
     // The tour was finished or skipped: it stops opening at launch.

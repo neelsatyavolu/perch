@@ -20,7 +20,7 @@ describe("Settings shell", () => {
     expect(await r.findByRole("heading", { level: 1, name: "Appearance" })).toBeTruthy();
     const nav = r.getByRole("navigation", { name: "Settings" });
     const names = within(nav).getAllByRole("link").map((a) => a.textContent);
-    expect(names).toEqual(["Appearance", "Privacy and security", "Sync", "Import", "Models", "Skills and MCP", "Permissions", "Memory", "Routines", "Performance", "Built-in extensions", "About and updates"]);
+    expect(names).toEqual(["Profile", "Appearance", "Privacy and security", "Sync", "Import", "Models", "Skills and MCP", "Permissions", "Memory", "Routines", "Performance", "Built-in extensions", "About and updates"]);
     expect(within(nav).getAllByRole("list").map((l) => l.getAttribute("aria-label"))).toEqual(["Personal", "Agent", "Browser", "More"]);
     expect(within(nav).getByRole("link", { name: "Appearance" }).getAttribute("aria-current")).toBe("page");
   });

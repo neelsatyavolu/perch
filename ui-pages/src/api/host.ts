@@ -18,7 +18,7 @@ export const BROWSER_METHODS: ReadonlySet<string> = new Set([
   "getAbout", "checkForUpdates", "installUpdate", "setAutoUpdate",
   "listBuiltInExtensions", "setBuiltInExtension",
   "getMemorySaver", "setMemorySaver", "addSleepRule", "listTabMemory",
-  "queryCommandBar", "runCommandBarItem", "closeCommandBar", "openCommandBar", "showAgentTab", "showThisTab", "finishTour",
+  "queryCommandBar", "runCommandBarItem", "closeCommandBar", "openCommandBar", "showAgentTab", "showThisTab", "finishTour", "getProfile", "setProfile",
   "revealRecoveryKey", "getSecurity", "exportBackup", "restoreFromRecoveryKey", "startFresh",
 ]);
 

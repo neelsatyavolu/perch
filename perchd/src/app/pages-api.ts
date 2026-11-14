@@ -34,7 +34,7 @@ export const BROWSER_METHODS = [
   "submitQuery", "autocompleteAddress", "openAddress", "openChat", "newChat",
   "listBuiltInExtensions", "setBuiltInExtension",
   "getMemorySaver", "setMemorySaver", "addSleepRule", "listTabMemory",
-  "queryCommandBar", "runCommandBarItem", "closeCommandBar", "openCommandBar", "showAgentTab", "showThisTab", "finishTour",
+  "queryCommandBar", "runCommandBarItem", "closeCommandBar", "openCommandBar", "showAgentTab", "showThisTab", "finishTour", "getProfile", "setProfile",
   "revealRecoveryKey", "getSecurity", "exportBackup", "restoreFromRecoveryKey", "startFresh",
 ] as const satisfies readonly ApiMethod[];
 

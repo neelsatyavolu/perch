@@ -76,6 +76,9 @@ export type Appearance = {
 
 /* ---------- New tab page (spec 5.5, DESIGN.md) ---------- */
 
+/** A profile's name and icon; `icons` are the pictures to pick from, as PNG data: URLs. */
+export type ProfileInfo = { readonly name: string; readonly icon: number; readonly icons: readonly { readonly index: number; readonly url: string }[] };
+
 export type ChatStatus = "idle" | "running" | "waiting";
 export type ChatSummary = {
   readonly id: string;
@@ -593,6 +596,10 @@ export interface PerchApi {
   showThisTab(): Promise<void>;
   /** The tour was finished or skipped; it stops opening when Perch starts. */
   finishTour(): Promise<void>;
+  /** This profile's name and icon, and the icons to pick from (Settings › Profile). */
+  getProfile(): Promise<ProfileInfo>;
+  /** Renames this profile or changes its icon (an index from `getProfile().icons`). */
+  setProfile(patch: { readonly name?: string; readonly icon?: number }): Promise<void>;
 
   // Outside agents (the tour's last step): the perch command and Perch's skill and MCP server in
   // Claude Code, Codex and Grok
@@ -719,7 +726,7 @@ export const API_METHODS = [
   "getPrivacy", "setPrivacy", "setBackgroundConnection", "removeBlockerException", "listSiteData", "forgetSite",
   "listBuiltInExtensions", "setBuiltInExtension",
   "getMemorySaver", "setMemorySaver", "addSleepRule", "listTabMemory",
-  "queryCommandBar", "runCommandBarItem", "closeCommandBar", "openCommandBar", "showAgentTab", "showThisTab", "finishTour", "getAgentSetup", "connectAgents", "startMemoryChat",
+  "queryCommandBar", "runCommandBarItem", "closeCommandBar", "openCommandBar", "showAgentTab", "showThisTab", "finishTour", "getProfile", "setProfile", "getAgentSetup", "connectAgents", "startMemoryChat",
   "getSync", "startSyncPairing", "checkSyncPairing", "syncNow", "removeSyncDevice", "turnOffSync", "revealRecoveryKey",
   "getSecurity", "exportBackup", "restoreFromRecoveryKey", "startFresh",
   "getMemorySettings", "setMemorySettings", "listMemoryPages", "readMemoryPage", "writeMemoryPage", "deleteMemoryPage", "wipeMemory",

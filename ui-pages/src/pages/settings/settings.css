@@ -147,3 +147,13 @@ legend.cand-src { padding: 6px 0 0; }
 .op-vault { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--body); }
 .op-problem { display: grid; gap: 6px; }
 .op-problem p { margin: 0; }
+
+/* Profile: the name field fits its row; the icons are a grid of round pictures, the chosen one ringed. */
+.profile-name { width: 220px; }
+.profile-icons { display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: 8px; padding: 12px; }
+.profile-icon { width: 48px; height: 48px; padding: 2px; border: 0; border-radius: 50%; background: none; cursor: pointer; justify-self: center;
+  box-shadow: inset 0 0 0 1px var(--hair); transition: box-shadow 120ms var(--ease); }
+.profile-icon:hover { box-shadow: inset 0 0 0 1px var(--hair-strong); }
+.profile-icon.on { box-shadow: 0 0 0 2px var(--accent); }
+.profile-icon img { display: block; width: 44px; height: 44px; border-radius: 50%; }
+@media (max-width: 480px) { .profile-name { width: 100%; } }

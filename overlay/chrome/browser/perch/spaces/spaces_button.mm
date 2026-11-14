@@ -29,7 +29,15 @@
 #include "ui/views/border.h"
 #include "ui/views/controls/highlight_path_generator.h"
 #include "ui/views/animation/ink_drop.h"
+#include "base/scoped_observation.h"
+#include "chrome/browser/browser_process.h"
 #include "chrome/browser/perch/toolbar/perch_profile_menu.h"
+#include "chrome/browser/profiles/profile_attributes_entry.h"
+#include "chrome/browser/profiles/profile_attributes_storage.h"
+#include "chrome/browser/profiles/profile_avatar_icon_util.h"
+#include "chrome/browser/profiles/profile_manager.h"
+#include "ui/views/controls/image_view.h"
+#include "ui/views/layout/box_layout.h"
 #include "components/vector_icons/vector_icons.h"
 #include "ui/views/layout/flex_layout_types.h"
 #include "ui/views/view_class_properties.h"
@@ -38,26 +46,30 @@ namespace perch {
 
 namespace {
 
-// The chevron at the end of the tab strip; a press opens Perch's menu.
-class SpacesButton : public views::LabelButton {
-  METADATA_HEADER(SpacesButton, views::LabelButton)
+// The end of the tab strip, as on Aside: this profile's icon, then a chevron;
+// a press opens Perch's menu (perch_profile_menu.cc). Spaces stay in the menu
+// bar and on Control-1 to 9.
+class SpacesButton : public views::Button,
+                     public ProfileAttributesStorage::Observer {
+  METADATA_HEADER(SpacesButton, views::Button)
 
  public:
   explicit SpacesButton(BrowserWindowInterface* browser)
-      : views::LabelButton(
-            base::BindRepeating(&SpacesButton::ShowMenu,
-                                base::Unretained(this))),
+      : views::Button(base::BindRepeating(&SpacesButton::ShowMenu,
+                                          base::Unretained(this))),
         browser_(browser) {
-    // Just an arrow, so the tabs keep the strip's width; the space's name is
-    // in the tooltip and at the top of the menu.
-    SetImageModel(views::Button::STATE_NORMAL,
-                  ui::ImageModel::FromVectorIcon(
-                      vector_icons::kKeyboardArrowDownIcon,
-                      kColorTabForegroundInactiveFrameActive, 16));
-    SetHorizontalAlignment(gfx::ALIGN_CENTER);
-    SetBorder(views::CreateEmptyBorder(gfx::Insets(0)));
-    SetMinSize(gfx::Size(28, 28));
-    SetMaxSize(gfx::Size(28, 28));
+    auto* layout = SetLayoutManager(std::make_unique<views::BoxLayout>(
+        views::BoxLayout::Orientation::kHorizontal, gfx::Insets::VH(0, 5), 2));
+    layout->set_cross_axis_alignment(
+        views::BoxLayout::CrossAxisAlignment::kCenter);
+    avatar_ = AddChildView(std::make_unique<views::ImageView>());
+    avatar_->SetCanProcessEventsWithinSubtree(false);
+    auto* chevron = AddChildView(std::make_unique<views::ImageView>(
+        ui::ImageModel::FromVectorIcon(vector_icons::kKeyboardArrowDownIcon,
+                                       kColorTabForegroundInactiveFrameActive,
+                                       14)));
+    chevron->SetCanProcessEventsWithinSubtree(false);
+    SetPreferredSize(gfx::Size(46, 28));
     // A 4 px rounded fill on hover and press, like the strip's other
     // controls.
     views::InstallRoundRectHighlightPathGenerator(this, gfx::Insets(), 4);
@@ -70,20 +82,50 @@ class SpacesButton : public views::LabelButton {
     SetProperty(views::kCrossAxisAlignmentKey,
                 views::LayoutAlignment::kCenter);
     SetProperty(views::kMarginsKey, gfx::Insets::TLBR(0, 4, 0, 8));
-    UpdateName();
+    if (ProfileManager* manager = g_browser_process->profile_manager()) {
+      observation_.Observe(&manager->GetProfileAttributesStorage());
+    }
+    Update();
+  }
+
+  // ProfileAttributesStorage::Observer:
+  void OnProfileAvatarChanged(const base::FilePath& path) override {
+    Update();
+  }
+  void OnProfileHighResAvatarLoaded(const base::FilePath& path) override {
+    Update();
+  }
+  void OnProfileNameChanged(const base::FilePath& path,
+                            const std::u16string& old_name) override {
+    Update();
   }
 
  private:
-  void UpdateName() {
-    SetTooltipText(u"Profiles and more");
-    GetViewAccessibility().SetName(u"Profiles and more");
+  void Update() {
+    ProfileManager* manager = g_browser_process->profile_manager();
+    ProfileAttributesEntry* entry =
+        manager ? manager->GetProfileAttributesStorage()
+                      .GetProfileAttributesWithPath(
+                          browser_->GetProfile()->GetOriginalProfile()
+                              ->GetPath())
+                : nullptr;
+    if (entry) {
+      avatar_->SetImage(ui::ImageModel::FromImage(profiles::GetSizedAvatarIcon(
+          entry->GetAvatarIcon(18), 18, 18, profiles::SHAPE_CIRCLE)));
+    }
+    const std::u16string name =
+        entry ? entry->GetName() + u": profiles and more" : u"Profiles and more";
+    SetTooltipText(name);
+    GetViewAccessibility().SetName(name);
   }
 
-  // As on Aside, the chevron opens the profiles and the browser's places
-  // (perch_profile_menu.cc). Spaces stay in the menu bar and on ⌃1–⌃9.
   void ShowMenu() { ShowPerchAppMenu(browser_, this); }
 
   raw_ptr<BrowserWindowInterface> browser_;
+  raw_ptr<views::ImageView> avatar_ = nullptr;
+  base::ScopedObservation<ProfileAttributesStorage,
+                          ProfileAttributesStorage::Observer>
+      observation_{this};
 };
 
 BEGIN_METADATA(SpacesButton)

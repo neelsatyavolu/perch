@@ -41,6 +41,8 @@
 #define IDC_PERCH_TOGGLE_SIDEBAR 46033
 // The menu button's About Perch: Settings › About.
 #define IDC_PERCH_ABOUT 46034
+// The menu button's Edit Profile: Settings › Profile (name and icon).
+#define IDC_PERCH_EDIT_PROFILE 46035
 // One per profile row.
 #define IDC_PERCH_PROFILE_FIRST 46100
 #define IDC_PERCH_PROFILE_LAST 46149

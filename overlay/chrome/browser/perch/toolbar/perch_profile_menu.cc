@@ -17,6 +17,11 @@
 #include "chrome/browser/profiles/profile_attributes_entry.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
 #include "chrome/browser/perch/perch_pref_names.h"
+#include "content/public/browser/page_navigator.h"
+#include "content/public/common/referrer.h"
+#include "ui/base/page_transition_types.h"
+#include "ui/base/window_open_disposition.h"
+#include "url/gurl.h"
 #include "chrome/browser/profiles/profile_avatar_icon_util.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profile_window.h"
@@ -142,6 +147,8 @@ void PerchProfileMenuModel::BuildProfiles() {
                   entry->GetAvatarIcon(16), 16, 16, profiles::SHAPE_CIRCLE)));
     }
   }
+  AddItemWithIcon(IDC_PERCH_EDIT_PROFILE, u"Edit profile\u2026",
+                  Icon(vector_icons::kEditIcon));
   AddItemWithIcon(IDC_PERCH_NEW_PROFILE, u"New profile",
                   Icon(vector_icons::kAccountCircleIcon));
   if (kind_ == Kind::kProfile) {
@@ -281,6 +288,15 @@ void PerchProfileMenuModel::ExecuteCommand(int command_id, int event_flags) {
   switch (command_id) {
     case IDC_PERCH_NEW_PROFILE:
       NewProfile();
+      return;
+    case IDC_PERCH_EDIT_PROFILE:
+      // Settings › Profile: this window's profile's name and icon.
+      browser_->OpenURL(
+          content::OpenURLParams(GURL("chrome://perch-settings/#profile"),
+                                 content::Referrer(),
+                                 WindowOpenDisposition::kNewForegroundTab,
+                                 ui::PAGE_TRANSITION_AUTO_BOOKMARK, false),
+          {});
       return;
     case IDC_PERCH_MANAGE_PROFILES:
       ProfilePicker::Show(ProfilePicker::Params::FromEntryPoint(

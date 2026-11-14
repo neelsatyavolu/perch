@@ -19,7 +19,11 @@ import {
 } from "../lib/validate";
 import * as seed from "./seed";
 
+/** Stand-in profile pictures: a 1×1 PNG each. */
+const FAKE_ICONS = [27, 28, 29, 30].map((index) => ({ index, url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" }));
+
 type State = {
+  profile: { name: string; icon: number };
   appearance: Appearance;
   layout: NtpLayout;
   chats: readonly ChatSummary[];
@@ -157,6 +161,7 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
   const stepMs = options.stepMs ?? 400;
   const navigate = options.onNavigate ?? (() => undefined);
   let state: State = {
+    profile: { name: "Your Perch", icon: 27 },
     appearance: { ...DEFAULT_APPEARANCE, ...options.appearance },
     layout: { railOpen: true, hidden: [], recentTab: "chats" },
     chats: seed.CHATS,
@@ -657,6 +662,13 @@ export function createFakeApi(options: FakeOptions = {}): PerchApi {
     },
     async finishTour() {
       navigate("finish-tour", null);
+    },
+    async getProfile() {
+      return { ...state.profile, icons: FAKE_ICONS };
+    },
+    async setProfile(patch) {
+      if (patch.name !== undefined && !patch.name.trim()) throw new Error("Give the profile a name of 1 to 50 characters");
+      set({ profile: { ...state.profile, ...(patch.name !== undefined ? { name: patch.name.trim() } : {}), ...(patch.icon !== undefined ? { icon: patch.icon } : {}) } });
     },
 
     async startMemoryChat(_always) {

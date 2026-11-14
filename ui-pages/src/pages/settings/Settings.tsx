@@ -2,7 +2,7 @@ import type { ComponentType } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { LucideIcon } from "lucide-preact";
 import {
-  ArrowDownToLine, Box, Brain, ChevronRight, Gauge, Icon, Info, Lock, Palette, Plug, Puzzle, RefreshCw, Repeat, Search, ShieldCheck,
+  ArrowDownToLine, Box, Brain, ChevronRight, Gauge, Icon, Info, Lock, Palette, Plug, Puzzle, RefreshCw, Repeat, Search, ShieldCheck, User,
 } from "../../ui/icons";
 import { About } from "./About";
 import { BuiltIn } from "./BuiltIn";
@@ -12,18 +12,19 @@ import { Models } from "./Models";
 import { Performance } from "./Performance";
 import { Permissions } from "./Permissions";
 import { Privacy } from "./Privacy";
+import { ProfileSection } from "./Profile";
 import { NAV_GROUPS, type SectionId, isSection, searchSettings, sectionLabel } from "./sections";
 import { SkillsMcp } from "./SkillsMcp";
 import { Sync } from "./Sync";
 import "./settings.css";
 
 const PAGES: Readonly<Record<SectionId, ComponentType>> = {
-  appearance: Appearance, models: Models, skills: SkillsMcp, permissions: Permissions, privacy: Privacy, performance: Performance, sync: Sync, builtin: BuiltIn,
+  profile: ProfileSection, appearance: Appearance, models: Models, skills: SkillsMcp, permissions: Permissions, privacy: Privacy, performance: Performance, sync: Sync, builtin: BuiltIn,
   memory: MemorySection, routines: RoutinesSection, import: ImportSection, about: About,
 };
 
 const NAV_ICONS: Readonly<Record<SectionId, LucideIcon>> = {
-  appearance: Palette, privacy: Lock, sync: RefreshCw, import: ArrowDownToLine, models: Box, skills: Plug, permissions: ShieldCheck,
+  profile: User, appearance: Palette, privacy: Lock, sync: RefreshCw, import: ArrowDownToLine, models: Box, skills: Plug, permissions: ShieldCheck,
   memory: Brain, routines: Repeat, performance: Gauge, builtin: Puzzle, about: Info,
 };
 

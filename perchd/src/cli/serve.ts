@@ -14,6 +14,8 @@ export async function serve(argv: string[], io: CliIO): Promise<number> {
     const { serveInBrowser } = await import("./serve-browser");
     return serveInBrowser(io);
   }
+  // One failed background promise is logged, not a reason for perchd (and every session) to exit.
+  process.on("unhandledRejection", (error) => io.stderr(`perchd: unhandled rejection: ${String(error)}\n`));
   const a = parseArgs(argv, { flags: ["--headless"], options: ["--browser"] });
   const paths = pathsFor(io);
   mkdirSync(paths.home, { recursive: true, mode: 0o700 });

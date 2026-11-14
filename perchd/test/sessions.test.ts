@@ -106,3 +106,11 @@ test("an ended persistent session is closed after its grace period unless it com
   expect(manager.get("grok", "g1")).toBeUndefined();
   expect((await env.browser.tabs()).map((t) => t.id)).not.toContain(tab);
 }, 30_000);
+
+test("two calls that start a session's context at once share one", async () => {
+  const s = manager.open(info("claude-code", "race", "Claude Code", "Race"));
+  const [a, b] = await Promise.all([manager.lend(s), manager.lend(s)]);
+  expect(a.ctx).toBe(b.ctx);
+  expect(s.ctx).toBe(a.ctx);
+  await manager.end(s, "close");
+});

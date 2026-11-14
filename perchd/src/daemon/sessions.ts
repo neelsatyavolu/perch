@@ -61,7 +61,8 @@ export class SessionManager {
 
   constructor(private readonly opts: ManagerOptions) {
     const idle = opts.idleSleepMs ?? 30 * 60_000;
-    this.idleTimer = setInterval(() => void this.sleepIdle(idle), Math.min(idle, 60_000));
+    // A tab that fails to freeze must not take perchd down with an unhandled rejection.
+    this.idleTimer = setInterval(() => void this.sleepIdle(idle).catch(() => undefined), Math.min(idle, 60_000));
     this.idleTimer.unref?.();
     // A file left by a perchd that crashed lists sessions that are gone; start from none.
     this.writeFile();
@@ -185,7 +186,7 @@ export class SessionManager {
   /** Ends a session after `ms` unless it is opened again first (an MCP client restarting). */
   scheduleEnd(session: AgentSession, ms: number): void {
     if (session.endTimer) clearTimeout(session.endTimer);
-    session.endTimer = setTimeout(() => void this.end(session, session.info.onEnd), ms);
+    session.endTimer = setTimeout(() => void this.end(session, session.info.onEnd).catch(() => undefined), ms);
   }
 
   /** Close: the session's own tabs close and it is forgotten. Sleep: its tabs freeze and stay listed. */
@@ -257,8 +258,17 @@ export class SessionManager {
     };
   }
 
+  /** Contexts being made, so two calls at once (a borrow and a lend) share one rather than leak one. */
+  private readonly making = new WeakMap<AgentSession, Promise<ToolContext>>();
+
   private async context(session: AgentSession): Promise<ToolContext> {
-    session.ctx ??= await newToolContext(await this.opts.browser());
+    if (session.ctx) return session.ctx;
+    let making = this.making.get(session);
+    if (!making) {
+      making = this.opts.browser().then(newToolContext).finally(() => this.making.delete(session));
+      this.making.set(session, making);
+    }
+    session.ctx ??= await making;
     return session.ctx;
   }
 

@@ -5,6 +5,7 @@
  */
 
 import type { ComponentChildren, VNode } from "preact";
+import { useState } from "preact/hooks";
 import { memo } from "./memo";
 
 export type MarkdownProps = { text: string; renderArtifact?: (id: string) => VNode | null };
@@ -134,12 +135,22 @@ function Table({ rows }: { rows: string[][] }) {
 }
 
 function CodeBlock({ language, code }: { language: string; code: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard?.writeText(code);
+    } catch {
+      return; // Not copied, so the button does not say it was.
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
   return (
     <figure class="code">
       <figcaption>
         <span class="mono">{language || "text"}</span>
-        <button type="button" class="link-btn" onClick={() => void navigator.clipboard?.writeText(code)}>
-          Copy
+        <button type="button" class="link-btn" onClick={() => void copy()}>
+          {copied ? "Copied" : "Copy"}
         </button>
       </figcaption>
       <pre>

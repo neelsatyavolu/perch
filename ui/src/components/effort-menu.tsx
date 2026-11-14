@@ -94,7 +94,8 @@ export function EffortMenu({ efforts, effort, onEffort, fast = false, onFast }: 
         <Icon name="down" size={12} />
       </button>
       {open && (
-        <div class="menu end eff-pop" role="dialog" aria-label="Effort" onKeyDown={onPopKey}>
+        // tabIndex -1: a click on a label or the hint keeps focus in the popover, so it stays open.
+        <div class="menu end eff-pop" role="dialog" aria-label="Effort" tabIndex={-1} onKeyDown={onPopKey}>
           <div class="eff-head">
             <span>Effort</span>
             <span class="eff-now">{label}</span>
@@ -138,9 +139,9 @@ export function EffortMenu({ efforts, effort, onEffort, fast = false, onFast }: 
             <div class="eff-fast">
               <span class="eff-fast-t">
                 <span id={fastId}>Fast mode</span>
-                <span class="eff-fast-h">Faster replies. Uses your ChatGPT plan's limits faster.</span>
+                <span class="eff-fast-h" id={`${fastId}-h`}>Quicker replies that use more of your ChatGPT plan's limits.</span>
               </span>
-              <button type="button" role="switch" class="switch" aria-checked={fast} aria-labelledby={fastId} onClick={() => onFast(!fast)} />
+              <button type="button" role="switch" class="switch" aria-checked={fast} aria-labelledby={fastId} aria-describedby={`${fastId}-h`} onClick={() => onFast(!fast)} />
             </div>
           )}
         </div>

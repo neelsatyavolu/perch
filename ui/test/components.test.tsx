@@ -161,6 +161,15 @@ test("Enter sends, Shift+Enter does not, and typing reports the draft", () => {
   expect(calls.draft.at(-1)).toBe("Find flights to Tokyo");
 });
 
+test("a message over the length limit is not sent, and the composer says why on its own line", () => {
+  const { el, calls } = composer({ draft: "x".repeat(50_001) });
+  act(() => void el.querySelector("textarea")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+  expect(calls.send).toEqual([]);
+  const note = el.querySelector(".cnote")!;
+  expect(note.textContent).toBe("Too long to send: 50,001 characters, and the limit is 50,000.");
+  expect(note.closest(".crow")).toBeNull();
+});
+
 test("while a task runs the send button becomes Stop", () => {
   const { el, calls } = composer({ running: true, draft: "" });
   expect(el.querySelector('[aria-label="Send message"]')).toBeNull();
@@ -586,4 +595,32 @@ test("a file copied in Finder and pasted is attached, and its pasted name is tak
   const chip = el.querySelector(".chip.file")!;
   expect(chip.textContent).toContain("window.jpg");
   expect(chip.querySelector("img.thumb")!.getAttribute("src")).toBe("data:image/jpeg;base64,AAAA");
+});
+
+test("files dragged anywhere over the page light up the chat box, and a drop attaches them instead of opening them", async () => {
+  const uploads: string[] = [];
+  const { el } = composer({ uploadFile: async (name) => (uploads.push(name), { id: "f2", name, size: 4 }) });
+  const drag = (type: string, files: File[] = []) => {
+    const e = new Event(type, { bubbles: true, cancelable: true }) as Event & { dataTransfer: unknown };
+    Object.defineProperty(e, "dataTransfer", { value: { types: ["Files"], files } });
+    return e;
+  };
+  // Over the thread, not the box: the box still lights up.
+  const elsewhere = document.createElement("div");
+  document.body.appendChild(elsewhere);
+  act(() => void elsewhere.dispatchEvent(drag("dragenter")));
+  expect(el.querySelector(".composer")!.classList.contains("dropping")).toBe(true);
+  const over = drag("dragover");
+  elsewhere.dispatchEvent(over);
+  expect(over.defaultPrevented).toBe(true);
+  const drop = drag("drop", [new File([new Uint8Array([1, 2])], "notes.pdf", { type: "application/pdf" })]);
+  await act(async () => {
+    elsewhere.dispatchEvent(drop);
+    await new Promise((r) => setTimeout(r, 50));
+  });
+  elsewhere.remove();
+  expect(drop.defaultPrevented).toBe(true);
+  expect(uploads).toEqual(["notes.pdf"]);
+  expect(el.querySelector(".composer")!.classList.contains("dropping")).toBe(false);
+  expect(el.querySelector(".chip.file")!.textContent).toContain("notes.pdf");
 });

@@ -404,6 +404,35 @@ test("a pick in a chat that already started changes that chat and the default fo
   expect(client.calls.find((c) => c.name === "setDefaults")!.args[0]).toEqual({ effort: "low" });
 });
 
+test("a pick shows before the server answers, so two quick arrow presses move two stops, and a failed save goes back", async () => {
+  const client = fakeClient();
+  const chat = await client.createChat();
+  client.windows.set("w1", { windowId: "w1", tab: tabA, chatId: chat.id });
+  client.chatsById.set(chat.id, { ...chat, tab: { id: tabA.id, windowId: "w1" } });
+  const el = await mount(<Sidebar client={client} windowId="w1" />);
+  // Saves wait until released, as on a slow connection.
+  const waiting: (() => void)[] = [];
+  const patch = client.patchChat;
+  client.patchChat = (id, p) => new Promise((resolve) => waiting.push(() => resolve(patch(id, p))));
+  await act(async () => (el.querySelector('[aria-label="Effort"]') as HTMLElement).click());
+  const slider = el.querySelector<HTMLElement>('[role="slider"]')!;
+  const key = (k: string) => act(async () => void slider.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true })));
+  await key("ArrowLeft");
+  expect(el.querySelector(".eff-t")!.textContent).toBe("Low");
+  await key("ArrowRight");
+  await key("ArrowRight");
+  expect(el.querySelector(".eff-t")!.textContent).toBe("High");
+  await act(async () => waiting.splice(0).forEach((go) => go()));
+  await settle();
+  expect(el.querySelector(".eff-t")!.textContent).toBe("High");
+  // A save that fails puts the shown value back and says why.
+  client.patchChat = () => Promise.reject(new Error("Couldn't save the setting"));
+  await key("ArrowLeft");
+  await settle();
+  expect(el.querySelector(".eff-t")!.textContent).toBe("High");
+  expect(el.querySelector(".note.error")!.textContent).toBe("Couldn't save the setting");
+});
+
 test("an open side chat with no messages yet follows a pick made in another composer", async () => {
   const client = fakeClient();
   client.windows.set("w1", { windowId: "w1", tab: tabA, chatId: null });

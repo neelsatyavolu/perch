@@ -68,7 +68,7 @@ export function Steps({ steps: raw, open: initial = false }: { steps: StepLike[]
   );
 }
 
-const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+export const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 const pageHidden = () => typeof document !== "undefined" && document.hidden;
 
 /** The slowest reveal, in characters a second, for the last few characters of a backlog. */

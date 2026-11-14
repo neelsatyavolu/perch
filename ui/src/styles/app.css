@@ -351,14 +351,17 @@ button.artifact-card:hover { background: var(--fill-hover); }
 .queued-item .btn.small { flex: none; height: 26px; padding: 0 8px; }
 .queued-item .ib.x { flex: none; width: 26px; height: 26px; }
 .crow > .steer { flex: none; color: var(--ink); }
-.chip.file { padding-left: 8px; padding-right: 2px; max-width: 220px; }
+/* A file chip is as wide as its name, and cuts the name short only when the box runs out of room. */
+.chip.file { padding-left: 8px; padding-right: 2px; }
+.chip .d { flex: none; white-space: nowrap; }
 .chip.file .ib.x { width: 20px; height: 20px; }
 /* An attached image shows what it is: a small square of the picture before its name. */
 .chip.file.has-thumb { height: 48px; padding: 4px 2px 4px 4px; gap: 8px; }
 .chip.file .thumb { width: 40px; height: 40px; object-fit: cover; border-radius: 4px; flex: none; box-shadow: inset 0 0 0 1px var(--hair); }
 /* Files dragged over the chat box: the box says it will take them. */
 .composer.dropping { box-shadow: inset 0 0 0 2px var(--accent); }
-.cnote { color: var(--mute); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* A note from the composer (a file that could not attach, a message too long) gets its own line and wraps, never cut off. */
+.cnote { margin: 0; color: var(--mute); font-size: 12px; line-height: 16px; overflow-wrap: anywhere; }
 /* Sidebar */
 /* The side chat is one surface: header, thread and composer all on the card colour. */
 .side { height: 100%; display: flex; flex-direction: column; background: var(--card); min-height: 0; }
@@ -426,7 +429,11 @@ button.artifact-card:hover { background: var(--fill-hover); }
 .chat-tip .tip-p { font-size: 13px; line-height: 18px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .center { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--card); margin: 6px; border-radius: var(--r-panel); box-shadow: inset 0 0 0 1px var(--hair); overflow: hidden; }
 .chats + .center { margin-left: 0; }
-.fc-h { padding: 0 8px; gap: 2px; }
+.fc-h { padding: 0 8px; gap: 2px; container-type: inline-size; }
+/* In a narrow window the chat's title wins: the status keeps its dot (with the words in its title) and the words go to screen readers only. */
+@container (max-width: 680px) {
+  .fc-h .state { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); margin: 0; }
+}
 .fc-h .title { flex: 0 1 auto; min-width: 0; text-align: left; background: none; border: 0; height: 28px; padding: 0 8px; line-height: 28px; border-radius: var(--r-control); color: var(--ink); font-weight: 500; font-size: 14px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fc-h .title:hover:not(:disabled) { background: var(--hover); }

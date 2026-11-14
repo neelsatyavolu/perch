@@ -70,6 +70,8 @@ function readFile(file: File): Promise<{ url: string; base64: string }> {
 
 const IMAGE_NAME = /\.(png|jpe?g|gif|webp)$/i;
 const PASTED_LIMIT = 8 * 1024 * 1024;
+/** The longest message perchd takes (its send route's limit). */
+const MESSAGE_LIMIT = 50_000;
 
 function fileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -129,6 +131,11 @@ export function Composer(p: ComposerProps) {
   const send = (steer = false) => {
     const text = p.draft.trim();
     if (!text) return;
+    if (text.length > MESSAGE_LIMIT) {
+      setNote(`Too long to send: ${text.length.toLocaleString("en-US")} characters, and the limit is ${MESSAGE_LIMIT.toLocaleString("en-US")}.`);
+      return;
+    }
+    setNote(null);
     if (dictating) void stopDictation();
     petalBurst(document.querySelector(".composer .send"));
     const sentFiles = files;
@@ -191,7 +198,8 @@ export function Composer(p: ComposerProps) {
       try {
         const { url, base64 } = await readFile(file);
         const ext = (file.type.split("/")[1] ?? "png").replace("jpeg", "jpg");
-        const name = file.name && file.name !== "image.png" ? file.name : `Pasted image ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.${ext}`;
+        // A saved name can't hold ":" (it comes back as "_"), so the time uses dots, as a macOS screenshot's does.
+        const name = file.name && file.name !== "image.png" ? file.name : `Pasted image ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" }).replace(/:/g, ".")}.${ext}`;
         const added = await p.uploadFile(name, base64);
         addFiles([added]);
         if (file.type.startsWith("image/")) setThumbs((t) => ({ ...t, [added.id]: url }));
@@ -220,18 +228,38 @@ export function Composer(p: ComposerProps) {
       }
     });
   };
-  const onDrop = (e: DragEvent) => {
-    setDropping(false);
-    const dropped = [...(e.dataTransfer?.files ?? [])];
-    if (!dropped.length || !p.uploadFile) return;
-    e.preventDefault();
-    void takeFiles(dropped);
-  };
-  const onDragOver = (e: DragEvent) => {
-    if (!p.uploadFile || ![...(e.dataTransfer?.types ?? [])].includes("Files")) return;
-    e.preventDefault();
-    setDropping(true);
-  };
+  // Files dropped anywhere on the page attach here, and the box lights up while they are dragged
+  // over the page; otherwise the browser would open the dropped file in place of the chat.
+  const take = useRef(takeFiles);
+  take.current = takeFiles;
+  const canUpload = Boolean(p.uploadFile);
+  useEffect(() => {
+    if (!canUpload) return;
+    const doc = field.current?.ownerDocument ?? document;
+    let depth = 0;
+    const withFiles = (e: DragEvent) => [...(e.dataTransfer?.types ?? [])].includes("Files");
+    const enter = (e: DragEvent) => withFiles(e) && setDropping(++depth > 0);
+    const leave = (e: DragEvent) => withFiles(e) && setDropping(--depth > 0);
+    const over = (e: DragEvent) => void (withFiles(e) && e.preventDefault());
+    const drop = (e: DragEvent) => {
+      depth = 0;
+      setDropping(false);
+      const dropped = [...(e.dataTransfer?.files ?? [])];
+      if (!dropped.length) return;
+      e.preventDefault();
+      void take.current(dropped);
+    };
+    doc.addEventListener("dragenter", enter);
+    doc.addEventListener("dragleave", leave);
+    doc.addEventListener("dragover", over);
+    doc.addEventListener("drop", drop);
+    return () => {
+      doc.removeEventListener("dragenter", enter);
+      doc.removeEventListener("dragleave", leave);
+      doc.removeEventListener("dragover", over);
+      doc.removeEventListener("drop", drop);
+    };
+  }, [canUpload]);
   const stopDictation = async () => {
     setDictating(false);
     await p.host?.stopDictation?.().catch(() => undefined);
@@ -278,7 +306,7 @@ export function Composer(p: ComposerProps) {
           ))}
         </ol>
       )}
-      <div class={`composer${dropping ? " dropping" : ""}`} onDragOver={onDragOver} onDragLeave={() => setDropping(false)} onDrop={onDrop}>
+      <div class={`composer${dropping ? " dropping" : ""}`}>
         {choices.length > 0 && (
           <ul class="menu start mentions" role="listbox" aria-label="Tabs to mention">
             {choices.map((t, i) => (
@@ -334,6 +362,7 @@ export function Composer(p: ComposerProps) {
           onKeyDown={onKey}
           onPaste={onPaste}
         />
+        {note && <p class="cnote" role="status">{note}</p>}
         <div class="crow">
           <button
             type="button"
@@ -350,7 +379,6 @@ export function Composer(p: ComposerProps) {
             {/* Ask and Guard fold to the shield in a narrow side chat; Skip confirmation always says so. */}
             <span class={p.settings.mode === "skip" ? undefined : "mode-t"}>{MODES.find((m) => m.value === p.settings.mode)?.label}</span>
           </Menu>
-          {note && <span class="cnote" role="status">{note}</span>}
           <div class="grow" />
           <ModelMenu
             models={p.models}

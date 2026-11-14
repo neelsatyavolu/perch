@@ -31,6 +31,9 @@ function saveFile(name: string, text: string): void {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
+/** The header's status words; in a narrow header only the dot shows, with these as its tooltip. */
+const STATE_WORDS = { idle: "", running: "Working", waiting: "Waiting for your approval" } as const;
+
 export function FullChat({ client, initialChat = null, initialAsk = null, onNavigate, host }: Props) {
   const chat = useChat(client);
   const [info, setInfo] = useState<AppInfo | null>(null);
@@ -207,8 +210,8 @@ export function FullChat({ client, initialChat = null, initialAsk = null, onNavi
               <Icon name="more" />
             </Menu>
           )}
-          <PerchDot status={status} />
-          {status !== "idle" && <span class="state">{status === "running" ? "Working" : "Waiting for your approval"}</span>}
+          <PerchDot status={status} title={STATE_WORDS[status]} />
+          {status !== "idle" && <span class="state">{STATE_WORDS[status]}</span>}
           <span class="grow" />
           {/* Both show only when there is something to act on, as in Aside. */}
           {view.chat?.messages.length ? (

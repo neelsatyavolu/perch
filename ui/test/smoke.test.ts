@@ -248,7 +248,9 @@ test("a reply that outgrows the view is followed, so its newest step stays in si
     return step.getBoundingClientRect().bottom <= thread.getBoundingClientRect().bottom;
   })()`)).toBe(true);
   await shot("long-step-narrow");
-  await tab.send("Emulation.setDeviceMetricsOverride", { width: 1000, height: 700, deviceScaleFactor: 1, mobile: false });
+  // Widening unwraps the text. With six live steps the whole reply fits a 1000×700 view (nothing to
+  // scroll), so the view is kept short enough that it still outgrows it.
+  await tab.send("Emulation.setDeviceMetricsOverride", { width: 1000, height: 450, deviceScaleFactor: 1, mobile: false });
   // The newest step comes into view and stays there, with the view scrolled down to it.
   await waitFor(`(() => {
     const thread = document.querySelector('.thread');

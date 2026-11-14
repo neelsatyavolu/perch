@@ -16,6 +16,8 @@ export function useChat(client: Client) {
   const [draft, setDraftState] = useState("");
   const [error, setError] = useState<string | null>(null);
   const current = useRef<{ chatId: string | null; draft: string; saved: string; timer?: ReturnType<typeof setTimeout> }>({ chatId: null, draft: "", saved: "" });
+  /** Counts settings saves, so only the latest one's answer is shown. */
+  const settingsSeq = useRef(0);
 
   const saveDraft = useCallback(async () => {
     const c = current.current;
@@ -117,8 +119,22 @@ export function useChat(client: Client) {
     guard(async () => {
       if (!view.chat) apply(patch);
       else {
-        const chat = await client.patchChat(view.chat.id, { settings: patch });
-        setView((v) => (v.chat?.id === chat.id ? { ...v, chat: { ...v.chat, settings: chat.settings, title: chat.title } } : v));
+        // The pick shows at once, so a dragged slider or two quick arrow presses move from what is
+        // shown, not from what the server last said; a failed save puts the old value back.
+        const id = view.chat.id;
+        const before = view.chat.settings;
+        const withSettings = (settings: ChatSettings, title?: string) =>
+          setView((v) => (v.chat?.id === id ? { ...v, chat: { ...v.chat, settings, ...(title !== undefined ? { title } : {}) } } : v));
+        const seq = ++settingsSeq.current;
+        withSettings({ ...before, ...patch });
+        try {
+          const chat = await client.patchChat(id, { settings: patch });
+          // An earlier save answering late must not undo a later pick.
+          if (seq === settingsSeq.current) withSettings(chat.settings, chat.title);
+        } catch (e) {
+          if (seq === settingsSeq.current) withSettings(before);
+          throw e;
+        }
       }
       // The model and effort picked here are what every new chat starts with, in any composer.
       const pick = { ...(patch.model ? { model: patch.model } : {}), ...(patch.effort ? { effort: patch.effort } : {}) };

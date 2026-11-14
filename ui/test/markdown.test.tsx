@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import { render } from "preact";
+import { act } from "preact/test-utils";
 import { Markdown } from "../src/components/markdown";
 
 let root: HTMLElement;
@@ -56,4 +57,19 @@ test("artifact markers use the page's card and streaming blocks show what is bei
   expect(el.querySelector(".card-for")!.textContent).toBe("abc-123");
   expect(el.querySelector(".artifact-card.pending")!.textContent).toBe("Making Budget");
   expect(el.textContent).not.toContain("<h1>");
+});
+
+test("a code block's Copy button copies the code and says Copied", async () => {
+  const writes: string[] = [];
+  const clip = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (t: string) => void writes.push(t) } });
+  try {
+    const el = show(["```sh", "bun test", "```"].join("\n"));
+    const button = el.querySelector<HTMLButtonElement>("figcaption button")!;
+    await act(async () => button.click());
+    expect(writes).toEqual(["bun test"]);
+    expect(button.textContent).toBe("Copied");
+  } finally {
+    if (clip) Object.defineProperty(navigator, "clipboard", clip);
+  }
 });

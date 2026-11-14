@@ -8,7 +8,7 @@ import { ApprovalCard } from "./approval";
 import { PerchMark } from "./icon";
 import type { Client } from "../api/client";
 import { FileCard } from "./files";
-import { LiveRun, Message, dayLabel, liveOrder, newDay } from "./message";
+import { LiveRun, Message, dayLabel, liveOrder, newDay, reducedMotion } from "./message";
 
 /**
  * How much of the final answer the live run already showed. The live text can start with what the
@@ -111,8 +111,10 @@ export function Thread({ client, view, onDecide, onOpenArtifact, onBranch, selec
     };
     const watch = new MutationObserver(refit);
     watch.observe(el, { childList: true, subtree: true, characterData: true });
-    // A narrower sidebar wraps the text taller; a view at the bottom stays there.
-    const resize = typeof ResizeObserver === "function" ? new ResizeObserver(refit) : null;
+    // A narrower sidebar wraps the text taller; a view at the bottom stays there. This fits at once,
+    // not on the next frame: rewrapped text makes the browser's scroll anchoring move the view, and
+    // the scroll event that follows would otherwise read as the user leaving the bottom.
+    const resize = typeof ResizeObserver === "function" ? new ResizeObserver(() => fit()) : null;
     resize?.observe(el);
     return () => {
       watch.disconnect();
@@ -133,7 +135,7 @@ export function Thread({ client, view, onDecide, onOpenArtifact, onBranch, selec
       pad.current.style.height = `${Math.max(0, el.clientHeight - below - 24)}px`;
       if (target.dataset.anchored !== "1") {
         target.dataset.anchored = "1";
-        el.scrollTo({ top: Math.max(0, top - 12), behavior: "smooth" });
+        el.scrollTo({ top: Math.max(0, top - 12), behavior: reducedMotion() ? "instant" : "smooth" });
       } else if (below > el.clientHeight - 24 && !moved.current) {
         // The reply has outgrown the view: from here the view follows it, so new steps stay in sight.
         anchor.current = null;
@@ -158,6 +160,8 @@ export function Thread({ client, view, onDecide, onOpenArtifact, onBranch, selec
       class="thread"
       ref={box}
       aria-live="polite"
+      // A reply typing in is read once it is done, not a few letters at a time; an approval card is read at once.
+      aria-busy={Boolean(run && !run.approval)}
       onWheel={() => void (moved.current = true)}
       onTouchMove={() => void (moved.current = true)}
       onKeyDown={(e) => void (/^(PageUp|PageDown|ArrowUp|ArrowDown|Home|End| )$/.test(e.key) && (moved.current = true))}

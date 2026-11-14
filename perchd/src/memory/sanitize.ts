@@ -43,6 +43,12 @@ export function categoryOf(path: string): Category | null {
 
 const SECRET_PATTERNS: RegExp[] = [
   /\b(password|passcode|passphrase|pin|otp|one[- ]time code|verification code|security code|2fa code|cvv|cvc|recovery (key|code)s?)\b\s*(is|was|=|:)\s*\S+/i,
+  // "Passwords: gmail: hunter2!", "the wifi password for home is Tr0ub4dor", "app password abcd efgh".
+  /\b(pass(word|code|phrase)s?|app password)\b(\W+\w+){0,5}?\s*(is|was|=|:)\s*\S{4,}/i,
+  /\bapp password\s+[a-z]{4}(\s?[a-z]{4}){3}\b/i,
+  /\bPIN\b\W{0,3}\d{4,8}\b/i,
+  /\b(backup|recovery|security) codes?\b\W+\d{4}/i,
+  /\b(security (question|answer)|maiden name)\b/i,
   /\b(sk|pk|rk)-[A-Za-z0-9_-]{16,}/,
   /\bxai-[A-Za-z0-9]{16,}/,
   /\b(ghp|gho|ghu|ghs|github_pat)_[A-Za-z0-9_]{20,}/,

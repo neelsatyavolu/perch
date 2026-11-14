@@ -22,14 +22,28 @@ export const MEMORY_DETAIL = "Imported from Aside";
 
 const plural = (n: number, one: string, many: string) => `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`;
 
+/** The pages every chat reads; facts merge into them rather than skip a page Perch already has. */
+const TOP: Readonly<Record<string, "user" | "rules">> = { "USER.md": "user", "MEMORY.md": "rules" };
+
 async function writeMemory(deps: PagesDeps, files: readonly TextFile[]): Promise<AgentCounts> {
+  const store = (await deps.data()).memory;
   const mapped = files.map(pagesFromAside);
   const pages = mapped.flatMap((m) => m?.pages ?? []);
-  const result = await (await deps.data()).memory.addPages(pages, "import", MEMORY_DETAIL);
+  // USER.md and MEMORY.md often exist already (a chat saved a fact before the import), and Aside's
+  // own profile (users/<name>.md) lands on USER.md too: their facts join the page.
+  const mergedFile = new Set<number>();
+  for (const [i, m] of mapped.entries()) {
+    for (const page of (m?.pages ?? []).filter((p) => TOP[p.path])) {
+      const result = await store.addFacts(page.current.map((text) => ({ category: TOP[page.path]!, title: page.title, text })), "import");
+      if (result.added) mergedFile.add(i);
+    }
+  }
+  const result = await store.addPages(pages.filter((p) => !TOP[p.path]), "import", MEMORY_DETAIL);
   // A file counts as imported when its first page went in; its continuation pages are part of it.
-  // Two files that land on one path count once: the store kept the first.
+  // Two files that land on one page path count once: the store kept the first.
   const added = new Set(result.added);
-  const written = [...new Set(mapped.flatMap((m) => m?.pages[0]?.path ?? []))].filter((path) => added.has(path)).length;
+  const paged = [...new Set(mapped.flatMap((m) => (m?.pages[0] && !TOP[m.pages[0].path] ? [m.pages[0].path] : [])))].filter((path) => added.has(path)).length;
+  const written = paged + mergedFile.size;
   const secrets = mapped.reduce((n, m) => n + (m?.secrets ?? 0), 0);
   const note = secrets ? `${plural(secrets, "line that looked", "lines that looked")} like a password, key or code ${secrets === 1 ? "was" : "were"} left out.` : undefined;
   return { added: written, skipped: files.length - written, ...(note ? { note } : {}) };

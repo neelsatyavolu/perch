@@ -116,3 +116,8 @@ test("ids and kinds are checked, so no path escapes the folder", async () => {
   await expect(folder.put("pages", "../../x", "x")).rejects.toThrow("record id");
   await expect(folder.put("../x", "aa".repeat(16), "x")).rejects.toThrow("record kind");
 });
+
+test("common ways of writing down a password, PIN, backup code or security answer are kept out", () => {
+  for (const t of ["Passwords: gmail: hunter2!", "The wifi password for home is Tr0ub4dor", "Bank PIN 4821", "Backup codes: 1234-5678 9876-5432", "Gmail app password abcd efgh ijkl mnop", "Mother's maiden name is Smith"]) expect(looksSecret(t)).toBe(true);
+  for (const t of ["Uses 1Password for logins", "Changed the Amazon password last week", "Prefers passkeys", "Phone is +1 650 555 0100", "Pinned tabs: Gmail"]) expect(looksSecret(t)).toBe(false);
+});

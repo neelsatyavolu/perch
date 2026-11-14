@@ -44,6 +44,8 @@ const DAMAGED_SETTINGS = "settings";
 const MAX_FACTS_PER_PAGE = 200;
 const MAX_PAGES = 5000;
 const CONTEXT_LIMIT = 4000;
+/** Facts a form or an order needs: who the user is and how to reach them. */
+const CONTACT_FACT = /\b(name|e-?mail|phone|mobile|address|lives|zip|postcode|birthday|born|size)\b|@|\+?\d[\d ().-]{7,}\d/i;
 const VECTOR_FLOOR = 0.3;
 const DAY_MS = 24 * 60 * 60_000;
 /** Undo keeps a page's old text for this long; History keeps changes (and the deleted text in them) for longer. */
@@ -207,9 +209,21 @@ export class MemoryStore {
 
   /** USER.md and MEMORY.md, small enough to go into every chat (spec 8). */
   context(): string {
+    const today = this.stamp().slice(0, 10);
     const part = (path: string, heading: string) => {
-      const facts = this.get(path)?.current ?? [];
-      return facts.length ? `${heading}\n${facts.map((f) => `- ${f.text}`).join("\n")}`.slice(0, CONTEXT_LIMIT) : "";
+      const facts = (this.get(path)?.current ?? []).filter((f) => !f.expires || f.expires >= today);
+      // Contact details first (forms need them), then newest first; whole facts up to the limit.
+      const order = facts
+        .map((f, i) => ({ f, i, contact: CONTACT_FACT.test(f.text) }))
+        .sort((a, b) => Number(b.contact) - Number(a.contact) || b.i - a.i);
+      const lines: string[] = [];
+      let size = heading.length;
+      for (const { f } of order) {
+        if (size + f.text.length + 3 > CONTEXT_LIMIT) break;
+        lines.push(`- ${f.text}`);
+        size += f.text.length + 3;
+      }
+      return lines.length ? `${heading}\n${lines.join("\n")}` : "";
     };
     return [part("USER.md", "About the user (USER.md):"), part("MEMORY.md", "Rules from the user (MEMORY.md):")].filter(Boolean).join("\n\n");
   }
@@ -224,9 +238,16 @@ export class MemoryStore {
     const categories = FILEABLE.filter((c) => c !== "user" && c !== "rules");
     const sitePage = opts.url ? sitePageFor([...this.pages.values()], opts.url) : undefined;
     const site = sitePage ? { host: new URL(opts.url!).hostname.replace(/^www\./, ""), page: sitePage, items: siteFacts(sitePage, exclude) } : undefined;
+    // A fact past its expiry date stays out until the overnight tidy moves it to History.
+    const today = new Date(opts.now ?? Date.now()).toISOString().slice(0, 10);
+    const live = (i: { path: string; text: string }) => {
+      const fact = this.get(i.path)?.current.find((f) => f.text === i.text);
+      return !fact?.expires || fact.expires >= today;
+    };
+    if (site) site.items = site.items.filter(live);
     const siteKeys = new Set(site?.items.map((i) => i.key) ?? []);
     const items = scoreFacts(this.index.searchFacts(message, { categories, limit: 40 }), message, opts.now ?? Date.now())
-      .filter((i) => !exclude.has(i.key) && !siteKeys.has(i.key))
+      .filter((i) => !exclude.has(i.key) && !siteKeys.has(i.key) && live(i))
       .slice(0, RECALL_LIMIT);
     return { text: renderRecall(items, site), keys: [...items.map((i) => i.key), ...siteKeys] };
   }

@@ -20,32 +20,12 @@ async function open() {
 
 const call = (name: string, args: Record<string, unknown>) => ({ id: "c", name, args });
 
-test("Build my memory proposes findings to the review draft and saves nothing", async () => {
+test("a chat saves findings itself; it isn't offered the review draft", async () => {
   const store = await open();
   const draft: DraftHolder = { current: null };
   const memory = chatMemory(store, { draft, history: async () => [] })!;
-  expect(memory.specs.map((s) => s.name)).toEqual(["memory_search", "memory_save", "memory_propose", "browsing_history"]);
-  expect(memory.kind(call("memory_propose", { items: [] }))).toBe("read");
-  const result = await memory.run(
-    call("memory_propose", {
-      items: [
-        { category: "user", title: "You", text: "Goes by Neel" },
-        { category: "writing", title: "Texts to friends", text: "Short, lowercase, no emoji" },
-        { category: "people", title: "Maya", text: "Sister" },
-        { category: "user", title: "You", text: "Goes by Neel" },
-        { category: "user", title: "You", text: "Password is hunter2" },
-      ],
-    }),
-  );
-  expect(result.content).toContain("Added 3 to the review draft (3 in all). Left out 2");
-  expect(result.content).toContain("perch://memory#review");
-  expect(draft.current!.items.map((i) => [i.group, i.text])).toEqual([
-    ["about", "Goes by Neel"],
-    ["writing", "Short, lowercase, no emoji"],
-    ["people", "Sister"],
-  ]);
-  expect(draft.current!.sources).toEqual(["research"]);
-  expect(store.all()).toEqual([]);
+  expect(memory.specs.map((s) => s.name)).toEqual(["memory_search", "memory_save", "browsing_history"]);
+  expect(memory.handles("memory_propose")).toBe(false);
 });
 
 test("browsing history is searchable by the agent, most visited first", async () => {

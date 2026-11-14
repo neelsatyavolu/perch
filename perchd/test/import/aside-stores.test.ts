@@ -86,7 +86,9 @@ test("memory, skills and chats are written into Perch's stores and nothing is bu
   expect(report.bundle).toBeUndefined();
   expect(pendingBundles(perch)).toEqual([]);
 
-  expect(memory.list().map((p) => p.path)).toEqual(["USER.md", "episodic/2026-10-04.md", "people/ada.md", "people/sam.md"]);
+  // Aside's own profile (users/sam.md) joins USER.md, which every chat reads.
+  expect(memory.list().map((p) => p.path)).toEqual(["USER.md", "episodic/2026-10-04.md", "people/ada.md"]);
+  expect(memory.get("USER.md")!.current.map((f) => f.text)).toEqual(["Likes tea.", "Lives in Lisbon.", "Sam is the owner."]);
   const ada = memory.get("people/ada.md")!;
   expect(ada.title).toBe("Ada Lovelace");
   expect(ada.current).toEqual([
@@ -96,8 +98,8 @@ test("memory, skills and chats are written into Perch's stores and nothing is bu
   expect(ada.history.map((f) => f.text)).toEqual(["Met in 2025."]);
   expect(memory.get("episodic/2026-10-04.md")!.current.map((f) => f.text)).toEqual(["20:53 PDT: Booked a table for four.", "20:53 PDT: Paid the deposit."]);
   const changes = await memory.changes();
-  expect(changes).toHaveLength(4);
-  expect(changes.every((c) => c.action === "add" && c.source === "import" && c.detail === "Imported from Aside")).toBe(true);
+  expect(changes).toHaveLength(5);
+  expect(changes.every((c) => c.action === "add" && c.source === "import")).toBe(true);
 
   const mail = (await skills.list())[0]!;
   expect(mail).toMatchObject({ name: "mail", description: "Does mail.", source: "Aside" });
@@ -129,7 +131,7 @@ test("importing twice adds nothing twice, and Perch's own version of a page is k
     { type: "skills", status: "written", count: 0, skipped: 2 },
     { type: "chats", status: "written", count: 0, skipped: 2 },
   ]);
-  expect(memory.list()).toHaveLength(4);
+  expect(memory.list()).toHaveLength(3);
   expect(memory.get("people/ada.md")!.current.map((f) => f.text)).toEqual(["Edited in Perch."]);
   expect(await skills.names()).toEqual(["mail"]);
   expect(chats.list()).toHaveLength(2);
@@ -177,7 +179,7 @@ test("Aside's paths map onto Perch's folders", () => {
   expect(pagePathFor("TAXONOMY.md")).toBeNull();
   expect(pagePathFor("notes.txt")).toBeNull();
   expect(pagePathFor("people/Ada Lovelace.md")).toBe("people/ada-lovelace.md");
-  expect(pagePathFor("users/sam.md")).toBe("people/sam.md");
+  expect(pagePathFor("users/sam.md")).toBe("USER.md");
   expect(pagePathFor("dreaming-history/2026-10-04.md")).toBe("log/2026-10-04.md");
   expect(pagePathFor("projects/perch/Release Plan.md")).toBe("projects/perch-release-plan.md");
   expect(pagePathFor("recipes/soup.md")).toBe("concepts/recipes-soup.md");
@@ -246,4 +248,11 @@ test("about 200 pages and 600 chats import in a few seconds", async () => {
   expect(chats.list()).toHaveLength(600);
   expect(firstMs).toBeLessThan(5000);
   expect(secondMs).toBeLessThan(5000);
+});
+
+test("Aside's profile joins a USER.md Perch already has, instead of being skipped", async () => {
+  await memory.addFacts([{ category: "user", title: "You", text: "Prefers window seats" }], "agent");
+  asideAgent(env.home, ACCOUNT);
+  await run();
+  expect(memory.get("USER.md")!.current.map((f) => f.text)).toEqual(["Prefers window seats", "Likes tea.", "Lives in Lisbon.", "Sam is the owner."]);
 });

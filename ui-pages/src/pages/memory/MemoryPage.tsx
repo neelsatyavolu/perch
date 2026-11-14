@@ -4,7 +4,6 @@ import { inlineTime } from "../../lib/time";
 import { useAction, useApi, useLoad } from "../../ui/frame";
 import { Dialog } from "../../ui/Dialog";
 import { ArrowLeft, Brain, History, Icon, Search, User } from "../../ui/icons";
-import { BUILD_MEMORY_PROMPT } from "./build-prompt";
 import { Switch } from "../../ui/Switch";
 import { SetupMemory } from "./SetupMemory";
 import "./memory.css";
@@ -127,7 +126,7 @@ function Browser({ onSetup }: { readonly onSetup: () => void }) {
   const q = filter.trim().toLowerCase();
   const shown = q ? all.filter((p) => `${p.title} ${p.path}`.toLowerCase().includes(q)) : all;
   const found = useContentSearch(filter).filter((h) => !shown.some((p) => p.path === h.path));
-  const buildWithAgent = () => act(() => api.submitQuery({ text: BUILD_MEMORY_PROMPT, mode: "ask", engine: "brave" }));
+  const buildWithAgent = () => act(() => api.startMemoryChat(true), "Building your memory in a tab behind this one");
 
   return (
     <div class="mem-browse">
@@ -145,7 +144,7 @@ function Browser({ onSetup }: { readonly onSetup: () => void }) {
         )}
         <button type="button" class="btn" onClick={() => setHistoryOpen(true)}><Icon of={History} />History</button>
         <button type="button" class="btn" onClick={onSetup}><Icon of={User} />Set up your memory</button>
-        <button type="button" class="btn primary" onClick={buildWithAgent} title="Perch researches you in a chat and drafts facts for you to review"><Icon of={Brain} />Build my memory</button>
+        <button type="button" class="btn primary" onClick={buildWithAgent} title="Perch researches you in a chat of its own and saves what it finds"><Icon of={Brain} />Build my memory</button>
       </div>
       <HistoryDialog open={historyOpen} onClose={() => setHistoryOpen(false)} onChanged={() => pages.reload()} />
       {pages.data && all.length === 0 ? (

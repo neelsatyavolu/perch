@@ -16,14 +16,18 @@ const PAGE_FACTS = 200;
 const MAX_CONTEXT = 80;
 const TOP_PAGES: ReadonlySet<string> = new Set(["USER.md", "MEMORY.md"]);
 /** Aside folders Perch names differently. A folder Perch does not have goes under concepts. */
-const FOLDERS: Readonly<Record<string, string>> = { users: "people", "dreaming-history": "log" };
+const FOLDERS: Readonly<Record<string, string>> = { "dreaming-history": "log" };
 const OTHER_FOLDER = "concepts";
+/** A heading over credentials: nothing under it is imported. */
+const SECRET_SECTION = /\b(passwords?|passcodes?|pins?|secrets?|credentials?|recovery codes?|backup codes?|2fa|api keys?)\b/i;
 
 export type MappedFile = { readonly pages: readonly NewPage[]; readonly secrets: number };
 
 /** Where a file goes in Perch, or null for one Perch has no page for (TAXONOMY.md, not markdown). */
 export function pagePathFor(path: string): string | null {
   if (TOP_PAGES.has(path)) return path;
+  // Aside keeps the user's own profile in users/<name>.md: it is what Perch keeps in USER.md.
+  if (path.startsWith("users/") && path.endsWith(".md")) return "USER.md";
   if (!path.endsWith(".md") || path === "TAXONOMY.md") return null;
   const parts = path.slice(0, -3).split("/").filter(Boolean);
   const first = parts[0] ?? "";
@@ -89,6 +93,11 @@ function facts(body: string): Lists {
     }
     const text = cleanText(raw.replace(/^\s*(?:[-*+]|\d+[.)])\s+/, "").replace(/^\s*>\s?/, ""), Number.MAX_SAFE_INTEGER);
     if (!/[\p{L}\p{N}]/u.test(text)) continue;
+    // The whole line is checked before it is split, and a section about secrets is left out whole.
+    if (SECRET_SECTION.test(context) || looksSecret(context ? `${context}: ${text}` : text)) {
+      secrets++;
+      continue;
+    }
     for (const fact of chunks(context, text)) {
       const key = `${section}:${factKey(fact)}`;
       if (seen.has(key)) continue;

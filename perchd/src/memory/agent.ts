@@ -1,9 +1,9 @@
 /**
  * Memory inside a chat: what the agent knows at the start (USER.md, MEMORY.md and the pages that
  * match the task), the memory_search and memory_save tools, and extraction when the chat ends.
- * memory_save is a "change": it waits for approval in Ask mode and runs in Guard and Skip, except
- * saving to USER.md or MEMORY.md, which always asks because both go into every later chat. In a
- * chat nobody is watching (an unattended routine run) every save asks, so it is declined and listed.
+ * memory_save never asks, as on Aside: memory is only useful if it fills itself, and each save is
+ * in Memory → History to undo. The one exception is a standing rule (MEMORY.md), which every later
+ * chat follows: that asks, so a page can't plant one, and in a chat nobody is watching it is declined.
  * Incognito chats get no memory at all.
  */
 
@@ -53,7 +53,7 @@ export const memorySpecs = (taxonomy: string): readonly ToolSpec[] => [
   },
   {
     name: "memory_save",
-    description: `Save one durable fact the user told you or asked you to remember.\n${taxonomy}`,
+    description: `Save one lasting fact about the user, someone they know, an account or a site, as soon as you learn it. Saving needs no approval, except a standing rule (category rules), which the user approves.\n${taxonomy}`,
     parameters: {
       type: "object",
       properties: {
@@ -76,7 +76,7 @@ const CONTEXT_NOTE = [
   "- Be exactly as sure as your memory is. Keep specifics exact (names, numbers, addresses). Newer records win over older ones; when a fact may have changed, say when you last knew it (\"as of 7 Oct\").",
   "- For plans, deadlines, logistics, money or decisions, search memory for the whole record rather than relying on one line.",
   "- If you don't recall something the task needs, search memory before asking the user.",
-  "- Save with memory_save only when the user shares something durable or asks you to remember it; Perch learns the rest from the chat by itself.",
+  "- When you learn something lasting about the user, someone they know, an account or a site, save it with memory_save right away.",
 ].join("\n");
 
 /** Facts already shown in each chat, so recall doesn't repeat itself turn after turn. */
@@ -157,8 +157,10 @@ export function chatMemory(store: MemoryStore, opts: ChatMemoryOptions = {}): Me
     return null;
   };
   return {
-    specs: [...memorySpecs(store.taxonomy()), ...(opts.draft && !opts.unattended ? researchSpecs.filter((s) => s.name !== "browsing_history" || opts.history) : [])],
-    handles: (name) => name === "memory_search" || name === "memory_save" || (Boolean(opts.draft) && !opts.unattended && (name === "memory_propose" || (name === "browsing_history" && Boolean(opts.history)))),
+    // Findings are saved as they're found (memory_save), so a chat isn't offered the review draft
+    // (memory_propose): what went there waited for a review that rarely came.
+    specs: [...memorySpecs(store.taxonomy()), ...(opts.draft && !opts.unattended && opts.history ? researchSpecs.filter((s) => s.name === "browsing_history") : [])],
+    handles: (name) => name === "memory_search" || name === "memory_save" || (Boolean(opts.draft) && !opts.unattended && name === "browsing_history" && Boolean(opts.history)),
     async context(task, hints = {}) {
       const known = store.context();
       const shown = shownFor(hints.chatId);
@@ -178,7 +180,7 @@ export function chatMemory(store: MemoryStore, opts: ChatMemoryOptions = {}): Me
     kind: () => "read",
     // Saves go in without asking, as on Aside: memory is only useful if it fills itself. Each one
     // is in Memory → History, where a fact a page planted can be seen and undone.
-    mustAsk: () => false,
+    mustAsk: (call) => call.name === "memory_save" && str(call.args.category) === "rules",
     summary(call) {
       if (call.name === "memory_search") return `Search memory for "${str(call.args.query)}"`;
       if (call.name === "memory_propose") return "Add findings to the memory draft";
@@ -210,14 +212,17 @@ export function chatMemory(store: MemoryStore, opts: ChatMemoryOptions = {}): Me
       if (problem) return { content: problem, isError: true };
       if (call.name === "memory_search") {
         const limit = Math.max(1, Math.min(10, Number(call.args.limit) || SEARCH_LIMIT));
-        const hits = await store.search(str(call.args.query), { limit });
+        const query = str(call.args.query);
+        // The overnight tidy's logs quote retired facts; they are not memory to act on.
+        const hits = await store.search(query, { limit, categories: FILEABLE });
         if (!hits.length) return { content: "Nothing in memory matches.", label: "Searched memory" };
         const blocks = hits.map((h) => {
-          const facts = store.get(h.id)?.current.slice(0, FACTS_SHOWN) ?? [];
+          const facts = shownFacts(store.get(h.id)?.current ?? [], query, new Date().toISOString().slice(0, 10));
           return `${h.path} (${h.title})\n${facts.map((f) => `- ${f.text}`).join("\n")}`;
         });
         return { content: blocks.join("\n\n"), label: "Searched memory" };
       }
+      if (store.settings().paused) return { content: "Not saved: memory is paused.", isError: true };
       const category = str(call.args.category);
       if (!isCategory(category) || !FILEABLE.includes(category) || category === "episodic") return { content: "Not saved: unknown category.", isError: true };
       const result = await store.addFacts([{ category, title: str(call.args.title), text: str(call.args.text), ...(str(call.args.expires) ? { expires: str(call.args.expires) } : {}) }], "agent");
@@ -232,6 +237,21 @@ export function chatMemory(store: MemoryStore, opts: ChatMemoryOptions = {}): Me
         .then((result) => opts.onExtracted?.(result));
     },
   };
+}
+
+/**
+ * The facts of a found page worth showing: the ones that share the most words with the query
+ * first (a phone number on a long profile page), then the rest in order; expired facts left out.
+ */
+export function shownFacts<T extends { readonly text: string; readonly expires?: string }>(facts: readonly T[], query: string, today: string): T[] {
+  const words = query.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 2);
+  const score = (text: string) => words.filter((w) => text.toLowerCase().includes(w)).length;
+  return facts
+    .filter((f) => !f.expires || f.expires >= today)
+    .map((f, i) => ({ f, i, s: score(f.text) }))
+    .sort((a, b) => b.s - a.s || a.i - b.i)
+    .slice(0, FACTS_SHOWN)
+    .map((x) => x.f);
 }
 
 /** What the plaintext audit log may say about a memory call: never the query or the fact itself. */

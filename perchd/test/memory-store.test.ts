@@ -239,3 +239,33 @@ test("undo snapshots go after 30 days and History after 90, when the store opens
     clock = saved;
   }
 });
+
+test("imported facts keep their own date: a dated line's, else the daily page's, never a future one", async () => {
+  const { store } = await open();
+  await store.addPages(
+    [
+      { path: "projects/perch.md", title: "Perch", current: ["2025-03-09: Started the project.", "No date here.", "2027-01-01: Planned launch."] },
+      { path: "episodic/2026-10-04.md", title: "2026-10-04", current: ["20:53 PDT: Booked a table."] },
+    ],
+    "import",
+    "Imported",
+  );
+  expect(store.get("projects/perch.md")!.current.map((f) => f.added)).toEqual(["2025-03-09T00:00:00.000Z", clock.toISOString(), clock.toISOString()]);
+  expect(store.get("episodic/2026-10-04.md")!.current[0]!.added).toBe("2026-10-04T00:00:00.000Z");
+});
+
+test("finding a page by path follows a page that moves, is deleted, or is wiped", async () => {
+  const { store } = await open();
+  await store.addFacts([{ category: "people", title: "Ada", text: "Writes code" }], "user");
+  const ada = store.get("people/ada.md")!;
+  await store.replacePage({ ...ada, path: "people/ada-lovelace.md" }, { action: "edit", detail: "moved", source: "user" });
+  expect(store.get("people/ada.md")).toBeNull();
+  expect(store.get("people/ada-lovelace.md")!.id).toBe(ada.id);
+  expect((await store.search("code")).map((h) => h.path)).toEqual(["people/ada-lovelace.md"]);
+  await store.deletePage(ada.id);
+  expect(store.get("people/ada-lovelace.md")).toBeNull();
+  expect(await store.search("code")).toEqual([]);
+  await store.addFacts([{ category: "people", title: "Ada", text: "Back again" }], "user");
+  await store.wipe();
+  expect(store.get("people/ada.md")).toBeNull();
+});

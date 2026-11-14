@@ -11,7 +11,7 @@ import type { Model, ToolSpec } from "../models/types";
 import { askForTool, message, str } from "./model-call";
 import { factKey, newPage, type Fact, type Page } from "./page";
 import { cleanText, looksSecret } from "./sanitize";
-import type { MemoryStore, NewFact } from "./store";
+import { MAX_FACTS_PER_PAGE, type MemoryStore, type NewFact } from "./store";
 
 export type DreamReport = {
   date: string;
@@ -31,7 +31,8 @@ export type DreamReport = {
 };
 export type DreamOptions = { store: MemoryStore; model?: Model; now: Date; signal?: AbortSignal };
 
-const HISTORY_CAP = 100;
+/** As much History as a page may hold, so a page imported with a full History keeps all of it. */
+const HISTORY_CAP = MAX_FACTS_PER_PAGE;
 const PROMPT_BUDGET = 30_000;
 const DAY = 86_400_000;
 /** Joining words a merged fact may add; every other word must come from the facts it merges. */

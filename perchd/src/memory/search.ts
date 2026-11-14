@@ -63,6 +63,11 @@ export function pageText(page: Page): { body: string; history: string } {
 
 export class MemoryIndex {
   private readonly db = new Database(":memory:");
+  /**
+   * Each page's rows. FTS5 can only find a row fast by rowid; deleting by page id scanned every
+   * row, so opening a large memory (one upsert per page) took time quadratic in its size.
+   */
+  private readonly rows = new Map<string, { page: number; facts: number[] }>();
 
   constructor() {
     this.db.run(
@@ -77,18 +82,27 @@ export class MemoryIndex {
   upsert(page: Page): void {
     const { body, history } = pageText(page);
     this.remove(page.id);
-    this.db.run("INSERT INTO pages (id, path, category, title, body, history) VALUES (?, ?, ?, ?, ?, ?)", [page.id, page.path, page.category, `${page.title} ${page.path}`, body, history]);
+    const title = `${page.title} ${page.path}`;
+    const row = this.db.run("INSERT INTO pages (id, path, category, title, body, history) VALUES (?, ?, ?, ?, ?, ?)", [page.id, page.path, page.category, title, body, history]);
     const add = this.db.prepare("INSERT INTO facts (page, path, category, added, part, title, text) VALUES (?, ?, ?, ?, ?, ?, ?)");
-    for (const f of page.current) add.run(page.id, page.path, page.category, f.added, "current", `${page.title} ${page.path}`, f.text);
-    for (const f of page.history) add.run(page.id, page.path, page.category, f.added, "history", `${page.title} ${page.path}`, f.text);
+    const facts = [
+      ...page.current.map((f) => add.run(page.id, page.path, page.category, f.added, "current", title, f.text)),
+      ...page.history.map((f) => add.run(page.id, page.path, page.category, f.added, "history", title, f.text)),
+    ].map((r) => Number(r.lastInsertRowid));
+    this.rows.set(page.id, { page: Number(row.lastInsertRowid), facts });
   }
 
   remove(id: string): void {
-    this.db.run("DELETE FROM pages WHERE id = ?", [id]);
-    this.db.run("DELETE FROM facts WHERE page = ?", [id]);
+    const rows = this.rows.get(id);
+    if (!rows) return;
+    this.rows.delete(id);
+    this.db.run("DELETE FROM pages WHERE rowid = ?", [rows.page]);
+    const drop = this.db.prepare("DELETE FROM facts WHERE rowid = ?");
+    for (const rowid of rows.facts) drop.run(rowid);
   }
 
   clear(): void {
+    this.rows.clear();
     this.db.run("DELETE FROM pages");
     this.db.run("DELETE FROM facts");
   }

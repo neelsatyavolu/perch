@@ -41,7 +41,7 @@ const DEFAULT_SETTINGS: MemorySettings = { extraction: true, paused: false, drea
 const SAFE_SETTINGS: MemorySettings = { extraction: false, paused: true, dreaming: false, episodicRetentionDays: null };
 /** How damaged settings are listed in `damaged`. */
 const DAMAGED_SETTINGS = "settings";
-const MAX_FACTS_PER_PAGE = 200;
+export const MAX_FACTS_PER_PAGE = 200;
 const MAX_PAGES = 5000;
 const CONTEXT_LIMIT = 4000;
 /** Facts a form or an order needs: who the user is and how to reach them. */
@@ -56,6 +56,8 @@ export type StoreOptions = { dir: string; keys: KeyStore; profile: string; now?:
 
 export class MemoryStore {
   private readonly pages = new Map<string, Page>();
+  /** Page id by path, so finding a page by path doesn't walk every page. */
+  private readonly byPath = new Map<string, string>();
   private readonly index = new MemoryIndex();
   private readonly vectors = new Map<string, Float32Array>();
   private config: MemorySettings = DEFAULT_SETTINGS;
@@ -108,9 +110,28 @@ export class MemoryStore {
   }
 
   private remember(page: Page): void {
+    const old = this.pages.get(page.id);
     this.pages.set(page.id, page);
+    if (old && old.path !== page.path) this.unlinkPath(old.path, page.id);
+    if (!this.byPath.has(page.path)) this.byPath.set(page.path, page.id);
     this.index.upsert(page);
     this.vectors.delete(page.id);
+  }
+
+  private forget(id: string): void {
+    const page = this.pages.get(id);
+    this.pages.delete(id);
+    if (page) this.unlinkPath(page.path, id);
+    this.index.remove(id);
+    this.vectors.delete(id);
+  }
+
+  /** Drops a path's entry for this page; another page at the same path (a damaged store) takes it. */
+  private unlinkPath(path: string, id: string): void {
+    if (this.byPath.get(path) !== id) return;
+    this.byPath.delete(path);
+    const other = [...this.pages.values()].find((p) => p.path === path);
+    if (other) this.byPath.set(path, other.id);
   }
 
   private stamp(): string {
@@ -125,7 +146,8 @@ export class MemoryStore {
 
   /** A page by id or by path. */
   get(idOrPath: string): Page | null {
-    return this.pages.get(idOrPath) ?? [...this.pages.values()].find((p) => p.path === idOrPath) ?? null;
+    const id = this.pages.has(idOrPath) ? idOrPath : this.byPath.get(idOrPath);
+    return (id && this.pages.get(id)) || null;
   }
 
   all(): Page[] {
@@ -321,7 +343,8 @@ export class MemoryStore {
     if (count >= MAX_PAGES) return "memory is full";
     if (typeof item.path !== "string" || !categoryOf(item.path)) return "not a memory page path";
     const now = this.stamp();
-    const facts = (texts: readonly string[]): Fact[] => texts.map((t) => cleanText(String(t))).filter(Boolean).map((text) => ({ text, added: now, source }));
+    const facts = (texts: readonly string[]): Fact[] =>
+      texts.map((t) => cleanText(String(t))).filter(Boolean).map((text) => ({ text, added: datedAt(text, item.path, now), source }));
     const current = facts(item.current);
     const history = facts(item.history ?? []);
     if (current.length + history.length === 0) return "empty";
@@ -379,9 +402,7 @@ export class MemoryStore {
       if (!page || (expectedUpdated !== undefined && page.updated !== expectedUpdated)) return false;
       await this.snapshot(id, page.path);
       await this.folder.remove(PAGES, id);
-      this.pages.delete(id);
-      this.index.remove(id);
-      this.vectors.delete(id);
+      this.forget(id);
       await this.log([{ time: this.stamp(), action: "delete", path: page.path, detail: page.title, source }]);
       return true;
     });
@@ -394,6 +415,7 @@ export class MemoryStore {
       await this.folder.removeKind(CHANGES);
       await this.folder.removeKind(SNAPSHOTS);
       this.pages.clear();
+      this.byPath.clear();
       this.index.clear();
       this.vectors.clear();
       await this.log([{ time: this.stamp(), action: "wipe", path: "", detail: "All memory was deleted", source: "user" }]);
@@ -436,9 +458,7 @@ export class MemoryStore {
         if (current) {
           await this.snapshot(current.id, current.path);
           await this.folder.remove(PAGES, current.id);
-          this.pages.delete(current.id);
-          this.index.remove(current.id);
-          this.vectors.delete(current.id);
+          this.forget(current.id);
         }
         await this.log([{ time: this.stamp(), action: "revert", path: snap.path, detail: "Undid a change: the page is gone again", source: "user" }]);
         return null;
@@ -519,6 +539,17 @@ export class MemoryStore {
   close(): void {
     this.index.close();
   }
+}
+
+/**
+ * When an imported fact was learned: the date it starts with (Aside writes "2026-10-09: …"), else
+ * a daily page's date, else now. Recall shows it ("as of …"), so a years-old fact must not read as new.
+ */
+function datedAt(text: string, path: string, now: string): string {
+  const day = /^(\d{4}-\d{2}-\d{2})\b/.exec(text)?.[1] ?? /^episodic\/(\d{4}-\d{2}-\d{2})\.md$/.exec(path)?.[1];
+  if (!day || !validDate(day)) return now;
+  const at = new Date(`${day}T00:00:00.000Z`).toISOString();
+  return at < now ? at : now;
 }
 
 function validDate(value: unknown): value is string {

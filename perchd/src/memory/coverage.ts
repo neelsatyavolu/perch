@@ -13,7 +13,8 @@ const WRITING = /\b(tone|sign[- ]?off|signs (off|emails)|writes|writing|greeting
 const CONTACT_KINDS: readonly RegExp[] = [
   /@[\w-]+\.\w|\be-?mail\b/i,
   /\bphone|mobile\b|\+?\d[\d ().-]{7,}\d/i,
-  /\baddress|lives (in|at)|street|\bst\b|avenue|zip|postcode\b/i,
+  // "Email address" is an email, not a second kind of contact detail.
+  /(?<!e-?mail )\baddress|lives (in|at)|street|\bst\b|avenue|zip|postcode\b/i,
 ];
 
 type Need = { readonly gap: string; readonly met: (pages: readonly Page[]) => boolean };

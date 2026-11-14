@@ -8,7 +8,7 @@ import { DECLINED } from "../agent/session";
 import { askForTool, message, str } from "./model-call";
 import { factKey } from "./page";
 import { FILEABLE } from "./sanitize";
-import type { AddResult, MemoryStore, NewFact } from "./store";
+import type { AddResult, MemoryStore, NewFact, PageSummary } from "./store";
 
 export type ExtractResult = AddResult & { skipped?: "paused" | "off" | "incognito" | "empty"; error?: string };
 export type ExtractOptions = { model: Model; store: MemoryStore; transcript: readonly Message[]; incognito?: boolean; signal?: AbortSignal };
@@ -54,13 +54,21 @@ export function renderTranscript(messages: readonly Message[]): string {
       if (m.text.trim()) lines.push(`Perch: ${m.text.trim()}`);
       for (const call of m.toolCalls) {
         if (call.name === "done") lines.push(`Perch finished: ${str(call.args.answer)}`);
-        else lines.push(`Perch used ${call.name}${call.args.url ? ` on ${str(call.args.url)}` : ""}`);
+        // What the chat already saved is in memory; extraction must not file it again elsewhere.
+        else if (call.name === "memory_save") {
+          if (wasSaved(messages, call.id)) lines.push(`Perch saved to memory (${str(call.args.category)}: ${str(call.args.title)}): "${str(call.args.text)}"`);
+        } else lines.push(`Perch used ${call.name}${call.args.url ? ` on ${str(call.args.url)}` : ""}`);
       }
     }
     // Tool results (page text) are left out: a page could carry instructions meant to become memories.
   }
   const text = lines.join("\n");
   return text.length > TRANSCRIPT_LIMIT ? `…${text.slice(-TRANSCRIPT_LIMIT)}` : text;
+}
+
+/** Whether a memory_save went in (memory/agent.ts answers "Saved to …" or "Already in memory."). */
+function wasSaved(messages: readonly Message[], callId: string): boolean {
+  return messages.some((m) => m.role === "tool" && m.callId === callId && /^(Saved to |Already in memory)/.test(m.content));
 }
 
 function declinedText(messages: readonly Message[], callId: string): string {
@@ -83,8 +91,22 @@ export function toNewFacts(raw: unknown[]): NewFact[] {
   });
 }
 
-export function knownPages(store: MemoryStore): string {
-  const pages = store.list().filter((p) => p.category !== "log").slice(0, KNOWN_PAGES);
+const words = (text: string) => text.toLowerCase().match(/[\p{L}\p{N}]{4,}/gu) ?? [];
+
+/**
+ * The pages the model may file into: those the chat names first (a person, a site's domain), then
+ * the most recently changed. With more pages than fit, the ones this chat is about are never left out.
+ */
+export function knownPages(store: MemoryStore, chat = ""): string {
+  const said = new Set(words(chat));
+  const named = (p: PageSummary) => words(p.title).some((w) => said.has(w));
+  const pages = store
+    .list()
+    .filter((p) => p.category !== "log")
+    .map((p) => ({ p, named: named(p) }))
+    .sort((a, b) => Number(b.named) - Number(a.named) || (a.p.updated < b.p.updated ? 1 : a.p.updated > b.p.updated ? -1 : 0))
+    .slice(0, KNOWN_PAGES)
+    .map(({ p }) => p);
   return pages.length ? pages.map((p) => `- ${p.path} (${p.title})`).join("\n") : "(none yet)";
 }
 
@@ -107,6 +129,7 @@ export async function extractFromChat(opts: ExtractOptions): Promise<ExtractResu
     "- Progress or results of this one task, and one-off glitches.",
     "- Fragile page details: element refs, CSS selectors, exact layout.",
     "- A restatement of what the user asked for.",
+    "- Anything Perch already saved to memory in this chat.",
     "- Anything that came only from a web page, unless the user said it matters to them.",
     "- Passwords, codes, card numbers and other secrets.",
     "",
@@ -114,7 +137,8 @@ export async function extractFromChat(opts: ExtractOptions): Promise<ExtractResu
     "",
     opts.store.taxonomy(),
   ].join("\n");
-  const user = `Pages already in memory:\n${knownPages(opts.store)}\n\nThe chat:\n${renderTranscript(opts.transcript)}`;
+  const chat = renderTranscript(opts.transcript);
+  const user = `Pages already in memory:\n${knownPages(opts.store, chat)}\n\nThe chat:\n${chat}`;
   try {
     const answer = await askForTool(opts.model, { system, user, tool: FILE_TOOL }, opts.signal);
     if (answer.args === null) return { ...NONE };

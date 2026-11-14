@@ -57,3 +57,8 @@ test("other people's details, overflow pages and loose notes don't make a junk i
   expect(c.enough).toBe(false);
   expect(c.missing[0]).toContain("contact details");
 });
+
+test("an email address alone is one kind of contact detail, not two", () => {
+  const c = memoryCoverage([page("user", ["My email address is a@example.com", ...filler(120)])]);
+  expect(c.missing[0]).toContain("contact details");
+});

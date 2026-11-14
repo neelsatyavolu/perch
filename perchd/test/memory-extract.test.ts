@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { extractFromChat, renderTranscript } from "../src/memory/extract";
+import { extractFromChat, knownPages, renderTranscript } from "../src/memory/extract";
 import { mockKeychain } from "../src/memory/keychain";
 import { MemoryStore } from "../src/memory/store";
 import { fakeModel } from "../src/models/fake";
@@ -106,4 +106,28 @@ test("extraction never files standing rules, and never re-saves what the user de
   expect(result).toMatchObject({ added: 1, rejected: [{ reason: "standing rules are saved only with your approval" }, { reason: "the user declined saving this" }] });
   expect(s.get("MEMORY.md")).toBeNull();
   expect(s.get("USER.md")!.current.map((f) => f.text)).toEqual(["Vegetarian"]);
+});
+
+test("the transcript shows what the chat already saved, so extraction doesn't file it again", () => {
+  const saved: Message[] = [
+    { role: "user", text: "My dentist is Dr Ruiz" },
+    { role: "assistant", text: "", toolCalls: [{ id: "s1", name: "memory_save", args: { category: "people", title: "Dr Ruiz", text: "The user's dentist" } }] },
+    { role: "tool", callId: "s1", name: "memory_save", content: "Saved to people/dr-ruiz.md" },
+  ];
+  const text = renderTranscript(saved);
+  expect(text).toContain('Perch saved to memory (people: Dr Ruiz): "The user\'s dentist"');
+  expect(text).not.toContain("Perch used memory_save");
+});
+
+test("the pages a chat names are listed even when memory has more pages than fit", async () => {
+  const s = await store();
+  await s.addPages(
+    Array.from({ length: 250 }, (_, i) => ({ path: `concepts/topic-${String(i).padStart(3, "0")}.md`, title: `Topic ${i}`, current: ["A fact."] })),
+    "import",
+    "test",
+  );
+  await s.addFacts([{ category: "people", title: "Zora Quint", text: "Plays chess" }], "chat");
+  const list = knownPages(s, "User: Ask Zora about Friday");
+  expect(list.split("\n")).toHaveLength(200);
+  expect(list.split("\n")[0]).toBe("- people/zora-quint.md (Zora Quint)");
 });

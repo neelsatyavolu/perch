@@ -195,3 +195,13 @@ test("dreaming prunes undo snapshots older than 30 days", async () => {
     clock = saved;
   }
 });
+
+test("dreaming keeps an imported page's whole History when it moves an expired fact there", async () => {
+  const s = await store();
+  const history = Array.from({ length: 150 }, (_, i) => `Old fact ${i}.`);
+  await s.addPages([{ path: "projects/big.md", title: "Big", current: ["Live fact."], history }], "import", "Imported");
+  const page = s.get("projects/big.md")!;
+  await s.replacePage({ ...page, current: [...page.current, { text: "Ended Nov 1", added: page.created, source: "chat", expires: "2026-11-01" }] }, { action: "edit", detail: "test", source: "user" });
+  await dream({ store: s, now: clock });
+  expect(texts(s, "projects/big.md", "history")).toEqual([...history, "Ended Nov 1"]);
+});

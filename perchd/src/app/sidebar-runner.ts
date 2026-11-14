@@ -157,7 +157,7 @@ export function toStep(event: AsideEvent): StepEvent | null {
  * (external.ts codexArgs), so a private chat does not use it. Claude Code runs with its tools
  * limited to Perch's and without saving a session (claudeArgs), so it may.
  */
-export const CODEX_NOT_PRIVATE = "Codex can't be used in a private chat, because it can run commands on this Mac outside Perch's approvals. Pick another model for this chat.";
+export const CODEX_NOT_PRIVATE = "ChatGPT can't be used in a private chat, because it can run commands on this Mac outside Perch's approvals. Pick another model for this chat.";
 
 export type SidebarRunnerOptions = {
   runs: SidebarRuns;
@@ -303,7 +303,7 @@ export function sidebarRunner(opts: SidebarRunnerOptions): Runner {
       } else if (!input.signal.aborted) {
         const why = f.result.timedOut ? "it ran out of time" : `it stopped (exit ${f.result.exitCode})`;
         const detail = f.result.stderr.trim().split("\n").filter(Boolean).slice(-1)[0];
-        yield { type: "error", message: `${agent === "codex" ? "Codex" : "Claude Code"} gave no answer: ${why}.${detail ? ` ${detail.slice(0, 300)}` : ""}` };
+        yield { type: "error", message: `${agent === "codex" ? "ChatGPT" : "Claude Code"} gave no answer: ${why}.${detail ? ` ${detail.slice(0, 300)}` : ""}` };
       }
     } finally {
       opts.runs.delete(session);

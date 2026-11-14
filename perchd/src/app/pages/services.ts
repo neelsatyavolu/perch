@@ -215,7 +215,7 @@ export function openPageServices(opts: PageServicesOptions): PageServices {
       if (!providerAllowed(provider, policy) || !allowsModel(provider, model, policy)) return MODEL_NOT_ALLOWED;
       try {
         const handle = await (await models()).modelFor({ provider, model });
-        return handle.kind === "model" ? handle.model : "This model runs as its own agent; pick it from the Claude Code or Codex list.";
+        return handle.kind === "model" ? handle.model : "This model runs as its own agent; pick it from the Claude Code or ChatGPT list.";
       } catch (error) {
         return error instanceof Error ? error.message : String(error);
       }

@@ -184,7 +184,7 @@ export function label(call: ToolCall, target: Target | undefined, site: string):
     case "select": return `Chose "${call.args.value}" in ${what}`;
     case "press": return `Pressed ${call.args.key}`;
     case "scroll": return "Scrolled";
-    case "hover": return `Pointed at ${what}`;
+    case "hover": return target || call.args.ref !== undefined ? `Pointed at ${what}` : `Pointed at ${call.args.x}, ${call.args.y}`;
     case "drag": return `Dragged ${what}`;
     case "upload": return `Attached ${(call.args.paths as string[]).length} file(s)`;
     case "back": return "Went back";

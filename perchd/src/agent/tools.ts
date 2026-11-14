@@ -17,7 +17,7 @@ import { back, click, describeRef, drag, hover, press, scroll, select, type, upl
 import { openPage } from "../page/navigation";
 import { refsFor } from "../page/refs";
 import { repl } from "../page/repl";
-import { clickAt, screenshot } from "../page/screenshot";
+import { clickAt, hoverAt, screenshot } from "../page/screenshot";
 import { snapshot } from "../page/snapshot";
 import type { PageContext, Target } from "./permissions";
 import { changeNotes } from "./changes";
@@ -99,6 +99,7 @@ export function checkCall(call: ToolCall): string | null {
     if (typeof to === "string" && !REF.test(to)) return `ref "${to}" is not a valid ref; refs look like e12`;
     if (to === undefined && dx === undefined && dy === undefined) return "give to (a ref to drop on) or dx and dy (pixels to move)";
   }
+  if (call.name === "hover" && ref === undefined && (call.args.x === undefined || call.args.y === undefined)) return "give ref (an element) or x and y (screenshot pixels)";
   if (call.name === "navigate" || call.name === "open_tab") {
     const url = normalizeUrl(String(call.args.url));
     if (url !== "about:blank" && !WEB_URL.test(url)) return "Perch's agent only opens http and https pages";
@@ -125,6 +126,25 @@ const SENDS = new Set(["click", "press", "click_at", "submit"]);
 const RECHECK_MS = 500;
 export const UNCHANGED =
   "The page looks the same as before this action. If you expected a change (a filter, a menu, a new page), it did not take effect: check, or try another way.";
+/** For a click on something the page text cannot show, where "looks the same" would be a guess. */
+export const CANT_TELL =
+  "Perch can't tell whether this changed anything: it landed on a canvas, video or embedded frame, which the page text does not show. Take a screenshot to check.";
+
+/** Whether a point is on a canvas, video or plugin, or in a frame the page cannot look into. */
+const OPAQUE_AT_JS = (x: number, y: number) => `(() => {
+  let doc = document, px = ${x}, py = ${y};
+  for (let depth = 0; depth < 10; depth++) {
+    const el = doc.elementFromPoint(px, py);
+    if (!el) return false;
+    if (/^(CANVAS|VIDEO|EMBED|OBJECT)$/.test(el.tagName)) return true;
+    if (el.tagName !== 'IFRAME') return false;
+    let inner = null;
+    try { inner = el.contentDocument; } catch {}
+    if (!inner) return true;
+    const r = el.getBoundingClientRect(); px -= r.left + el.clientLeft; py -= r.top + el.clientTop; doc = inner;
+  }
+  return false;
+})()`;
 
 /**
  * Fields the browser refused to send, after a Submit that did nothing. Chromium focuses the first
@@ -138,7 +158,8 @@ const INVALID_FIELDS_JS = `(() => {
   return [...a.form.elements].filter((el) => el.willValidate && el.validity && !el.validity.valid).slice(0, 5).map((el) => name(el) + ': ' + el.validationMessage);
 })()`;
 
-async function withPage(ctx: ToolContext, tab: Tab, result: ActionResult, action = ""): Promise<ToolResult> {
+/** `unseen`: the action hit something the snapshot cannot show (OPAQUE_AT_JS), so no change proves nothing. */
+async function withPage(ctx: ToolContext, tab: Tab, result: ActionResult, action = "", unseen = false): Promise<ToolResult> {
   if (!result.ok) {
     if (result.error === STOPPED_RESPONDING && tab === ctx.tab) {
       const recovered = await replaceIfFrozen(ctx, tab);
@@ -158,13 +179,13 @@ async function withPage(ctx: ToolContext, tab: Tab, result: ActionResult, action
   let view = await page(ctx, tab);
   const compare = () => changeNotes({ before: before ?? "", after: ctx.lastSnapshot.get(tab) ?? "", sameUrl: shownUrl.get(tab) === beforeUrl });
   let change = watch ? compare() : { unchanged: false, text: "" };
-  if (change.unchanged) {
+  if (change.unchanged && !unseen) {
     // Results sometimes arrive after the page went quiet; look once more before saying nothing happened.
     await Bun.sleep(RECHECK_MS);
     view = await page(ctx, tab);
     change = compare();
   }
-  const notes = [result.note, ...(change.unchanged ? [UNCHANGED] : change.text ? [change.text] : [])];
+  const notes = [result.note, ...(change.unchanged ? [unseen ? CANT_TELL : UNCHANGED] : change.text ? [change.text] : [])];
   if (change.small) {
     const invalid = SENDS.has(action) ? await tab.evaluate<string[]>(INVALID_FIELDS_JS).catch(() => []) : [];
     if (invalid.length) notes.push(`The browser did not send the form: these fields are not valid (its message bubble is not in the snapshot): ${invalid.join("; ")}`);
@@ -413,8 +434,11 @@ async function dispatch(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
       return withPage(ctx, tab, await press(tab, a.key), "press");
     case "scroll":
       return withPage(ctx, tab, await scroll(tab, { refs, ref: a.ref, dy: a.dy }));
-    case "hover":
-      return withPage(ctx, tab, await hover(tab, refs, a.ref));
+    case "hover": {
+      if (a.ref !== undefined) return withPage(ctx, tab, await hover(tab, refs, a.ref));
+      const r = await hoverAt(tab, a.x / ctx.shotScale, a.y / ctx.shotScale);
+      return withPage(ctx, tab, r.ok ? { ok: true, note: `pointed at ${a.x}, ${a.y} in the screenshot` } : r);
+    }
     case "drag":
       return withPage(ctx, tab, await drag(tab, refs, a.ref, a.to !== undefined ? { ref: a.to } : { dx: Number(a.dx ?? 0), dy: Number(a.dy ?? 0) }), "drag");
     case "upload":
@@ -438,8 +462,10 @@ async function dispatch(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
       return { content: `screenshot ${shot.width}×${shot.height}`, image: shot.jpegBase64 };
     }
     case "click_at": {
-      const r = await clickAt(tab, a.x / ctx.shotScale, a.y / ctx.shotScale);
-      return withPage(ctx, tab, r.ok ? { ok: true, note: `clicked at ${a.x}, ${a.y} in the screenshot` } : r, "click_at");
+      const [x, y] = [a.x / ctx.shotScale, a.y / ctx.shotScale];
+      const unseen = await tab.evaluate<boolean>(OPAQUE_AT_JS(x, y)).catch(() => false);
+      const r = await clickAt(tab, x, y);
+      return withPage(ctx, tab, r.ok ? { ok: true, note: `clicked at ${a.x}, ${a.y} in the screenshot` } : r, "click_at", unseen);
     }
     case "type_text": {
       await tab.send("Input.insertText", { text: String(a.text) });

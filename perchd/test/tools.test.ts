@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { checkCall, describeTarget, newToolContext, runTool, TOOL_SPECS } from "../src/agent/tools";
+import { CANT_TELL, checkCall, describeTarget, newToolContext, runTool, TOOL_SPECS, UNCHANGED } from "../src/agent/tools";
 import { setup } from "./helpers";
 import { callTool } from "../src/agent/session";
 import { AuditLog } from "../src/agent/audit";
@@ -23,6 +23,15 @@ test("every tool spec is a strict JSON Schema object", () => {
     for (const key of p.required ?? []) expect(Object.keys(p.properties)).toContain(key);
     expect(spec.description.length).toBeLessThan(240);
   }
+});
+
+test("repl and script's js() say they read a copy of the page, and where live state is", () => {
+  const describe = (name: string) => TOOL_SPECS.find((s) => s.name === name)!;
+  const repl = describe("repl").description;
+  expect(repl).toStartWith("Run JavaScript on a read-only copy of the page");
+  expect(repl).toContain("no page scripts, frames or canvas, and media reads as stopped: for live state use snapshot or screenshot");
+  expect(JSON.stringify(describe("script").parameters)).toContain("js(code) (runs code on a read-only copy of the page");
+  expect(JSON.stringify(TOOL_SPECS)).not.toContain("in the page and return");
 });
 
 test("bad calls come back as plain errors", async () => {
@@ -183,4 +192,40 @@ test("type_text types at the focus, save_pdf writes a PDF to Downloads, download
     else process.env.PERCH_DOWNLOADS_DIR = before;
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+const refIn = (text: string, label: string) => {
+  const m = text.match(new RegExp(`${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} \\[ref=(e\\d+)\\]`));
+  if (!m) throw new Error(`no ${label} in\n${text}`);
+  return m[1]!;
+};
+
+test("hover at a point opens a hover menu, which stays open for a click on its item", async () => {
+  const ctx = await newToolContext(env.browser);
+  await runTool(ctx, call("navigate", { url: env.site.url("/canvas-editor.html") }));
+  await ctx.tab!.evaluate(`document.body.insertAdjacentHTML('beforeend', '<style>#m .fly { display: none } #m:hover .fly { display: block }</style><div id="m" style="position:fixed;left:0;top:300px;width:200px;background:#eee">Playtime<div class="fly"><button onclick="document.title = \\'Over 10\\'">Over 10 hours</button></div></div>')`);
+  expect(await runTool(ctx, call("hover", {}))).toMatchObject({ isError: true, content: "give ref (an element) or x and y (screenshot pixels)" });
+  const hovered = await runTool(ctx, call("hover", { x: 50, y: 305 }));
+  expect(hovered.content).toStartWith("pointed at 50, 305 in the screenshot");
+  const clicked = await runTool(ctx, call("click", { ref: refIn(hovered.content, 'button "Over 10 hours"') }));
+  expect(clicked.isError).toBeFalsy();
+  expect(await ctx.tab!.evaluate<string>("document.title")).toBe("Over 10");
+  await ctx.close();
+});
+
+test("a click on a canvas says Perch can't tell whether it changed anything, not that nothing did", async () => {
+  const ctx = await newToolContext(env.browser);
+  await runTool(ctx, call("navigate", { url: env.site.url("/canvas-editor.html") }));
+  await ctx.tab!.evaluate(`(() => {
+    const c = document.createElement('canvas');
+    c.width = 200; c.height = 100; c.style.cssText = 'position:fixed;left:300px;top:200px';
+    c.addEventListener('click', (e) => c.getContext('2d').fillRect(e.offsetX, e.offsetY, 10, 10));
+    document.body.appendChild(c);
+  })()`);
+  const drawn = await runTool(ctx, call("click_at", { x: 400, y: 250 }));
+  expect(drawn.content).toContain(CANT_TELL);
+  expect(drawn.content).not.toContain(UNCHANGED);
+  const text = await runTool(ctx, call("click_at", { x: 20, y: 20 }));
+  expect(text.content).toContain(UNCHANGED);
+  await ctx.close();
 });

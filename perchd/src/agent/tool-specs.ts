@@ -24,7 +24,7 @@ export const TOOL_SPECS: ToolSpec[] = [
   spec("press", "Press a key in the focused element, such as Enter, Escape, Tab or Meta+A.", { key: { type: "string" } }, ["key"]),
   spec("scroll", "Scroll by pixels (positive is down), or bring a ref into view.", { dy: { type: "number" }, ref }),
   spec("drag", "Drag an element by ref onto another element (to), or by dx, dy pixels. For sliders, sortable lists, maps and drop zones.", { ref, to: { type: "string", description: "Ref of the element to drop on" }, dx: { type: "number" }, dy: { type: "number" } }, ["ref"]),
-  spec("hover", "Move the mouse over an element by ref, for menus and tooltips.", { ref }, ["ref"]),
+  spec("hover", "Move the mouse over an element by ref, or to x, y in the last screenshot's pixels, for menus, tooltips and chart values. The pointer stays there, so what it opens stays open for the next step.", { ref, x: { type: "number" }, y: { type: "number" } }),
   spec("upload", "Attach local files to a file input by ref.", { ref, paths: { type: "array", items: { type: "string" } } }, ["ref", "paths"]),
   spec("write_file", "Save a text file in this chat's own folder, for example to upload it to a form. Returns its path.", { name: { type: "string" }, content: { type: "string" } }, ["name", "content"]),
   spec("read_document", "Read the file a link points to (PDF, .pptx, .docx, .xlsx or a page) with the user's sign-in. Saves the original in this chat's folder and returns its text; pass from to read on in long ones.", { url: { type: "string" }, from: { type: "number", description: "Character to start at, from the last part's note" } }, ["url"]),
@@ -33,7 +33,7 @@ export const TOOL_SPECS: ToolSpec[] = [
   spec("back", "Go back one page in the current tab.", {}),
   spec("screenshot", "See the visible page as an image. Use when the snapshot cannot describe it, as on canvas, maps and charts.", {}),
   spec("click_at", "Click at x, y in the last screenshot's pixels.", { x: { type: "number" }, y: { type: "number" } }, ["x", "y"]),
-  spec("repl", "Run JavaScript in the page and return the result as JSON. Use return in multi-line code. Secret fields cannot be read.", { code: { type: "string" }, title }, ["code"]),
+  spec("repl", "Run JavaScript on a read-only copy of the page; returns JSON. The copy has no page scripts, frames or canvas, and media reads as stopped: for live state use snapshot or screenshot. Use return in multi-line code. Secrets can't be read.", { code: { type: "string" }, title }, ["code"]),
   spec("type_text", "Type text at the keyboard focus, without a ref: for editors drawn on canvas such as Google Sheets and Docs. Click the cell or spot first; press Enter or Tab after to move on.", { text: { type: "string" } }, ["text"]),
   spec("save_pdf", "Save the current page as a PDF in the user's Downloads folder. Returns its path.", { name: { type: "string", description: "File name, without .pdf" } }),
   spec("downloads", "List files downloaded in the last hour (newest first), with their paths, so a download can be found or uploaded.", {}),
@@ -50,7 +50,7 @@ export const TOOL_SPECS: ToolSpec[] = [
       code: {
         type: "string",
         description:
-          "Body of an async function; use await, and return or log() only what you need. Functions: navigate(url), snapshot({full}), find(role, name, {contains}) (returns [{ref, role, name}] from the whole page), click(ref), type(ref, text, {submit}), select(ref, value), press(key), scroll(dy), hover(ref), wait_for({text, seconds}), back(), tabs(), open_tab(url), switch_tab(id), js(code) (runs code in the page, returns its JSON result), sleep(s), log(...). Each returns what the tool of that name returns; a failed call throws. No network, fetch or DOM here: use js() for the page.",
+          "Body of an async function; use await, and return or log() only what you need. Functions: navigate(url), snapshot({full}), find(role, name, {contains}) (returns [{ref, role, name}] from the whole page), click(ref), type(ref, text, {submit}), select(ref, value), press(key), scroll(dy), hover(ref), wait_for({text, seconds}), back(), tabs(), open_tab(url), switch_tab(id), js(code) (runs code on a read-only copy of the page, like repl, and returns its JSON result), sleep(s), log(...). Each returns what the tool of that name returns; a failed call throws. No network, fetch or DOM here: use js() for the page.",
       },
       title,
     },

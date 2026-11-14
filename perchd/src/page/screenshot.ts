@@ -120,6 +120,16 @@ export async function clickAt(tab: Tab, x: number, y: number): Promise<ActionRes
   }
 }
 
+/** Moves the mouse to a point and leaves it there, so a hover menu or tooltip stays open. */
+export async function hoverAt(tab: Tab, x: number, y: number): Promise<ActionResult> {
+  try {
+    await tab.send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
+    return { ok: true, note: `pointed at ${Math.round(x)}, ${Math.round(y)}` };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
 export async function typeText(tab: Tab, text: string): Promise<ActionResult> {
   try {
     await tab.send("Input.insertText", { text });

@@ -87,6 +87,9 @@ async function sandbox(conn: CdpConnection): Promise<Tab> {
       return tab;
     })();
     sandboxes.set(conn, pending);
+    // A scratch tab that failed to open is not kept: the next call tries again.
+    const made = pending;
+    made.catch(() => sandboxes.get(conn) === made && sandboxes.delete(conn));
   }
   const tab = await pending;
   if (!tab.closed) return tab;

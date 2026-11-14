@@ -1,6 +1,6 @@
 import { APP_ICON_NAMES, type AppIconName, type Density } from "../../api";
 import type { Appearance as AppearanceSettings } from "../../api";
-import { ACCENTS, ACCENT_NAMES, type DarkThemeName, THEMES, THEME_NAMES, isLightTheme, isSakura, lightPartner } from "../../theme/tokens";
+import { ACCENTS, ACCENT_NAMES, type DarkThemeName, PICKER_THEMES, THEMES, THEME_NAMES, isLightTheme, isSakura, lightPartner } from "../../theme/tokens";
 import { useAppearance } from "../../ui/frame";
 import { Group, Row } from "../../ui/Row";
 import { Segmented } from "../../ui/Segmented";
@@ -35,7 +35,7 @@ export function appIconOptions(a: AppearanceSettings) {
 
 export function Appearance() {
   const { appearance: a, update } = useAppearance();
-  const themes = THEME_NAMES.map((t) => ({ value: t, label: THEMES[t].label, bg: THEMES[t].card, fg: THEMES[t].ink }));
+  const themes = PICKER_THEMES.map((t) => ({ value: t, label: THEMES[t].label, bg: THEMES[t].card, fg: THEMES[t].ink }));
   const accentBg = THEMES[a.theme].card;
   const accents = ACCENT_NAMES.map((n) => ({ value: n, label: ACCENTS[n].label, bg: accentBg, fg: THEMES[a.theme].dark ? ACCENTS[n].dark : ACCENTS[n].light }));
 
@@ -48,7 +48,7 @@ export function Appearance() {
               <div class="n">Theme</div>
               <div class="d">Changes every surface and text colour in Perch at once. Contrast turns on by itself with macOS Increase Contrast.</div>
             </div>
-            <Swatches label="Theme" value={a.theme} options={themes} onChange={(theme) => update({ theme, matchSystem: false })} />
+            <Swatches label="Theme" value={a.theme} options={themes} columns={5} onChange={(theme) => update({ theme, matchSystem: false })} />
           </div>
           <div id="accent" class="srow noicon stack">
             <div>

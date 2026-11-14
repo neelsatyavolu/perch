@@ -2,7 +2,7 @@ import { Fragment } from "preact";
 import type preact from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { Provider } from "../../api";
-import { ACCENTS, ACCENT_NAMES, THEMES, THEME_NAMES } from "../../theme/tokens";
+import { ACCENTS, ACCENT_NAMES, PICKER_THEMES, THEMES } from "../../theme/tokens";
 import { errorText, useAction, useApi, useAppearance, useLoad } from "../../ui/frame";
 import { PerchMark } from "../../ui/PerchMark";
 import { Blossom, Petals } from "../../ui/Sakura";
@@ -25,7 +25,7 @@ function Look() {
   return (
     <div class="wl-grid">
       <div class="label"><span>Theme</span>
-        <Swatches label="Theme" value={a.theme} onChange={(theme) => update({ theme })} options={THEME_NAMES.map((n) => ({ value: n, label: THEMES[n].label, bg: THEMES[n].card, fg: THEMES[n].ink }))} />
+        <Swatches label="Theme" value={a.theme} columns={5} onChange={(theme) => update({ theme })} options={PICKER_THEMES.map((n) => ({ value: n, label: THEMES[n].label, bg: THEMES[n].card, fg: THEMES[n].ink }))} />
       </div>
       <div class="label"><span>Accent</span>
         <Swatches label="Accent" value={a.accent} onChange={(accent) => update({ accent })} options={ACCENT_NAMES.map((n) => ({ value: n, label: ACCENTS[n].label, bg: t.card, fg: t.dark ? ACCENTS[n].dark : ACCENTS[n].light }))} />

@@ -15,6 +15,9 @@ export const LIGHT_THEMES = ["paper", "fog", "mist", "sage", "sakura"] as const;
 export type LightThemeName = (typeof LIGHT_THEMES)[number];
 export type DarkThemeName = Exclude<ThemeName, LightThemeName>;
 
+/** Theme pickers show two rows of five: the dark themes over the light ones. */
+export const PICKER_THEMES: readonly ThemeName[] = ["ink", "graphite", "dusk", "contrast", "yozakura", "paper", "fog", "mist", "sage", "sakura"];
+
 export const isLightTheme = (name: string): name is LightThemeName => (LIGHT_THEMES as readonly string[]).includes(name);
 
 /** Match system's light side for a dark theme: Fog for Graphite, Mist for Dusk, Sakura for Yozakura, Paper for the rest. */

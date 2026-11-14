@@ -7,13 +7,15 @@ type Props<T extends string> = {
   readonly value: T;
   readonly options: readonly Swatch<T>[];
   readonly onChange: (value: T) => void;
+  /** Lay the swatches out in this many columns instead of wrapping freely. */
+  readonly columns?: number;
 };
 
 /** Theme and accent pickers: a radio group of swatches, each with its name under it. */
-export function Swatches<T extends string>({ label, value, options, onChange }: Props<T>) {
+export function Swatches<T extends string>({ label, value, options, onChange, columns }: Props<T>) {
   const selected = Math.max(0, options.findIndex((o) => o.value === value));
   return (
-    <div class="swatches" role="radiogroup" aria-label={label}>
+    <div class="swatches" role="radiogroup" aria-label={label} style={columns ? { display: "grid", gridTemplateColumns: `repeat(${columns}, 60px)` } : undefined}>
       {options.map((o, i) => (
         <button
           key={o.value}

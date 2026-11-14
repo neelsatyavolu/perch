@@ -120,3 +120,29 @@ test("Claude Code and Codex run on the signed-in plan: API-key variables are lef
   const env = subscriptionEnv({ HOME: "/Users/x", PATH: "/bin", ANTHROPIC_API_KEY: "sk-ant", ANTHROPIC_AUTH_TOKEN: "t", OPENAI_API_KEY: "sk", CODEX_API_KEY: "c" });
   expect(env).toEqual({ HOME: "/Users/x", PATH: "/bin" });
 });
+
+test("an agent that writes a lot to stderr still finishes, and one stopped before it started is stopped at once", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "perch-fake-cli-"));
+  const mcp = { command: "/x/perch", args: ["mcp"], env: {} };
+  const bin = join(dir, "cli");
+  try {
+    // 256 KB of stderr, more than a pipe holds, before the answer.
+    writeFileSync(bin, `#!/bin/sh\ncat > /dev/null\nhead -c 262144 /dev/zero | tr '\\\\0' x >&2\necho '${JSON.stringify({ type: "result", result: "Done" })}'\n`);
+    chmodSync(bin, 0o755);
+    process.env.PERCH_CLAUDE_BIN = bin;
+    const chatty = await runClaudeCode({ task: "t", timeoutMs: 10_000, auditPath: join(dir, "audit"), mcp });
+    expect(chatty.answer).toBe("Done");
+    expect(chatty.stderr.length).toBe(262_144);
+
+    writeFileSync(bin, "#!/bin/sh\ncat > /dev/null\nsleep 30\n");
+    const stopped = new AbortController();
+    stopped.abort();
+    const started = Date.now();
+    const result = await runClaudeCode({ task: "t", timeoutMs: 60_000, auditPath: join(dir, "audit"), mcp, signal: stopped.signal });
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(result.answer).toBe("");
+  } finally {
+    delete process.env.PERCH_CLAUDE_BIN;
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 20_000);

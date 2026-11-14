@@ -144,6 +144,8 @@ function stopper(child: { kill(signal?: number | NodeJS.Signals): void }, opts: 
   }, opts.timeoutMs);
   const onAbort = () => stop();
   opts.signal?.addEventListener("abort", onAbort, { once: true });
+  // Stopped before the agent started (while memory or skills loaded): an abort event will not come again.
+  if (opts.signal?.aborted) stop();
   return {
     get timedOut() {
       return timedOut;
@@ -186,6 +188,8 @@ export async function runClaudeCode(opts: RunOptions): Promise<ExternalResult> {
     env: { ...subscriptionEnv(), CLAUDE_CODE_ENTRYPOINT: "perch-exec", ENABLE_TOOL_SEARCH: "false" },
   });
   const stop = stopper(child, opts);
+  // Read alongside stdout: an agent blocked writing to a full stderr pipe would never finish.
+  const stderrText = new Response(child.stderr).text();
   const events: AsideEvent[] = [];
   let answer = "";
   const reader = child.stdout.getReader();
@@ -220,7 +224,7 @@ export async function runClaudeCode(opts: RunOptions): Promise<ExternalResult> {
   }
   const exitCode = await child.exited;
   stop.done();
-  const stderr = await new Response(child.stderr).text();
+  const stderr = await stderrText;
   rmSync(work, { recursive: true, force: true });
   return { answer, events, exitCode, timedOut: stop.timedOut, stderr };
 }
@@ -327,6 +331,8 @@ export async function runCodex(opts: RunOptions): Promise<ExternalResult> {
   const args = codexArgs({ mcpArgs: server.args, command: server.command, envNames: Object.keys(server.env), model: opts.model, effort: opts.effort, fast: opts.fast, otherServers: otherCodexServers() });
   const child = Bun.spawn([codexBinary(), ...args], { cwd: work, stdout: "pipe", stderr: "pipe", stdin: Buffer.from(prompt), env: { ...subscriptionEnv(), ...server.env } });
   const stop = stopper(child, opts);
+  // Read alongside stdout: an agent blocked writing to a full stderr pipe would never finish.
+  const stderrText = new Response(child.stderr).text();
   const events: AsideEvent[] = [];
   let answer = "";
   const reader = child.stdout.getReader();
@@ -358,7 +364,7 @@ export async function runCodex(opts: RunOptions): Promise<ExternalResult> {
   }
   const exitCode = await child.exited;
   stop.done();
-  const stderr = await new Response(child.stderr).text();
+  const stderr = await stderrText;
   rmSync(work, { recursive: true, force: true });
   return { answer, events, exitCode, timedOut: stop.timedOut, stderr };
 }

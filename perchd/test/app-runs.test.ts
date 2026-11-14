@@ -375,3 +375,51 @@ test("a message about the tab in view carries that page's text", async () => {
   expect(task).toContain("hello world");
   expect(task.indexOf("hello world")).toBeLessThan(task.indexOf("what does this say"));
 });
+
+test("stopping an outside agent's listed work lets idleFor return (deleting its chat never hangs)", async () => {
+  const runs = manager(async function* () {});
+  const chat = await chats.create({});
+  runs.observeStep(chat.id, "Claude Code is working in Perch", { label: "Clicked" });
+  expect(runs.status(chat.id)).toBe("running");
+  runs.cancel(chat.id);
+  await runs.idleFor(chat.id);
+  expect(runs.status(chat.id)).toBe("idle");
+  expect(chats.get(chat.id)!.messages.at(-1)).toMatchObject({ role: "assistant", text: "Finished 1 step in Perch." });
+});
+
+test("a second message sent while the first reads the page waits in the queue, not in a run of its own", async () => {
+  let readPage!: () => void;
+  const reading = new Promise<void>((r) => (readPage = r));
+  const tasks: string[] = [];
+  const runs = new RunManager({
+    chats, artifacts, emit: () => {}, artifactUrl: (id, v) => `http://art/${id}/${v}`, tabs: () => [],
+    runner: async function* (input): AsyncIterable<StepEvent> {
+      tasks.push(input.task);
+      yield { type: "final", text: "ok" };
+    },
+    pageText: async () => {
+      await reading;
+      return "page text";
+    },
+  });
+  const chat = await chats.create({});
+  const tab = { id: "t1", windowId: "w1", title: "Hi", url: "https://hi.example", targetId: "T1" };
+  const first = runs.enqueue(chat.id, "first", tab);
+  const second = await runs.enqueue(chat.id, "second", tab);
+  expect(second).toHaveProperty("queued");
+  await expect(runs.send(chat.id, "third")).rejects.toThrow(/still running/);
+  readPage();
+  await first;
+  await waitFor(() => (tasks.length === 2 && runs.status(chat.id) === "idle" ? true : undefined));
+  expect(chats.get(chat.id)!.messages.filter((m) => m.role === "user").map((m) => m.text)).toEqual(["first", "second"]);
+});
+
+test("a file the reply can't hand over is named as written, even with $ in its name", async () => {
+  const runs = manager(async function* () {
+    yield { type: "final", text: "Here it is:\n[[file:/etc/a$&b.txt]]" };
+  });
+  const chat = await chats.create({});
+  await runs.send(chat.id, "make a file");
+  await runs.idle();
+  expect(chats.get(chat.id)!.messages.at(-1)!.text).toContain("(The file a$&b.txt could not be attached");
+});

@@ -68,8 +68,8 @@ type Pending = { card: ApprovalCard; resolve: (approved: boolean) => void; done?
 /** `holdBack`: the user asked for the work without the final submit or send ("complete it without submitting"). */
 type Run = {
   runId: string; chatId: string; controller: AbortController; text: string; steps: Step[]; pending: Pending | null; done: Promise<void>; startedAt: string; holdBack?: boolean;
-  /** An outside agent's work, listed as it reports it (observeStep); `quiet` ends it after a pause. */
-  observed?: true; quiet?: ReturnType<typeof setTimeout>;
+  /** An outside agent's work, listed as it reports it (observeStep); `quiet` ends it after a pause, and `ended` settles `done`. */
+  observed?: true; quiet?: ReturnType<typeof setTimeout>; ended?: () => void;
 };
 
 /** "without submitting", "don't send it", "do not turn it in": the user wants the last step left to them. */
@@ -174,7 +174,10 @@ export class RunManager {
     if (run && !run.observed) return; // A run of Perch's own is going here; it lists its own steps.
     if (!run) {
       const message: ChatMessage = { id: crypto.randomUUID(), role: "user", text: intro, time: new Date().toISOString() };
-      const started: Run = { runId: crypto.randomUUID(), chatId, controller: new AbortController(), text: "", steps: [], pending: null, done: Promise.resolve(), startedAt: message.time, observed: true };
+      // `done` stays open until the list ends: waiting on a settled promise in a loop (idleFor) would spin forever.
+      let ended!: () => void;
+      const done = new Promise<void>((resolve) => (ended = resolve));
+      const started: Run = { runId: crypto.randomUUID(), chatId, controller: new AbortController(), text: "", steps: [], pending: null, done, startedAt: message.time, observed: true, ended };
       run = started;
       this.runs.set(chatId, started);
       void this.deps.chats.update(chatId, (c) => ({ ...c, messages: [...c.messages, message] })).then((updated) => {
@@ -200,6 +203,7 @@ export class RunManager {
     } finally {
       this.runs.delete(run.chatId);
       this.announce(run.chatId);
+      run.ended?.();
     }
   }
 
@@ -256,12 +260,17 @@ export class RunManager {
     const tab = context?.targetId ? context : undefined;
     const holdBack = HOLD_BACK.test(text);
     const built = buildTask({ history: chat.messages, text, scope: chat.settings.scope, tab: context, tabs: this.deps.tabs(), incognito: chat.incognito === true, inTab: Boolean(tab), mentions, files });
-    const page = tab?.targetId && this.deps.pageText ? await this.deps.pageText(tab.targetId).catch(() => null) : null;
-    const withPage = page ? `${page}\n\n${built}` : built;
-    const task = holdBack ? `${HOLD_BACK_NOTE}\n\n${withPage}` : withPage;
-    const run: Run = { runId: crypto.randomUUID(), chatId, controller: new AbortController(), text: "", steps: [], pending: null, done: Promise.resolve(), startedAt: new Date().toISOString(), ...(holdBack ? { holdBack } : {}) };
+    // The run is registered before anything is awaited, so a second message sent meanwhile is
+    // queued behind it rather than started beside it. `done` stays open until the run ends:
+    // waiting on a settled promise in a loop (idleFor) would spin forever.
+    let started!: (done?: Promise<void>) => void;
+    const run: Run = { runId: crypto.randomUUID(), chatId, controller: new AbortController(), text: "", steps: [], pending: null, done: new Promise<void>((resolve) => (started = resolve)), startedAt: new Date().toISOString(), ...(holdBack ? { holdBack } : {}) };
     this.runs.set(chatId, run);
+    let task: string;
     try {
+      const page = tab?.targetId && this.deps.pageText ? await this.deps.pageText(tab.targetId).catch(() => null) : null;
+      const withPage = page ? `${page}\n\n${built}` : built;
+      task = holdBack ? `${HOLD_BACK_NOTE}\n\n${withPage}` : withPage;
       const updated = await this.deps.chats.update(chatId, (c) => ({
         ...c,
         title: c.title === "New chat" && c.messages.length === 0 ? provisionalTitle(text) : c.title,
@@ -273,12 +282,13 @@ export class RunManager {
       this.deps.onStatus?.(chatId, "running", null);
     } catch (error) {
       this.runs.delete(chatId);
+      started();
       throw error;
     }
     // Skip confirmation would let the submit through unasked, so a held-back run asks (and declines it).
     const chosen = extras.mode ? { ...chat.settings, mode: extras.mode } : chat.settings;
     const settings = holdBack && chosen.mode === "skip" ? { ...chosen, mode: "guard" as const } : chosen;
-    run.done = this.drive(run, task, settings, tab, text, files.map((f) => ({ name: f.name, path: f.path })));
+    started(this.drive(run, task, settings, tab, text, files.map((f) => ({ name: f.name, path: f.path }))));
     return { runId: run.runId, message };
   }
 
@@ -507,14 +517,15 @@ export class RunManager {
         text = text.replace(`[[artifact:#${i}]]`, `[[artifact:${record.id}]]`);
         this.deps.emit({ type: "artifact.saved", chatId: run.chatId, artifact: this.artifactMeta(record) });
       } catch (e) {
-        text = text.replace(`[[artifact:#${i}]]`, `(The artifact "${block.title}" could not be saved: ${(e as Error).message}.)`);
+        text = text.replace(`[[artifact:#${i}]]`, () => `(The artifact "${block.title}" could not be saved: ${(e as Error).message}.)`);
       }
     }
     for (const match of [...text.matchAll(FILE_MARKER)]) {
       const path = match[1]!;
       const file = handedFile(path);
       if ("error" in file) {
-        text = text.replace(match[0], `(The file ${basename(path)} could not be attached: ${file.error}.)`);
+        // A function, so a "$&" in a name is kept as written rather than read as a pattern.
+        text = text.replace(match[0], () => `(The file ${basename(path)} could not be attached: ${file.error}.)`);
         continue;
       }
       try {
@@ -523,7 +534,7 @@ export class RunManager {
         text = text.replace(match[0], `[[artifact:${record.id}]]`);
         this.deps.emit({ type: "artifact.saved", chatId: run.chatId, artifact: this.artifactMeta(record) });
       } catch (e) {
-        text = text.replace(match[0], `(The file ${file.title} could not be attached: ${(e as Error).message}.)`);
+        text = text.replace(match[0], () => `(The file ${file.title} could not be attached: ${(e as Error).message}.)`);
       }
     }
     const message: ChatMessage = {

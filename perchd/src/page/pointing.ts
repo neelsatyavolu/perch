@@ -234,3 +234,49 @@ export async function toggleHiddenControl(tab: Tab, node: Node, why: unknown): P
   await call(tab, node, "function () { this.click(); }");
   return true;
 }
+
+/** Links and buttons, which a script click works on like a person's. */
+const IS_LINK_OR_BUTTON = `function () {
+  if (this.disabled) return false;
+  return this.matches('a[href], button, input[type=button], input[type=submit], input[type=reset], summary, [role=button], [role=link], [role=menuitem], [role=tab]');
+}`;
+/**
+ * Whether the element is clipped where it was aimed at, not covered by something else: the hit is
+ * its own container, or its centre lies outside a container that hides overflow (a closed menu).
+ */
+const CLIPPED_THERE = `function (cover) {
+  for (let n = this; n; n = n.parentNode || n.host) if (n === cover) return true;
+  const r = this.getBoundingClientRect(); const x = r.left + r.width / 2, y = r.top + r.height / 2;
+  const doc = this.ownerDocument;
+  for (let n = this.parentElement; n && n !== doc.body && n !== doc.documentElement; n = n.parentElement) {
+    const s = getComputedStyle(n);
+    if (s.overflowX === 'visible' && s.overflowY === 'visible') continue;
+    const b = n.getBoundingClientRect();
+    if (x < b.left || x > b.right || y < b.top || y > b.bottom) return true;
+  }
+  return false;
+}`;
+export const SCRIPT_CLICK = "with a script click: it is off screen, hidden or clipped (perhaps in a closed menu), so check the page changed as you expected";
+
+/**
+ * A link or button that cannot be pointed at (`why` is the error from aiming): off screen even
+ * after scrolling, with no box (in a closed menu), clipped by its container, or under its own
+ * card's drawing. It gets the element's own click, as the page would from a person. A dialog or
+ * banner over it is never clicked through: its "covered by" error is rethrown, as for checkboxes.
+ * Returns false for anything that is not a link or button.
+ */
+export async function clickHiddenTarget(tab: Tab, node: Node, why: unknown): Promise<boolean> {
+  const clickable = await call<boolean>(tab, node, IS_LINK_OR_BUTTON).catch(() => false);
+  if (!clickable) return false;
+  if (why instanceof CoveredError) {
+    const clipped = await tab
+      .sendIn<{ result: { value?: boolean } }>(node.session, "Runtime.callFunctionOn", { objectId: node.objectId, functionDeclaration: CLIPPED_THERE, arguments: [{ objectId: why.cover.objectId }], returnByValue: true })
+      .then(({ result }) => result.value === true)
+      .catch(() => false);
+    if (!clipped) await rethrowForeignCover(tab, node, why);
+  } else if (!(why instanceof Error) || !/^the element is (not visible|hidden or clipped)/.test(why.message)) {
+    return false;
+  }
+  await call(tab, node, "function () { this.click(); }");
+  return true;
+}

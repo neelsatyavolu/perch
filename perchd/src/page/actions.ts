@@ -4,8 +4,9 @@ import { existsSync } from "node:fs";
 import type { Tab } from "../browser/tab";
 import { parseKey } from "./keys";
 import { call, callForObject, describe, DESCRIBE, type Described, liveNode, type Node } from "./node";
-import { aim, clickAtPoint, mouse, type Point, scrollToCentre, toggleHiddenControl } from "./pointing";
+import { aim, clickAtPoint, clickHiddenTarget, mouse, type Point, SCRIPT_CLICK, scrollToCentre, toggleHiddenControl } from "./pointing";
 import { wheelScroll } from "./scrolling";
+import { selectFromListbox } from "./listbox";
 import { setSlider } from "./slider";
 import { drag as dragTo, type DragTarget } from "./drag";
 import type { RefTable } from "./refs";
@@ -42,6 +43,7 @@ export function click(tab: Tab, refs: RefTable, ref: string): Promise<ActionResu
       point = await aim(tab, node);
     } catch (error) {
       if (await toggleHiddenControl(tab, node, error)) return ok(`clicked ${label}${await checkedState(tab, node)}`);
+      if (await clickHiddenTarget(tab, node, error)) return ok(`clicked ${label} ${SCRIPT_CLICK}`);
       throw error;
     }
     await clickAtPoint(tab, point);
@@ -139,6 +141,9 @@ async function setSpecialInput(tab: Tab, node: Node, text: string): Promise<Acti
 export function select(tab: Tab, refs: RefTable, ref: string, choice: string): Promise<ActionResult> {
   return attempt(async () => {
     const node = await liveNode(tab, refs, ref);
+    if (!(await call<boolean>(tab, node, "function () { return this.tagName === 'SELECT'; }"))) {
+      return (await selectFromListbox(tab, node, choice)) ?? fail(`${await describe(tab, node)} isn't a dropdown; click it instead`);
+    }
     const result = await call<{ chosen?: string; options?: string[] }>(
       tab,
       node,

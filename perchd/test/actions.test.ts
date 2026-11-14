@@ -54,6 +54,36 @@ test("select picks an option by label or value and fires change", async () => {
   await tab.close();
 });
 
+test("select opens a custom combobox and clicks the option it controls: exact, any case, then contains", async () => {
+  const tab = await env.browser.newTab(env.site.url("/combobox.html"));
+  let snap = await snapshot(tab);
+  expect(await select(tab, snap.refs, refOf(snap, 'combobox "Fruit"'), "banana")).toEqual({ ok: true, note: 'selected "Banana"' });
+  expect(await status(tab)).toBe("Fruit: Banana");
+  snap = await snapshot(tab);
+  expect(await select(tab, snap.refs, refOf(snap, 'combobox "Fruit"'), "cherry")).toEqual({ ok: true, note: 'selected "Cherry pie"' });
+  expect(await status(tab)).toBe("Fruit: Cherry pie");
+  snap = await snapshot(tab);
+  const missing = await select(tab, snap.refs, refOf(snap, 'combobox "Fruit"'), "Mango");
+  expect(missing).toEqual({ ok: false, error: 'no option "Mango"; options are: Apple, Banana, Cherry pie' });
+  await tab.close();
+});
+
+test("select finds a listbox a button pops up elsewhere on the page", async () => {
+  const tab = await env.browser.newTab(env.site.url("/combobox.html"));
+  const snap = await snapshot(tab);
+  expect(await select(tab, snap.refs, refOf(snap, 'button "Size"'), "Medium")).toEqual({ ok: true, note: 'selected "Medium"' });
+  expect(await status(tab)).toBe("Size: Medium");
+  await tab.close();
+});
+
+test("select on something that isn't a dropdown says so and does not click it", async () => {
+  const tab = await env.browser.newTab(env.site.url("/form.html"));
+  const snap = await snapshot(tab);
+  expect(await select(tab, snap.refs, refOf(snap, 'button "Sign in"'), "x")).toEqual({ ok: false, error: 'button "Sign in" isn\'t a dropdown; click it instead' });
+  expect(await status(tab)).toBe("");
+  await tab.close();
+});
+
 test("press Enter in the search box submits the form", async () => {
   const tab = await env.browser.newTab(env.site.url("/mail.html"));
   const snap = await snapshot(tab);

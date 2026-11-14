@@ -105,3 +105,31 @@ test("a button under a fixed header is scrolled clear of it, then clicked", asyn
   expect(await out()).toBe("Clicked under");
   await tab.close();
 });
+
+const HIDDEN_TARGETS = `document.body.insertAdjacentHTML('beforeend',
+  '<nav style="position:fixed;left:-600px;top:300px;width:200px"><a href="#stores">Store finder</a></nav>' +
+  '<div style="position:fixed;top:300px;left:20px;width:200px;height:0;overflow:hidden"><button id="track">Track order</button></div>');
+document.getElementById('track').addEventListener('click', () => { document.getElementById('out').textContent = 'Clicked track'; });`;
+
+test("a link off screen and a button clipped by its closed menu get their own click, and the result says so", async () => {
+  tab = await env.browser.newTab(env.site.url("/controls.html"));
+  await tab.evaluate(HIDDEN_TARGETS);
+  const snap = await snapshot(tab, { full: true });
+  const link = await click(tab, snap.refs, refOf(snap, 'link "Store finder"'));
+  expect(link).toEqual({ ok: true, note: 'clicked link "Store finder" with a script click: it is off screen, hidden or clipped (perhaps in a closed menu), so check the page changed as you expected' });
+  expect(await tab.evaluate<string>("location.hash")).toBe("#stores");
+  expect(await click(tab, snap.refs, refOf(snap, 'button "Track order"'))).toMatchObject({ ok: true, note: expect.stringContaining("with a script click") });
+  expect(await out()).toBe("Clicked track");
+  await tab.close();
+});
+
+test("a link or button under a dialog is still not clicked through it", async () => {
+  tab = await env.browser.newTab(env.site.url("/controls.html"));
+  await tab.evaluate(HIDDEN_TARGETS);
+  const snap = await snapshot(tab, { full: true });
+  await tab.evaluate("document.getElementById('consent').hidden = false");
+  const result = await click(tab, snap.refs, refOf(snap, 'button "Under the header"'));
+  expect(!result.ok && result.error).toMatch(/^covered by .*close it first/);
+  expect(await out()).toBe("");
+  await tab.close();
+});

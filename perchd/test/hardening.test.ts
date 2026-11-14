@@ -319,12 +319,12 @@ test("only visible fields decide whether a page is a password change", async () 
   await ctx.close();
 });
 
-test("a checkbox under its own decoration clicks; a clipped button says so plainly", async () => {
+test("a checkbox under its own decoration clicks; a clipped button gets its own click, said plainly", async () => {
   const tab = await env.browser.newTab(env.site.url("/login.html"));
   const snap = await snapshot(tab);
   expect(await click(tab, snap.refs, refOf(snap, 'checkbox "Search all releases"'))).toMatchObject({ ok: true });
   expect(await tab.evaluate<string>("document.getElementById('out').textContent")).toBe("all true");
   const clipped = await click(tab, snap.refs, refOf(snap, 'button "Clipped"'));
-  expect(clipped).toEqual({ ok: false, error: "the element is hidden or clipped on screen; scroll its container or open the panel it is in" });
+  expect(clipped).toEqual({ ok: true, note: 'clicked button "Clipped" with a script click: it is off screen, hidden or clipped (perhaps in a closed menu), so check the page changed as you expected' });
   await tab.close();
 });

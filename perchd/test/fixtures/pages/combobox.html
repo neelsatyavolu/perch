@@ -1,0 +1,48 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Order</title>
+<style>body{font:14px system-ui;padding:16px}[role=combobox],button{display:inline-block;border:1px solid #888;padding:4px 8px;min-width:120px;cursor:pointer}[role=listbox]{list-style:none;margin:0;padding:0;border:1px solid #888;width:140px;background:#fff}[role=option]{padding:4px 8px}[hidden]{display:none}#size-list{position:absolute}</style></head>
+<body>
+<h1>Order</h1>
+<p>Fruit</p>
+<div id="fruit" role="combobox" tabindex="0" aria-label="Fruit" aria-controls="fruit-list" aria-expanded="false">Choose a fruit</div>
+<ul id="fruit-list" role="listbox" aria-label="Fruits" hidden>
+  <li role="option">Apple</li>
+  <li role="option">Banana</li>
+  <li role="option">Cherry pie</li>
+</ul>
+<p>Size</p>
+<button id="size" aria-haspopup="listbox">Size</button>
+<p id="status" role="status"></p>
+<script>
+const status = document.getElementById('status');
+const fruit = document.getElementById('fruit');
+const fruitList = document.getElementById('fruit-list');
+fruit.onclick = () => { fruitList.hidden = false; fruit.setAttribute('aria-expanded', 'true'); };
+fruitList.onclick = (e) => {
+  const option = e.target.closest('[role=option]');
+  if (!option) return;
+  fruit.textContent = option.textContent;
+  fruitList.hidden = true;
+  fruit.setAttribute('aria-expanded', 'false');
+  status.textContent = 'Fruit: ' + option.textContent;
+};
+// The size list is made on open and put at the end of the page, as many libraries do.
+const size = document.getElementById('size');
+size.onclick = () => setTimeout(() => {
+  const list = document.createElement('ul');
+  list.id = 'size-list';
+  list.setAttribute('role', 'listbox');
+  const r = size.getBoundingClientRect();
+  list.style.left = r.left + scrollX + 'px';
+  list.style.top = r.bottom + scrollY + 'px';
+  for (const name of ['Small', 'Medium', 'Large']) {
+    const li = document.createElement('li');
+    li.setAttribute('role', 'option');
+    li.textContent = name;
+    li.onclick = () => { list.remove(); status.textContent = 'Size: ' + name; };
+    list.appendChild(li);
+  }
+  document.body.appendChild(list);
+}, 150);
+</script>
+</body></html>

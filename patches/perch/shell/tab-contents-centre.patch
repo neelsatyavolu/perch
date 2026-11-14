@@ -1,0 +1,24 @@
+diff --git a/chrome/browser/ui/views/tabs/common/horizontal_tab_style_views.cc b/chrome/browser/ui/views/tabs/common/horizontal_tab_style_views.cc
+index 92b6e71911..96690aa2ee 100644
+--- a/chrome/browser/ui/views/tabs/common/horizontal_tab_style_views.cc
++++ b/chrome/browser/ui/views/tabs/common/horizontal_tab_style_views.cc
+@@ -435,6 +435,19 @@ gfx::Insets HorizontalTabStyleViews::GetContentsInsets() const {
+           0, 0, GetLayoutConstant(LayoutConstant::kTabstripToolbarOverlap), 0) +
+       base_style_insets + split_insets;
+ 
++  // Perch: the icon, title and close button sit centred on the floating pill
++  // (GetPath), which ends kPerchPillBottomGap above the toolbar, rather than
++  // low in the tab where the icon would hang past the pill's bottom edge.
++  const int pill_top = GetLayoutConstant(LayoutConstant::kTabStripPadding);
++  const int pill_bottom_inset =
++      GetLayoutConstant(LayoutConstant::kTabstripToolbarOverlap) +
++      static_cast<int>(kPerchPillBottomGap);
++  const int pill_height = GetLayoutConstant(LayoutConstant::kTabHeight) -
++                          pill_top - pill_bottom_inset;
++  const int inner = std::max(0, (pill_height - gfx::kFaviconSize) / 2);
++  insets.set_top(pill_top + inner);
++  insets.set_bottom(pill_bottom_inset + inner);
++
+   return insets;
+ }
+ 

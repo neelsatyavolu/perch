@@ -20,7 +20,7 @@ Perch follows `~/DESIGN.md` (Ledger) and the unslop rules (unslop by Damir Sokol
 | Body 15px | Chrome 13px, chat 14px, captions 12px | Matches Chrome and Safari so Perch feels native |
 | No shadows, blur or glass | Popups are glass: menus, bubbles and the pickers in Perch's own pages sit on a blurred backdrop under a thin tint with a hairline edge. Nothing else blurs, and nothing casts a shadow | The owner asked for popups that stay glassy; a floating layer over an arbitrary web page needs separation a hairline alone can't give |
 | Serif hero on every page | Newsreader only on the new tab page title, empty states and the welcome screen, at 40px or larger | The chrome is a tool, not an editorial |
-| Dark and light | Seven themes and six accents (below), including Sakura mode | People live in a browser; it should feel like theirs |
+| Dark and light | Ten themes and six accents (below), including Sakura mode | People live in a browser; it should feel like theirs |
 | One accent use list | Accent marks: the perch dot, focus rings, text selection, the search engine chip, links in chat, the active artifact | Same restraint, named for browser surfaces |
 
 Everything else carries over: Newsreader / Geist / Geist Mono, weights 400 and 500, the 4px grid, radii (controls, rows and chips 8, panels, menus, dialogs and cards 12, the composer and the new tab address box 16, pills full; owner's Aside-parity layout, 2026-11-11). The native chrome (toolbar buttons, menu rows, menus) stays tighter: 4 for buttons and rows, 6 for menus and bubbles, three text roles plus `stone`, hairlines for depth, the single easing curve, no gradients, glows, glass (menus aside) or emoji.
@@ -29,27 +29,30 @@ Everything else carries over: Newsreader / Geist / Geist Mono, weights 400 and 5
 
 A theme sets every colour token. The accent is chosen separately and works on every theme. The default is Ink with Blue.
 
-| Token | Ink | Graphite | Dusk | Paper | Contrast | Sakura | Yozakura |
-|---|---|---|---|---|---|---|---|
-| canvas (tab strip, sidebar) | `#0E0E0D` | `#1C1D20` | `#0E1116` | `#F7F5EF` | `#000000` | `#FAF2F4` | `#150F12` |
-| card (toolbar, active tab, pages) | `#141413` | `#232428` | `#141922` | `#FBFAF6` | `#000000` | `#FDF7F8` | `#1C1418` |
-| elevated (address bar, chips) | `#1A1A18` | `#2B2C31` | `#1B2130` | `#EFECE4` | `#141414` | `#F3E2E7` | `#261B20` |
-| ink | `#F2F0EA` | `#F2F3F5` | `#EEF2F8` | `#16161A` | `#FFFFFF` | `#2A1A1F` | `#F8E9ED` |
-| body | ink at 86% | ink at 86% | ink at 86% | ink at 86% | `#FFFFFF` | ink at 86% | ink at 86% |
-| mute | `#8B8A87` | `#9A9DA3` | `#8E98A8` | `#676667` | `#C8C8C8` | `#765C64` | `#A88E96` |
-| hairline | ink at 8% | white 7% | white 7% | ink at 10% | white 28% | ink at 10% | ink at 8% |
-| hairline-strong | ink at 18% | white 14% | white 14% | ink at 22% | white 50% | ink at 22% | ink at 18% |
-| primary button | `#F2F0EA` on `#0E0E0D` | `#F2F3F5` on `#1C1D20` | `#EEF2F8` on `#0E1116` | `#16161A` on `#F7F5EF` | `#FFFFFF` on `#000000` | `#2A1A1F` on `#FAF2F4` | `#F8E9ED` on `#150F12` |
+| Token | Ink | Graphite | Dusk | Paper | Fog | Mist | Sage | Contrast | Sakura | Yozakura |
+|---|---|---|---|---|---|---|---|---|---|---|
+| canvas (tab strip, sidebar) | `#0E0E0D` | `#1C1D20` | `#0E1116` | `#F7F5EF` | `#F3F4F6` | `#F1F4F8` | `#F2F4EE` | `#000000` | `#FAF2F4` | `#150F12` |
+| card (toolbar, active tab, pages) | `#141413` | `#232428` | `#141922` | `#FBFAF6` | `#FAFAFB` | `#F8FAFC` | `#F9FAF6` | `#000000` | `#FDF7F8` | `#1C1418` |
+| elevated (address bar, chips) | `#1A1A18` | `#2B2C31` | `#1B2130` | `#EFECE4` | `#E8EAED` | `#E4E9F0` | `#E6EADF` | `#141414` | `#F3E2E7` | `#261B20` |
+| ink | `#F2F0EA` | `#F2F3F5` | `#EEF2F8` | `#16161A` | `#1A1C20` | `#141A24` | `#1B2019` | `#FFFFFF` | `#2A1A1F` | `#F8E9ED` |
+| body | ink at 86% | ink at 86% | ink at 86% | ink at 86% | ink at 86% | ink at 86% | ink at 86% | `#FFFFFF` | ink at 86% | ink at 86% |
+| mute | `#8B8A87` | `#9A9DA3` | `#8E98A8` | `#676667` | `#5F636A` | `#5A6576` | `#5E665A` | `#C8C8C8` | `#765C64` | `#A88E96` |
+| hairline | ink at 8% | white 7% | white 7% | ink at 10% | ink at 10% | ink at 10% | ink at 10% | white 28% | ink at 10% | ink at 8% |
+| hairline-strong | ink at 18% | white 14% | white 14% | ink at 22% | ink at 22% | ink at 22% | ink at 22% | white 50% | ink at 22% | ink at 18% |
+| primary button | `#F2F0EA` on `#0E0E0D` | `#F2F3F5` on `#1C1D20` | `#EEF2F8` on `#0E1116` | `#16161A` on `#F7F5EF` | `#1A1C20` on `#F3F4F6` | `#141A24` on `#F1F4F8` | `#1B2019` on `#F2F4EE` | `#FFFFFF` on `#000000` | `#2A1A1F` on `#FAF2F4` | `#F8E9ED` on `#150F12` |
 
 - **Ink**: Ledger dark. Warm off-black, not pure black; card and elevated are Ledger's `surface-card` and `surface-hover`.
 - **Graphite**: a neutral grey for people who find black too stark. Close to Chrome's and Aside's dark grey.
 - **Dusk**: a blue-grey dark for night reading.
 - **Paper**: Ledger light, on warm paper.
+- **Fog**: a neutral light grey, Graphite's light partner.
+- **Mist**: a cool blue-grey light, Dusk's light partner.
+- **Sage**: a soft green-grey paper.
 - **Contrast**: for low vision and bright rooms. It turns on automatically with macOS Increase Contrast.
 - **Sakura**: cherry-blossom light. Blush paper and a warm sumi ink with a red-brown cast, never purple. Picking it turns on Sakura mode (below).
 - **Yozakura**: night sakura, its dark partner. A plum-brown dark with blush ink.
 
-"Match system" switches between a dark theme the user picks (Ink by default) and Paper; with Yozakura as the dark theme, the light side is Sakura instead.
+"Match system" switches between a dark theme the user picks (Ink by default) and its light partner: Fog for Graphite, Mist for Dusk, Sakura for Yozakura and Paper for the rest.
 
 ## Accents
 

@@ -15,7 +15,8 @@ export function resolveTheme(theme: ThemeId, media: Media): Exclude<ThemeId, "sy
 }
 
 /** Match system's light side for a dark theme: Sakura for Yozakura, Paper for the rest (DESIGN.md). */
-export const lightPartner = (dark: string): "sakura" | "paper" => (dark === "yozakura" ? "sakura" : "paper");
+const LIGHT_PARTNERS: Record<string, string> = { graphite: "fog", dusk: "mist", yozakura: "sakura" };
+export const lightPartner = (dark: string): string => LIGHT_PARTNERS[dark] ?? "paper";
 
 /**
  * The theme an Appearance shows now: Contrast with Increase Contrast, else the chosen theme, or

@@ -108,7 +108,7 @@ test("Appearance picks the theme and accent, following macOS when Match system i
   applyAppearance(root, { theme: "graphite", accent: "nope", matchSystem: true, darkTheme: "dusk" }, media(true));
   expect([root.dataset.theme, root.dataset.accent]).toEqual(["dusk", "blue"]);
   applyAppearance(root, { theme: "graphite", accent: "blue", matchSystem: true, darkTheme: "dusk" }, media(false));
-  expect(root.dataset.theme).toBe("paper");
+  expect(root.dataset.theme).toBe("mist");
   applyAppearance(root, { theme: "graphite", accent: "blue", matchSystem: false, darkTheme: "dusk" }, media(false, true));
   expect(root.dataset.theme).toBe("contrast");
   expect(shellCanvas({ theme: "graphite", accent: "blue", matchSystem: false, darkTheme: "ink" }, () => false)).toBe("#1C1D20");

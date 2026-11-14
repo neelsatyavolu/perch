@@ -8,10 +8,11 @@ describe("resolveTheme", () => {
   test("uses the chosen theme when Match system is off", () => {
     expect(resolveTheme({ ...DEFAULT_APPEARANCE, theme: "dusk" }, light)).toBe("dusk");
   });
-  test("Match system switches between the chosen dark theme and Paper", () => {
+  test("Match system switches between the chosen dark theme and its light partner", () => {
     const a = { ...DEFAULT_APPEARANCE, matchSystem: true, darkTheme: "graphite" as const };
     expect(resolveTheme(a, dark)).toBe("graphite");
-    expect(resolveTheme(a, light)).toBe("paper");
+    expect(resolveTheme(a, light)).toBe("fog");
+    expect(resolveTheme({ ...a, darkTheme: "ink" }, light)).toBe("paper");
   });
   test("macOS Increase Contrast turns on Contrast", () => {
     expect(resolveTheme({ ...DEFAULT_APPEARANCE, theme: "paper" }, { prefersDark: false, prefersMoreContrast: true })).toBe("contrast");

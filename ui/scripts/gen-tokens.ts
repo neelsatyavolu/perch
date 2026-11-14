@@ -25,7 +25,7 @@ export type Accent = { name: string; dark: string; light: string };
 export type Design = { themes: Theme[]; accents: Accent[]; ok: string; warn: string; danger: { dark: string; light: string } };
 
 /** Hover fills are not in DESIGN.md's table; these come from the approved preview. */
-const HOVER: Record<string, number> = { ink: 0.08, graphite: 0.06, dusk: 0.05, paper: 0.04, contrast: 0.1, sakura: 0.04, yozakura: 0.06 };
+const HOVER: Record<string, number> = { ink: 0.08, graphite: 0.06, dusk: 0.05, paper: 0.04, fog: 0.04, mist: 0.04, sage: 0.04, contrast: 0.1, sakura: 0.04, yozakura: 0.06 };
 
 /**
  * The surface steps above the theme table (aside-parity spec 1): a lifted sidebar (`--side`), filled

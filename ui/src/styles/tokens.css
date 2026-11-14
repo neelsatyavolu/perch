@@ -67,6 +67,48 @@
   --accent: var(--accent-light);
   --accent-soft: color-mix(in srgb, var(--accent) 10%, transparent);
 }
+:root[data-theme="fog"] {
+  color-scheme: light;
+  --canvas: #F3F4F6; --card: #FAFAFB; --raised: #E8EAED;
+  --ink: #1A1C20; --body: rgba(26, 28, 32, 0.86); --mute: #5F636A;
+  --hair: rgba(26, 28, 32, 0.1); --hair-strong: rgba(26, 28, 32, 0.22); --hover: rgba(0, 0, 0, 0.04);
+  --btn-bg: #1A1C20; --btn-fg: #F3F4F6;
+  --side: var(--raised); --fill: #FFFFFF; --fill-hover: color-mix(in srgb, var(--ink) 4%, #FFFFFF);
+  --nav-on: color-mix(in srgb, var(--ink) 9%, var(--side)); --nav-ring: var(--hair);
+  --danger: #BC2E23;
+  --btn-danger: #EE5A4B;
+  --pop: none;
+  --accent: var(--accent-light);
+  --accent-soft: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+:root[data-theme="mist"] {
+  color-scheme: light;
+  --canvas: #F1F4F8; --card: #F8FAFC; --raised: #E4E9F0;
+  --ink: #141A24; --body: rgba(20, 26, 36, 0.86); --mute: #5A6576;
+  --hair: rgba(20, 26, 36, 0.1); --hair-strong: rgba(20, 26, 36, 0.22); --hover: rgba(0, 0, 0, 0.04);
+  --btn-bg: #141A24; --btn-fg: #F1F4F8;
+  --side: var(--raised); --fill: #FFFFFF; --fill-hover: color-mix(in srgb, var(--ink) 4%, #FFFFFF);
+  --nav-on: color-mix(in srgb, var(--ink) 9%, var(--side)); --nav-ring: var(--hair);
+  --danger: #BC2E23;
+  --btn-danger: #EE5A4B;
+  --pop: none;
+  --accent: var(--accent-light);
+  --accent-soft: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+:root[data-theme="sage"] {
+  color-scheme: light;
+  --canvas: #F2F4EE; --card: #F9FAF6; --raised: #E6EADF;
+  --ink: #1B2019; --body: rgba(27, 32, 25, 0.86); --mute: #5E665A;
+  --hair: rgba(27, 32, 25, 0.1); --hair-strong: rgba(27, 32, 25, 0.22); --hover: rgba(0, 0, 0, 0.04);
+  --btn-bg: #1B2019; --btn-fg: #F2F4EE;
+  --side: var(--raised); --fill: #FFFFFF; --fill-hover: color-mix(in srgb, var(--ink) 4%, #FFFFFF);
+  --nav-on: color-mix(in srgb, var(--ink) 9%, var(--side)); --nav-ring: var(--hair);
+  --danger: #BC2E23;
+  --btn-danger: #EE5A4B;
+  --pop: none;
+  --accent: var(--accent-light);
+  --accent-soft: color-mix(in srgb, var(--accent) 10%, transparent);
+}
 :root[data-theme="contrast"] {
   color-scheme: dark;
   --canvas: #000000; --card: #000000; --raised: #141414;

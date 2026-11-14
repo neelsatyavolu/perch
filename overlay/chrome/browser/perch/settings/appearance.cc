@@ -15,10 +15,12 @@ namespace perch {
 
 namespace {
 
-constexpr std::array<std::string_view, 7> kThemes = {
-    "ink", "graphite", "dusk", "paper", "contrast", "sakura", "yozakura"};
+constexpr std::array<std::string_view, 10> kThemes = {
+    "ink",  "graphite", "dusk",     "paper",  "fog",
+    "mist", "sage",     "contrast", "sakura", "yozakura"};
 // The light themes, which Match system's dark theme can't be.
-constexpr std::array<std::string_view, 2> kLightThemes = {"paper", "sakura"};
+constexpr std::array<std::string_view, 5> kLightThemes = {
+    "paper", "fog", "mist", "sage", "sakura"};
 constexpr std::array<std::string_view, 6> kAccents = {"blue", "teal",  "amber",
                                                       "rose", "mono",  "sakura"};
 constexpr std::array<std::string_view, 7> kAppIcons = {

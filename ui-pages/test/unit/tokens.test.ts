@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { ACCENTS, ACCENT_NAMES, THEMES, THEME_NAMES, accentFor, contrastRatio, isLightTheme, isSakura, lightPartner, mix, surfaceSteps, tokenVars } from "../../src/theme/tokens";
 
 describe("theme tokens (DESIGN.md)", () => {
-  test("seven themes and six accents, Ink and Blue first, Sakura mode's last", () => {
-    expect(THEME_NAMES).toEqual(["ink", "graphite", "dusk", "paper", "contrast", "sakura", "yozakura"]);
+  test("ten themes and six accents, Ink and Blue first, Sakura mode's last", () => {
+    expect(THEME_NAMES).toEqual(["ink", "graphite", "dusk", "paper", "fog", "mist", "sage", "contrast", "sakura", "yozakura"]);
     expect(ACCENT_NAMES).toEqual(["blue", "teal", "amber", "rose", "mono", "sakura"]);
     expect(THEMES.sakura.canvas).toBe("#FAF2F4");
     expect(THEMES.yozakura.dark).toBe(true);
@@ -13,11 +13,13 @@ describe("theme tokens (DESIGN.md)", () => {
     expect(THEMES.paper.raised).toBe("#EFECE4");
   });
 
-  test("Match system pairs Yozakura with Sakura and every other dark theme with Paper", () => {
+  test("Match system pairs Graphite with Fog, Dusk with Mist, Yozakura with Sakura and the rest with Paper", () => {
     expect(lightPartner("yozakura")).toBe("sakura");
+    expect(lightPartner("graphite")).toBe("fog");
+    expect(lightPartner("dusk")).toBe("mist");
     expect(lightPartner("ink")).toBe("paper");
     expect(lightPartner("contrast")).toBe("paper");
-    expect([...THEME_NAMES].filter(isLightTheme)).toEqual(["paper", "sakura"]);
+    expect([...THEME_NAMES].filter(isLightTheme)).toEqual(["paper", "fog", "mist", "sage", "sakura"]);
     expect([...THEME_NAMES].filter(isSakura)).toEqual(["sakura", "yozakura"]);
   });
 

@@ -4,14 +4,15 @@ import { applyAppearance, lightPartner, shownTheme } from "../src/theme/theme";
 
 const media = (dark: boolean, contrast = false) => (q: string) => ({ matches: q.includes("contrast") ? contrast : q.includes("dark") ? dark : false });
 
-test("Match system pairs Yozakura with Sakura, every other dark theme with Paper", () => {
+test("Match system pairs Yozakura with Sakura, Graphite with Fog, Dusk with Mist, the rest with Paper", () => {
   expect(lightPartner("yozakura")).toBe("sakura");
   expect(lightPartner("ink")).toBe("paper");
   const a = { theme: "ink", matchSystem: true, darkTheme: "yozakura" };
   expect(shownTheme(a, (q) => media(false)(q).matches)).toBe("sakura");
   expect(shownTheme(a, (q) => media(true)(q).matches)).toBe("yozakura");
   expect(shownTheme(a, (q) => media(true, true)(q).matches)).toBe("contrast");
-  expect(shownTheme({ ...a, darkTheme: "dusk" }, (q) => media(false)(q).matches)).toBe("paper");
+  expect(shownTheme({ ...a, darkTheme: "dusk" }, (q) => media(false)(q).matches)).toBe("mist");
+  expect(shownTheme({ ...a, darkTheme: "ink" }, (q) => media(false)(q).matches)).toBe("paper");
 });
 
 test("the root gets the tone and, for Sakura's themes, the sakura flag", () => {

@@ -1,24 +1,25 @@
 /**
- * Perch's one token file: seven themes and six accents, values from DESIGN.md.
+ * Perch's one token file: ten themes and six accents, values from DESIGN.md.
  * Sakura and Yozakura are Sakura mode's light and dark themes (DESIGN.md, Sakura mode).
  * A theme sets every surface and text colour; the accent is picked separately and
  * works on every theme. Layout, type and spacing never change with the theme.
  */
 
-export const THEME_NAMES = ["ink", "graphite", "dusk", "paper", "contrast", "sakura", "yozakura"] as const;
+export const THEME_NAMES = ["ink", "graphite", "dusk", "paper", "fog", "mist", "sage", "contrast", "sakura", "yozakura"] as const;
 export const ACCENT_NAMES = ["blue", "teal", "amber", "rose", "mono", "sakura"] as const;
 
 export type ThemeName = (typeof THEME_NAMES)[number];
 export type AccentName = (typeof ACCENT_NAMES)[number];
 /** The light themes; every other theme is dark. */
-export const LIGHT_THEMES = ["paper", "sakura"] as const;
+export const LIGHT_THEMES = ["paper", "fog", "mist", "sage", "sakura"] as const;
 export type LightThemeName = (typeof LIGHT_THEMES)[number];
 export type DarkThemeName = Exclude<ThemeName, LightThemeName>;
 
 export const isLightTheme = (name: string): name is LightThemeName => (LIGHT_THEMES as readonly string[]).includes(name);
 
-/** Match system's light side for a dark theme: Sakura for Yozakura, Paper for the rest. */
-export const lightPartner = (dark: DarkThemeName): LightThemeName => (dark === "yozakura" ? "sakura" : "paper");
+/** Match system's light side for a dark theme: Fog for Graphite, Mist for Dusk, Sakura for Yozakura, Paper for the rest. */
+const LIGHT_PARTNERS: Partial<Record<DarkThemeName, LightThemeName>> = { graphite: "fog", dusk: "mist", yozakura: "sakura" };
+export const lightPartner = (dark: DarkThemeName): LightThemeName => LIGHT_PARTNERS[dark] ?? "paper";
 
 /** Sakura mode: petals, the branch and the blossom mark show while one of these themes does. */
 export const isSakura = (name: string): boolean => name === "sakura" || name === "yozakura";
@@ -65,6 +66,24 @@ export const THEMES: Readonly<Record<ThemeName, Theme>> = Object.freeze({
     ink: "#16161A", body: "rgba(22,22,26,0.86)", mute: "#676667",
     hair: "rgba(22,22,26,0.10)", hairStrong: "rgba(22,22,26,0.22)", hover: "rgba(0,0,0,0.04)",
     btnBg: "#16161A", btnFg: "#F7F5EF", scrim: "rgba(22,22,26,0.40)",
+  },
+  fog: {
+    label: "Fog", dark: false, canvas: "#F3F4F6", card: "#FAFAFB", raised: "#E8EAED",
+    ink: "#1A1C20", body: "rgba(26,28,32,0.86)", mute: "#5F636A",
+    hair: "rgba(26,28,32,0.10)", hairStrong: "rgba(26,28,32,0.22)", hover: "rgba(0,0,0,0.04)",
+    btnBg: "#1A1C20", btnFg: "#F3F4F6", scrim: "rgba(26,28,32,0.40)",
+  },
+  mist: {
+    label: "Mist", dark: false, canvas: "#F1F4F8", card: "#F8FAFC", raised: "#E4E9F0",
+    ink: "#141A24", body: "rgba(20,26,36,0.86)", mute: "#5A6576",
+    hair: "rgba(20,26,36,0.10)", hairStrong: "rgba(20,26,36,0.22)", hover: "rgba(0,0,0,0.04)",
+    btnBg: "#141A24", btnFg: "#F1F4F8", scrim: "rgba(20,26,36,0.40)",
+  },
+  sage: {
+    label: "Sage", dark: false, canvas: "#F2F4EE", card: "#F9FAF6", raised: "#E6EADF",
+    ink: "#1B2019", body: "rgba(27,32,25,0.86)", mute: "#5E665A",
+    hair: "rgba(27,32,25,0.10)", hairStrong: "rgba(27,32,25,0.22)", hover: "rgba(0,0,0,0.04)",
+    btnBg: "#1B2019", btnFg: "#F2F4EE", scrim: "rgba(27,32,25,0.40)",
   },
   contrast: {
     label: "Contrast", dark: true, canvas: "#000000", card: "#000000", raised: "#141414",

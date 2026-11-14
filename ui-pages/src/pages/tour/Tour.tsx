@@ -50,14 +50,19 @@ function useRecentChats(): readonly ChatSummary[] {
   useEffect(() => {
     let live = true;
     const poll = async () => {
+      // A tour left open in a background tab doesn't keep asking perchd every two seconds.
+      if (document.visibilityState === "hidden") return;
       const list = await api.listChats(10).catch(() => null);
       if (live && list) setChats(list);
     };
     void poll();
     const timer = setInterval(poll, POLL_MS);
+    const onShow = () => void poll();
+    document.addEventListener("visibilitychange", onShow);
     return () => {
       live = false;
       clearInterval(timer);
+      document.removeEventListener("visibilitychange", onShow);
     };
   }, [api]);
   return chats;

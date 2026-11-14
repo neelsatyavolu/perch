@@ -41,6 +41,8 @@ export class McpManager {
   private live: ReadonlyMap<string, Live> = new Map();
   private statuses: ReadonlyMap<string, ServerStatus> = new Map();
   private readonly listeners: (() => void)[] = [];
+  /** Connections being made, by server: two calls at once share one rather than start two servers. */
+  private readonly connecting = new Map<string, Promise<ServerStatus>>();
 
   constructor(private readonly opts: ManagerOptions) {}
 
@@ -65,7 +67,15 @@ export class McpManager {
     this.listeners.push(listener);
   }
 
-  async connect(name: string): Promise<ServerStatus> {
+  connect(name: string): Promise<ServerStatus> {
+    const pending = this.connecting.get(name);
+    if (pending) return pending;
+    const started = this.connectNow(name).finally(() => this.connecting.delete(name));
+    this.connecting.set(name, started);
+    return started;
+  }
+
+  private async connectNow(name: string): Promise<ServerStatus> {
     const entry = findServer(await this.opts.store.load(), name);
     if (!entry) throw new Error(`no server named "${name}"`);
     await this.disconnect(name);

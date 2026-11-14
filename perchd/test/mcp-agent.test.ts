@@ -118,6 +118,14 @@ test("secrets reach the server from the Keychain", async () => {
   expect((await m.call("fixture", "env_value", { name: "FIXTURE_TOKEN" })).content[0]).toEqual({ type: "text", text: FAKE });
 });
 
+test("two calls at once to a server that is not running start it once, with one launch prompt", async () => {
+  const m = manager();
+  const [a, b] = await Promise.all([m.call("fixture", "env_value", { name: "FIXTURE_TOKEN" }), m.call("fixture", "env_value", { name: "FIXTURE_TOKEN" })]);
+  expect(a.content[0]).toEqual({ type: "text", text: FAKE });
+  expect(b.content[0]).toEqual({ type: "text", text: FAKE });
+  expect(launches).toHaveLength(1);
+});
+
 test("Guard mode: read-only tools run, other tools wait for approval; everything is audited", async () => {
   const m = manager();
   await m.start();

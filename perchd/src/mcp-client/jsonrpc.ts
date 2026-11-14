@@ -32,7 +32,8 @@ export class RpcError extends Error {
   }
 }
 
-type Pending = { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> };
+/** `done` clears the request's timer and stops listening to its signal. */
+type Pending = { resolve: (v: unknown) => void; reject: (e: Error) => void; done: () => void };
 
 export type RequestOptions = { timeoutMs?: number; signal?: AbortSignal };
 
@@ -74,16 +75,22 @@ export class RpcSession {
       const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
       const cancel = (reason: string) => {
         if (!this.pending.delete(id)) return;
-        clearTimeout(timer);
+        done();
         void this.transport.send({ jsonrpc: "2.0", method: "notifications/cancelled", params: { requestId: id, reason } }).catch(() => undefined);
         reject(new Error(reason));
       };
       const timer = setTimeout(() => cancel(`The server did not answer ${method} within ${Math.round(timeoutMs / 1000)} s.`), timeoutMs);
-      opts.signal?.addEventListener("abort", () => cancel("Cancelled."), { once: true });
-      this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject, timer });
+      const onAbort = () => cancel("Cancelled.");
+      opts.signal?.addEventListener("abort", onAbort, { once: true });
+      // A chat's signal lives for many calls: each answered call stops listening to it.
+      const done = () => {
+        clearTimeout(timer);
+        opts.signal?.removeEventListener("abort", onAbort);
+      };
+      this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject, done });
       this.transport.send({ jsonrpc: "2.0", id, method, ...(params === undefined ? {} : { params }) }).catch((error: Error) => {
         if (!this.pending.delete(id)) return;
-        clearTimeout(timer);
+        done();
         reject(error);
       });
     });
@@ -108,7 +115,7 @@ export class RpcSession {
     const pending = typeof msg.id === "number" ? this.pending.get(msg.id) : undefined;
     if (!pending) return;
     this.pending.delete(msg.id as number);
-    clearTimeout(pending.timer);
+    pending.done();
     if (msg.error) pending.reject(new RpcError(String(msg.error.message ?? "error").slice(0, 2000), Number(msg.error.code ?? -32603)));
     else pending.resolve(msg.result);
   }
@@ -125,7 +132,7 @@ export class RpcSession {
     if (this.closedError) return;
     this.closedError = error;
     for (const [, p] of this.pending) {
-      clearTimeout(p.timer);
+      p.done();
       p.reject(error);
     }
     this.pending.clear();

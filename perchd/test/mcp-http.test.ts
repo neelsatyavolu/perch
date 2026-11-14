@@ -67,6 +67,19 @@ test("the SSE parser handles multi-line data, comments and CRLF", async () => {
   expect(events).toEqual([{ event: "a", data: "one\ntwo" }, { event: "message", data: "three" }]);
 });
 
+test("the SSE parser keeps an event whole when a CRLF is split across chunks", async () => {
+  const parts = ["data: one\r", "\ndata: two\r", "\n\r", "\n"];
+  const stream = new ReadableStream<Uint8Array>({
+    start(c) {
+      for (const p of parts) c.enqueue(new TextEncoder().encode(p));
+      c.close();
+    },
+  });
+  const events = [];
+  for await (const e of parseSse(stream)) events.push(e);
+  expect(events).toEqual([{ event: "message", data: "one\ntwo" }]);
+});
+
 test("Streamable HTTP: session id and protocol version on later requests, tool calls over an event stream", async () => {
   const client = await connectRemote("http", { url: `${base}/mcp`, headers: {} });
   expect(client.serverInfo.name).toBe("fixture");

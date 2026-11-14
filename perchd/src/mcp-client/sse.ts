@@ -25,12 +25,20 @@ export async function* parseSse(stream: ReadableStream<Uint8Array>): AsyncGenera
   let event = "";
   let data: string[] = [];
   let id: string | undefined;
+  // A CR that ended the last chunk may be the first half of a CRLF split across chunks.
+  let skipLf = false;
   for await (const chunk of chunks(stream)) {
     buffer += decoder.decode(chunk, { stream: true });
+    if (skipLf && buffer) {
+      if (buffer.startsWith("\n")) buffer = buffer.slice(1);
+      skipLf = false;
+    }
     let nl: number;
     while ((nl = buffer.search(/\r\n|\r|\n/)) !== -1) {
       const line = buffer.slice(0, nl);
-      buffer = buffer.slice(nl + (buffer.startsWith("\r\n", nl) ? 2 : 1));
+      const crlf = buffer.startsWith("\r\n", nl);
+      if (!crlf && buffer[nl] === "\r" && nl === buffer.length - 1) skipLf = true;
+      buffer = buffer.slice(nl + (crlf ? 2 : 1));
       if (line === "") {
         if (data.length) yield { event: event || "message", data: data.join("\n"), ...(id !== undefined ? { id } : {}) };
         event = "";

@@ -55,6 +55,18 @@ test("a 10,000-row page stays within budget, says what it left out, and is fast"
   await tab.close();
 });
 
+test("a full snapshot gets more room, and when even it is cut it says how much and what reaches the rest", async () => {
+  const tab = await env.browser.newTab(env.site.url("/mail.html"));
+  await tab.evaluate("document.body.insertAdjacentHTML('beforeend', Array.from({ length: 3000 }, (_, i) => '<p>Line ' + i + ' of a very long article body</p>').join(''))");
+  const snap = await snapshot(tab, { full: true });
+  expect(snap.text.length).toBeGreaterThan(12_000);
+  expect(snap.text.length).toBeLessThanOrEqual(30_000);
+  expect(snap.text).toMatch(/- … [\d,]+ more lines \([\d,]+ characters\) left out: even the full snapshot stops at 30,000 characters\. Use find/);
+  expect(snap.text).toContain("read_document");
+  expect(snap.text).not.toContain("ask for the full page");
+  await tab.close();
+});
+
 test("buttons inside an iframe and a shadow root get refs", async () => {
   const frame = await env.browser.newTab(env.site.url("/iframe.html"));
   await Bun.sleep(200);

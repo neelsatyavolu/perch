@@ -19,6 +19,12 @@ import { isSecretField, REDACTED, rememberedSecrets, secretKey } from "./secrets
 
 export type Snapshot = { text: string; refs: RefTable; omitted: number };
 export const DEFAULT_BUDGET = 12_000;
+/**
+ * A full snapshot was asked for, so it gets more room. In benchmark runs, of the full snapshots the
+ * default cut, the median page came to about 20,000 characters and 84% fit in 30,000 (about 7,500
+ * tokens); agents that were cut pulled up to 20,000 characters of innerText through the REPL instead.
+ */
+export const FULL_BUDGET = 30_000;
 const TEXT_LIMIT = 160;
 
 const INTERACTIVE = new Set([
@@ -67,7 +73,7 @@ type Ctx = {
 };
 
 export async function snapshot(tab: Tab, opts: { budget?: number; full?: boolean } = {}): Promise<Snapshot> {
-  const budget = opts.budget ?? DEFAULT_BUDGET;
+  const budget = opts.budget ?? (opts.full ? FULL_BUDGET : DEFAULT_BUDGET);
   await tab.send("DOM.getDocument", { depth: 0 });
   const { frameTree } = await tab.send<{ frameTree: FrameTree }>("Page.getFrameTree");
   const inProcess = flattenFrames(frameTree);
@@ -81,7 +87,7 @@ export async function snapshot(tab: Tab, opts: { budget?: number; full?: boolean
   const ctx: Ctx = { trees, secrets: rememberedSecrets(tab), frameOwners: owners, layout, refs: refsFor(tab), full, omitted: 0 };
   const main = trees.get(frames[0]!)!;
   const lines = main.root ? renderChildren(ctx, main, main.root, 0) : [];
-  return fitBudget(lines, budget, ctx.omitted, ctx.refs);
+  return fitBudget(lines, budget, ctx.omitted, ctx.refs, full);
 }
 
 function flattenFrames(tree: FrameTree): string[] {
@@ -352,14 +358,24 @@ function extras(ctx: Ctx, tree: Tree, node: AXNode, role: string): string {
   return parts.length ? ` ${parts.join(" ")}` : "";
 }
 
-function fitBudget(lines: string[], budget: number, omitted: number, refs: RefTable): Snapshot {
-  const notice = (n: number) => `- … ${n.toLocaleString("en-US")} more lines cut at ${budget.toLocaleString("en-US")} characters; scroll or ask for the full page`;
+/**
+ * Cuts the lines to the budget. A full snapshot that is still cut cannot be asked for in full
+ * again, so its notice says how much was left out and which tools reach the rest.
+ */
+function fitBudget(lines: string[], budget: number, omitted: number, refs: RefTable, full: boolean): Snapshot {
+  const cap = budget.toLocaleString("en-US");
+  const notice = (n: number, chars: number) =>
+    full
+      ? `- … ${n.toLocaleString("en-US")} more lines (${chars.toLocaleString("en-US")} characters) left out: even the full snapshot stops at ${cap} characters. Use find to get refs anywhere on the page by name, scroll and snapshot to read the part you need, or read_document with this page's address for its text`
+      : `- … ${n.toLocaleString("en-US")} more lines cut at ${cap} characters; scroll or ask for the full page`;
+  const room = budget - notice(lines.length, budget * 100).length - 1;
   let size = 0;
   for (let i = 0; i < lines.length; i++) {
     size += lines[i]!.length + 1;
-    if (size > budget - 120) {
-      const dropped = lines.length - i;
-      return { text: [...lines.slice(0, i), notice(dropped)].join("\n"), refs, omitted: omitted + dropped };
+    if (size > room) {
+      const rest = lines.slice(i);
+      const chars = rest.reduce((sum, line) => sum + line.length + 1, 0);
+      return { text: [...lines.slice(0, i), notice(rest.length, chars)].join("\n"), refs, omitted: omitted + rest.length };
     }
   }
   return { text: lines.join("\n"), refs, omitted };

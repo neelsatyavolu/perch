@@ -1,0 +1,19 @@
+diff --git a/chrome/browser/ui/views/tabs/tab/tab_title.cc b/chrome/browser/ui/views/tabs/tab/tab_title.cc
+index b0b58ef943..6ae92846fe 100644
+--- a/chrome/browser/ui/views/tabs/tab/tab_title.cc
++++ b/chrome/browser/ui/views/tabs/tab/tab_title.cc
+@@ -14,10 +14,10 @@ TabTitle::TabTitle() {
+   SetAutoColorReadabilityEnabled(false);
+   SetText(CoreTabHelper::GetDefaultTitle());
+   SetBackgroundColor(SK_ColorTRANSPARENT);
+-  // Title paints on top of an opaque region (the tab background) of a
+-  // non-opaque layer (the tabstrip's layer), which cannot currently be detected
+-  // by the subpixel-rendering opacity check.
+-  SetSkipSubpixelRenderingOpacityCheck(true);
++  // Perch: tabs are see-through (the glass tint), so the title is drawn with
++  // grayscale smoothing. Subpixel text over a translucent tab left a lighter
++  // box behind the faded end of the title when the tab was hovered.
++  SetSubpixelRenderingEnabled(false);
+   SetCanProcessEventsWithinSubtree(false);
+   SetCollapseWhenHidden(true);
+ }

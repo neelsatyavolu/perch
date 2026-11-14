@@ -132,3 +132,4 @@ perch/shell/extension-updates.patch
 perch/shell/quiet-setup.patch
 perch/shell/pinned-sound-icon.patch
 perch/shell/no-profile-picker.patch
+perch/shell/tab-title-smoothing.patch

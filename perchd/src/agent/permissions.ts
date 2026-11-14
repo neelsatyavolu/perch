@@ -36,9 +36,14 @@ export const OFF_PAGE = new Set(["done", "tabs", "switch_tab", "downloads", "bat
 const MAX_QUERY = 200;
 const MAX_QUERY_VALUE = 120;
 
-const RISKY = /\b(send|post|publish|submit|turn in|hand in|go live|push live|make live|deploy|delete|remove|discard|share|invite|transfer|confirm|sign up|unsubscribe|reply|forward|archive|trash)\b/i;
+const RISKY = /\b(send|post|publish|submit|turn in|hand in|go live|push live|make live|deploy|delete|remove|discard|share|invite|transfer|confirm|sign up|subscribe|unsubscribe|reply|forward|archive|trash)\b/i;
+/**
+ * A bare "Subscribe" (a newsletter, a channel) signs up like "Sign up" does: risky. It is a payment
+ * when it commits ("Subscribe now", "Yes, subscribe") or names a price (SUBSCRIBE with MONEY).
+ */
 const PAYMENT =
-  /\b(pay|buy|purchase|checkout|check out|place (your )?order|submit (your )?order|complete (your )?(order|purchase|booking|reservation|payment|checkout)|reserve|request to book|book( now| it)?|confirm (and|&) pay|confirm (your )?(booking|purchase|payment|order|reservation)|subscribe|donate|start (your )?(free )?trial|upgrade|pre[- ]?order|rent (it|this|now|for))\b/i;
+  /\b(pay|buy|purchase|checkout|check out|place (your )?order|submit (your )?(order|payment)|make (a |your )?payment|complete (your )?(order|purchase|booking|reservation|payment|checkout)|reserve|request to book|book( now| it)?|confirm (and|&) pay|confirm (your )?(booking|purchase|payment|order|reservation)|subscribe (now|today)|yes,? subscribe|donate|start (your )?(free )?trial|upgrade|pre[- ]?order|rent (it|this|the|now|for))\b/i;
+const SUBSCRIBE = /\bsubscribe\b/i;
 const MONEY = /[$€£¥₹]\s?\d|\d\s?(usd|eur|gbp|inr|jpy)\b/i;
 /** A button that is a price ("$9.99") or charges one ("Get it for $4.99", "Continue ($19.99)"). */
 const PRICE_ONLY = /^\s*(price:?\s*)?(us|ca|a)?[$€£¥₹]\s?\d[\d,.]*\s*$/i;
@@ -55,6 +60,19 @@ const STORE_SUFFIX = /\s[-|–—]\s*best buy\s*$/i;
 const STAY_DATE = /\b(select(ed)?|chosen?) as (the )?check[- ]?(in|out) date\b/gi;
 /** A day in a date picker names its weekday or month ("11, Wednesday, November 2026"). */
 const CALENDAR_DAY = /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|january|february|march|april|may|june|july|august|september|october|november|december)\b/i;
+/**
+ * Putting something in a cart only fills the cart, even beside its price ("Add to Bag - $100.00"):
+ * checking out is what pays. Not "Add to order": that can charge an order already placed.
+ */
+const TO_CART = /\badd( it| this| them| one| all| items?)? to (my |your |the )?(cart|bag|basket|trolley)\b/gi;
+/**
+ * A link opens a page. In its label the store's name is a name ("Best Buy® - $100 Gift Card"),
+ * and "Book" or "Reserve" after a word like "the" is a title ("The Book of Mormon"). Anywhere
+ * else those words still book ("Book a table").
+ */
+const STORE_NAME = /\bbest buy\b/gi;
+const LINK_BOOKING = /(?<!\bto )\b(book|reserve)\b(?! (now|it)\b)/gi;
+const TITLE_WORD = /\b(the|a|an|this|that|my|your|our|his|her|their)\s+$/i;
 /** Purchase words that keep a menu button asking: opening a menu never needs them. */
 const PURCHASE = /\b(pay|buy|purchase|checkout|check out|order|donate|confirm|complete)\b/i;
 /** Roles whose drag moves a value along a track rather than dropping something somewhere. */
@@ -130,18 +148,27 @@ function clickKind(target: Target | undefined, guarded: boolean): Kind {
   // "Drop-off at a Best Buy store" is a choice, not a purchase.
   if (CHOICES.has(target.role)) return "change";
   const day = CALENDAR_DAY.test(target.name) ? target.name.replace(STAY_DATE, " ") : target.name;
-  const name = day.replace(STORE_SUFFIX, " ");
-  // A price next to a stripped phrase ("Extend check-out date ($30)") still charges.
-  if (name !== target.name && MONEY.test(target.name)) return "payment";
+  // A price next to a stripped date phrase ("Extend check-out date ($30)") still charges.
+  if (day !== target.name && MONEY.test(target.name)) return "payment";
+  const named = (target.role === "link" && !guarded ? linkWords(day) : day).replace(STORE_SUFFIX, " ");
   // A one-word menu button ("Book", "Subscribe") only opens its items, each judged when it is
   // clicked. "Subscribe now" or "Book now" commits, so longer labels get the usual rules.
-  const word = /^\s*\w+\s*$/.test(name);
-  const menu = target.expanded !== undefined && !guarded && word && !PURCHASE.test(name);
+  const word = /^\s*\w+\s*$/.test(named);
+  const menu = target.expanded !== undefined && !guarded && word && !PURCHASE.test(named);
   if (menu) return "change";
-  if (PAYMENT.test(name) || PASSWORD.test(name) || charges({ ...target, name }, guarded)) return "payment";
+  const cart = !guarded && new RegExp(TO_CART.source, "i").test(named);
+  const name = cart ? named.replace(TO_CART, " ") : named;
+  const priced = MONEY.test(name) && SUBSCRIBE.test(name);
+  if (PAYMENT.test(name) || PASSWORD.test(name) || priced || (!cart && charges({ ...target, name }, guarded))) return "payment";
   if (guarded && ADVANCES.test(name)) return "payment";
   if (RISKY.test(name) && !isListing(target.role, name)) return "risky";
   return "change";
+}
+
+/** A link's label without its store names, and without booking words that are part of a title (LINK_BOOKING). */
+function linkWords(label: string): string {
+  const name = label.replace(STORE_NAME, " ");
+  return name.replace(LINK_BOOKING, (word: string, ...rest: unknown[]) => (TITLE_WORD.test(name.slice(0, rest.at(-2) as number)) ? " " : word));
 }
 
 /** Roles of items in a list or feed: an email row, a search result, an article link. */

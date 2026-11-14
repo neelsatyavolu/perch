@@ -216,3 +216,25 @@ test("an email row or headline that mentions sending is a listing to open, not a
   expect(classify(click, { role: "link", name: "Send" })).toBe("risky");
   expect(classify(click, { role: "link", name: "Delete this draft now" })).toBe("risky");
 });
+
+test("titles, store names, carts, booking links and newsletters are not payments; real payments still are", () => {
+  const click = { id: "c", name: "click", args: { ref: "e1" } };
+  // Labels a benchmark agent was stopped on as payments.
+  expect(classify(click, { role: "link", name: "The Book of Mormon" })).toBe("change");
+  expect(classify(click, { role: "link", name: "Best Buy® - $100 Celebrate Balloons Gift Card" })).toBe("change");
+  expect(classify(click, { role: "button", name: "Subscribe" })).toBe("risky");
+  // Their neighbours that are payments.
+  for (const [role, name] of [
+    ["button", "Place order"], ["button", "Pay $42.18"], ["button", "Buy now"], ["link", "Buy now"], ["button", "Complete purchase"],
+    ["button", "Confirm and pay"], ["button", "Submit payment"], ["button", "Make a payment"], ["button", "Subscribe for $9.99/month"], ["link", "Subscribe to Premium - $4.99/mo"],
+    ["button", "Subscribe now"], ["link", "Book now"], ["link", "Reserve now"], ["link", "Request to book"], ["link", "Book a room for $129"],
+    ["button", "Reserve"], ["button", "Book"], ["button", "Add to cart and buy now"], ["button", "Add to cart and check out"],
+    ["link", "Rent The Book of Eli"], ["button", "Buy at Best Buy"], ["button", "Proceed to checkout"],
+  ] as const) expect([name, classify(click, { role, name })]).toEqual([name, "payment"]);
+  for (const name of ["Send", "Post", "Delete", "Sign up", "Subscribe to our newsletter"]) expect([name, classify(click, { role: "button", name })]).toEqual([name, "risky"]);
+  // On a checkout page a cart or booking word still moves the order forward.
+  expect(classify(click, { role: "button", name: "Add to order $14.99" }, { payment: true })).toBe("payment");
+  expect(classify(click, { role: "link", name: "Reserve a PO Box" }, { payment: true })).toBe("payment");
+  // Adding to a cart or opening a product never asks as a payment.
+  for (const name of ["Add to cart", "Add to Bag - $100.00", "Add to basket £12.50"]) expect([name, classify(click, { role: "button", name })]).toEqual([name, "change"]);
+});

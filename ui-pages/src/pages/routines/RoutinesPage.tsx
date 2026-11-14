@@ -90,12 +90,12 @@ export function RoutinesPage() {
               const r = await act(() => api.acceptProposal(p.id), `Added ${p.title}`);
               if (r) {
                 replace(r);
-                setProposals(proposals.filter((x) => x.id !== p.id));
+                setProposals((ps) => ps && ps.filter((x) => x.id !== p.id));
               }
             }}
             onDismiss={async (p) => {
-              await act(() => api.dismissProposal(p.id));
-              setProposals(proposals.filter((x) => x.id !== p.id));
+              // A dismissal that failed leaves the proposal, so it can be tried again.
+              if (await act(() => api.dismissProposal(p.id).then(() => true))) setProposals((ps) => ps && ps.filter((x) => x.id !== p.id));
             }}
           />
         )}

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { cleanup, fireEvent, waitFor, within } from "@testing-library/preact";
+import { createFakeApi } from "../../src/api/fake";
 import { RoutinesPage } from "../../src/pages/routines/RoutinesPage";
 import { renderWithApi } from "./render";
 
@@ -84,5 +85,15 @@ describe("Routines page", () => {
     expect(await r.findByRole("heading", { name: "Friday expense report", level: 3 })).toBeTruthy();
     fireEvent.click(within(found).getByRole("button", { name: "Not now: Check Canvas for new grades" }));
     expect(await r.findByText("Nothing else to suggest right now. Perch looks again as you browse.")).toBeTruthy();
+  });
+
+  test("a proposal whose dismissal fails stays, so it can be tried again", async () => {
+    const fake = createFakeApi({ stepMs: 0 });
+    const r = renderWithApi(<RoutinesPage />, { api: { ...fake, dismissProposal: () => Promise.reject(new Error("Perch couldn't save that")) } });
+    fireEvent.click(await r.findByRole("button", { name: "Find routines to automate" }));
+    const found = await r.findByRole("region", { name: "Tasks you repeat" });
+    fireEvent.click(within(found).getByRole("button", { name: "Not now: Check Canvas for new grades" }));
+    expect(await r.findByText("Perch couldn't save that")).toBeTruthy();
+    expect(within(found).getByRole("button", { name: "Not now: Check Canvas for new grades" })).toBeTruthy();
   });
 });

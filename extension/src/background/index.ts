@@ -1,7 +1,7 @@
 /** The service worker: applies settings, answers validated messages, and runs menus and commands. */
 
 import { parseContentMessage, parsePageMessage, senderOrigin, type ContentMessage, type PageMessage } from "../shared/messages";
-import { SETTINGS_KEY, isSiteOff, loadSettings } from "../shared/settings";
+import { SETTINGS_KEY, cachedSettings, forgetCachedSettings, isSiteOff } from "../shared/settings";
 import { fillCodeInFrame, type FillResult } from "../totp/fill-code";
 import { createMenus, onCommand, onMenuClick, toggleReader } from "./menus";
 import { fetchPreview } from "./preview";
@@ -13,7 +13,7 @@ import { forgetTab, recordBanner, tabState } from "./tabstate";
 
 async function setUp(): Promise<void> {
   createMenus();
-  await applySettings(await loadSettings());
+  await applySettings(await cachedSettings());
 }
 
 declare global {
@@ -26,17 +26,20 @@ chrome.runtime.onInstalled.addListener(() => void setUp().catch(report));
 chrome.runtime.onStartup.addListener(() => void setUp().catch(report));
 
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "local" && changes[SETTINGS_KEY]) void loadSettings().then(applySettings).catch(report);
+  if (area !== "local" || !changes[SETTINGS_KEY]) return;
+  forgetCachedSettings();
+  void cachedSettings().then(applySettings).catch(report);
 });
 
 // Caveatly, starting up, asks for Perch's blocker switch and the sites it's off for.
 chrome.runtime.onMessageExternal.addListener((raw, sender, reply) => {
   if (!isCaveatlyAsking(raw, sender)) return false;
-  void loadSettings().then((s) => reply(blockerState(s))).catch(report);
+  void cachedSettings().then((s) => reply(blockerState(s))).catch(report);
   return true;
 });
 
-chrome.webNavigation.onCommitted.addListener((details) => void hideOnCommit(details).catch(report));
+// Only web pages get element hiding; the filter keeps other commits (new tab, about:blank) from waking the worker.
+chrome.webNavigation.onCommitted.addListener((details) => void hideOnCommit(details).catch(report), { url: [{ schemes: ["http", "https"] }] });
 chrome.tabs.onRemoved.addListener((tabId) => void forgetTab(tabId));
 chrome.contextMenus.onClicked.addListener((info, tab) => void onMenuClick(info, tab).catch(report));
 chrome.commands.onCommand.addListener((command, tab) => void onCommand(command, tab).catch(report));
@@ -85,7 +88,7 @@ function handlePage(message: PageMessage | null): Promise<unknown> | null {
 async function reportBanner(tabId: number, url: string, cmp: string): Promise<void> {
   const host = new URL(url).hostname;
   // A frame on an exempt site could still report; keep the record honest.
-  if (isSiteOff(await loadSettings(), host)) return;
+  if (isSiteOff(await cachedSettings(), host)) return;
   await recordBanner(tabId, url, cmp);
 }
 
@@ -97,7 +100,7 @@ async function reportBanner(tabId: number, url: string, cmp: string): Promise<vo
 async function bannersAllowed(tabUrl: string | undefined): Promise<boolean> {
   if (!tabUrl) return false;
   const host = new URL(tabUrl).hostname;
-  return !isSiteOff(await loadSettings(), host);
+  return !isSiteOff(await cachedSettings(), host);
 }
 
 function report(error: unknown): void {

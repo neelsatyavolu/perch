@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_SETTINGS, isSiteOff, listableHost, normalizeHost, protectionState, sanitizeSettings, withSiteProtection } from "../../src/shared/settings";
+import { DEFAULT_SETTINGS, cachedSettings, forgetCachedSettings, isSiteOff, listableHost, normalizeHost, protectionState, sanitizeSettings, withSiteProtection } from "../../src/shared/settings";
 import { siteOffRules, contentScriptPlan, enabledRulesets } from "../../src/background/plan";
 import { PRIORITY } from "../../src/rules/limits";
 import { validateRule } from "../../src/rules/compile";
@@ -54,6 +54,44 @@ describe("settings", () => {
     expect(protectionState(settings, "sub.example.com")).toEqual({ on: false, listable: true, offBy: "example.com" });
     expect(protectionState(settings, "other.example")).toEqual({ on: true, listable: true, offBy: null });
     expect(protectionState(settings, "[::1]")).toEqual({ on: true, listable: false, offBy: null });
+  });
+});
+
+describe("cachedSettings", () => {
+  test("reads storage once until forgotten, and retries after a failed read", async () => {
+    let reads = 0;
+    let stored: unknown = { pip: false };
+    let fail = false;
+    (globalThis as { chrome?: unknown }).chrome = {
+      storage: {
+        local: {
+          get: async () => {
+            reads++;
+            if (fail) throw new Error("storage unavailable");
+            return { settings: stored };
+          },
+        },
+      },
+    };
+    try {
+      forgetCachedSettings();
+      expect((await cachedSettings()).pip).toBe(false);
+      expect((await cachedSettings()).pip).toBe(false);
+      expect(reads).toBe(1);
+      stored = { pip: true };
+      forgetCachedSettings();
+      expect((await cachedSettings()).pip).toBe(true);
+      expect(reads).toBe(2);
+      forgetCachedSettings();
+      fail = true;
+      await expect(cachedSettings()).rejects.toThrow("storage unavailable");
+      fail = false;
+      expect((await cachedSettings()).pip).toBe(true);
+      expect(reads).toBe(4);
+    } finally {
+      forgetCachedSettings();
+      delete (globalThis as { chrome?: unknown }).chrome;
+    }
   });
 });
 

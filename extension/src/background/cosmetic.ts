@@ -5,7 +5,7 @@
  */
 
 import { EMPTY_COSMETIC, sanitizeCosmetic, siteCss, type CosmeticData } from "../cosmetic/data";
-import { isSiteOff, loadSettings } from "../shared/settings";
+import { cachedSettings, isSiteOff } from "../shared/settings";
 
 let data: Promise<CosmeticData> | null = null;
 
@@ -26,10 +26,11 @@ type Committed = chrome.webNavigation.WebNavigationTransitionCallbackDetails;
 
 export async function hideOnCommit(details: Committed): Promise<void> {
   if (!/^https?:/.test(details.url)) return;
-  const settings = await loadSettings();
+  const settings = await cachedSettings();
   if (!settings.blocker) return;
   const host = new URL(details.url).hostname;
-  const top = await topHost(details);
+  // With no sites exempted there is nothing to look up: skip walking the frame tree.
+  const top = settings.sitesOff.length ? await topHost(details) : host;
   // Without the tab's address there is no telling whether the user exempted it: do nothing.
   if (top === null || isSiteOff(settings, top) || isSiteOff(settings, host)) return;
   const css = siteCss(await cosmeticData(), host);

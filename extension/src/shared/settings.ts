@@ -85,6 +85,24 @@ export async function loadSettings(): Promise<Settings> {
   return sanitizeSettings(stored[SETTINGS_KEY]);
 }
 
+let cached: Promise<Settings> | null = null;
+
+/**
+ * For the service worker, which needs the settings on every frame commit and banner check: one
+ * storage read until they change. Call forgetCachedSettings() when storage reports a change.
+ */
+export function cachedSettings(): Promise<Settings> {
+  cached ??= loadSettings().catch((error: unknown) => {
+    cached = null;
+    throw error;
+  });
+  return cached;
+}
+
+export function forgetCachedSettings(): void {
+  cached = null;
+}
+
 export async function saveSettings(settings: Settings): Promise<void> {
   await chrome.storage.local.set({ [SETTINGS_KEY]: sanitizeSettings(settings) });
 }

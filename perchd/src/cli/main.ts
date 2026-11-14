@@ -56,7 +56,7 @@ Agents:
   perch guide                      how agents use Perch
 
   perch serve [--browser <path>] [--headless]   run perchd (normally started for you)
-  perch --version
+  perch --version | -v
 
 Exit codes: 0 done, 1 failed or --timeout passed (the task keeps running), 64 bad usage,
 3 Perch not running, 130 stopped with Ctrl-C.
@@ -128,7 +128,7 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
     io.stdout((topic && helpFor(topic)) || USAGE);
     return name ? 0 : 64;
   }
-  if (name === "--version" || name === "-V" || name === "version") {
+  if (name === "--version" || name === "-v" || name === "-V" || name === "version") {
     io.stdout(`perch ${VERSION}\n`);
     return 0;
   }

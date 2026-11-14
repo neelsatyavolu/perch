@@ -14,7 +14,8 @@ type Status = { client: string; mode: string; session: string; label: string; pi
 const SESSION = ["--session"];
 
 async function withDaemon<T>(io: CliIO, session: string | undefined, run: (c: DaemonClient) => Promise<T>, client?: string): Promise<T> {
-  const c = await openDaemon(io, { session, client });
+  // A session named with --session is labelled by that name, so two of them in one folder differ.
+  const c = await openDaemon(io, { session, client, ...(session ? { title: session } : {}) });
   try {
     return await run(c);
   } finally {
@@ -167,7 +168,9 @@ export const sessionCommands: Record<string, (argv: string[], io: CliIO) => Prom
     const a = parseArgs(argv, { flags: ["--sleep"], options: SESSION });
     if (a.positionals[0] !== "end") throw new UsageError("usage: perch session end [--session <name>] [--sleep]");
     const session = a.options.get("--session");
-    await withDaemon(io, session, (c) => c.request("end", { onEnd: a.flags.has("--sleep") ? "sleep" : "close" }));
+    const sleep = a.flags.has("--sleep");
+    const { tabs } = await withDaemon(io, session, (c) => c.request<{ tabs?: number }>("end", { onEnd: sleep ? "sleep" : "close" }));
+    io.stdout(!tabs ? "Ended the session; it had no tabs.\n" : sleep ? `Put ${plural(tabs, "tab")} to sleep. perch focus wakes them.\n` : `Ended the session and closed ${plural(tabs, "tab")}.\n`);
     return 0;
   },
   /** Brings a session's tabs forward; agterm and agmux run this for their own sessions. */
@@ -175,7 +178,8 @@ export const sessionCommands: Record<string, (argv: string[], io: CliIO) => Prom
     const a = parseArgs(argv, { options: [...SESSION, "--client"] });
     const session = a.options.get("--session");
     // A mark in agterm or agmux can outlive perchd; clicking it must not start a browser.
-    await withDaemon({ ...io, autostart: false }, undefined, (c) => c.request("focus", session ? { session } : {}), a.options.get("--client"));
+    const { label } = await withDaemon({ ...io, autostart: false }, undefined, (c) => c.request<{ label?: string }>("focus", session ? { session } : {}), a.options.get("--client"));
+    io.stdout(label ? `Showing ${label}.\n` : "Done.\n");
     return 0;
   },
   async clients(argv, io) {

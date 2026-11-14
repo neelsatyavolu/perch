@@ -20,13 +20,13 @@ export function parseArgs(argv: string[], spec: { flags?: string[]; options?: st
       continue;
     }
     const [name, inline] = arg.split(/=(.*)/s, 2) as [string, string | undefined];
-    if (!known.has(name)) throw new UsageError(`unknown option ${name}`);
+    if (!known.has(name)) throw new UsageError(`perch: unknown option ${name}${known.size ? `; this command takes ${[...known].join(", ")}` : ""}`);
     if (spec.flags?.includes(name)) {
       flags.add(name);
       continue;
     }
     const value = inline ?? argv[++i];
-    if (value === undefined) throw new UsageError(`${name} needs a value`);
+    if (value === undefined) throw new UsageError(`perch: ${name} needs a value`);
     options.set(name, value);
   }
   return { positionals, flags, options };

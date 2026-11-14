@@ -191,12 +191,17 @@ export async function startDaemon(opts: DaemonOptions): Promise<Daemon> {
     },
     tabs: async (conn) => manager.tabs(conn.session),
     sessions: async () => manager.list(),
-    focus: async (conn, params) => ({ tab: await manager.focus(sessionOf(conn, params)) }),
+    focus: async (conn, params) => {
+      const session = sessionOf(conn, params);
+      return { tab: await manager.focus(session), label: session.label };
+    },
     end: async (conn, params) => {
       const how = str(params, "onEnd") as OnEnd | undefined;
       if (how !== undefined && how !== "close" && how !== "sleep") throw new Error('onEnd must be "close" or "sleep".');
-      await manager.end(sessionOf(conn, params), how);
-      return { ended: true };
+      const session = sessionOf(conn, params);
+      const tabs = session.tabIds().length;
+      await manager.end(session, how);
+      return { ended: true, tabs };
     },
     "task.start": async (conn, params) =>
       outsideOf(conn).tasks.start({ client: conn.client.name, clientMode: conn.policy().mode, task: need(params, "task"), model: str(params, "model"), effort: str(params, "effort"), mode: str(params, "mode") }),

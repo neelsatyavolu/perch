@@ -73,7 +73,7 @@ test("open, tabs, snapshot, click and screenshot work in the terminal's own sess
   const sessions = await perch("sessions");
   expect(sessions.out).toContain("Terminal · perch  1 tab");
 
-  expect((await perch("session", "end")).code).toBe(0);
+  expect(await perch("session", "end")).toMatchObject({ code: 0, out: "Ended the session and closed 1 tab.\n" });
   expect((await perch("sessions")).out).toContain("No agent sessions.");
 }, 60_000);
 
@@ -81,8 +81,10 @@ test("separate --session names keep separate tab groups", async () => {
   await perch("open", "--session", "research", site.url("/news.html"));
   const listed = await perch("sessions", "--json");
   expect(JSON.parse(listed.out)).toContainEqual(expect.objectContaining({ session: "research", tabs: 1 }));
+  // Named with --session, the session's tab group says so rather than the folder's name.
+  expect(JSON.parse(listed.out)).toContainEqual(expect.objectContaining({ session: "research", label: "Terminal · research" }));
   const focus = await perch("focus", "--session", "research");
-  expect(focus.code).toBe(0);
+  expect(focus).toMatchObject({ code: 0, out: "Showing Terminal · research.\n" });
   const missing = await perch("focus", "--client", "agterm", "--session", "T1");
   expect(missing).toMatchObject({ code: 1, err: 'No session "T1" for agterm.\n' });
 }, 60_000);
@@ -92,6 +94,8 @@ test("errors, usage and admin commands", async () => {
   expect((await perch("bogus")).code).toBe(64);
   expect((await perch("type", "e1")).err).toContain("usage: perch type <ref> <text>");
   expect((await perch("guide")).out).toContain("# Using Perch from an agent");
+  expect((await perch("-v")).out).toMatch(/^perch \S+\n$/);
+  expect((await perch("snapshot", "--sesion", "x")).err).toBe("perch: unknown option --sesion; this command takes --full, --session\n");
   expect((await perch("--help")).out).toContain("perch skill install claude|codex|grok");
 
   await perch("status");

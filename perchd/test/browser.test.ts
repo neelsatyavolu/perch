@@ -59,3 +59,13 @@ test("in the agent's tabs a passkey request is turned down at once, so no passke
   expect(await tab.evaluate<string>(ask)).toBe("NotAllowedError");
   await tab.close();
 });
+
+test("a browser page that opens with no opener during an action is found, a web page isn't", async () => {
+  const since = Date.now();
+  const { targetId: web } = await env.browser.conn.send<{ targetId: string }>("Target.createTarget", { url: env.site.url("/mail.html") });
+  expect(await env.browser.internalOpenedSince(since)).toBeNull();
+  const { targetId: internal } = await env.browser.conn.send<{ targetId: string }>("Target.createTarget", { url: "chrome://version/" });
+  expect(await env.browser.internalOpenedSince(since)).toBe(internal);
+  expect(await env.browser.internalOpenedSince(Date.now() + 1000)).toBeNull();
+  for (const id of [web, internal]) await env.browser.conn.send("Target.closeTarget", { targetId: id });
+});

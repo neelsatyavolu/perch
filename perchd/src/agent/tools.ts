@@ -198,7 +198,8 @@ const actionStarted = new WeakMap<Tab, number>();
 
 /** A tab the action opened (a link with target=_blank, window.open) becomes the current tab. */
 async function followPopup(ctx: ToolContext, tab: Tab): Promise<string | null> {
-  const id = ctx.browser.openedBy(tab.id, actionStarted.get(tab) ?? Date.now()).at(-1);
+  const since = actionStarted.get(tab) ?? Date.now();
+  const id = ctx.browser.openedBy(tab.id, since).at(-1) ?? (await ctx.browser.internalOpenedSince(since));
   if (!id) return null;
   const popup = await Tab.attach(ctx.browser.conn, id).catch(() => null);
   if (!popup) return null;

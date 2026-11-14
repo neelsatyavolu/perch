@@ -7,12 +7,17 @@ import { Tab } from "./tab";
 
 export type TabInfo = { id: string; url: string; title: string };
 
+/** Browser and extension pages; Perch's own (perch://, the new tab page) are not the agent's to take. */
+const INTERNAL_PAGE = /^(chrome-extension:\/\/|chrome:\/\/(?!newtab|new-tab-page|perch))/i;
+
 /** Agent windows use a common laptop size, so pages lay out as they do for people. */
 const AGENT_WINDOW = { width: 1440, height: 900 };
 
 export class Browser {
   /** Pages opened by another page (target=_blank links, window.open), newest last. */
   private readonly popups: { id: string; opener: string; at: number }[] = [];
+  /** Pages that opened with no opener (an extension's settings opened from chrome://extensions), newest last. */
+  private readonly unopened: { id: string; at: number }[] = [];
 
   /**
    * True inside Perch, whose patches add the `Perch` CDP domain: agent tabs then open in the
@@ -34,13 +39,35 @@ export class Browser {
     conn.on("Target.targetCreated", (p: { targetInfo: { targetId: string; type: string; openerId?: string } }) => {
       const t = p.targetInfo;
       if (t.type === "page" && t.openerId) this.popups.push({ id: t.targetId, opener: t.openerId, at: Date.now() });
+      else if (t.type === "page") this.unopened.push({ id: t.targetId, at: Date.now() });
       if (this.popups.length > 50) this.popups.shift();
+      if (this.unopened.length > 50) this.unopened.shift();
     });
   }
 
   /** Ids of pages the given tab opened at or after `since` (ms since the epoch). */
   openedBy(opener: string, since: number): string[] {
     return this.popups.filter((p) => p.opener === opener && p.at >= since).map((p) => p.id);
+  }
+
+  /**
+   * A browser or extension page (chrome://, chrome-extension://) that opened at or after `since`
+   * with no opener. Chromium opens an extension's options from chrome://extensions this way, so an
+   * agent working there would otherwise leave the page in the user's window. Web pages with no
+   * opener are the user's own and are never returned.
+   */
+  async internalOpenedSince(since: number): Promise<string | null> {
+    for (const { id } of this.unopened.filter((u) => u.at >= since).reverse()) {
+      // The address shows up a moment after the tab does.
+      for (let i = 0; i < 20; i++) {
+        const info = await this.conn.send<{ targetInfo: { url: string } }>("Target.getTargetInfo", { targetId: id }).catch(() => null);
+        const url = info?.targetInfo.url ?? "";
+        if (INTERNAL_PAGE.test(url)) return id;
+        if (url && url !== "about:blank") break;
+        await Bun.sleep(50);
+      }
+    }
+    return null;
   }
 
   static async launch(opts: { userDataDir: string; executable?: string; headless?: boolean; args?: string[] }): Promise<Browser> {

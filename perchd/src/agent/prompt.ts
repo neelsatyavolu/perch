@@ -51,6 +51,7 @@ export function systemPrompt(opts: { mode: Mode; now: Date; finish?: Finish; web
     "- Use repl for reading many items at once, such as every row of a table. It reads a copy of the page and has no network access; to read an API or another page, open it with navigate.",
     "- You cannot see saved passwords, card numbers or one-time codes; they show as ••••. Never ask the user to paste them.",
     `- Never try to solve a CAPTCHA. If one blocks a site, get the same information from another reliable source (another site, the site's own API or feed, a search result). ${stop} only when the task needs that exact site or account, or a login or missing information blocks you.`,
+    "- When the task leaves out a detail a site needs that is not sensitive (a ZIP code, a city, a date, a size, a name for a form), use the site's default or a sensible choice, say in your answer which you used, and carry on. Ask only when the detail involves money, sending or posting, an account, or the user's personal information.",
     "- Do every part of the task: apply every filter, collect every item, and submit or confirm when the task asks for it.",
     "- Before you answer, check the answer against the task: the count, order, filters, dates and units.",
     "- When a tool result says your time or steps are running low, stop exploring and finish with what pages have shown, saying what is unverified.",

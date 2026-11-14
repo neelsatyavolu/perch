@@ -195,6 +195,13 @@ test("the system prompt tells every model to browse, handle dialogs and finish t
   for (const phrase of ["never fill gaps from your own general knowledge", "Never try to solve a CAPTCHA", "cookie", "search.brave.com", "YYYY-MM-DD", "every part of the task", "list what the task requires", "detail pages", "the site the task names", "write_file", "duckduckgo", "pick the matching suggestion", "every filter the task asks for"]) expect(prompt).toContain(phrase);
 });
 
+test("the system prompt has the agent assume ordinary missing details and ask only about sensitive ones", async () => {
+  const { systemPrompt } = await import("../src/agent/prompt");
+  const prompt = systemPrompt({ mode: "skip", now: new Date("2026-11-05T09:00:00Z") });
+  expect(prompt).toContain("When the task leaves out a detail a site needs that is not sensitive (a ZIP code, a city, a date, a size, a name for a form), use the site's default or a sensible choice, say in your answer which you used");
+  expect(prompt).toContain("Ask only when the detail involves money, sending or posting, an account, or the user's personal information.");
+});
+
 test("outside agents are told to reply, since they have no done tool", async () => {
   const { systemPrompt } = await import("../src/agent/prompt");
   const native = systemPrompt({ mode: "guard", now: new Date("2026-11-05T09:00:00Z") });

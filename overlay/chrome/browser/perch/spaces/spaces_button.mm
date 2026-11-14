@@ -38,81 +38,7 @@ namespace perch {
 
 namespace {
 
-// Space rows, then New Space, Rename Space and Delete Space.
-constexpr int kFirstSpace = 1;
-constexpr int kNewSpace = 1000;
-constexpr int kRenameSpace = 1001;
-constexpr int kDeleteSpace = 1002;
-
-// Asks for a new name in a native sheet-less alert.
-std::u16string AskForName(const std::u16string& current) {
-  NSAlert* alert = [[NSAlert alloc] init];
-  alert.messageText = @"Rename Space";
-  [alert addButtonWithTitle:@"Rename"];
-  [alert addButtonWithTitle:@"Cancel"];
-  NSTextField* field =
-      [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 240, 24)];
-  field.stringValue = base::SysUTF16ToNSString(current);
-  alert.accessoryView = field;
-  alert.window.initialFirstResponder = field;
-  if ([alert runModal] != NSAlertFirstButtonReturn) {
-    return std::u16string();
-  }
-  return base::SysNSStringToUTF16(field.stringValue);
-}
-
-class SpacesMenuModel : public ui::SimpleMenuModel,
-                        public ui::SimpleMenuModel::Delegate {
- public:
-  explicit SpacesMenuModel(BrowserWindowInterface* browser)
-      : ui::SimpleMenuModel(this), browser_(browser) {
-    spaces_ = ListSpaces(browser);
-    for (size_t i = 0; i < spaces_.size(); ++i) {
-      AddCheckItem(kFirstSpace + static_cast<int>(i), spaces_[i].name);
-    }
-    AddSeparator(ui::NORMAL_SEPARATOR);
-    AddItem(kNewSpace, u"New Space");
-    AddItem(kRenameSpace, u"Rename Space…");
-    AddItem(kDeleteSpace, u"Delete Space");
-  }
-
-  bool IsCommandIdChecked(int command_id) const override {
-    const size_t row = command_id - kFirstSpace;
-    return command_id >= kFirstSpace && row < spaces_.size() &&
-           spaces_[row].active;
-  }
-
-  bool IsCommandIdEnabled(int command_id) const override {
-    return command_id != kDeleteSpace || spaces_.size() > 1;
-  }
-
-  void ExecuteCommand(int command_id, int event_flags) override {
-    switch (command_id) {
-      case kNewSpace:
-        NewSpace(browser_);
-        return;
-      case kRenameSpace: {
-        const std::u16string name = AskForName(ActiveSpaceName(browser_));
-        if (!name.empty()) {
-          RenameActiveSpace(browser_, name);
-        }
-        return;
-      }
-      case kDeleteSpace:
-        DeleteActiveSpace(browser_);
-        return;
-      default:
-        SwitchToSpace(browser_, command_id - kFirstSpace);
-    }
-  }
-
- private:
-  raw_ptr<BrowserWindowInterface> browser_;
-  std::vector<SpaceInfo> spaces_;
-};
-
-// The active space as a quiet chip at the start of the tab strip: its name,
-// then a chevron icon centred beside it; a press opens the menu.
+// The chevron at the end of the tab strip; a press opens Perch's menu.
 class SpacesButton : public views::LabelButton {
   METADATA_HEADER(SpacesButton, views::LabelButton)
 
@@ -144,30 +70,20 @@ class SpacesButton : public views::LabelButton {
     SetProperty(views::kCrossAxisAlignmentKey,
                 views::LayoutAlignment::kCenter);
     SetProperty(views::kMarginsKey, gfx::Insets::TLBR(0, 4, 0, 8));
-    registrar_.Init(browser->GetProfile()->GetPrefs());
-    for (const char* pref : {prefs::kSpaces, prefs::kActiveSpace}) {
-      registrar_.Add(pref, base::BindRepeating(&SpacesButton::UpdateName,
-                                               base::Unretained(this)));
-    }
     UpdateName();
   }
 
  private:
   void UpdateName() {
-    const std::u16string name = u"Spaces: " + ActiveSpaceName(browser_);
-    SetTooltipText(name);
-    GetViewAccessibility().SetName(name);
+    SetTooltipText(u"Profiles and more");
+    GetViewAccessibility().SetName(u"Profiles and more");
   }
 
-  void ShowMenu() {
-    model_ = std::make_unique<SpacesMenuModel>(browser_);
-    RunToolbarMenu(model_.get(), runner_, this);
-  }
+  // As on Aside, the chevron opens the profiles and the browser's places
+  // (perch_profile_menu.cc). Spaces stay in the menu bar and on ⌃1–⌃9.
+  void ShowMenu() { ShowPerchAppMenu(browser_, this); }
 
   raw_ptr<BrowserWindowInterface> browser_;
-  PrefChangeRegistrar registrar_;
-  std::unique_ptr<SpacesMenuModel> model_;
-  std::unique_ptr<views::MenuRunner> runner_;
 };
 
 BEGIN_METADATA(SpacesButton)

@@ -6,6 +6,8 @@
 #include <optional>
 #include <string>
 
+#include "base/callback_list.h"
+#include "base/functional/callback_forward.h"
 #include "base/time/time.h"
 
 namespace perch {
@@ -38,6 +40,11 @@ bool InstallReadyUpdate();
 // Turns the app menu's "Check for Updates…" into "Restart to Update Perch"
 // once an update is ready (called by the updater; safe to call any time).
 void ShowRestartToUpdateItem();
+// Runs `callback` when a downloaded update becomes ready to install, for the
+// tab strip's Update button. Check GetUpdaterInfo().ready_version first, since
+// an update may already be ready.
+base::CallbackListSubscription AddUpdateReadyCallback(
+    base::RepeatingClosure callback);
 
 }  // namespace perch
 

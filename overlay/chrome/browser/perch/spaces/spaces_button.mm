@@ -4,12 +4,16 @@
 #import <AppKit/AppKit.h>
 
 #include <memory>
+#include <optional>
+#include <string>
 #include <vector>
 
 #include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/sys_string_conversions.h"
+#include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/perch/perch_pref_names.h"
+#include "chrome/browser/perch/perch_updater_mac.h"
 #include "chrome/browser/perch/spaces/spaces.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/color/chrome_color_id.h"
@@ -38,6 +42,10 @@
 #include "chrome/browser/profiles/profile_avatar_icon_util.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "ui/views/controls/image_view.h"
+#include "ui/views/background.h"
+#include "ui/gfx/font.h"
+#include "ui/color/color_id.h"
+#include "base/callback_list.h"
 #include "ui/views/layout/box_layout.h"
 #include "components/vector_icons/vector_icons.h"
 #include "ui/views/layout/flex_layout_types.h"
@@ -80,9 +88,6 @@ class SpacesButton : public views::Button,
         kColorTabForegroundActiveFrameActive);
     views::InkDrop::Get(this)->SetHighlightOpacity(0.08f);
     views::InkDrop::Get(this)->SetVisibleOpacity(0.12f);
-    SetProperty(views::kCrossAxisAlignmentKey,
-                views::LayoutAlignment::kCenter);
-    SetProperty(views::kMarginsKey, gfx::Insets::TLBR(0, 4, 0, 8));
     // VoiceOver says it opens a menu.
     GetViewAccessibility().SetHasPopup(ax::mojom::HasPopup::kMenu);
     if (ProfileManager* manager = g_browser_process->profile_manager()) {
@@ -139,11 +144,102 @@ class SpacesButton : public views::Button,
 BEGIN_METADATA(SpacesButton)
 END_METADATA
 
+// "Update", left of the profile button once Sparkle has downloaded an update.
+// A press restarts Perch into the new version with the same windows and tabs.
+// Hidden until then, so the tabs keep the room.
+class UpdateButton : public views::LabelButton {
+  METADATA_HEADER(UpdateButton, views::LabelButton)
+
+ public:
+  UpdateButton()
+      : views::LabelButton(base::BindRepeating([] { InstallReadyUpdate(); }),
+                           u"Update") {
+    label()->SetFontList(
+        gfx::FontList().Derive(-1, gfx::Font::NORMAL, gfx::Font::Weight::MEDIUM));
+    // The primary button's colours, 4 px radius like the strip's controls.
+    // They already contrast, so the label mustn't lighten its text for the
+    // dark strip it thinks it's on.
+    label()->SetAutoColorReadabilityEnabled(false);
+    SetEnabledTextColors(ui::kColorButtonForegroundProminent);
+    // Views grey a button's label while its window is in the background; on
+    // this light pill that reads as broken, so it keeps the same ink.
+    SetTextColor(STATE_DISABLED, ui::kColorButtonForegroundProminent);
+    SetBackground(views::CreateRoundedRectBackground(
+        ui::kColorButtonBackgroundProminent, 4));
+    SetBorder(views::CreateEmptyBorder(gfx::Insets::VH(3, 9)));
+    SetHorizontalAlignment(gfx::ALIGN_CENTER);
+    views::InstallRoundRectHighlightPathGenerator(this, gfx::Insets(), 4);
+    views::InkDrop::Get(this)->SetMode(
+        views::InkDropHost::InkDropMode::ON_NO_ANIMATE);
+    views::InkDrop::Get(this)->SetBaseColor(ui::kColorButtonForegroundProminent);
+    views::InkDrop::Get(this)->SetHighlightOpacity(0.10f);
+    views::InkDrop::Get(this)->SetVisibleOpacity(0.16f);
+    SetVisible(false);
+  }
+
+  // Shows the button when an update is ready; true when that changed it.
+  bool Refresh() {
+    const std::optional<std::string> ready = GetUpdaterInfo().ready_version;
+    const bool show = ready.has_value();
+    if (show) {
+      const std::u16string tip =
+          ready->empty() ? u"Restart Perch to finish updating"
+                         : u"Restart Perch to finish updating to " +
+                               base::UTF8ToUTF16(*ready);
+      SetTooltipText(tip);
+      GetViewAccessibility().SetName(tip);
+    }
+    if (show == GetVisible()) {
+      return false;
+    }
+    SetVisible(show);
+    return true;
+  }
+};
+
+BEGIN_METADATA(UpdateButton)
+END_METADATA
+
+// The tab strip's end: Update (when one is ready), then the profile button.
+class TabStripEnd : public views::View {
+  METADATA_HEADER(TabStripEnd, views::View)
+
+ public:
+  explicit TabStripEnd(BrowserWindowInterface* browser) {
+    auto* layout = SetLayoutManager(std::make_unique<views::BoxLayout>(
+        views::BoxLayout::Orientation::kHorizontal, gfx::Insets(), 4));
+    layout->set_cross_axis_alignment(
+        views::BoxLayout::CrossAxisAlignment::kCenter);
+    update_ = AddChildView(std::make_unique<UpdateButton>());
+    AddChildView(std::make_unique<SpacesButton>(browser));
+    SetProperty(views::kCrossAxisAlignmentKey,
+                views::LayoutAlignment::kCenter);
+    SetProperty(views::kMarginsKey, gfx::Insets::TLBR(0, 4, 0, 8));
+    update_ready_ = AddUpdateReadyCallback(base::BindRepeating(
+        &TabStripEnd::OnUpdateReady, base::Unretained(this)));
+    update_->Refresh();
+  }
+
+ private:
+  // The strip makes room: the tabs narrow as the button appears.
+  void OnUpdateReady() {
+    if (update_->Refresh()) {
+      PreferredSizeChanged();
+    }
+  }
+
+  raw_ptr<UpdateButton> update_ = nullptr;
+  base::CallbackListSubscription update_ready_;
+};
+
+BEGIN_METADATA(TabStripEnd)
+END_METADATA
+
 }  // namespace
 
 std::unique_ptr<views::View> CreateSpacesButton(
     BrowserWindowInterface* browser) {
-  return std::make_unique<SpacesButton>(browser);
+  return std::make_unique<TabStripEnd>(browser);
 }
 
 }  // namespace perch

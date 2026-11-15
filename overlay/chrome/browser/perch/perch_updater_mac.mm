@@ -6,10 +6,15 @@
 
 #include "base/apple/bundle_locations.h"
 #include "base/apple/foundation_util.h"
+#include "base/callback_list.h"
+#include "base/no_destructor.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/time/time.h"
+#include "chrome/browser/browser_process.h"
 #include "chrome/browser/perch/perch_update_policy.h"
 #include "chrome/browser/perch/privacy/allowed_connections.h"
+#include "chrome/common/pref_names.h"
+#include "components/prefs/pref_service.h"
 
 // The Sparkle methods Perch calls. Sparkle is loaded at runtime, so nothing
 // links against it and builds without it still work.
@@ -118,6 +123,11 @@ namespace {
 
 id<PerchSparkleUpdaterController> g_updater_controller = nil;
 PerchUpdaterDelegate* g_updater_delegate = nil;
+base::RepeatingClosureList& UpdateReadyCallbacks() {
+  static base::NoDestructor<base::RepeatingClosureList> callbacks;
+  return *callbacks;
+}
+
 // The app menu's "Check for Updates…", which becomes "Restart to Update Perch"
 // once an update is ready.
 NSMenuItem* g_update_item = nil;
@@ -212,7 +222,11 @@ bool SetAutoUpdate(bool on) {
 }
 
 void ShowRestartToUpdateItem() {
-  if (!g_update_item || !g_updater_delegate.readyVersion) {
+  if (!g_updater_delegate.readyVersion) {
+    return;
+  }
+  UpdateReadyCallbacks().Notify();
+  if (!g_update_item) {
     return;
   }
   g_update_item.title = @"Restart to Update Perch";
@@ -220,8 +234,21 @@ void ShowRestartToUpdateItem() {
   g_update_item.action = @selector(installNow:);
 }
 
+base::CallbackListSubscription AddUpdateReadyCallback(
+    base::RepeatingClosure callback) {
+  return UpdateReadyCallbacks().Add(std::move(callback));
+}
+
 bool InstallReadyUpdate() {
-  return g_updater_delegate && [g_updater_delegate installNow];
+  if (!g_updater_delegate.readyVersion) {
+    return false;
+  }
+  // Like Chromium's own restart: the relaunched Perch reopens these windows
+  // and tabs whatever the startup setting says.
+  if (PrefService* local = g_browser_process->local_state()) {
+    local->SetBoolean(prefs::kWasRestarted, true);
+  }
+  return [g_updater_delegate installNow];
 }
 
 bool CheckForUpdatesNow() {

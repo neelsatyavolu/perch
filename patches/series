@@ -137,3 +137,5 @@ perch/shell/pinned-icon-only.patch
 perch/shell/tab-pill-gap.patch
 perch/shell/tab-icon-clip.patch
 perch/shell/tab-contents-centre.patch
+perch/shell/tab-title-centre.patch
+perch/shell/downloads-list-glass.patch

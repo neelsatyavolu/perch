@@ -158,3 +158,13 @@ test("a follow-up carries the steps of the last two turns, so the agent can say 
   expect(task).toContain("Perch: old answer");
   expect(task).not.toContain("OLDEST STEP");
 });
+
+test("a field with no name is not shown as an empty quote", () => {
+  const unnamed = (name: string, call = "type") => describeApproval(req({ name: call, args: { text: "75%", submit: true, key: "Enter", value: "B", x: 4, y: 9 }, target: { role: "textbox", name } }), ids);
+  expect(unnamed("").title).toBe("Type into a field and press Enter");
+  expect(unnamed("   ").title).toBe("Type into a field and press Enter");
+  expect(unnamed("", "press").title).toBe("Press Enter");
+  expect(unnamed("", "select").title).toBe('Choose "B"');
+  expect(unnamed(" ", "click_at").title).toBe("Click at 4, 9 on the page");
+  expect(unnamed("Answer 1").title).toBe('Type into textbox "Answer 1" and press Enter');
+});

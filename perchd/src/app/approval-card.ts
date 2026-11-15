@@ -19,7 +19,9 @@ type Ids = { id: string; chatId: string; runId: string };
 
 export function describeApproval(req: ApprovalRequest, ids: Ids): ApprovalCard {
   const a = req.call.args;
-  const what = req.target ? `${req.target.role} "${req.target.name}"` : "";
+  // A field with no accessible name gets the plain words ("a field"), not an empty quote.
+  const name = req.target?.name.trim() ?? "";
+  const what = req.target && name ? `${req.target.role} "${name}"` : "";
   const base = { ...ids, site: req.site, kind: req.kind === "read" ? "change" : req.kind } as const;
   const card = (title: string, confirm: string, extra: Partial<ApprovalCard> = {}): ApprovalCard => ({
     ...base,
@@ -36,7 +38,6 @@ export function describeApproval(req: ApprovalRequest, ids: Ids): ApprovalCard {
       return card(`Type into ${what || "a field"}${submit ? " and press Enter" : ""}`, submit ? "Type and press Enter" : "Type text", { body: String(a.text ?? "") });
     }
     case "click": {
-      const name = req.target?.name.trim() ?? "";
       const confirm = !name || GENERIC.test(name) ? `Click "${name || "this"}"` : sentenceCase(name);
       const fields = formFields(req.summary);
       return card(`Click ${what || "an element"}`, confirm, fields.length ? { fields } : {});
@@ -52,8 +53,8 @@ export function describeApproval(req: ApprovalRequest, ids: Ids): ApprovalCard {
       });
     }
     case "click_at":
-      return req.target?.name
-        ? card(`Click ${what}`, `Click "${req.target.name.trim()}"`)
+      return what
+        ? card(`Click ${what}`, `Click "${name}"`)
         : card(`Click at ${a.x}, ${a.y} on the page`, `Click at ${a.x}, ${a.y}`);
     case "repl":
       return card("Run a script on the page", "Run script", { body: String(a.code ?? "") });

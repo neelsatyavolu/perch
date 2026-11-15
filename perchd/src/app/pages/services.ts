@@ -98,8 +98,8 @@ export type PageServices = {
   memoryApi: () => Promise<MemoryApi | undefined>;
   /** The profile's skills (built-in and the user's own), read fresh for each sidebar run. */
   skills: () => Promise<SkillCatalog>;
-  /** The subscriptions Perch can call itself that are signed in now. */
-  signedIn: () => Promise<("claude" | "grok")[]>;
+  /** The subscriptions Perch can call itself that are signed in now, and Claude Code while it is connected. */
+  signedIn: () => Promise<("claude" | "grok" | "claude-code")[]>;
   /** A chat model Perch calls directly (`claude:claude-opus-5-5`), or why it can't be used now. */
   chatModel: (provider: string, model: string) => Promise<Model | string>;
   /** Names a chat after its first reply with the profile's fast model (`startApp({ nameChat })`). */
@@ -207,7 +207,7 @@ export function openPageServices(opts: PageServicesOptions): PageServices {
     skills: () => SkillCatalog.load({ store: new SkillStore(join(base, "skills"), secrets) }),
     signedIn: async () => {
       const list = await (await models()).listProviders();
-      return list.filter((p) => p.connected && (p.id === "claude" || p.id === "grok")).map((p) => p.id as "claude" | "grok");
+      return list.filter((p) => p.connected && (p.id === "claude" || p.id === "grok" || p.id === "claude-code")).map((p) => p.id as "claude" | "grok" | "claude-code");
     },
     chatModel: async (provider, model) => {
       if (!isProviderId(provider)) return `Perch has no model provider "${provider}".`;

@@ -176,6 +176,18 @@ export function currentModel(id: string, models: readonly ModelInfo[]): string {
   return models.find((m) => m.id.startsWith("codex:"))?.id ?? id;
 }
 
+/**
+ * The model a run actually uses: the chat's own while it is offered, else the same model from
+ * another source (a chat left on Claude Code after it was signed out runs on the Claude sign-in).
+ * Otherwise the chat's own is kept, so the run says why it can't be used.
+ */
+export function offeredModel(id: string, models: readonly ModelInfo[]): string {
+  const current = currentModel(id, models);
+  if (models.some((m) => m.id === current)) return current;
+  const name = current.slice(current.indexOf(":") + 1);
+  return models.find((m) => m.id.slice(m.id.indexOf(":") + 1) === name)?.id ?? current;
+}
+
 export async function startApp(opts: AppOptions): Promise<App> {
   const chats = await ChatStore.load(join(opts.dataDir, "chats"), opts.vault);
   const artifacts = await ArtifactStore.load(join(opts.dataDir, "artifacts"), opts.vault, keptInMemory(chats));
@@ -189,7 +201,7 @@ export async function startApp(opts: AppOptions): Promise<App> {
     artifacts,
     // A chat keeps its effort when it changes model; each run gets the nearest one the model takes.
     runner: (input) => {
-      const model = currentModel(input.settings.model, models());
+      const model = offeredModel(input.settings.model, models());
       return opts.runner({ ...input, settings: { ...input.settings, model, effort: fitEffort(models().find((m) => m.id === model)?.efforts, input.settings.effort) } });
     },
     emit: (event) => publish(event),

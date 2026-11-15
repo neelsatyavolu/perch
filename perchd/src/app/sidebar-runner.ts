@@ -55,18 +55,18 @@ function installed(agent: Agent): boolean {
 }
 
 /**
- * The chat models, from shared-ai-auth's catalog: Codex (listed as ChatGPT) and Claude Code when installed (they run
- * whole tasks), and the Claude and Grok sign-ins Perch calls itself. `signedIn` names the
- * subscriptions signed in now.
+ * The chat models, from shared-ai-auth's catalog: Codex (listed as ChatGPT) when installed and
+ * Claude Code when installed and connected in Settings → Models (they run whole tasks), and the
+ * Claude and Grok sign-ins Perch calls itself. `signedIn` names what is connected now.
  */
-export function sidebarModels(catalog: ModelCatalog = bundledModels, signedIn: readonly ("claude" | "grok")[] = [], has: (agent: Agent) => boolean = installed): ModelInfo[] {
+export function sidebarModels(catalog: ModelCatalog = bundledModels, signedIn: readonly ("claude" | "grok" | "claude-code")[] = [], has: (agent: Agent) => boolean = installed): ModelInfo[] {
   const claude = catalog.claude ?? bundledModels.claude ?? [];
   const list = (prefix: string, provider: string, models: readonly { id: string; label: string; efforts?: string[] }[]) =>
     models.map((m) => ({ id: `${prefix}:${m.id}`, label: m.label, provider, efforts: catalogEfforts(m.efforts) }));
   return [
     ...(has("codex") ? list("codex", "ChatGPT", catalog.codex) : []),
     ...(signedIn.includes("claude") ? list("claude", "Claude", claude) : []),
-    ...(has("claude-code") ? list("claude-code", "Claude Code", claude) : []),
+    ...(signedIn.includes("claude-code") && has("claude-code") ? list("claude-code", "Claude Code", claude) : []),
     ...(signedIn.includes("grok") ? list("grok", "Grok", catalog.grok) : []),
   ];
 }

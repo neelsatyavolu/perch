@@ -7,12 +7,12 @@ import { CODEX_NOT_PRIVATE, SidebarRuns, sidebarModels, sidebarRunner, type OwnL
 test("chat models come from shared-ai-auth: CLIs when installed, Claude and Grok when signed in", () => {
   const none = sidebarModels(bundledModels, [], () => false);
   expect(none).toEqual([]);
-  const ids = sidebarModels(bundledModels, ["claude"], (agent) => agent === "claude-code").map((m) => m.id);
+  const ids = sidebarModels(bundledModels, ["claude", "claude-code"], (agent) => agent === "claude-code").map((m) => m.id);
   expect(ids).toEqual([
     "claude:claude-fable-5-2", "claude:claude-opus-5-5", "claude:claude-sonnet-5-5", "claude:claude-haiku-5-5",
     "claude-code:claude-fable-5-2", "claude-code:claude-opus-5-5", "claude-code:claude-sonnet-5-5", "claude-code:claude-haiku-5-5",
   ]);
-  const all = sidebarModels(bundledModels, ["claude", "grok"], () => true);
+  const all = sidebarModels(bundledModels, ["claude", "grok", "claude-code"], () => true);
   // The Codex CLI's models show under ChatGPT, the subscription they run on; Codex's own default is not offered.
   expect(all.find((m) => m.id === "codex:gpt-6.1-sol")).toMatchObject({ label: "GPT-6.1 Sol", provider: "ChatGPT" });
   expect(all.some((m) => m.id === "codex:default" || m.provider === "Codex")).toBe(false);

@@ -19,7 +19,7 @@ test("catalog efforts keep known names and default to low, medium and high", () 
 });
 
 test("each chat model offers exactly the efforts the catalog lists for it", () => {
-  const all = sidebarModels(bundledModels, ["claude", "grok"], () => true);
+  const all = sidebarModels(bundledModels, ["claude", "grok", "claude-code"], () => true);
   const efforts = (id: string) => all.find((m) => m.id === id)?.efforts;
   expect(efforts("codex:gpt-6-astra")).toEqual(["low", "medium", "high", "xhigh", "max", "ultra"]);
   expect(efforts("codex:gpt-6-luna")).toEqual(["low", "medium", "high", "xhigh", "max"]);

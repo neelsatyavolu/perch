@@ -4,9 +4,10 @@ import { withoutPasskeys } from "../browser/no-passkeys";
 import { cachedDocument, cacheDocument, documentText, fetchDocument, forgetDocuments, freeName, makeZip, part } from "./documents";
 import { pdfPages, pdfSection } from "../page/pdf";
 import { FILL_TOOLS, runFillTool, type FillSites, type PasswordManager } from "./fill-tools";
+import { pageOf, readLocalDocument } from "./local-document";
 import { existsSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import type { Browser } from "../browser/browser";
 import { PageTimeoutError, STOPPED_RESPONDING, Tab } from "../browser/tab";
 import { appTool } from "../apps/index";
@@ -196,7 +197,7 @@ async function withPage(ctx: ToolContext, tab: Tab, result: ActionResult, action
   return { content: `${notes.join("\n")}\n\n${view}` };
 }
 
-async function readDocument(ctx: ToolContext, url: string, from: number): Promise<ToolResult> {
+async function readDocument(ctx: ToolContext, url: string, from: number, page?: number): Promise<ToolResult> {
   let doc = cachedDocument(ctx.workDir, url);
   if (!doc || !existsSync(doc.path)) {
     const tab = await currentTab(ctx);
@@ -210,6 +211,7 @@ async function readDocument(ctx: ToolContext, url: string, from: number): Promis
     doc = { path, text };
     cacheDocument(ctx.workDir, url, doc);
   }
+  if (page !== undefined) return pageOf(doc.path, page);
   if (doc.text instanceof Error) return { content: `Saved the file as ${doc.path}, but couldn't read its text: ${doc.text.message}.` };
   return { content: `${basename(doc.path)}, saved as ${doc.path}:\n\n${part(doc.text, from)}` };
 }
@@ -394,7 +396,12 @@ async function dispatch(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
     writeFileSync(path, String(a.content));
     return { content: `saved ${path} (${String(a.content).length} characters)` };
   }
-  if (call.name === "read_document") return readDocument(ctx, normalizeUrl(String(a.url)), Number(a.from ?? 0) || 0);
+  if (call.name === "read_document") return readDocument(ctx, normalizeUrl(String(a.url)), Number(a.from ?? 0) || 0, pageArg(a.page));
+  if (call.name === "read_download") {
+    const path = recentDownload(String(a.path));
+    if (!path) return { content: "path must be a file the downloads tool lists (in Downloads, changed in the last hour).", isError: true };
+    return readLocalDocument(path, { from: Number(a.from ?? 0) || 0, page: pageArg(a.page), tool: "read_download" });
+  }
   if (call.name === "make_zip") {
     const files = Array.isArray(a.files) ? a.files.map(String) : [];
     const zip = makeZip(ctx.workDir, String(a.name), files, readdirSync(ctx.workDir));
@@ -491,6 +498,21 @@ async function dispatch(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
 /** The user's Downloads folder (PERCH_DOWNLOADS_DIR in tests). */
 export const downloadsDir = () => process.env.PERCH_DOWNLOADS_DIR || join(homedir(), "Downloads");
 const RECENT_MS = 3_600_000;
+
+/** A whole page number from the model, or undefined. */
+const pageArg = (value: unknown): number | undefined => (value === undefined || value === null ? undefined : Math.max(1, Math.floor(Number(value)) || 1));
+
+/** `path` when it is a file directly in Downloads changed in the last hour, else null. Nothing else on the Mac is reachable. */
+export function recentDownload(path: string, dir = downloadsDir(), now = Date.now()): string | null {
+  const full = resolve(path.replace(/^file:\/\//, ""));
+  if (dirname(full) !== resolve(dir)) return null;
+  try {
+    const st = statSync(full);
+    return st.isFile() && now - st.mtimeMs < RECENT_MS && !full.endsWith(".crdownload") ? full : null;
+  } catch {
+    return null;
+  }
+}
 
 /** A path in `dir` for `name` that doesn't overwrite anything: "Report.pdf", then "Report 2.pdf". */
 export function freePath(dir: string, name: string): string {

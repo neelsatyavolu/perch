@@ -168,7 +168,7 @@ export async function documentText(bytes: Uint8Array, name: string, type: string
   if (type === "application/pdf" || ext === ".pdf") {
     const pdf = await pdfText(bytes);
     if ("error" in pdf) throw new Error(pdf.error);
-    return pdf.pages.map((p, i) => `--- Page ${i + 1} of ${pdf.pages.length} ---\n${p || "(no text on this page; it may be a scanned image)"}`).join("\n");
+    return pdf.pages.map((p, i) => `--- Page ${i + 1} of ${pdf.pages.length} ---\n${p || `(no text on this page; it may be a scan or handwriting. Read it again with page=${i + 1} to see it as an image)`}`).join("\n");
   }
   if (ext === ".pptx" || ext === ".docx" || ext === ".xlsx") return officeText(bytes, ext);
   if (type === "text/html" || ext === ".html" || ext === ".htm") return htmlText(strFromU8(bytes));
@@ -239,10 +239,10 @@ function htmlText(html: string): string {
 }
 
 /** Part of a long text, from character `from`, with a note on what is left. */
-export function part(text: string, from = 0): string {
+export function part(text: string, from = 0, tool = "read_document"): string {
   const start = Math.max(0, Math.min(from, text.length));
   const end = Math.min(text.length, start + PART_CHARS);
-  const rest = end < text.length ? `\n\n(Characters ${start}–${end} of ${text.length}. Call read_document again with from=${end} for more.)` : "";
+  const rest = end < text.length ? `\n\n(Characters ${start}–${end} of ${text.length}. Call ${tool} again with from=${end} for more.)` : "";
   return `${text.slice(start, end)}${rest}`;
 }
 

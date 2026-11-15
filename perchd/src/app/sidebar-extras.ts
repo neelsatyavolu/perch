@@ -7,6 +7,7 @@
 
 import { readFile, stat } from "node:fs/promises";
 import { extname } from "node:path";
+import { readLocalDocument } from "../agent/local-document";
 import type { MemoryAccess } from "../memory/agent";
 import type { ToolCall } from "../models/types";
 import { combineExtraTools, type ExtraTools } from "../mcp-client/extra-tools";
@@ -43,13 +44,15 @@ export function memoryExtraTools(memory: MemoryAccess): ExtraTools {
 
 export const READ_ATTACHMENT = "read_attachment";
 const IMAGE_TYPES: Record<string, string> = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp" };
+/** Documents read as text (a PDF page can also be seen as an image). */
+const DOCUMENT_EXT = /\.(pdf|docx|pptx|xlsx)$/i;
 const TEXT_EXT = /\.(txt|md|markdown|csv|tsv|json|ya?ml|xml|html?|css|js|mjs|ts|tsx|py|rb|go|rs|java|c|cc|cpp|h|sh|log|ini|toml|sql|tex|srt|vtt)$/i;
 const MAX_IMAGE = 5 * 1024 * 1024;
 const MAX_TEXT = 200_000;
 
 /**
- * The files the user attached to this message, readable by name: text as text, images as images
- * the model can see. Nothing else on the Mac is reachable through it.
+ * The files the user attached to this message, readable by name: text and documents as text,
+ * images and PDF pages as images the model can see. Nothing else on the Mac is reachable through it.
  */
 export function attachmentExtraTools(files: readonly { name: string; path: string }[]): ExtraTools | undefined {
   if (!files.length) return undefined;
@@ -58,8 +61,17 @@ export function attachmentExtraTools(files: readonly { name: string; path: strin
     specs: () => [
       {
         name: READ_ATTACHMENT,
-        description: "Read a file the user attached to this message: text files come back as text, images (screenshots, photos) as images you can see.",
-        parameters: { type: "object", properties: { name: { type: "string", description: `One of: ${files.map((f) => f.name).join(", ").slice(0, 400)}` } }, required: ["name"], additionalProperties: false },
+        description: "Read a file the user attached to this message: text files, PDFs, Word, PowerPoint and Excel come back as text, images (screenshots, photos) as images you can see. Pass page to see one PDF page as an image (scans, handwriting), from to read on in long ones.",
+        parameters: {
+          type: "object",
+          properties: {
+            name: { type: "string", description: `One of: ${files.map((f) => f.name).join(", ").slice(0, 400)}` },
+            page: { type: "number", description: "A PDF page number (1 is the first) to see as an image" },
+            from: { type: "number", description: "Character to start at, from the last part's note" },
+          },
+          required: ["name"],
+          additionalProperties: false,
+        },
       },
     ],
     prompt: () => `The user attached: ${files.map((f) => f.name).join(", ")}. Call ${READ_ATTACHMENT} with a name to read one.`,
@@ -75,7 +87,11 @@ export function attachmentExtraTools(files: readonly { name: string; path: strin
         if (size > MAX_IMAGE) return { content: `${name} is too large to show (${Math.round(size / 1048576)} MB).`, isError: true };
         return { content: `${name} (image)`, image: (await readFile(path)).toString("base64"), imageType };
       }
-      if (!TEXT_EXT.test(path)) return { content: `${name} isn't a text file or an image; upload it where the task needs it instead.`, isError: true };
+      if (DOCUMENT_EXT.test(path)) {
+        const page = call.args.page === undefined ? undefined : Math.max(1, Math.floor(Number(call.args.page)) || 1);
+        return readLocalDocument(path, { from: Number(call.args.from ?? 0) || 0, page, tool: READ_ATTACHMENT, title: name });
+      }
+      if (!TEXT_EXT.test(path)) return { content: `${name} isn't a document, text file or image; upload it where the task needs it instead.`, isError: true };
       const text = (await readFile(path, "utf8")).slice(0, MAX_TEXT);
       return { content: size > MAX_TEXT ? `${text}\n… (cut at ${MAX_TEXT} characters)` : text };
     },

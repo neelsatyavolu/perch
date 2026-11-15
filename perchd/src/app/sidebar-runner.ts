@@ -82,6 +82,7 @@ const STEP_NAMES: Record<string, string> = {
   type_text: "Type",
   save_pdf: "Save the page as a PDF",
   downloads: "Check downloads",
+  read_download: "Read a download",
   load_skill: "Read a skill",
   memory_search: "Search memory",
   memory_save: "Save to memory",

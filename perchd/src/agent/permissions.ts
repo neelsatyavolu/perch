@@ -25,14 +25,14 @@ export type Target = { role: string; name: string; expanded?: boolean };
 export type PageContext = { payment?: boolean; passwordChange?: boolean };
 
 // A batch or script is judged action by action as it runs (agent/session.ts callTool), so the batch itself is a read.
-const READ_TOOLS = new Set(["navigate", "snapshot", "find", "screenshot", "scroll", "hover", "wait_for", "back", "tabs", "open_tab", "switch_tab", "downloads", "batch", "script", "done", "read_document"]);
+const READ_TOOLS = new Set(["navigate", "snapshot", "find", "screenshot", "scroll", "hover", "wait_for", "back", "tabs", "open_tab", "switch_tab", "downloads", "read_download", "batch", "script", "done", "read_document"]);
 /** Tools that load an address: a read only while the address carries no payload (carriesData). */
 const URL_TOOLS = new Set(["navigate", "open_tab", "read_document"]);
 /**
  * Reads that touch no page, so a site's "never" rule does not stop them: without this, an agent
  * whose tab sits on a blocked site could not even finish.
  */
-export const OFF_PAGE = new Set(["done", "tabs", "switch_tab", "downloads", "batch", "script"]);
+export const OFF_PAGE = new Set(["done", "tabs", "switch_tab", "downloads", "read_download", "batch", "script"]);
 const MAX_QUERY = 200;
 const MAX_QUERY_VALUE = 120;
 

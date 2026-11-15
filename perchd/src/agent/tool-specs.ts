@@ -13,6 +13,8 @@ function spec(name: string, description: string, properties: Record<string, Prop
 const ref: Prop = { type: "string", description: "Element ref from the snapshot, like e12" };
 /** What a script-like step is for, shown to the user in the chat's step list. */
 const title: Prop = { type: "string", description: "A few words saying what this step is for, shown to the user, e.g. \"Read each pen's reviews\"" };
+const from: Prop = { type: "number", description: "Character to start at, from the last part's note" };
+const page: Prop = { type: "number", description: "A PDF page number (1 is the first) to see as an image" };
 
 export const TOOL_SPECS: ToolSpec[] = [
   spec("navigate", "Open a URL in the current agent tab. Returns the page snapshot.", { url: { type: "string" } }, ["url"]),
@@ -27,7 +29,7 @@ export const TOOL_SPECS: ToolSpec[] = [
   spec("hover", "Move the mouse over an element by ref, or to x, y in the last screenshot's pixels, for menus, tooltips and chart values. The pointer stays there, so what it opens stays open for the next step.", { ref, x: { type: "number" }, y: { type: "number" } }),
   spec("upload", "Attach local files to a file input by ref.", { ref, paths: { type: "array", items: { type: "string" } } }, ["ref", "paths"]),
   spec("write_file", "Save a text file in this chat's own folder, for example to upload it to a form. Returns its path.", { name: { type: "string" }, content: { type: "string" } }, ["name", "content"]),
-  spec("read_document", "Read the file a link points to (PDF, .pptx, .docx, .xlsx or a page) with the user's sign-in. Saves the original in this chat's folder and returns its text; pass from to read on in long ones.", { url: { type: "string" }, from: { type: "number", description: "Character to start at, from the last part's note" } }, ["url"]),
+  spec("read_document", "Read the file a link points to (PDF, .pptx, .docx, .xlsx or a page) with the user's sign-in. Saves it in this chat's folder and returns its text; from reads on in long ones, page shows one PDF page as an image (scans, handwriting).", { url: { type: "string" }, from, page }, ["url"]),
   spec("make_zip", "Bundle files from this chat's folder (made with write_file or saved by read_document) into a .zip there. Leave files empty to include them all. Returns its path.", { name: { type: "string" }, files: { type: "array", items: { type: "string" }, description: "File names in this chat's folder" } }, ["name"]),
   spec("wait_for", "Wait until text appears on the page, or wait a number of seconds and return the page.", { text: { type: "string" }, timeout_s: { type: "number" }, seconds: { type: "number" } }),
   spec("back", "Go back one page in the current tab.", {}),
@@ -36,7 +38,8 @@ export const TOOL_SPECS: ToolSpec[] = [
   spec("repl", "Run JavaScript on a read-only copy of the page; returns JSON. The copy has no page scripts, frames or canvas, and media reads as stopped: for live state use snapshot or screenshot. Use return in multi-line code. Secrets can't be read.", { code: { type: "string" }, title }, ["code"]),
   spec("type_text", "Type text at the keyboard focus, without a ref: for editors drawn on canvas such as Google Sheets and Docs. Click the cell or spot first; press Enter or Tab after to move on.", { text: { type: "string" } }, ["text"]),
   spec("save_pdf", "Save the current page as a PDF in the user's Downloads folder. Returns its path.", { name: { type: "string", description: "File name, without .pdf" } }),
-  spec("downloads", "List files downloaded in the last hour (newest first), with their paths, so a download can be found or uploaded.", {}),
+  spec("downloads", "List files downloaded in the last hour (newest first), with their paths, so a download can be found, read or uploaded.", {}),
+  spec("read_download", "Read a file the downloads tool lists (PDF, .pptx, .docx, .xlsx, text): its text, or with page one PDF page as an image (scans, handwriting).", { path: { type: "string" }, from, page }, ["path"]),
   spec(
     "batch",
     "Run actions you already know in a row (fill a form: type, type, select, click). Each is approved as usual; stops at the first that fails or needs a change of plan. Returns the page after the last.",

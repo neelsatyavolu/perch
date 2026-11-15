@@ -3,6 +3,7 @@
  * Shared by the task loop (sidebar chats) and the MCP server (outside agents).
  */
 
+import { basename } from "node:path";
 import { appTool } from "../apps/index";
 import { runScript, SCRIPT } from "./script";
 import type { ToolCall } from "../models/types";
@@ -194,6 +195,7 @@ export function label(call: ToolCall, target: Target | undefined, site: string):
     case "type_text": return "Typed text";
     case "save_pdf": return `Saved ${site} as a PDF`;
     case "downloads": return "Checked downloads";
+    case "read_download": return `Read ${basename(String(call.args.path))}`;
     case "repl": return `Ran a script on ${site}`;
     case "wait_for": return `Waited for "${call.args.text}"`;
     case "tabs": return "Listed tabs";

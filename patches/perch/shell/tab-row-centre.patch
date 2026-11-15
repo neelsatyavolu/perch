@@ -1,0 +1,96 @@
+# Perch: tab icons, titles, the hover pill and the pinned tray share one centre line, level with the window's buttons.
+diff --git a/chrome/browser/ui/views/tabs/common/horizontal_tab_style_views.cc b/chrome/browser/ui/views/tabs/common/horizontal_tab_style_views.cc
+index 96690aa2ee..17158b54e4 100644
+--- a/chrome/browser/ui/views/tabs/common/horizontal_tab_style_views.cc
++++ b/chrome/browser/ui/views/tabs/common/horizontal_tab_style_views.cc
+@@ -63,8 +63,6 @@ HorizontalTabStyleViews::GetSeparatorOpacitiesForTesting() const {  // IN-TEST
+ }
+ 
+ namespace {
+-// Perch: space between a hovered tab's pill and the toolbar, in DIPs.
+-constexpr float kPerchPillBottomGap = 3;
+ }  // namespace
+ 
+ SkPath HorizontalTabStyleViews::GetPath(TabStyle::PathType path_type,
+@@ -104,12 +102,12 @@ SkPath HorizontalTabStyleViews::GetPath(TabStyle::PathType path_type,
+ 
+     // The hit test extends the full height to make it easier to select tabs.
+     if (path_type != TabStyle::PathType::kHitTest) {
+-      tab_height -= GetLayoutConstant(LayoutConstant::kTabStripPadding) * scale;
+-      tab_height -=
+-          GetLayoutConstant(LayoutConstant::kTabstripToolbarOverlap) * scale;
+-      // Perch: the hover and inactive pill floats with room below it as well
+-      // as above, so it doesn't look cut off where it meets the toolbar.
+-      tab_height -= kPerchPillBottomGap * scale;
++      // Perch: the hover and inactive pill floats on the row's centre line,
++      // with the strip's top padding both above it and above the toolbar.
++      tab_height = (GetLayoutConstant(LayoutConstant::kTabStripHeight) -
++                    GetLayoutConstant(LayoutConstant::kTabstripToolbarOverlap) -
++                    2 * GetLayoutConstant(LayoutConstant::kTabStripPadding)) *
++                   scale;
+     }
+ 
+     // Don't round the bottom corners to avoid creating dead space between tabs.
+@@ -435,18 +433,15 @@ gfx::Insets HorizontalTabStyleViews::GetContentsInsets() const {
+           0, 0, GetLayoutConstant(LayoutConstant::kTabstripToolbarOverlap), 0) +
+       base_style_insets + split_insets;
+ 
+-  // Perch: the icon, title and close button sit centred on the floating pill
+-  // (GetPath), which ends kPerchPillBottomGap above the toolbar, rather than
+-  // low in the tab where the icon would hang past the pill's bottom edge.
+-  const int pill_top = GetLayoutConstant(LayoutConstant::kTabStripPadding);
+-  const int pill_bottom_inset =
+-      GetLayoutConstant(LayoutConstant::kTabstripToolbarOverlap) +
+-      static_cast<int>(kPerchPillBottomGap);
+-  const int pill_height = GetLayoutConstant(LayoutConstant::kTabHeight) -
+-                          pill_top - pill_bottom_inset;
+-  const int inner = std::max(0, (pill_height - gfx::kFaviconSize) / 2);
+-  insets.set_top(pill_top + inner);
+-  insets.set_bottom(pill_bottom_inset + inner);
++  // Perch: the icon, title and close button sit on the row's centre line:
++  // the middle of the strip the toolbar leaves showing, level with the
++  // window's buttons and the middle of the pill and the pinned tray.
++  const int strip = GetLayoutConstant(LayoutConstant::kTabStripHeight);
++  const int showing =
++      strip - GetLayoutConstant(LayoutConstant::kTabstripToolbarOverlap);
++  const int icon_top = (showing - gfx::kFaviconSize + 1) / 2;
++  insets.set_top(icon_top);
++  insets.set_bottom(strip - icon_top - gfx::kFaviconSize);
+ 
+   return insets;
+ }
+@@ -794,9 +789,11 @@ void HorizontalTabStyleViews::PaintPinnedTabBackground(gfx::Canvas* canvas,
+   }
+   const float side = tab_style()->GetBottomCornerRadius() + 1.5f;
+   gfx::RectF fill(view->GetLocalBounds());
++  // The same band as an unpinned tab's pill, on the row's centre line.
++  const float padding = GetLayoutConstant(LayoutConstant::kTabStripPadding);
+   fill.Inset(gfx::InsetsF::TLBR(
+-      GetLayoutConstant(LayoutConstant::kTabStripPadding) + 3.5f, side,
+-      GetLayoutConstant(LayoutConstant::kTabstripToolbarOverlap) + 3.5f,
++      padding, side,
++      GetLayoutConstant(LayoutConstant::kTabstripToolbarOverlap) + padding,
+       side));
+   cc::PaintFlags flags;
+   flags.setAntiAlias(true);
+diff --git a/chrome/browser/ui/views/tabs/tab_container.cc b/chrome/browser/ui/views/tabs/tab_container.cc
+index 10b980b080..111d35e5f7 100644
+--- a/chrome/browser/ui/views/tabs/tab_container.cc
++++ b/chrome/browser/ui/views/tabs/tab_container.cc
+@@ -914,12 +914,12 @@ void TabContainer::OnPaint(gfx::Canvas* canvas) {
+   if (tray.IsEmpty() || !colors) {
+     return;
+   }
+-  // The tray wraps the tabs' visible body: below the strip's top padding and
+-  // above the rows the toolbar covers, so the icons sit in its middle.
++  // The tray is centred on the part of the strip the toolbar leaves showing,
++  // the line the icons and the window's buttons sit on.
+   gfx::RectF edge(tray);
+   edge.Inset(gfx::InsetsF::TLBR(
+-      GetLayoutConstant(LayoutConstant::kTabStripPadding) + 1.5f, 4.5f,
+-      GetLayoutConstant(LayoutConstant::kTabstripToolbarOverlap) + 1.5f, 4.5f));
++      4.5f, 4.5f,
++      GetLayoutConstant(LayoutConstant::kTabstripToolbarOverlap) + 4.5f, 4.5f));
+   const SkColor ink = colors->GetColor(kColorTabForegroundActiveFrameActive);
+   constexpr float kRadius = 6;
+   cc::PaintFlags flags;

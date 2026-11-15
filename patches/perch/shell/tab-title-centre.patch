@@ -1,0 +1,20 @@
+# Perch: tab titles centre on the favicon's centre line, not the whole tab.
+diff --git a/chrome/browser/ui/views/tabs/tab.cc b/chrome/browser/ui/views/tabs/tab.cc
+index 04e2a7edcb..febb76f384 100644
+--- a/chrome/browser/ui/views/tabs/tab.cc
++++ b/chrome/browser/ui/views/tabs/tab.cc
+@@ -650,8 +650,12 @@ void Tab::Layout(PassKey) {
+     const int title_width = std::max(title_right - title_left, 0);
+     // The Label will automatically center the font's cap height within the
+     // provided vertical space.
+-    const gfx::Rect title_bounds(title_left, GetLocalBounds().y(), title_width,
+-                                 GetLocalBounds().height());
++    // Perch: the title's band is centred on the favicon's centre line, which
++    // sits on the floating pill rather than in the middle of the whole tab.
++    const int icon_centre = contents_rect.y() + gfx::kFaviconSize / 2;
++    const int half_band = std::min(icon_centre, height() - icon_centre);
++    const gfx::Rect title_bounds(title_left, icon_centre - half_band,
++                                 title_width, 2 * half_band);
+     // Perch: a sliver too narrow for a few letters reads as a stray glyph,
+     // so a narrow tab shows only its favicon and close button.
+     constexpr int kPerchMinTitleWidth = 24;

@@ -1,0 +1,15 @@
+# Perch: the downloads list shows the bubble's frosted glass, like its header and footer.
+diff --git a/chrome/browser/ui/views/download/bubble/download_bubble_primary_view.cc b/chrome/browser/ui/views/download/bubble/download_bubble_primary_view.cc
+index dd7065b549..9d639d9cf5 100644
+--- a/chrome/browser/ui/views/download/bubble/download_bubble_primary_view.cc
++++ b/chrome/browser/ui/views/download/bubble/download_bubble_primary_view.cc
+@@ -65,6 +65,9 @@ void DownloadBubblePrimaryView::BuildAndAddScrollView(
+   scroll_view_ = AddChildView(std::make_unique<views::ScrollView>());
+   scroll_view_->SetContents(std::move(row_list_view));
+   scroll_view_->ClipHeightTo(0, kMaxHeightForRowList);
++  // Perch: bubbles are frosted glass, so the list paints no opaque dialog
++  // colour of its own and matches the header and footer around it.
++  scroll_view_->SetBackgroundColor(std::nullopt);
+   scroll_view_->SetHorizontalScrollBarMode(
+       views::ScrollView::ScrollBarMode::kDisabled);
+ }

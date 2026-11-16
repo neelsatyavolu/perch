@@ -1,4 +1,4 @@
-# Perch: the downloads list shows the bubble's frosted glass, like its header and footer.
+# Perch: the download and site-info bubbles show their frosted glass throughout: the downloads list, its rows' quick actions and the site's permissions list paint no opaque dialog colour.
 diff --git a/chrome/browser/ui/views/download/bubble/download_bubble_primary_view.cc b/chrome/browser/ui/views/download/bubble/download_bubble_primary_view.cc
 index dd7065b549..9d639d9cf5 100644
 --- a/chrome/browser/ui/views/download/bubble/download_bubble_primary_view.cc
@@ -13,3 +13,103 @@ index dd7065b549..9d639d9cf5 100644
    scroll_view_->SetHorizontalScrollBarMode(
        views::ScrollView::ScrollBarMode::kDisabled);
  }
+diff --git a/chrome/browser/ui/views/download/bubble/download_bubble_row_view.cc b/chrome/browser/ui/views/download/bubble/download_bubble_row_view.cc
+index 877765717b..56200b2d4d 100644
+--- a/chrome/browser/ui/views/download/bubble/download_bubble_row_view.cc
++++ b/chrome/browser/ui/views/download/bubble/download_bubble_row_view.cc
+@@ -4,6 +4,7 @@
+ 
+ #include "chrome/browser/ui/views/download/bubble/download_bubble_row_view.h"
+ 
++#include <algorithm>
+ #include <string_view>
+ #include <utility>
+ 
+@@ -35,6 +36,8 @@
+ #include "chrome/grit/generated_resources.h"
+ #include "components/download/public/common/download_item.h"
+ #include "components/vector_icons/vector_icons.h"
++#include "third_party/skia/include/core/SkPath.h"
++#include "third_party/skia/include/core/SkRect.h"
+ #include "ui/base/clipboard/scoped_clipboard_writer.h"
+ #include "ui/base/l10n/l10n_util.h"
+ #include "ui/base/l10n/time_format.h"
+@@ -453,8 +456,9 @@ DownloadBubbleRowView::DownloadBubbleRowView(
+   AddQuickAction(DownloadCommands::OPEN_WHEN_COMPLETE);
+   quick_action_holder_->SetVisible(false);
+   quick_action_holder_->SetProperty(views::kViewIgnoredByLayoutKey, true);
+-  quick_action_holder_->SetBackground(
+-      views::CreateSolidBackground(ui::kColorDialogBackground));
++  // Perch: the quick actions sit on the bubble's frosted glass with no opaque
++  // dialog colour behind them; the labels are clipped short of them instead
++  // (ClipLabelsToQuickActions).
+ 
+   subpage_icon_holder_ =
+       AddChildView(std::make_unique<views::FlexLayoutView>());
+@@ -624,12 +628,30 @@ void DownloadBubbleRowView::OnWillChangeFocus(views::View* before,
+ 
+ void DownloadBubbleRowView::UpdateRowForHover(bool hovered) {
+   quick_action_holder_->SetVisible(hovered);
++  ClipLabelsToQuickActions();
++}
++
++void DownloadBubbleRowView::ClipLabelsToQuickActions() {
++  const bool shown = quick_action_holder_->GetVisible();
++  for (views::Label* label : {primary_label_.get(), secondary_label_.get()}) {
++    if (!label) {
++      continue;
++    }
++    if (!shown) {
++      label->SetClipPath(SkPath());
++      continue;
++    }
++    const int width = std::max(0, quick_action_holder_->x() - label->x());
++    label->SetClipPath(
++        SkPath::Rect(SkRect::MakeWH(width, label->height())));
++  }
+ }
+ 
+ void DownloadBubbleRowView::UpdateRowForFocus(
+     bool visible,
+     bool request_focus_on_last_quick_action) {
+   quick_action_holder_->SetVisible(visible);
++  ClipLabelsToQuickActions();
+   views::InkDrop::Get(this)->GetInkDrop()->SetFocused(visible);
+   // Update focus only if focus received from a different row.
+   bool should_set_focus = request_focus_on_last_quick_action &&
+@@ -651,6 +673,7 @@ void DownloadBubbleRowView::Layout(PassKey) {
+                            insets.top()),
+                 quick_actions_size));
+   inkdrop_container_->SetBoundsRect(GetLocalBounds());
++  ClipLabelsToQuickActions();
+ }
+ 
+ void DownloadBubbleRowView::OnMainButtonPressed(const ui::Event& event) {
+diff --git a/chrome/browser/ui/views/download/bubble/download_bubble_row_view.h b/chrome/browser/ui/views/download/bubble/download_bubble_row_view.h
+index a339759c00..70f3e09f1a 100644
+--- a/chrome/browser/ui/views/download/bubble/download_bubble_row_view.h
++++ b/chrome/browser/ui/views/download/bubble/download_bubble_row_view.h
+@@ -85,6 +85,9 @@ class DownloadBubbleRowView : public views::View,
+ 
+   // Update the row and its elements for hover and focus events.
+   void UpdateRowForHover(bool hovered);
++  // Perch: clips the file name and status short of the quick actions, which
++  // have no opaque background of their own.
++  void ClipLabelsToQuickActions();
+   void UpdateRowForFocus(bool visible, bool request_focus_on_last_quick_action);
+ 
+   // Overrides views::ContextMenuController:
+diff --git a/chrome/browser/ui/views/page_info/page_info_main_view.cc b/chrome/browser/ui/views/page_info/page_info_main_view.cc
+index b02babc4a9..0699e8271e 100644
+--- a/chrome/browser/ui/views/page_info/page_info_main_view.cc
++++ b/chrome/browser/ui/views/page_info/page_info_main_view.cc
+@@ -335,6 +335,9 @@ void PageInfoMainView::SetPermissionInfo(
+   scroll_view->ClipHeightTo(0,
+                             kMinPermissionRowHeight * kMaxPermissionRowCount);
+   scroll_view->SetDrawOverflowIndicator(false);
++  // Perch: bubbles are frosted glass, so the permissions list paints no opaque
++  // dialog colour of its own and matches the rest of the bubble.
++  scroll_view->SetBackgroundColor(std::nullopt);
+   auto* content_view =
+       scroll_view->SetContents(std::make_unique<views::View>());
+   content_view->SetLayoutManager(std::make_unique<views::FlexLayout>())

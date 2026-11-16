@@ -81,7 +81,7 @@ export function createServer(opts: ServerOptions) {
         });
         queue = run.catch(() => undefined);
         const result = await run;
-        const notes = progress.after({ id: String(req.id), name, args }, result.content);
+        const notes = progress.after({ id: String(req.id), name, args }, result.content, Boolean(result.isError));
         const content: object[] = [{ type: "text", text: notes.length ? `${notes.join("\n")}\n\n${result.content}` : result.content }];
         if (result.image) content.push({ type: "image", data: result.image, mimeType: result.imageType ?? "image/jpeg" });
         return { content, isError: Boolean(result.isError) };

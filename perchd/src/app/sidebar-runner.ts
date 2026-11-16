@@ -13,7 +13,8 @@ import type { StepEvent } from "../agent/loop";
 import { clip, OUTPUT_LIMIT, stepDetail } from "../agent/steps";
 import type { MemoryAccess, MemoryHints } from "../memory/agent";
 import { CHAT_SESSION_PREFIX, SIDEBAR_CLIENT, type SidebarRun } from "../daemon/server";
-import { claudeBinary, codexBinary, runClaudeCode, runCodex, type AsideEvent, type McpServer } from "../external";
+import { claudeBinary, codexBinary, runClaudeCode, runCodex, toolBudgetMs, type AsideEvent, type McpServer } from "../external";
+import { Progress } from "../agent/progress";
 import { AGENT_OFF, agentAllowed, allowsModel, capMode, MODEL_NOT_ALLOWED, type Policy, type PolicyView } from "../policy/policy";
 import { catalogEfforts } from "./effort";
 import type { ModelInfo } from "./protocol";
@@ -126,7 +127,7 @@ export function stepLabel(tool: string, args: unknown): string {
   if (tool === "WebFetch") return typeof a.url === "string" && host(a.url) ? `Read ${host(a.url)}` : "Read a web page";
   if (tool === "batch" && Array.isArray(a.actions)) return `Do ${a.actions.length} actions`;
   if (tool === "press" && typeof a.key === "string") return `Press ${a.key}`;
-  if (tool === "wait_for") return a.text ? `Wait for${quoted(a.text)}` : "Wait";
+  if (tool === "wait_for") return a.text ? `Wait for${quoted(a.text)}${a.gone ? " to go" : ""}` : "Wait";
   if (tool === "select") return `Choose${quoted(a.value)}`;
   const verb = words(tool);
   if (typeof a.url === "string") {
@@ -239,9 +240,11 @@ export function sidebarRunner(opts: SidebarRunnerOptions): Runner {
     const catalog = await opts.skills?.().catch(() => undefined);
     const extras = sidebarExtras(catalog, memory, input.files, input.incognito ? undefined : input.schedule);
     const skillList = extras?.prompt() ?? "";
+    const timeoutMs = opts.timeoutMs ?? 20 * 60_000;
     opts.runs.add(session, {
       ...(extras ? { extras } : {}),
       token, mode, approve: input.approve,
+      progress: new Progress({ maxMs: toolBudgetMs(timeoutMs) }),
       ...(input.tab?.targetId ? { tab: input.tab.targetId } : {}),
       ...(input.chatId ? { chatId: input.chatId } : {}),
       ...(input.incognito ? { private: true } : {}),
@@ -266,7 +269,7 @@ export function sidebarRunner(opts: SidebarRunnerOptions): Runner {
       effort: input.settings.effort,
       ...(agent === "codex" && input.settings.fast ? { fast: true } : {}),
       mode,
-      timeoutMs: opts.timeoutMs ?? 20 * 60_000,
+      timeoutMs,
       auditPath: opts.auditPath,
       mcp,
       signal: input.signal,

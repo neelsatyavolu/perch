@@ -195,6 +195,33 @@ test("the system prompt tells every model to browse, handle dialogs and finish t
   for (const phrase of ["never fill gaps from your own general knowledge", "Never try to solve a CAPTCHA", "cookie", "search.brave.com", "YYYY-MM-DD", "every part of the task", "list what the task requires", "detail pages", "the site the task names", "write_file", "duckduckgo", "pick the matching suggestion", "every filter the task asks for"]) expect(prompt).toContain(phrase);
 });
 
+test("three failed actions in a row tell the model to change approach", async () => {
+  const { FAILING } = await import("../src/agent/progress");
+  const { model } = await run([
+    () => tool("navigate", { url: env.site.url("/mail.html") }),
+    () => tool("click", { ref: "e997" }),
+    () => tool("click", { ref: "e998" }),
+    () => tool("click", { ref: "e999" }),
+    (req) => say(lastTool(req).content.startsWith(FAILING) ? "Changed approach." : "No note."),
+  ]);
+  expect(lastTool(model.requests.at(-1)!).content).toStartWith(FAILING);
+});
+
+test("the system prompt has the agent read before operating, judge forecasts and answer every question", async () => {
+  const { systemPrompt } = await import("../src/agent/prompt");
+  for (const finish of [undefined, "reply"] as const) {
+    const prompt = systemPrompt({ mode: "guard", now: new Date("2026-11-05T09:00:00Z"), finish });
+    for (const phrase of ["Read before you operate", "every question to answer", "how sure you are", "change approach rather than retrying", "what you are finding out for them", "Never end your turn on such a line", "Answer each question the user asked first and directly"]) expect(prompt).toContain(phrase);
+  }
+});
+
+test("the check before done and the out-of-budget turn ask for a direct answer to each question", async () => {
+  const { CHECK_BEFORE_DONE } = await import("../src/agent/loop");
+  const { outOfBudget } = await import("../src/agent/finish");
+  expect(CHECK_BEFORE_DONE).toContain("each question the user asked");
+  expect(outOfBudget("steps")).toContain("each question the user asked");
+});
+
 test("the system prompt has the agent assume ordinary missing details and ask only about sensitive ones", async () => {
   const { systemPrompt } = await import("../src/agent/prompt");
   const prompt = systemPrompt({ mode: "skip", now: new Date("2026-11-05T09:00:00Z") });

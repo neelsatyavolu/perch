@@ -21,7 +21,7 @@ import { ClientRegistry, isMode, raisesMode } from "./clients";
 import { macConfirm, type Confirm } from "./confirm";
 import { MemoryKeychain, type Keychain } from "./keychain";
 import type { PerchPaths } from "./paths";
-import { SESSION_ID, type OnEnd } from "./protocol";
+import { cleanPrompt, SESSION_ID, type OnEnd } from "./protocol";
 import type { Tasks } from "../app/tasks";
 import { ReplSessions } from "../agent/repl";
 import type { MemoryApi } from "../memory/api";
@@ -186,8 +186,10 @@ export async function startDaemon(opts: DaemonOptions): Promise<Daemon> {
       if (!CLIENT_TOOL_NAMES.has(name)) return { content: `Perch has no tool "${name}" for outside agents.`, isError: true };
       const call = { id: `${Date.now()}`, name, args: args as Record<string, unknown> };
       // An outside agent's steps show in its chat, so clicking one of its agent tabs shows its work.
-      if (conn.client.name !== SIDEBAR_CLIENT && !sidebarRunOf(conn)) opts.browser?.()?.step?.(conn.session, call);
-      return manager.call(conn.session, call, conn.policy());
+      if (conn.client.name !== SIDEBAR_CLIENT && !sidebarRunOf(conn)) opts.browser?.()?.step?.(conn.session, call, cleanPrompt(params.prompt));
+      const result = await manager.call(conn.session, call, conn.policy());
+      const notes = sidebarRunOf(conn)?.progress?.after(call, result.content, Boolean(result.isError)) ?? [];
+      return notes.length ? { ...result, content: `${notes.join("\n")}\n\n${result.content}` } : result;
     },
     tabs: async (conn) => manager.tabs(conn.session),
     sessions: async () => manager.list(),

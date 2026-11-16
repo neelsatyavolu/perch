@@ -12,6 +12,7 @@ import type { ApprovalRequest, CallPolicy } from "../agent/session";
 import type { AuditLog } from "../agent/audit";
 import { PRIVATE_AUDIT } from "../agent/audit-seal";
 import type { Mode } from "../agent/permissions";
+import type { Progress } from "../agent/progress";
 import { AGENT_OFF, agentAllowed, allowsClient, capMode, CLIENTS_OFF, siteRuleFor, type PolicyView } from "../policy/policy";
 import type { ClientRecord, ClientRegistry } from "./clients";
 import { parseClientMessage, parseHello, type ApproveAsk, type Hello, type Request } from "./protocol";
@@ -44,6 +45,8 @@ export type SidebarRun = {
   private?: boolean;
   /** Skills and memory for this run (app/sidebar-extras.ts), offered beside the browser tools. */
   extras?: SidebarExtras;
+  /** Budget and stuck notes added to the run's tool results, as Perch's own loop gets them. */
+  progress?: Progress;
 };
 
 function sameToken(a: string, b: string): boolean {

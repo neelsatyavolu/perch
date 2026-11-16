@@ -63,6 +63,7 @@ export const CHECK_BEFORE_DONE = [
   "Before you finish, check your answer against the task, one requirement at a time:",
   "- Did a page you opened in this task show each fact? Anything guessed or from memory is not done yet: open the page that has it now.",
   "- Did you apply every filter, collect every item, and finish every step the task asks for?",
+  "- Does your answer reply to each question the user asked, directly and with the specifics, rather than describe what you did?",
   "If something is missing, keep working. If everything is backed by pages, call done again with your answer (corrected if needed).",
 ].join("\n");
 
@@ -139,7 +140,7 @@ export async function* runTask(opts: TaskOptions): AsyncIterable<StepEvent> {
           return;
         }
         if (!opts.memory?.handles(call.name)) worked = true;
-        const notes = progress.after(call, outcome.message.content);
+        const notes = progress.after(call, outcome.message.content, outcome.failed);
         messages.push(notes.length ? { ...outcome.message, content: `${notes.join("\n")}\n\n${outcome.message.content}` } : outcome.message);
       }
     }
@@ -161,7 +162,8 @@ export async function* runTask(opts: TaskOptions): AsyncIterable<StepEvent> {
   }
 }
 
-type Outcome = { final?: string; message: Extract<Message, { role: "tool" }> };
+/** `failed`: the call came back with an error, which Progress counts toward being stuck. */
+type Outcome = { final?: string; failed?: boolean; message: Extract<Message, { role: "tool" }> };
 
 /**
  * The task's rules for its next action under the current company policy: the mode lowered to the
@@ -176,7 +178,7 @@ export function governed(opts: TaskOptions): TaskOptions {
 
 async function* act(ctx: ToolContext, task: TaskOptions, call: ToolCall, progress: Progress): AsyncGenerator<StepEvent, Outcome> {
   const opts = governed(task);
-  const reply = (content: string, image?: string): Outcome => ({ message: { role: "tool", callId: call.id, name: call.name, content, image } });
+  const reply = (content: string, image?: string, failed?: boolean): Outcome => ({ ...(failed ? { failed } : {}), message: { role: "tool", callId: call.id, name: call.name, content, image } });
   if (opts.extraTools?.handles(call.name)) {
     const result = yield* actExtra(opts, opts.extraTools, call, opts.signal ?? new AbortController().signal);
     return reply(result.content, result.image);
@@ -190,10 +192,10 @@ async function* act(ctx: ToolContext, task: TaskOptions, call: ToolCall, progres
       yield { type: "step", label: title ?? (call.name === SCRIPT ? "Run a script" : "Run several actions"), ...withDetail(call) };
       yield* stepOutput(result.content);
     }
-    return reply(result.content, result.image);
+    return reply(result.content, result.image, result.isError);
   }
   const prepared = await prepareCall(ctx, opts, call);
-  if (prepared.kind === "answer") return reply(prepared.result.content);
+  if (prepared.kind === "answer") return reply(prepared.result.content, undefined, prepared.result.isError);
   let approved: boolean | null = null;
   if (prepared.decision === "ask") {
     yield { type: "approval", request: prepared.request };
@@ -207,7 +209,7 @@ async function* act(ctx: ToolContext, task: TaskOptions, call: ToolCall, progres
     yield { type: "step", label: title ?? label(call, prepared.target, prepared.site), ...withDetail(call) };
     yield* stepOutput(result.content);
   }
-  return reply(result.content, result.image);
+  return reply(result.content, result.image, result.isError);
 }
 
 function withDetail(call: ToolCall): { detail?: string } {

@@ -12,7 +12,7 @@ export function outOfBudget(why: Exhausted): string {
   const what = why === "steps" ? "steps" : "time";
   return [
     `You have run out of ${what} for this task, so you cannot use the browser any more.`,
-    "Answer now in plain words with everything the pages you opened have shown: the facts the task asks for, and how far you got.",
+    "Answer now in plain words: each question the user asked, directly, from what the pages you opened have shown, then how far you got.",
     "Say clearly which parts are unverified or missing. Do not fill gaps from memory.",
   ].join(" ");
 }

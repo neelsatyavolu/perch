@@ -160,9 +160,14 @@ function stopper(child: { kill(signal?: number | NodeJS.Signals): void }, opts: 
 /** Time kept back from the client's limit for writing the answer after the last tool call. */
 const ANSWER_MARGIN_MS = 60_000;
 
+/** The time budget an outside agent is told about: its limit less the time to write the answer. */
+export function toolBudgetMs(timeoutMs: number): number {
+  return Math.max(timeoutMs / 2, timeoutMs - ANSWER_MARGIN_MS);
+}
+
 /** MCP server arguments shared by every outside agent: the browser, and the time budget it reports. */
 export function serverArgs(opts: RunOptions): string[] {
-  const budgetS = Math.floor(Math.max(opts.timeoutMs / 2, opts.timeoutMs - ANSWER_MARGIN_MS) / 1000);
+  const budgetS = Math.floor(toolBudgetMs(opts.timeoutMs) / 1000);
   return ["--time-budget-s", String(budgetS), ...browserArgs(opts)];
 }
 

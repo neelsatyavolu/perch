@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { Progress, REPEATED } from "../src/agent/progress";
+import { FAILING, Progress, REPEATED, SAME_ELEMENT } from "../src/agent/progress";
+import { DECLINED } from "../src/agent/session";
 
 const call = (name: string, args: Record<string, unknown> = {}) => ({ id: "c", name, args });
 
@@ -47,4 +48,44 @@ test("the same call with the same result a third time gets a note; a changing re
   for (let i = 0; i < 5; i++) expect(q.after(call("scroll", { dy: 800 }), `scrolled to ${i * 800}`)).toEqual([]);
   const r = new Progress({});
   for (let i = 0; i < 5; i++) expect(r.after(call("screenshot"), "screenshot 1280×720")).toEqual([]);
+});
+
+test("three failed actions in a row get a note to change approach; a success resets the count", () => {
+  const p = new Progress({});
+  expect(p.after(call("click", { ref: "e1" }), "No element e1", true)).toEqual([]);
+  expect(p.after(call("type", { ref: "e2", text: "7:00" }), "not editable", true)).toEqual([]);
+  expect(p.after(call("select", { ref: "e3", value: "7" }), "no such option", true)).toEqual([FAILING]);
+  expect(p.after(call("snapshot"), "Page: ...", false)).toEqual([]);
+  expect(p.after(call("click", { ref: "e4" }), "covered", true)).toEqual([]);
+  expect(p.after(call("click", { ref: "e5" }), "covered", true)).toEqual([]);
+  expect(p.after(call("click", { ref: "e6" }), "ok", false)).toEqual([]);
+});
+
+test("working one element again and again gets a note, even when each try differs", () => {
+  const p = new Progress({});
+  const notes = [
+    p.after(call("click", { ref: "e45" }), "opened picker"),
+    p.after(call("type", { ref: "e45", text: "7:00 AM" }), "typed"),
+    p.after(call("snapshot"), "Page: maps"),
+    p.after(call("type", { ref: "e45", text: "07:00" }), "typed again"),
+    p.after(call("click", { ref: "e45" }), "picker"),
+  ];
+  expect(notes.slice(0, 4).flat()).toEqual([]);
+  expect(notes[4]).toEqual([SAME_ELEMENT]);
+  // Filling a form touches each field once: no note.
+  const q = new Progress({});
+  for (let i = 0; i < 8; i++) expect(q.after(call("type", { ref: `e${i}`, text: "x" }), "typed")).toEqual([]);
+});
+
+test("one loop note at a time: the same failing call says it repeats, not three things", () => {
+  const p = new Progress({});
+  p.after(call("click", { ref: "e9" }), "covered by dialog", true);
+  p.after(call("click", { ref: "e9" }), "covered by dialog", true);
+  expect(p.after(call("click", { ref: "e9" }), "covered by dialog", true)).toEqual([REPEATED]);
+});
+
+test("actions the user declined are not failures: no note to get the same thing another way", () => {
+  const p = new Progress({});
+  for (let i = 0; i < 3; i++) expect(p.after(call("click", { ref: `e${i}` }), DECLINED, true)).toEqual([]);
+  expect(p.after(call("batch", { actions: [] }), `1. click e7: ${DECLINED}`, true)).toEqual([]);
 });

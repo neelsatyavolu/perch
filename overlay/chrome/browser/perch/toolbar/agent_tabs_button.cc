@@ -116,15 +116,8 @@ class AgentTabsPanel : public views::View, public AgentTabsObserver {
     auto list = std::make_unique<views::View>();
     list->SetLayoutManager(std::make_unique<views::BoxLayout>(
         views::BoxLayout::Orientation::kVertical));
-    for (tabs::TabInterface* tab :
-         AgentTabsFor(browser_->GetProfile()->GetOriginalProfile())) {
-      auto row = std::make_unique<HoverButton>(
-          base::BindRepeating(&AgentTabsPanel::Show, base::Unretained(this),
-                              tab->GetWeakPtr()),
-          IconFor(tab), TitleOf(tab));
-      row->SetTooltipText(TitleOf(tab));
-      list->AddChildView(std::move(row));
-    }
+    list_ = list.get();
+    BuildRows(AgentTabsFor(profile()));
     auto* scroll = AddChildView(std::make_unique<views::ScrollView>());
     scroll->ClipHeightTo(0, kMaxListHeight);
     scroll->SetDrawOverflowIndicator(false);
@@ -145,10 +138,21 @@ class AgentTabsPanel : public views::View, public AgentTabsObserver {
   AgentTabsPanel& operator=(const AgentTabsPanel&) = delete;
   ~AgentTabsPanel() override { RemoveAgentTabsObserver(this); }
 
-  // AgentTabsObserver: the list is short-lived; a change just closes it.
+  // AgentTabsObserver: agents open, load and close tabs while the list is
+  // open, so it follows them in place. It closes only when none are left (the
+  // button it hangs from hides then too).
   void OnAgentTabsChanged() override {
-    if (!acting_) {
+    if (acting_) {
+      return;
+    }
+    const std::vector<tabs::TabInterface*> tabs = AgentTabsFor(profile());
+    if (tabs.empty()) {
       Close();
+    } else if (ShowsTabs(tabs)) {
+      RefreshRows();
+    } else {
+      BuildRows(tabs);
+      FitToContents();
     }
   }
 
@@ -163,6 +167,63 @@ class AgentTabsPanel : public views::View, public AgentTabsObserver {
   }
 
  private:
+  struct Row {
+    base::WeakPtr<tabs::TabInterface> tab;
+    raw_ptr<HoverButton> button;
+  };
+
+  Profile* profile() { return browser_->GetProfile()->GetOriginalProfile(); }
+
+  void BuildRows(const std::vector<tabs::TabInterface*>& tabs) {
+    rows_.clear();
+    list_->RemoveAllChildViews();
+    for (tabs::TabInterface* tab : tabs) {
+      auto* button = list_->AddChildView(std::make_unique<HoverButton>(
+          base::BindRepeating(&AgentTabsPanel::Show, base::Unretained(this),
+                              tab->GetWeakPtr()),
+          IconFor(tab), TitleOf(tab)));
+      button->SetTooltipText(TitleOf(tab));
+      rows_.push_back({tab->GetWeakPtr(), button});
+    }
+  }
+
+  // Whether the rows are `tabs`, in order. A closed tab's row never matches.
+  bool ShowsTabs(const std::vector<tabs::TabInterface*>& tabs) const {
+    if (rows_.size() != tabs.size()) {
+      return false;
+    }
+    for (size_t i = 0; i < tabs.size(); ++i) {
+      if (rows_[i].tab.get() != tabs[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  // A tab loaded or changed its title or icon.
+  void RefreshRows() {
+    for (const Row& row : rows_) {
+      const std::u16string title = TitleOf(row.tab.get());
+      if (row.button->GetText() != title) {
+        row.button->SetText(title);
+        row.button->SetTooltipText(title);
+      }
+      row.button->SetImageModel(views::Button::STATE_NORMAL,
+                                IconFor(row.tab.get()));
+    }
+  }
+
+  // The bubble grows or shrinks with the list, still hanging from the button.
+  void FitToContents() {
+    views::Widget* widget = GetWidget();
+    if (!widget || !widget->widget_delegate()) {
+      return;
+    }
+    if (auto* bubble = widget->widget_delegate()->AsBubbleDialogDelegate()) {
+      bubble->SizeToContents();
+    }
+  }
+
   void AddSeparator() {
     auto* separator = AddChildView(std::make_unique<views::Separator>());
     separator->SetProperty(views::kMarginsKey, gfx::Insets::VH(6, 0));
@@ -179,11 +240,13 @@ class AgentTabsPanel : public views::View, public AgentTabsObserver {
 
   void CloseAll() {
     acting_ = true;
-    CloseAgentTabs(browser_->GetProfile()->GetOriginalProfile());
+    CloseAgentTabs(profile());
     Close();
   }
 
   raw_ptr<BrowserWindowInterface> browser_;
+  raw_ptr<views::View> list_;
+  std::vector<Row> rows_;
   bool acting_ = false;
   base::WeakPtrFactory<AgentTabsPanel> weak_factory_{this};
 };

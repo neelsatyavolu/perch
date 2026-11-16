@@ -215,6 +215,15 @@ test("the system prompt has the agent read before operating, judge forecasts and
   }
 });
 
+test("the system prompt has the agent look up the user's own orders and account on the site before saying it lacks them", async () => {
+  const { systemPrompt } = await import("../src/agent/prompt");
+  for (const finish of [undefined, "reply"] as const) {
+    const prompt = systemPrompt({ mode: "guard", now: new Date("2026-11-05T09:00:00Z"), finish });
+    expect(prompt).toContain("open the page that lists them (My Orders, Purchase history, Account)");
+    expect(prompt).toContain("Never say you don't have those details, or ask the user for them, before you have looked.");
+  }
+});
+
 test("the check before done and the out-of-budget turn ask for a direct answer to each question", async () => {
   const { CHECK_BEFORE_DONE } = await import("../src/agent/loop");
   const { outOfBudget } = await import("../src/agent/finish");

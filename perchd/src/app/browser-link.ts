@@ -46,8 +46,8 @@ export class BrowserLink {
     return {
       approve: (session: AgentSession, request: ApprovalRequest, signal: AbortSignal) => outside.approve(session.label, request, () => session.tabIds(), signal),
       allowClient: (name: string, signal: AbortSignal) => outside.allowClient(name, signal),
-      step: (session: AgentSession, call: ToolCall) =>
-        void outside.observe(session.label, () => session.tabIds(), { label: stepLabel(call.name, call.args) }).catch(() => undefined),
+      step: (session: AgentSession, call: ToolCall, prompt?: string) =>
+        void outside.observe(session.label, () => session.tabIds(), { label: stepLabel(call.name, call.args) }, prompt).catch(() => undefined),
     };
   };
 

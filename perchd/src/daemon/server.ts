@@ -74,8 +74,8 @@ export type ServerOptions = {
 export type BrowserApprovals = {
   approve(session: AgentSession, request: ApprovalRequest, signal: AbortSignal): Promise<boolean>;
   allowClient(name: string, signal: AbortSignal): Promise<boolean>;
-  /** A tool call an outside session made, for its chat's list of steps. */
-  step?(session: AgentSession, call: ToolCall): void;
+  /** A tool call an outside session made, for its chat's list of steps, with the prompt its agent is working on when known. */
+  step?(session: AgentSession, call: ToolCall, prompt?: string): void;
 };
 
 /** Why a connection may not go on under the current policy, or null when it may. */

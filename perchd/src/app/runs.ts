@@ -68,8 +68,8 @@ type Pending = { card: ApprovalCard; resolve: (approved: boolean) => void; done?
 /** `holdBack`: the user asked for the work without the final submit or send ("complete it without submitting"). */
 type Run = {
   runId: string; chatId: string; controller: AbortController; text: string; steps: Step[]; pending: Pending | null; done: Promise<void>; startedAt: string; holdBack?: boolean;
-  /** An outside agent's work, listed as it reports it (observeStep); `quiet` ends it after a pause, and `ended` settles `done`. */
-  observed?: true; quiet?: ReturnType<typeof setTimeout>; ended?: () => void;
+  /** An outside agent's work, listed as it reports it (observeStep); `quiet` ends it after a pause, and `ended` settles `done`. `intro` is its first message. */
+  observed?: true; quiet?: ReturnType<typeof setTimeout>; ended?: () => void; intro?: string;
 };
 
 /** "without submitting", "don't send it", "do not turn it in": the user wants the last step left to them. */
@@ -166,18 +166,26 @@ export class RunManager {
    * An outside agent's work (Claude Code or Codex through `perch mcp`, the perch command) shows in
    * its chat as a run of its own: the first step starts it with a line saying who is working, each
    * step is listed as it happens, and it ends after a quiet spell, saved like any other run.
+   * A new intro (the agent's user sent it a new prompt) ends the list and starts another.
    */
   observeStep(chatId: string, intro: string, step: Step): void {
     const chat = this.deps.chats.get(chatId);
     if (!chat) return;
     let run = this.runs.get(chatId);
     if (run && !run.observed) return; // A run of Perch's own is going here; it lists its own steps.
+    if (run && run.intro !== intro) {
+      // Its last message is queued before the new prompt's, so the chat keeps them in order.
+      clearTimeout(run.quiet);
+      void this.endObserved(run);
+      this.runs.delete(chatId);
+      run = undefined;
+    }
     if (!run) {
       const message: ChatMessage = { id: crypto.randomUUID(), role: "user", text: intro, time: new Date().toISOString() };
       // `done` stays open until the list ends: waiting on a settled promise in a loop (idleFor) would spin forever.
       let ended!: () => void;
       const done = new Promise<void>((resolve) => (ended = resolve));
-      const started: Run = { runId: crypto.randomUUID(), chatId, controller: new AbortController(), text: "", steps: [], pending: null, done, startedAt: message.time, observed: true, ended };
+      const started: Run = { runId: crypto.randomUUID(), chatId, controller: new AbortController(), text: "", steps: [], pending: null, done, startedAt: message.time, observed: true, ended, intro };
       run = started;
       this.runs.set(chatId, started);
       void this.deps.chats.update(chatId, (c) => ({ ...c, messages: [...c.messages, message] })).then((updated) => {
@@ -201,7 +209,8 @@ export class RunManager {
     try {
       await this.finish(run, `Finished ${n} ${n === 1 ? "step" : "steps"} in Perch.`, undefined);
     } finally {
-      this.runs.delete(run.chatId);
+      // A list started meanwhile for a new prompt stays.
+      if (this.runs.get(run.chatId) === run) this.runs.delete(run.chatId);
       this.announce(run.chatId);
       run.ended?.();
     }

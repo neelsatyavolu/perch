@@ -17,6 +17,7 @@ const keychain = new MemoryKeychain();
 const registry = new ClientRegistry(paths.clientsFile, keychain);
 const allowAsks: string[] = [];
 const approveAsks: { label: string; request: ApprovalRequest }[] = [];
+const steps: { label: string; tool: string; prompt?: string }[] = [];
 let allow = false;
 let daemon: Daemon;
 
@@ -35,6 +36,7 @@ beforeAll(async () => {
         return allow;
       },
       approve: async (session, request) => (approveAsks.push({ label: session.label, request }), true),
+      step: (session, call, prompt) => void steps.push({ label: session.label, tool: call.name, ...(prompt ? { prompt } : {}) }),
     }),
   });
 });
@@ -74,5 +76,18 @@ test("a client without its own prompt gets risky actions approved through the br
   expect(sent.isError).toBeFalsy();
   expect(approveAsks.length).toBe(1);
   expect(approveAsks[0]!.request.summary).toContain('Click button "Send"');
+  c.close();
+}, 30_000);
+
+test("the prompt a client sends with a call reaches its session's steps, tidied", async () => {
+  allow = true;
+  const c = await connect({ socket: paths.socket, hello: await hello("codex", "p1") });
+  steps.length = 0;
+  await c.request("call", { name: "navigate", args: { url: site.url("/far.html") }, prompt: "  Compare plans\u0007 on the site  " });
+  await c.request("call", { name: "snapshot", args: {} });
+  expect(steps).toEqual([
+    { label: "Codex · perch", tool: "navigate", prompt: "Compare plans  on the site" },
+    { label: "Codex · perch", tool: "snapshot" },
+  ]);
   c.close();
 }, 30_000);

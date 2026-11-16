@@ -66,6 +66,16 @@ export function cleanText(text: string, limit = TITLE_LIMIT): string {
   return text.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, limit);
 }
 
+export const MAX_PROMPT = 4_000;
+
+/** An outside agent's prompt for its chat: no control characters but line breaks, at most MAX_PROMPT; undefined when empty. */
+export function cleanPrompt(text: unknown): string | undefined {
+  if (typeof text !== "string") return undefined;
+  const clean = text.replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+  if (!clean) return undefined;
+  return clean.length <= MAX_PROMPT ? clean : `${clean.slice(0, MAX_PROMPT - 1).trimEnd()}…`;
+}
+
 export function groupLabel(agent: string, title: string): string {
   return title ? `${agent} · ${title}` : agent;
 }

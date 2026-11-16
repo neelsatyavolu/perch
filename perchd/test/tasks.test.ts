@@ -66,6 +66,16 @@ test("a task is a chat tagged with its client, using the chosen model, effort an
   expect(chats.get(started.id)!.origin).toBe("cli");
 });
 
+test("a `perch exec` task's chat shows its prompt as the user's message and is named after it", async () => {
+  const { runs, tasks } = setup(echo().runner);
+  const started = await tasks.start({ client: "cli", clientMode: "guard", task: "Find the cheapest flight to Tokyo in March", mode: "guard" });
+  expect(chats.get(started.id)!.title).toBe("Find the cheapest flight to Tokyo in March");
+  await runs.idle();
+  const chat = chats.get(started.id)!;
+  expect(chat.messages[0]).toMatchObject({ role: "user", text: "Find the cheapest flight to Tokyo in March" });
+  expect(started.title).toBe("Find the cheapest flight to Tokyo in March");
+});
+
 test("a client sees only its own tasks, and ids can be shortened", async () => {
   const { runs, tasks } = setup(echo().runner);
   const mine = await tasks.start({ client: "cli", clientMode: "guard", task: "One" });

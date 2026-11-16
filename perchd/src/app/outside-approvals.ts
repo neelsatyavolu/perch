@@ -10,6 +10,7 @@
 import type { ApprovalRequest } from "../agent/session";
 import type { PerchDomainApi } from "../browser/perch-domain";
 import { describeApproval } from "./approval-card";
+import { provisionalTitle } from "./chat-title";
 import type { ChatStore } from "./chats";
 import type { ApprovalCard, ChatSettings } from "./protocol";
 import type { RunManager } from "./runs";
@@ -27,6 +28,9 @@ export class OutsideApprovals {
   /** Chat ids by session label, and the tabs each chat's session works in. */
   private readonly chatOf = new Map<string, string>();
   private readonly tabsOf = new Map<string, () => string[]>();
+  /** The prompt each chat's agent is working on, and the title it gave the chat. */
+  private readonly promptOf = new Map<string, string>();
+  private readonly titleOf = new Map<string, string>();
 
   constructor(private readonly deps: OutsideDeps) {}
 
@@ -51,16 +55,30 @@ export class OutsideApprovals {
   /**
    * A step an outside session took: it shows in the session's chat (made on its first step, named
    * after the session), so clicking one of its agent tabs opens a chat with what it has done.
+   * `prompt` is what the agent's user asked it (src/cli/agent-prompt.ts): it heads the list of
+   * steps as the user's message, and a new one starts a new list and retitles the chat.
    */
-  async observe(label: string, tabs: () => string[], step: { label: string; detail?: string }): Promise<void> {
+  async observe(label: string, tabs: () => string[], step: { label: string; detail?: string }, prompt?: string): Promise<void> {
     const chatId = await this.chatFor(label);
     this.tabsOf.set(chatId, tabs);
-    this.deps.runs.observeStep(chatId, `${label} is working in Perch`, step);
+    if (prompt && prompt !== this.promptOf.get(chatId)) {
+      this.promptOf.set(chatId, prompt);
+      void this.retitle(chatId, label, prompt);
+    }
+    this.deps.runs.observeStep(chatId, this.promptOf.get(chatId) ?? `${label} is working in Perch`, step);
   }
 
   /** The tabs a chat's outside session works in (TaskStatusReporter's targets). */
   targets(chatId: string): string[] {
     return this.tabsOf.get(chatId)?.() ?? [];
+  }
+
+  /** "Codex · perch: Find flights to Tokyo", unless the user renamed the chat. Queued before the step, so the step's update carries it. */
+  private retitle(chatId: string, label: string, prompt: string): Promise<unknown> {
+    const ours = new Set([label, this.titleOf.get(chatId)]);
+    const title = `${label}: ${provisionalTitle(prompt)}`;
+    this.titleOf.set(chatId, title);
+    return this.deps.chats.update(chatId, (c) => (ours.has(c.title) ? { ...c, title } : c)).catch(() => undefined);
   }
 
   private async ask(label: string, card: CardText, tabs: () => string[], signal?: AbortSignal): Promise<boolean> {

@@ -112,6 +112,44 @@ test("an outside agent's steps show in its own chat from the first one, with its
   expect(chats.get(chat.id)!.messages.at(-1)?.text).toBe("Finished 2 steps in Perch.");
 });
 
+test("an outside agent's prompt heads its steps as the user's message and titles the chat; a new prompt starts a new list", async () => {
+  const r = runs();
+  const outside = new OutsideApprovals({ chats, runs: r, defaults, perch });
+  const label = "Claude Code · repo";
+  await outside.observe(label, () => ["T-7"], { label: "Open example.com" }, "Compare the pricing plans on example.com");
+  // A step that arrives without a prompt (the transcript was unreadable) stays in the same list.
+  await outside.observe(label, () => ["T-7"], { label: "Read the page" });
+  await chats.update((await waitForChat()).id, (c) => c); // Let the queued writes land.
+  const chat = await waitForChat();
+  expect(chat.title).toBe("Claude Code · repo: Compare the pricing plans on example.com");
+  expect(chat.messages.map((m) => [m.role, m.text])).toEqual([["user", "Compare the pricing plans on example.com"]]);
+  expect(r.snapshot(chat.id)?.steps.map((s) => s.label)).toEqual(["Open example.com", "Read the page"]);
+
+  await outside.observe(label, () => ["T-7"], { label: "Open the docs" }, "Now find the API rate limits");
+  for (let i = 0; i < 100 && chats.get(chat.id)!.messages.length < 3; i++) await Bun.sleep(5);
+  expect(chats.get(chat.id)!.messages.map((m) => [m.role, m.text])).toEqual([
+    ["user", "Compare the pricing plans on example.com"],
+    ["assistant", "Finished 2 steps in Perch."],
+    ["user", "Now find the API rate limits"],
+  ]);
+  expect(chats.get(chat.id)!.title).toBe("Claude Code · repo: Now find the API rate limits");
+  expect(r.status(chat.id)).toBe("running");
+  expect(r.snapshot(chat.id)?.steps.map((s) => s.label)).toEqual(["Open the docs"]);
+
+  // A chat the user renamed keeps their name.
+  await chats.update(chat.id, (c) => ({ ...c, title: "Rate limits" }));
+  await outside.observe(label, () => ["T-7"], { label: "Search" }, "Third prompt");
+  await chats.update(chat.id, (c) => c);
+  expect(chats.get(chat.id)!.title).toBe("Rate limits");
+  r.stop(chat.id);
+  await r.idleFor(chat.id);
+});
+
+async function waitForChat() {
+  for (let i = 0; i < 100 && chats.list().length === 0; i++) await Bun.sleep(5);
+  return chats.list()[0]!;
+}
+
 test("a new client's first connection becomes a card naming the client and Guard mode", async () => {
   const r = runs();
   const outside = new OutsideApprovals({ chats, runs: r, defaults, perch });

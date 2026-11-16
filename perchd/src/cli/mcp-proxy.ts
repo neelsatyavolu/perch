@@ -7,6 +7,7 @@
 import { basename } from "node:path";
 import { VERSION } from "../daemon/daemon";
 import type { ApproveAsk, OnEnd } from "../daemon/protocol";
+import { agentPrompt } from "./agent-prompt";
 import { parseArgs, UsageError } from "./args";
 import type { DaemonClient } from "./client";
 import { defaultSession, openDaemon, type CliIO } from "./io";
@@ -68,7 +69,8 @@ export class McpProxy {
         return { tools: await this.request("tools") };
       case "tools/call": {
         let result: ToolResult;
-        const call = { name: String(msg.params?.name ?? ""), args: msg.params?.arguments ?? {} };
+        const prompt = this.prompt();
+        const call = { name: String(msg.params?.name ?? ""), args: msg.params?.arguments ?? {}, ...(prompt ? { prompt } : {}) };
         try {
           result = await this.request<ToolResult>("call", call);
         } catch (error) {
@@ -81,6 +83,12 @@ export class McpProxy {
       default:
         throw Object.assign(new Error(`method not found: ${msg.method}`), { code: -32601 });
     }
+  }
+
+  /** What the agent's user last asked it, for its chat in Perch. The agent is this server's parent process. */
+  private prompt(): string | undefined {
+    const env = this.io.env;
+    return agentPrompt({ env, cwd: this.io.cwd, parent: process.ppid, agent: `${this.opts.client ?? ""} ${this.opts.agent ?? ""} ${this.clientName}` });
   }
 
   /** One request; if perchd restarted since the last one, reconnects once and tries again. */

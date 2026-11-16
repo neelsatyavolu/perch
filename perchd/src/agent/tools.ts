@@ -459,8 +459,10 @@ async function dispatch(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
         await Bun.sleep(seconds * 1000);
         return { content: `waited ${seconds} s\n\n${await page(ctx, tab)}` };
       }
-      const r = await waitFor(tab, { text: a.text, timeoutMs: Math.min(MAX_WAIT_S, Number(a.timeout_s ?? a.seconds ?? 10)) * 1000 });
-      return r.ok ? { content: r.note } : { content: r.error, isError: true };
+      const r = await waitFor(tab, { text: a.text, gone: Boolean(a.gone), timeoutMs: Math.min(MAX_WAIT_S, Number(a.timeout_s ?? a.seconds ?? 10)) * 1000 });
+      // The page comes back either way: what changed while waiting, or what is there instead.
+      const view = await page(ctx, tab);
+      return r.ok ? { content: `${r.note}\n\n${view}` } : { content: `${r.error}\n\n${view}`, isError: true };
     }
     case "screenshot": {
       const shot = await screenshot(tab, { maxWidth: SCREENSHOT_WIDTH });

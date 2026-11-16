@@ -8,6 +8,7 @@
 import type { Tab } from "../browser/tab";
 import { call, callForObject, describe, type Node } from "./node";
 import { aim, clickAtPoint } from "./pointing";
+import { typeKeys } from "./typing";
 
 export type ListboxResult = { ok: true; note: string } | { ok: false; error: string };
 
@@ -85,13 +86,40 @@ const NAME = `function () {
   return text(this);
 }`;
 
+/**
+ * The text field of a type-to-search combobox: the control itself, or the one field inside it.
+ * Null for a combobox that is a button, which only opens.
+ */
+const SEARCH_FIELD = `function () {
+  const takes = (el) => (el.tagName === 'INPUT' && /^(|text|search)$/.test(el.getAttribute('type') || '')) || el.isContentEditable;
+  if (takes(this)) return this.disabled || this.readOnly ? null : this;
+  const inside = [...this.querySelectorAll('input')].filter((el) => takes(el) && !el.disabled && !el.readOnly && el.getClientRects().length > 0);
+  return inside.length === 1 ? inside[0] : null;
+}`;
+
+/** Types the choice into a type-to-search combobox, replacing its text. False when it has no field. */
+async function searchFor(tab: Tab, node: Node, choice: string): Promise<boolean> {
+  const field = await callForObject(tab, node, SEARCH_FIELD).catch(() => undefined);
+  if (!field) return false;
+  await tab.sendIn(node.session, "DOM.focus", { objectId: field });
+  await call(tab, { ...node, objectId: field }, "function () { if (typeof this.select === 'function') this.select(); else document.execCommand('selectAll'); }");
+  await typeKeys(tab, choice);
+  return true;
+}
+
+/** How long an opened combobox may show no matching option before the choice is typed into it. */
+const TYPE_AFTER_MS = 300;
+
 /** Picks an option in a custom dropdown. Returns null when the element is not one. */
 export async function selectFromListbox(tab: Tab, node: Node, choice: string): Promise<ListboxResult | null> {
   const kind = await call<"open" | "closed" | "none">(tab, node, KIND);
   if (kind === "none") return null;
   const label = await describe(tab, node);
   if (kind === "closed") await clickAtPoint(tab, await aim(tab, node));
-  const deadline = Date.now() + WAIT_MS;
+  let deadline = Date.now() + WAIT_MS;
+  const typeAt = Date.now() + TYPE_AFTER_MS;
+  let typed = false;
+  let searched = false;
   for (;;) {
     const listbox = await callForObject(tab, node, LISTBOX_FOR);
     const box = listbox ? { ...node, objectId: listbox } : null;
@@ -102,7 +130,14 @@ export async function selectFromListbox(tab: Tab, node: Node, choice: string): P
       await clickAtPoint(tab, await aim(tab, target));
       return { ok: true, note: `selected "${name}"` };
     }
+    // Long lists (cities, airports, people) show their options only for what is typed.
+    if (!typed && Date.now() >= typeAt) {
+      typed = true;
+      searched = await searchFor(tab, node, choice);
+      if (searched) deadline = Date.now() + WAIT_MS;
+    }
     if (Date.now() >= deadline) {
+      if (!box && searched) return { ok: false, error: `typed "${choice}" into ${label}, but no option appeared; try a shorter or different spelling` };
       if (!box) return { ok: false, error: `opened ${label}, but no list of options appeared` };
       return { ok: false, error: `no option "${choice}"; options are: ${(await call<string[]>(tab, box, NAMES)).join(", ")}` };
     }

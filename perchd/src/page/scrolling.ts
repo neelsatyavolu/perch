@@ -54,9 +54,10 @@ async function wheelOrScript(tab: Tab, point: { x: number; y: number }, delta: n
   await tab.evaluate(SCROLL_BY(point.x, point.y, delta));
 }
 
-export async function wheelScroll(tab: Tab, dy: number | undefined): Promise<string> {
+/** Scrolls with the wheel at a point, the middle of the window by default. */
+export async function wheelScroll(tab: Tab, dy: number | undefined, at?: { x: number; y: number }): Promise<string> {
   const [w, h] = await tab.evaluate<[number, number]>("[innerWidth, innerHeight]");
-  const point = { x: Math.round(w / 2), y: Math.round(h / 2) };
+  const point = at ? { x: Math.round(at.x), y: Math.round(at.y) } : { x: Math.round(w / 2), y: Math.round(h / 2) };
   const read = () => tab.evaluate<ScrollState>(STATE_AT(point.x, point.y));
   const before = await read();
   const delta = dy ?? h * 0.8;

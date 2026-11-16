@@ -10,6 +10,7 @@ import { selectFromListbox } from "./listbox";
 import { setSlider } from "./slider";
 import { drag as dragTo, type DragTarget } from "./drag";
 import type { RefTable } from "./refs";
+import { IS_SECRET_JS, rememberedSecrets, secretKey } from "./secrets";
 import { ANNOUNCES_SUGGESTIONS, suggestionNote, typeKeys, VISIBLE_SUGGESTIONS } from "./typing";
 
 export type ActionResult = { ok: true; note: string } | { ok: false; error: string };
@@ -38,17 +39,70 @@ export function click(tab: Tab, refs: RefTable, ref: string): Promise<ActionResu
   return attempt(async () => {
     const node = await liveNode(tab, refs, ref);
     const label = await describe(tab, node);
-    let point: Point;
-    try {
-      point = await aim(tab, node);
-    } catch (error) {
-      if (await toggleHiddenControl(tab, node, error)) return ok(`clicked ${label}${await checkedState(tab, node)}`);
-      if (await clickHiddenTarget(tab, node, error)) return ok(`clicked ${label} ${SCRIPT_CLICK}`);
-      throw error;
-    }
-    await clickAtPoint(tab, point);
-    return ok(`clicked ${label}`);
+    const refusal = await clickRefusal(tab, node, label);
+    if (refusal) return fail(refusal);
+    const { result, picker } = await keepingFilePickerClosed(tab, () => clickNode(tab, node, label));
+    if (!picker || !result.ok) return result;
+    return ok(`${result.note}; it opened a file picker, which Perch kept closed: to attach files, use upload with ${ref}`);
   });
+}
+
+async function clickNode(tab: Tab, node: Node, label: string): Promise<ActionResult> {
+  let point: Point;
+  try {
+    point = await aim(tab, node);
+  } catch (error) {
+    if (await toggleHiddenControl(tab, node, error)) return ok(`clicked ${label}${await checkedState(tab, node)}`);
+    if (await clickHiddenTarget(tab, node, error)) return ok(`clicked ${label} ${SCRIPT_CLICK}`);
+    throw error;
+  }
+  await clickAtPoint(tab, point);
+  return ok(`clicked ${label}`);
+}
+
+/** How long after a click a page's script may still open a file picker. */
+const PICKER_GRACE_MS = 100;
+
+/**
+ * Runs a click with the browser's file picker held back. The picker is a window of its own that
+ * the agent can neither see nor use, and it would wait there for the user; upload sets files
+ * directly instead. Only the click is covered, so the user's own clicks in the tab still open it.
+ */
+async function keepingFilePickerClosed(tab: Tab, work: () => Promise<ActionResult>): Promise<{ result: ActionResult; picker: boolean }> {
+  let picker = false;
+  const off = tab.conn.on("Page.fileChooserOpened", (_p, sid) => {
+    if (sid === tab.session) picker = true;
+  });
+  const intercepting = await tab.send("Page.setInterceptFileChooserDialog", { enabled: true }).then(() => true, () => false);
+  try {
+    const result = await work();
+    if (intercepting) await Bun.sleep(PICKER_GRACE_MS);
+    return { result, picker };
+  } finally {
+    off();
+    if (intercepting) await tab.send("Page.setInterceptFileChooserDialog", { enabled: false }).catch(() => undefined);
+  }
+}
+
+const disabled = (label: string) => `${label} is disabled; the page enables it once it has what it needs (fill the required fields or make the choices before it)`;
+
+/**
+ * What a click would not do: a disabled control ignores it, and a native dropdown opens a menu
+ * drawn outside the page, which the snapshot and screenshots never show.
+ */
+const CLICK_BLOCKED = `function () {
+  const el = this.nodeType === 1 ? this : this.parentElement;
+  if (!el) return null;
+  if (el.matches(':disabled')) return { disabled: true };
+  if (el.tagName === 'SELECT' && !el.multiple && el.size <= 1) return { options: [...el.options].map((o) => o.label.trim() + (o.disabled ? ' (disabled)' : '')) };
+  return null;
+}`;
+
+async function clickRefusal(tab: Tab, node: Node, label: string): Promise<string | null> {
+  const blocked = await call<{ disabled?: true; options?: string[] } | null>(tab, node, CLICK_BLOCKED);
+  if (!blocked) return null;
+  if (blocked.disabled) return disabled(label);
+  return `${label} is a dropdown; use select with one of its options: ${(blocked.options ?? []).join(", ")}`;
 }
 
 async function checkedState(tab: Tab, node: Node): Promise<string> {
@@ -72,17 +126,19 @@ export function hover(tab: Tab, refs: RefTable, ref: string): Promise<ActionResu
 /** Replaces the field's contents with text, as a person selecting all and typing would. */
 export function type(tab: Tab, refs: RefTable, ref: string, text: string, opts: { submit?: boolean } = {}): Promise<ActionResult> {
   return attempt(async () => {
-    const node = await liveNode(tab, refs, ref);
-    const slider = await setSlider(tab, node, text);
+    const chosen = await liveNode(tab, refs, ref);
+    const slider = await setSlider(tab, chosen, text);
     if (slider) return slider;
+    const node = await innerField(tab, chosen);
     const special = await setSpecialInput(tab, node, text);
     if (special) return special;
     // Typing at a link or a button would send the keys to whatever has focus, where a page's own
     // keyboard shortcuts could act; only something that takes text gets them.
-    if (!(await call<boolean>(tab, node, TAKES_TEXT))) return fail(`${await describe(tab, node)} isn't a text field; type into a field, or click this instead`);
+    const state = await call<"text" | "readonly" | "disabled" | "none">(tab, node, FIELD_STATE);
+    if (state !== "text") return fail(notTypable(await describe(tab, chosen), state));
     if (node.owner !== undefined) await tab.send("DOM.scrollIntoViewIfNeeded", { backendNodeId: node.owner }).catch(() => undefined);
-    await tab.sendIn(node.session, "DOM.scrollIntoViewIfNeeded", { backendNodeId: node.backendNodeId }).catch(() => undefined);
-    await tab.sendIn(node.session, "DOM.focus", { backendNodeId: node.backendNodeId });
+    await tab.sendIn(node.session, "DOM.scrollIntoViewIfNeeded", { objectId: node.objectId }).catch(() => undefined);
+    await tab.sendIn(node.session, "DOM.focus", { objectId: node.objectId });
     await call(tab, node, "function () { if (typeof this.select === 'function') this.select(); else if (this.isContentEditable) document.execCommand('selectAll'); }");
     // Number boxes, passwords and plain text areas never suggest, so they skip the wait for a list.
     const watch = !opts.submit && text !== "" && !(await call<boolean>(tab, node, "function () { return this.type === 'password' || this.type === 'number' || (this.tagName === 'TEXTAREA' && !this.getAttribute('role') && !this.getAttribute('aria-autocomplete')); }"));
@@ -91,18 +147,77 @@ export function type(tab: Tab, refs: RefTable, ref: string, text: string, opts: 
     if (text) await typeKeys(tab, text);
     else await press(tab, "Delete");
     if (opts.submit) await press(tab, "Enter");
+    // What the field shows is checked before suggestions are waited for, which can take a second.
+    const shown = opts.submit || !text ? "" : await shownNote(tab, node, text);
     const note = watch ? await suggestionNote(suggestions, before, await call<boolean>(tab, node, ANNOUNCES_SUGGESTIONS)) : "";
-    return ok(`typed ${text.length} characters${opts.submit ? " and pressed Enter" : ""}${note}`);
+    return ok(`typed ${text.length} characters${opts.submit ? " and pressed Enter" : ""}${shown}${note}`);
   });
 }
 
-/** Whether the element takes typed text: a text field, a text area, or something editable. */
-const TAKES_TEXT = `function () {
-  if (this.isContentEditable) return true;
-  if (this.tagName === 'TEXTAREA') return !this.disabled && !this.readOnly;
-  if (this.tagName === 'INPUT') return !this.disabled && !this.readOnly && !['button', 'submit', 'reset', 'checkbox', 'radio', 'image', 'hidden', 'file', 'color', 'range'].includes(this.type);
-  return ['textbox', 'searchbox', 'combobox', 'spinbutton'].includes(this.getAttribute('role') || '');
+const NOT_TEXT_INPUTS = "['button', 'submit', 'reset', 'checkbox', 'radio', 'image', 'hidden', 'file', 'color', 'range']";
+
+/** Whether the element takes typed text ("text"), and if not, why: a field that is read-only or disabled, or no field at all. */
+const FIELD_STATE = `function () {
+  const field = this.isContentEditable || this.tagName === 'TEXTAREA' || (this.tagName === 'INPUT' && !${NOT_TEXT_INPUTS}.includes(this.type));
+  if (!field) return ['textbox', 'searchbox', 'combobox', 'spinbutton'].includes(this.getAttribute('role') || '') ? 'text' : 'none';
+  if (this.isContentEditable) return 'text';
+  return this.disabled ? 'disabled' : this.readOnly ? 'readonly' : 'text';
 }`;
+
+function notTypable(label: string, state: "readonly" | "disabled" | "none"): string {
+  if (state === "disabled") return disabled(label);
+  // Custom date pickers and dropdowns often draw a read-only field that opens a panel when clicked.
+  if (state === "readonly") return `${label} is read-only; click it to open its picker, then choose from what appears`;
+  return `${label} isn't a text field; type into a field, or click this instead`;
+}
+
+/**
+ * The text field that belongs to the element the agent chose, when that element is not one
+ * itself: the control of a label, or the one field inside a wrapper (an ARIA combobox drawn as a
+ * box around its input, as react-select and many date and place pickers do).
+ */
+const INNER_FIELD = `function () {
+  const takes = (el) => el.isContentEditable || el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && !${NOT_TEXT_INPUTS}.includes(el.type));
+  if (takes(this)) return null;
+  if (this.tagName === 'LABEL' && this.control && takes(this.control)) return this.control;
+  const inside = [...this.querySelectorAll('input, textarea, [contenteditable]:not([contenteditable=false])')].filter((el) => takes(el) && el.getClientRects().length > 0);
+  return inside.length === 1 ? inside[0] : null;
+}`;
+
+async function innerField(tab: Tab, node: Node): Promise<Node> {
+  const inner = await callForObject(tab, node, INNER_FIELD).catch(() => undefined);
+  if (!inner) return node;
+  // The field's own node id, so a field once shown as secret is still known as one.
+  const { node: described } = await tab.sendIn<{ node: { backendNodeId: number } }>(node.session, "DOM.describeNode", { objectId: inner });
+  return { ...node, objectId: inner, backendNodeId: described.backendNodeId };
+}
+
+/**
+ * What a field shows, unless it holds a secret; null for a secret. Rich editors are not read:
+ * they turn text into lists, links and chips, and some (Google Docs) empty their input after each key.
+ */
+const SHOWN_TEXT = `function (remembered) {
+  if (remembered || (${IS_SECRET_JS})(this)) return null;
+  if (this.tagName !== 'INPUT' && this.tagName !== 'TEXTAREA') return null;
+  return String(this.value ?? '');
+}`;
+
+/**
+ * Input masks reformat typed text, maxlength cuts it, and some pages refuse it; the model is told
+ * what the field shows when that differs from what it typed. Secret fields are never read.
+ */
+async function shownNote(tab: Tab, node: Node, text: string): Promise<string> {
+  const remembered = rememberedSecrets(tab).has(secretKey(node.backendNodeId, node.session));
+  const shown = await call<string | null>(tab, node, SHOWN_TEXT, [remembered]).catch(() => null);
+  if (shown === null) return "";
+  const squeeze = (s: string) => s.replace(/\s+/g, " ").trim();
+  if (squeeze(shown) === squeeze(text)) return "";
+  if (!squeeze(shown)) return "; the field is still empty: the page did not take the text. Click the field and use type_text, or check for a message near it";
+  const cut = shown.length > SHOWN_LIMIT ? `${shown.slice(0, SHOWN_LIMIT)}…` : shown;
+  return `; the field now shows "${cut}"`;
+}
+
+const SHOWN_LIMIT = 200;
 
 const FORMATS: Record<string, [string, string]> = {
   date: ["YYYY-MM-DD", "2026-11-05"],
@@ -144,7 +259,7 @@ export function select(tab: Tab, refs: RefTable, ref: string, choice: string): P
     if (!(await call<boolean>(tab, node, "function () { return this.tagName === 'SELECT'; }"))) {
       return (await selectFromListbox(tab, node, choice)) ?? fail(`${await describe(tab, node)} isn't a dropdown; click it instead`);
     }
-    const result = await call<{ chosen?: string; options?: string[] }>(
+    const result = await call<{ chosen?: string; options?: string[]; disabled?: string }>(
       tab,
       node,
       `function (choice) {
@@ -152,6 +267,7 @@ export function select(tab: Tab, refs: RefTable, ref: string, choice: string): P
         const want = choice.trim().toLowerCase();
         const hit = opts.find(o => o.label.trim().toLowerCase() === want) || opts.find(o => o.value.toLowerCase() === want);
         if (!hit) return { options: opts.map(o => o.label.trim()) };
+        if (hit.disabled) return { disabled: hit.label.trim(), options: opts.filter(o => !o.disabled).map(o => o.label.trim()) };
         this.value = hit.value;
         this.dispatchEvent(new Event('input', { bubbles: true }));
         this.dispatchEvent(new Event('change', { bubbles: true }));
@@ -159,6 +275,7 @@ export function select(tab: Tab, refs: RefTable, ref: string, choice: string): P
       }`,
       [choice],
     );
+    if (result.disabled !== undefined) return fail(`option "${result.disabled}" is disabled; choose another: ${(result.options ?? []).join(", ")}`);
     if (result.chosen === undefined) return fail(`no option "${choice}"; options are: ${(result.options ?? []).join(", ")}`);
     return ok(`selected "${result.chosen}"`);
   });
@@ -179,7 +296,10 @@ export function press(tab: Tab, combo: string): Promise<ActionResult> {
 export function scroll(tab: Tab, opts: { refs?: RefTable; ref?: string; dy?: number }): Promise<ActionResult> {
   return attempt(async () => {
     if (opts.ref && opts.refs) {
-      await scrollToCentre(tab, await liveNode(tab, opts.refs, opts.ref));
+      const node = await liveNode(tab, opts.refs, opts.ref);
+      // With dy too, the wheel turns over the element, so a side panel or a dialog's list scrolls.
+      if (opts.dy !== undefined) return ok(await wheelScroll(tab, opts.dy, await aim(tab, node, { hitTest: false })));
+      await scrollToCentre(tab, node);
       return ok(`scrolled ${opts.ref} into view`);
     }
     return ok(await wheelScroll(tab, opts.dy));
@@ -225,16 +345,19 @@ export function upload(tab: Tab, refs: RefTable, ref: string, paths: string[]): 
   });
 }
 
-export function waitFor(tab: Tab, opts: { text?: string; timeoutMs?: number }): Promise<ActionResult> {
+/** Waits until the text is on the page, or with `gone` until it is not (a "Loading…" message). */
+export function waitFor(tab: Tab, opts: { text?: string; timeoutMs?: number; gone?: boolean }): Promise<ActionResult> {
   return attempt(async () => {
     const timeout = opts.timeoutMs ?? 10_000;
     const text = opts.text ?? "";
+    const gone = opts.gone === true;
     const started = Date.now();
     while (Date.now() - started < timeout) {
-      if (await tab.evaluate<boolean>(`document.body?.innerText.includes(${JSON.stringify(text)}) ?? false`)) return ok(`"${text}" is on the page`);
+      const there = await tab.evaluate<boolean>(`document.body?.innerText.includes(${JSON.stringify(text)}) ?? false`);
+      if (there !== gone) return ok(gone ? `"${text}" is gone from the page` : `"${text}" is on the page`);
       await Bun.sleep(100);
     }
-    return fail(`waited ${timeout / 1000}s; "${text}" did not appear`);
+    return fail(`waited ${timeout / 1000}s; "${text}" ${gone ? "is still on the page" : "did not appear"}`);
   });
 }
 

@@ -56,7 +56,9 @@ export const DESCRIBE = `function () {
   const role = owner.getAttribute('role') || ({ A: 'link', DIALOG: 'dialog', SELECT: 'combobox', TEXTAREA: 'textbox', H1: 'heading', H2: 'heading', H3: 'heading', BUTTON: 'button', LABEL: 'label' })[tag]
     || (tag === 'INPUT' ? (['button', 'submit', 'reset'].includes(type) ? 'button' : type === 'checkbox' ? 'checkbox' : type === 'radio' ? 'radio' : type === 'search' ? 'searchbox' : 'textbox') : tag.toLowerCase());
   const isField = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
-  const label = owner.getAttribute('aria-label') || (owner.labels && owner.labels[0] && owner.labels[0].innerText) || owner.getAttribute('placeholder') || owner.getAttribute('title') || '';
+  // A label wrapped around a dropdown would otherwise read out every option with its own text.
+  const labelText = (l) => { if (!l.contains(owner) || tag !== 'SELECT') return l.innerText; const c = l.cloneNode(true); c.querySelectorAll('select').forEach((s) => s.remove()); return c.textContent; };
+  const label = owner.getAttribute('aria-label') || (owner.labels && owner.labels[0] && labelText(owner.labels[0])) || owner.getAttribute('placeholder') || owner.getAttribute('title') || '';
   const text = isField ? (['button', 'submit', 'reset'].includes(type) ? owner.value : '') : owner.innerText;
   return { role, name: (label || text || '').replace(/\\s+/g, ' ').trim().slice(0, 80) };
 }`;

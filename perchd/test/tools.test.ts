@@ -155,6 +155,18 @@ test("wait_for can wait a few seconds and returns the page after", async () => {
   await ctx.close();
 });
 
+test("wait_for for text returns the page, and can wait for a loading message to go", async () => {
+  const ctx = await newToolContext(env.browser);
+  await runTool(ctx, call("navigate", { url: env.site.url("/acting.html") }));
+  const gone = await runTool(ctx, call("wait_for", { text: "Loading results", gone: true, timeout_s: 3 }));
+  expect(gone.isError).toBeFalsy();
+  expect(gone.content).toStartWith('"Loading results" is gone from the page\n\nPage: Booking');
+  const missing = await runTool(ctx, call("wait_for", { text: "never there", timeout_s: 0.3 }));
+  expect(missing).toMatchObject({ isError: true });
+  expect(missing.content).toContain("Page: Booking");
+  await ctx.close();
+});
+
 test("the REPL says plainly that it has no network", async () => {
   const ctx = await newToolContext(env.browser);
   await runTool(ctx, call("navigate", { url: env.site.url("/shop.html") }));

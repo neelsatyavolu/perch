@@ -44,6 +44,17 @@ test("the approval card shows what goes out and its button names the action", as
   expect(decide).toHaveBeenCalledWith(true, undefined);
 });
 
+test("the approval card leads with what, then where, and its decision buttons are full-size", () => {
+  const click: Card = { ...card, title: 'Click button "Send"', body: undefined, confirm: "Send" };
+  const el = mount(<ApprovalCard card={click} onDecide={() => {}} />);
+  const head = el.querySelector(".approve > header")!;
+  expect(head.querySelector(".ah")!.textContent).toBe('Click button "Send"');
+  expect(head.querySelector(".meta .mono")!.textContent).toBe("mail.example");
+  expect(el.querySelector(".body")).toBeNull();
+  const buttons = [...el.querySelectorAll(".act button")];
+  expect(buttons.map((b) => b.className)).toEqual(["btn primary", "btn outline"]);
+});
+
 test("a sign-in card with nothing saved asks for the login, and only sends it with Sign in", async () => {
   const decide = mock(async (_ok: boolean, _login?: { username: string; password: string }) => {});
   const signIn: Card = { ...card, title: "Sign in to account.proton.me", site: "account.proton.me", body: undefined, confirm: "Sign in", login: { loginKey: "c1" } };

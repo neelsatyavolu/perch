@@ -10,6 +10,7 @@ import type { Appearance, PerchApi } from "../api";
 import { loadApi } from "../api/resolve";
 import { isBridge } from "../api/rpc";
 import { DEFAULT_APPEARANCE, applyAppearance, cacheAppearance, isAppearance, readSystemPrefs, watchSystemPrefs } from "../theme/apply";
+import { CircleAlert, Icon, X } from "./icons";
 
 type AppearanceCtx = { readonly appearance: Appearance; readonly update: (patch: Partial<Appearance>) => Promise<void> };
 type Announce = (message: string, tone?: "polite" | "error") => void;
@@ -37,12 +38,15 @@ const storage = (): Storage | null => {
 /** The one download location the project controls. perchbrowser.com is not registered yet (spec, line 9). */
 export const RELEASES_URL = "https://github.com/neelsatyavolu/perch/releases";
 
+/** How long the toast takes to fade out (frame.css), before its message is cleared. */
+const TOAST_EXIT_MS = 180;
+
 type FrameProps = { readonly children: ComponentChildren; readonly api?: PerchApi | null; readonly title?: string };
 
 export function PageFrame({ children, api: injected, title }: FrameProps) {
   const [api, setApi] = useState<PerchApi | null | undefined>(injected);
   const [appearance, setAppearance] = useState<Appearance>(DEFAULT_APPEARANCE);
-  const [status, setStatus] = useState<{ text: string; tone: "polite" | "error"; n: number }>({ text: "", tone: "polite", n: 0 });
+  const [status, setStatus] = useState<{ text: string; tone: "polite" | "error"; on: boolean }>({ text: "", tone: "polite", on: false });
   const timer = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
@@ -85,10 +89,17 @@ export function PageFrame({ children, api: injected, title }: FrameProps) {
 
   useEffect(() => watchSystemPrefs(window, () => paint(appearance)), [appearance]);
 
+  // The toast fades out with its message in place, then empties, so the same message is read again next time.
+  const hide = useCallback(() => {
+    clearTimeout(timer.current);
+    setStatus((s) => ({ ...s, on: false }));
+    timer.current = setTimeout(() => setStatus((s) => ({ ...s, text: "" })), TOAST_EXIT_MS);
+  }, []);
+
   const announce = useCallback<Announce>((text, tone = "polite") => {
     clearTimeout(timer.current);
-    setStatus((s) => ({ text, tone, n: s.n + 1 }));
-    timer.current = setTimeout(() => setStatus((s) => ({ ...s, text: "" })), tone === "error" ? 8000 : 4000);
+    setStatus({ text, tone, on: true });
+    timer.current = setTimeout(hide, tone === "error" ? 8000 : 4000);
   }, []);
 
   const appearanceCtx = useMemo<AppearanceCtx>(() => ({
@@ -124,8 +135,16 @@ export function PageFrame({ children, api: injected, title }: FrameProps) {
       <AppearanceContext.Provider value={appearanceCtx}>
         <AnnounceContext.Provider value={announce}>
           {children}
-          <div class={`toast ${status.text ? "on" : ""} ${status.tone}`} role={status.tone === "error" ? "alert" : "status"} aria-live={status.tone === "error" ? "assertive" : "polite"}>
-            {status.text}
+          <div class={`toast ${status.on ? "on" : ""} ${status.tone}`}>
+            {status.tone === "error" && <Icon of={CircleAlert} />}
+            <span class="toast-t" role={status.tone === "error" ? "alert" : "status"} aria-live={status.tone === "error" ? "assertive" : "polite"}>
+              {status.text}
+            </span>
+            {status.tone === "error" && (
+              <button type="button" class="ib sm" aria-label="Dismiss" onClick={hide}>
+                <Icon of={X} />
+              </button>
+            )}
           </div>
         </AnnounceContext.Provider>
       </AppearanceContext.Provider>

@@ -35,3 +35,40 @@ describe("PageFrame appearance", () => {
     }
   });
 });
+
+describe("PageFrame status toast", () => {
+  async function announced(text: string, tone?: "polite" | "error") {
+    const { createFakeApi } = await import("../../src/api/fake");
+    const { useAnnounce } = await import("../../src/ui/frame");
+    function Say() {
+      const announce = useAnnounce();
+      return <button type="button" onClick={() => announce(text, tone)}>say</button>;
+    }
+    const r = render(<PageFrame api={createFakeApi()}><Say /></PageFrame>);
+    const { act } = await import("@testing-library/preact");
+    act(() => r.getByText("say").click());
+    return r;
+  }
+
+  test("a result is a polite status holding only the message, with nothing to dismiss", async () => {
+    const r = await announced("Saved");
+    const status = r.getByRole("status");
+    expect(status.textContent).toBe("Saved");
+    expect(status.closest(".toast")!.classList.contains("on")).toBe(true);
+    expect(r.queryByRole("button", { name: "Dismiss" })).toBeNull();
+  });
+
+  test("an error is an alert with an icon and a Dismiss button that hides it, then clears it", async () => {
+    const { act, waitFor } = await import("@testing-library/preact");
+    const r = await announced("Perch couldn't save that.", "error");
+    const alert = r.getByRole("alert");
+    expect(alert.textContent).toBe("Perch couldn't save that.");
+    const toast = alert.closest(".toast")!;
+    expect(toast.querySelector("svg.i")).not.toBeNull();
+    act(() => r.getByRole("button", { name: "Dismiss" }).click());
+    // It fades out with the message still in place, then empties so the same message is read again next time.
+    expect(toast.classList.contains("on")).toBe(false);
+    expect(alert.textContent).toBe("Perch couldn't save that.");
+    await waitFor(() => expect(alert.textContent).toBe(""));
+  });
+});

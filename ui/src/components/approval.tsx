@@ -33,10 +33,12 @@ export function ApprovalCard({ card, onDecide }: { card: Card; onDecide: (approv
   };
   return (
     <section class="approve" aria-label="Approval needed" data-kind={card.kind}>
-      <div class="ah">{card.title}</div>
-      <div class="meta">
-        <span class="mono">{card.site}</span> · {KIND_WORDS[card.kind]}
-      </div>
+      <header>
+        <div class="ah">{card.title}</div>
+        <div class="meta">
+          <span class="mono">{card.site}</span> · {KIND_WORDS[card.kind]}
+        </div>
+      </header>
       {card.body !== undefined && <blockquote class="body">{card.body || "(nothing)"}</blockquote>}
       {card.fields?.length ? (
         <dl class="fields">
@@ -62,10 +64,10 @@ export function ApprovalCard({ card, onDecide }: { card: Card; onDecide: (approv
         </form>
       )}
       <div class="act">
-        <button type="button" class={card.danger ? "btn small primary danger" : "btn small primary"} disabled={busy || (card.login !== undefined && !password)} onClick={() => void decide(true)}>
+        <button type="button" class={card.danger ? "btn primary danger" : "btn primary"} disabled={busy || (card.login !== undefined && !password)} onClick={() => void decide(true)}>
           {card.confirm}
         </button>
-        <button type="button" class="btn small outline" disabled={busy} onClick={() => void decide(false)}>
+        <button type="button" class="btn outline" disabled={busy} onClick={() => void decide(false)}>
           Don’t allow
         </button>
       </div>

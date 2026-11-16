@@ -1,10 +1,23 @@
-/* The status line that announces results and errors. Bottom left, out of the way. */
+/*
+ * The toast that announces results and errors. Bottom left, out of the way. A popup, so glass
+ * with a hairline edge (DESIGN.md); 36px tall for one line, growing with the message.
+ * An error leads with a danger icon and keeps a Dismiss button; the words stay ink so they read on any page.
+ * It fades and rises 4px in, and fades out with its message in place before the message clears.
+ */
 .toast {
-  position: fixed; left: 16px; bottom: 16px; z-index: 20; max-width: min(480px, calc(100vw - 32px));
-  padding: 8px 12px; border-radius: 12px; background: color-mix(in srgb, var(--raised) 72%, transparent); -webkit-backdrop-filter: blur(28px) saturate(1.5); backdrop-filter: blur(28px) saturate(1.5); color: var(--ink); border: 1px solid var(--hair-strong);
-  font-size: 13px; opacity: 0; transform: translateY(4px); pointer-events: none;
-  transition: opacity 180ms var(--ease), transform 180ms var(--ease);
+  position: fixed; left: 16px; bottom: 16px; z-index: 20; max-width: min(480px, calc(100vw - 32px)); min-height: 36px;
+  display: flex; align-items: flex-start; gap: 8px; padding: 8px 12px;
+  border-radius: 12px; border: 1px solid var(--hair-strong); color: var(--ink);
+  background: color-mix(in srgb, var(--raised) 72%, transparent); -webkit-backdrop-filter: blur(28px) saturate(1.5); backdrop-filter: blur(28px) saturate(1.5);
+  font-size: 13px; line-height: 18px;
+  opacity: 0; transform: translateY(4px); visibility: hidden; pointer-events: none;
+  transition: opacity 180ms var(--ease), transform 180ms var(--ease), visibility 0s linear 180ms;
 }
-.toast.on { opacity: 1; transform: none; }
-.toast.error { color: var(--danger-text); }
-.toast:empty { padding: 0; border: 0; }
+.toast.on { opacity: 1; transform: none; visibility: visible; pointer-events: auto; transition-delay: 0s; }
+/* The live region stays in the accessibility tree while the toast is hidden, so a new message is
+   heard as a change to it; a region that appears already holding its words is often not read. */
+.toast-t { min-width: 0; overflow-wrap: anywhere; visibility: visible; }
+.toast > svg.i { flex: none; margin-top: 1px; color: var(--danger-text); }
+/* The Dismiss button sits in the toast's corner, its 24px box centred on the first line. */
+.toast.error { padding-right: 6px; }
+.toast > .ib { margin: -3px 0 -3px auto; }

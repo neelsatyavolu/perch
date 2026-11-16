@@ -1,4 +1,4 @@
-# Perch: the download and site-info bubbles show their frosted glass throughout: the downloads list, its rows' quick actions and the site's permissions list paint no opaque dialog colour.
+# Perch: the downloads list shows the bubble's frosted glass, like its header and footer, and a row's quick actions sit on that glass with the file name clipped short of them.
 diff --git a/chrome/browser/ui/views/download/bubble/download_bubble_primary_view.cc b/chrome/browser/ui/views/download/bubble/download_bubble_primary_view.cc
 index dd7065b549..9d639d9cf5 100644
 --- a/chrome/browser/ui/views/download/bubble/download_bubble_primary_view.cc
@@ -99,17 +99,3 @@ index a339759c00..70f3e09f1a 100644
    void UpdateRowForFocus(bool visible, bool request_focus_on_last_quick_action);
  
    // Overrides views::ContextMenuController:
-diff --git a/chrome/browser/ui/views/page_info/page_info_main_view.cc b/chrome/browser/ui/views/page_info/page_info_main_view.cc
-index b02babc4a9..0699e8271e 100644
---- a/chrome/browser/ui/views/page_info/page_info_main_view.cc
-+++ b/chrome/browser/ui/views/page_info/page_info_main_view.cc
-@@ -335,6 +335,9 @@ void PageInfoMainView::SetPermissionInfo(
-   scroll_view->ClipHeightTo(0,
-                             kMinPermissionRowHeight * kMaxPermissionRowCount);
-   scroll_view->SetDrawOverflowIndicator(false);
-+  // Perch: bubbles are frosted glass, so the permissions list paints no opaque
-+  // dialog colour of its own and matches the rest of the bubble.
-+  scroll_view->SetBackgroundColor(std::nullopt);
-   auto* content_view =
-       scroll_view->SetContents(std::make_unique<views::View>());
-   content_view->SetLayoutManager(std::make_unique<views::FlexLayout>())

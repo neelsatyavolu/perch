@@ -1,0 +1,128 @@
+# Perch: in a frosted-glass bubble, scroll views paint no opaque dialog fill and the footer is a faint ink band, so the glass shows throughout.
+diff --git a/ui/views/bubble/bubble_dialog_delegate_view.cc b/ui/views/bubble/bubble_dialog_delegate_view.cc
+index afbc09c28e..8fa4942766 100644
+--- a/ui/views/bubble/bubble_dialog_delegate_view.cc
++++ b/ui/views/bubble/bubble_dialog_delegate_view.cc
+@@ -1482,4 +1482,17 @@ void BubbleDialogDelegate::UpdateHighlightedButton(bool highlighted) {
+ BEGIN_METADATA(BubbleDialogDelegateView)
+ END_METADATA
+ 
++bool IsInPerchGlassBubble(const View* view) {
++#if BUILDFLAG(IS_MAC)
++  Widget* widget = view ? const_cast<View*>(view)->GetWidget() : nullptr;
++  WidgetDelegate* delegate = widget ? widget->widget_delegate() : nullptr;
++  BubbleDialogDelegate* bubble =
++      delegate ? delegate->AsBubbleDialogDelegate() : nullptr;
++  return bubble && bubble->GetShadow() == BubbleBorder::NO_SHADOW &&
++         bubble->background_color() == ui::kColorMenuBackground;
++#else
++  return false;
++#endif
++}
++
+ }  // namespace views
+diff --git a/ui/views/bubble/bubble_dialog_delegate_view.h b/ui/views/bubble/bubble_dialog_delegate_view.h
+index c63a5501d9..54fc112d48 100644
+--- a/ui/views/bubble/bubble_dialog_delegate_view.h
++++ b/ui/views/bubble/bubble_dialog_delegate_view.h
+@@ -1075,6 +1075,11 @@ VIEW_BUILDER_PROPERTY(base::OnceClosure, CloseCallback)
+ VIEW_BUILDER_PROPERTY(const gfx::Insets&, ButtonRowInsets)
+ END_VIEW_BUILDER
+ 
++// Perch: whether `view` sits in a bubble Perch frosts on Mac (see
++// BubbleDialogDelegate::CreateBubbleInternal). Opaque dialog fills inside such
++// a bubble would cover the glass.
++VIEWS_EXPORT bool IsInPerchGlassBubble(const View* view);
++
+ }  // namespace views
+ 
+ DEFINE_VIEW_BUILDER(VIEWS_EXPORT, BubbleDialogDelegateView)
+diff --git a/ui/views/bubble/footnote_container_view.cc b/ui/views/bubble/footnote_container_view.cc
+index 37b5376c3e..f4a1a8dff9 100644
+--- a/ui/views/bubble/footnote_container_view.cc
++++ b/ui/views/bubble/footnote_container_view.cc
+@@ -12,6 +12,7 @@
+ #include "ui/color/color_id.h"
+ #include "ui/gfx/geometry/rounded_corners_f.h"
+ #include "ui/views/background.h"
++#include "ui/views/bubble/bubble_dialog_delegate_view.h"
+ #include "ui/views/border.h"
+ #include "ui/views/layout/box_layout.h"
+ 
+@@ -42,10 +43,20 @@ void FootnoteContainerView::ChildVisibilityChanged(View* child) {
+   SetVisible(child->GetVisible());
+ }
+ 
++void FootnoteContainerView::OnThemeChanged() {
++  View::OnThemeChanged();
++  SetRoundedBackground(lower_left_radius_, lower_right_radius_);
++}
++
+ void FootnoteContainerView::SetRoundedBackground(float lower_left_radius,
+                                                  float lower_right_radius) {
++  lower_left_radius_ = lower_left_radius;
++  lower_right_radius_ = lower_right_radius;
++  // Perch: in a frosted-glass bubble the footer is a faint ink band over the
++  // glass, not an opaque card-coloured block.
+   SetBackground(CreateRoundedRectBackground(
+-      ui::kColorBubbleFooterBackground,
++      IsInPerchGlassBubble(this) ? ui::kColorMenuSeparator
++                                 : ui::kColorBubbleFooterBackground,
+       gfx::RoundedCornersF(0, 0, lower_left_radius, lower_right_radius)));
+ }
+ 
+diff --git a/ui/views/bubble/footnote_container_view.h b/ui/views/bubble/footnote_container_view.h
+index 6c009ed454..afb1346da7 100644
+--- a/ui/views/bubble/footnote_container_view.h
++++ b/ui/views/bubble/footnote_container_view.h
+@@ -32,9 +32,14 @@ class FootnoteContainerView : public View {
+   void SetRoundedCorners(float lower_left_radius, float lower_right_radius);
+ 
+   void ChildVisibilityChanged(View* child) override;
++  void OnThemeChanged() override;
+ 
+  private:
+   void SetRoundedBackground(float lower_left_radius, float lower_right_radius);
++
++  // Perch: kept so the background can be redone once the bubble is known.
++  float lower_left_radius_ = 0;
++  float lower_right_radius_ = 0;
+ };
+ 
+ }  // namespace views
+diff --git a/ui/views/controls/scroll_view.cc b/ui/views/controls/scroll_view.cc
+index 687d5be60b..9acf3373cc 100644
+--- a/ui/views/controls/scroll_view.cc
++++ b/ui/views/controls/scroll_view.cc
+@@ -31,6 +31,7 @@
+ #include "ui/native_theme/native_theme.h"
+ #include "ui/views/accessibility/view_accessibility.h"
+ #include "ui/views/background.h"
++#include "ui/views/bubble/bubble_dialog_delegate_view.h"
+ #include "ui/views/border.h"
+ #include "ui/views/controls/focus_ring.h"
+ #include "ui/views/deprecated_layout_immediately_pass_key.h"
+@@ -1511,7 +1512,14 @@ void ScrollView::UpdateBorder() {
+ }
+ 
+ void ScrollView::UpdateBackground() {
+-  const std::optional<ui::ColorVariant> background_color = GetBackgroundColor();
++  std::optional<ui::ColorVariant> background_color = GetBackgroundColor();
++  // Perch: in a frosted-glass bubble the dialog fill would paint an opaque
++  // block over the glass; the bubble behind already paints its tint.
++  if (IsInPerchGlassBubble(this) &&
++      (background_color == ui::kColorDialogBackground ||
++       background_color == ui::kColorBubbleBackground)) {
++    background_color = std::nullopt;
++  }
+ 
+   auto create_background = [background_color]() {
+     return background_color ? CreateSolidBackground(background_color.value())
+@@ -1545,6 +1553,7 @@ std::optional<ui::ColorVariant> ScrollView::GetBackgroundColor() const {
+   return background_color_;
+ }
+ 
++
+ void ScrollView::PositionOverflowIndicators() {
+   // TODO(crbug.com/40742414): Use a layout manager to position these.
+   const gfx::Rect contents_bounds = GetContentsBounds();

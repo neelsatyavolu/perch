@@ -59,6 +59,9 @@
 #include "chrome/browser/password_manager/factories/profile_password_store_factory.h"
 #include "ui/events/event.h"
 #include "chrome/browser/ui/views/location_bar/location_bar_view.h"
+#include "chrome/browser/content_settings/host_content_settings_map_factory.h"
+#include "chrome/browser/ui/views/page_info/page_info_bubble_view_base.h"
+#include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "chrome/browser/ui/views/omnibox/omnibox_view_views.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
@@ -350,6 +353,22 @@ class Snapshotter {
       LOG(WARNING) << "Perch snapshot: spaces A:" << before << " / B:" << in_b
                    << " / back in A:" << urls() << " / names:"
                    << ListSpaces(browser_).size();
+    } else if (state == "page-info-open") {
+      // A site with a permission set, so the site info bubble shows its
+      // permissions list (the part that once painted an opaque block).
+      HostContentSettingsMapFactory::GetForProfile(browser_->GetProfile())
+          ->SetContentSettingDefaultScope(
+              GURL("https://example.com/"), GURL(),
+              ContentSettingsType::SOUND, CONTENT_SETTING_BLOCK);
+      browser_->GetTabStripModel()->GetActiveWebContents()->GetController()
+          .LoadURL(GURL("https://example.com/"), content::Referrer(),
+                   ui::PAGE_TRANSITION_TYPED, std::string());
+    } else if (state == "page-info") {
+      // The site info bubble for the page from "page-info-open".
+      BrowserView::GetBrowserViewForBrowser(browser_)
+          ->toolbar()
+          ->location_bar_view()
+          ->ShowPageInfoDialog();
     } else if (state == "translate-open") {
       browser_->GetTabStripModel()->GetActiveWebContents()->GetController()
           .LoadURL(GURL("https://fr.wikipedia.org/wiki/Paris"),
@@ -811,6 +830,13 @@ class Snapshotter {
     }
     if (states_[index_] == "agent-tabs-menu" && GetAgentTabsMenuWidget()) {
       widget = GetAgentTabsMenuWidget();
+    }
+    if (states_[index_] == "page-info") {
+      if (views::BubbleDialogDelegateView* bubble =
+              PageInfoBubbleViewBase::GetPageInfoBubbleForTesting(
+                  browser_->GetTabStripModel()->GetActiveWebContents())) {
+        widget = bubble->GetWidget();
+      }
     }
     ui::Layer* layer = widget ? widget->GetLayer() : nullptr;
     if (!layer) {

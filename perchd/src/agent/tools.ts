@@ -504,10 +504,13 @@ const RECENT_MS = 3_600_000;
 /** A whole page number from the model, or undefined. */
 const pageArg = (value: unknown): number | undefined => (value === undefined || value === null ? undefined : Math.max(1, Math.floor(Number(value)) || 1));
 
+/** Keys, certificates, password stores and dotfiles such as .env: never read, even when just downloaded. */
+const SECRET_FILE = /^\.|^id_(rsa|dsa|ecdsa|ed25519)\b|\.(pem|key|p12|pfx|kdbx|keychain(-db)?|asc|gpg|ppk)$/i;
+
 /** `path` when it is a file directly in Downloads changed in the last hour, else null. Nothing else on the Mac is reachable. */
 export function recentDownload(path: string, dir = downloadsDir(), now = Date.now()): string | null {
   const full = resolve(path.replace(/^file:\/\//, ""));
-  if (dirname(full) !== resolve(dir)) return null;
+  if (dirname(full) !== resolve(dir) || SECRET_FILE.test(basename(full))) return null;
   try {
     const st = statSync(full);
     return st.isFile() && now - st.mtimeMs < RECENT_MS && !full.endsWith(".crdownload") ? full : null;

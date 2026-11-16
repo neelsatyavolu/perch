@@ -60,6 +60,18 @@ test("read_download reads only files directly in Downloads from the last hour", 
   expect(recentDownload(old, downloads, now)).toBeNull();
 });
 
+test("read_download won't read keys or secrets, even fresh ones in Downloads", () => {
+  const downloads = mkdtempSync(join(tmpdir(), "perch-dl-secrets-"));
+  const now = Date.now();
+  for (const name of [".env", ".env.local", "id_rsa", "server.pem", "cert.key", "store.p12", "creds.pfx", "keys.kdbx", ".npmrc"]) {
+    writeFileSync(join(downloads, name), "secret");
+    expect(recentDownload(join(downloads, name), downloads, now)).toBeNull();
+  }
+  writeFileSync(join(downloads, "keynote-notes.txt"), "fine");
+  expect(recentDownload(join(downloads, "keynote-notes.txt"), downloads, now)).toBe(join(downloads, "keynote-notes.txt"));
+  rmSync(downloads, { recursive: true, force: true });
+});
+
 test("a file that is gone is a message, not a crash", async () => {
   const gone = await readLocalDocument(join(dir, "gone.pdf"), { tool: "read_attachment" });
   expect(gone.isError).toBe(true);

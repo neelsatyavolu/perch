@@ -32,6 +32,12 @@ test("an attached PDF is read as text, and page shows it as an image", async () 
   }
 });
 
+test.skipIf(process.platform !== "darwin")("page works for a PDF saved without .pdf in its name", async () => {
+  const saved = join(dir, "download.php");
+  copyFileSync(pdf, saved);
+  expect(await readLocalDocument(saved, { page: 1, tool: "read_document" })).toMatchObject({ imageType: "image/jpeg" });
+});
+
 test("page only works for PDFs, and a long text says which tool reads on", async () => {
   const notes = join(dir, "notes.docx");
   writeFileSync(notes, "not really a docx");

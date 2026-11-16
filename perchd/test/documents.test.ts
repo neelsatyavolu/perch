@@ -41,6 +41,65 @@ test("PDFs, pages and unknown formats", async () => {
   await expect(documentText(strToU8("x"), "movie.mov", "video/quicktime")).rejects.toThrow(/can't read \.mov/);
 });
 
+test("Excel keeps each cell in its column, skips empty styled cells cleanly and names the sheets", async () => {
+  const xlsx = office({
+    "xl/workbook.xml": '<workbook><sheets><sheet name="Summary" sheetId="2" r:id="rId2"/><sheet name="Q1 &amp; Q2" sheetId="1" r:id="rId1"/></sheets></workbook>',
+    "xl/_rels/workbook.xml.rels": '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Target="/xl/worksheets/sheet2.xml"/></Relationships>',
+    "xl/sharedStrings.xml": '<sst><si><r><t>Total</t></r><r><t xml:space="preserve"> due</t></r></si></sst>',
+    "xl/worksheets/sheet1.xml":
+      '<worksheet><sheetData><row r="1"><c r="A1" s="1"/><c r="B1" t="s"><v>0</v></c><c r="D1"><v>4</v></c></row><row r="2" spans="1:4"/><row r="3"><c r="A3" t="inlineStr"><is><t>Paid</t></is></c><c r="B3" t="b"><v>1</v></c><c r="C3"><f>SUM(A1:A2)</f><v>7</v></c></row></sheetData></worksheet>',
+    "xl/worksheets/sheet2.xml": '<worksheet><sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData></worksheet>',
+  });
+  expect(await documentText(xlsx, "Budget.xlsx", "")).toBe("--- Sheet 1 of 2: Summary ---\n1\n--- Sheet 2 of 2: Q1 & Q2 ---\n\tTotal due\t\t4\nPaid\tTRUE\t7");
+});
+
+test("Word keeps tabs and line breaks between words, and table rows on one line", async () => {
+  const docx = office({
+    "word/document.xml":
+      '<w:document><w:body><w:p><w:pPr><w:tabs><w:tab w:val="left" w:pos="720"/></w:tabs></w:pPr><w:r><w:t>Name:</w:t><w:tab/><w:t>Maya</w:t><w:br/><w:t>Room 4</w:t></w:r></w:p>' +
+      '<w:tbl><w:tr><w:trPr/><w:tc><w:p><w:r><w:t>Item</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>Cost</w:t></w:r></w:p></w:tc></w:tr>' +
+      '<w:tr><w:tc><w:p><w:r><w:t>Bus</w:t></w:r></w:p><w:p><w:r><w:t>pass</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>$5 &amp; up</w:t></w:r></w:p></w:tc></w:tr></w:tbl></w:body></w:document>',
+  });
+  expect(await documentText(docx, "Form.docx", "")).toBe("Name:\tMaya\nRoom 4\nItem | Cost\nBus pass | $5 & up");
+});
+
+test("web pages decode named and numbered entities, drop comments and keep table cells apart", async () => {
+  const html = "<html><!-- <p>hidden</p> --><body><p>Caf&#233;&nbsp;&mdash; it&#x27;s &ldquo;open&rdquo; &amp;nbsp;</p><table><tr><th>Day</th><th>Hours</th></tr><tr><td>Mon</td><td>9&ndash;5</td></tr></table></body></html>";
+  expect(await documentText(strToU8(html), "a.html", "text/html")).toBe("Café — it's “open” &nbsp;\nDay | Hours\nMon | 9–5");
+});
+
+test("text in other encodings and formats without a known extension is still read", async () => {
+  // Excel's "Unicode text" export: UTF-16 with a byte order mark.
+  const utf16 = new Uint8Array([0xff, 0xfe, ...[..."a\tb"].flatMap((c) => [c.charCodeAt(0), 0])]);
+  expect(await documentText(utf16, "export.txt", "")).toBe("a\tb");
+  // A Windows CSV with a curly quote and an accent (Windows-1252, not UTF-8).
+  expect(await documentText(new Uint8Array([0x93, 0x43, 0x61, 0x66, 0xe9, 0x94]), "list.csv", "")).toBe("“Café”");
+  expect(await documentText(strToU8("level: 3\nname: x"), "config.yaml", "")).toBe("level: 3\nname: x");
+  expect(await documentText(strToU8("2026-11-16 ok"), "server.log", "application/octet-stream")).toBe("2026-11-16 ok");
+  await expect(documentText(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0, 0, 0, 1]), "picture", "application/octet-stream")).rejects.toThrow(/can't read this kind of/);
+});
+
+test("a file with no extension is read by what it contains", async () => {
+  const pdf = readFileSync(join(import.meta.dir, "fixtures", "business-cycle.pdf"));
+  expect(await documentText(pdf, "download.php", "application/octet-stream")).toContain("Expansion, peak, contraction, trough.");
+  const docx = office({ "[Content_Types].xml": "<Types/>", "word/document.xml": "<w:document><w:p><w:r><w:t>Essay</w:t></w:r></w:p></w:document>" });
+  expect(await documentText(docx, "file", "application/octet-stream")).toBe("Essay");
+});
+
+test("unreadable files say why and what to do", async () => {
+  const ole = new Uint8Array([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1, 0, 0, 0, 0]);
+  await expect(documentText(ole, "old.doc", "application/msword")).rejects.toThrow(/older \.doc format.*\.docx/);
+  // Many sites' "Export to Excel" sends a web page or CSV named .xls; those are read.
+  expect(await documentText(strToU8("<html xmlns:x=\"urn:schemas-microsoft-com:office:excel\"><body><table><tr><td>Item</td><td>Price</td></tr></table></body></html>"), "report.xls", "application/vnd.ms-excel")).toBe("Item | Price");
+  expect(await documentText(strToU8("Item,Price\nTea,2"), "report.xls", "application/vnd.ms-excel")).toBe("Item,Price\nTea,2");
+  const signIn = strToU8("<!doctype html><html><title>Sign in</title><style>p{width:100%}</style><form>Password</form></html>");
+  await expect(documentText(signIn, "notes.pdf", "application/octet-stream")).rejects.toThrow(/sent a web page, not the file/);
+});
+
+test("reading past the end says the text has ended", () => {
+  expect(part("short", 500)).toBe("(The text ends at character 5; there is no more.)");
+});
+
 test("long text comes in parts that say how to read on", () => {
   const text = "a".repeat(70_000);
   expect(part(text)).toContain("Call read_document again with from=30000");

@@ -68,9 +68,11 @@ export function pdfSection(result: PdfPages, full: boolean): string {
   let out = "";
   let shown = 0;
   for (const [i, page] of result.pages.entries()) {
-    const block = `\n--- Page ${i + 1} of ${total} ---\n${page || "(no text on this page; it may be a scanned image)"}`;
+    const block = `\n--- Page ${i + 1} of ${total} ---\n${page || `(no text on this page; it may be a scanned image. read_document with this page's address and page=${i + 1} shows it as an image)`}`;
     if (out.length + block.length > limit) {
-      out += `\n--- Pages ${i + 1}–${total} not shown (${full ? "too long" : "take a full snapshot to see more"}) ---`;
+      out += full
+        ? `\n--- Pages ${i + 1}–${total} not shown: read_document with this page's address reads them, a part at a time ---`
+        : `\n--- Pages ${i + 1}–${total} not shown (take a full snapshot to see more) ---`;
       break;
     }
     out += block;

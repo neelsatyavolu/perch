@@ -162,43 +162,125 @@ export function freeName(dir: string, name: string): string {
   }
 }
 
-/** The document's text, by its type or extension. Throws when the format is not one Perch reads. */
+const TEXT_EXT = new Set([".txt", ".csv", ".tsv", ".json", ".md", ".markdown", ".xml", ".yaml", ".yml", ".log", ".ics", ".vcf"]);
+const OLD_OFFICE: Record<string, string> = { ".doc": ".docx", ".xls": ".xlsx", ".ppt": ".pptx" };
+const OFFICE_PART: [string, string][] = [["word/document.xml", ".docx"], ["ppt/presentation.xml", ".pptx"], ["xl/workbook.xml", ".xlsx"]];
+
+const startsWith = (bytes: Uint8Array, text: string) => [...text].every((c, i) => bytes[i] === c.charCodeAt(0));
+const looksLikeHtml = (bytes: Uint8Array) => /^\s*(<!--[\s\S]*?-->\s*)*<(!doctype html|html|head|body)[\s>]/i.test(new TextDecoder().decode(bytes.subarray(0, 1024)));
+
+/** An Office file's extension by the parts inside the zip, for files saved without one. */
+function officeKind(bytes: Uint8Array): string | undefined {
+  const names: string[] = [];
+  try {
+    unzipSync(bytes, { filter: (f) => (names.push(f.name), false) });
+  } catch {
+    return undefined;
+  }
+  return OFFICE_PART.find(([part]) => names.includes(part))?.[1];
+}
+
+/** Plain text when the bytes are text: a UTF-16 byte order mark, or valid UTF-8 with no NUL bytes. */
+function sniffText(bytes: Uint8Array): string | undefined {
+  if ((bytes[0] === 0xff && bytes[1] === 0xfe) || (bytes[0] === 0xfe && bytes[1] === 0xff)) return decodeText(bytes);
+  if (bytes.subarray(0, 8192).includes(0)) return undefined;
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Text in the encoding it was written in: UTF-16 by its byte order mark, a web page's own
+ * `<meta charset>`, UTF-8, and otherwise Windows-1252, which older Windows CSV and text files use.
+ */
+export function decodeText(bytes: Uint8Array, html = false): string {
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) return new TextDecoder("utf-16le").decode(bytes);
+  if (bytes[0] === 0xfe && bytes[1] === 0xff) return new TextDecoder("utf-16be").decode(bytes);
+  const declared = html ? new TextDecoder().decode(bytes.subarray(0, 2048)).match(/<meta[^>]+charset=["']?([\w-]+)/i)?.[1] : undefined;
+  if (declared && !/^utf-?8$/i.test(declared)) {
+    try {
+      return new TextDecoder(declared).decode(bytes);
+    } catch {
+      // A charset this runtime doesn't know: fall through to UTF-8.
+    }
+  }
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return new TextDecoder("windows-1252").decode(bytes);
+  }
+}
+
+/**
+ * The document's text, by its type or extension, or for a file saved without either (a link to
+ * download.php, an attachment called "file") by what its bytes are. Throws when Perch can't read it.
+ */
 export async function documentText(bytes: Uint8Array, name: string, type: string): Promise<string> {
-  const ext = extname(name).toLowerCase();
-  if (type === "application/pdf" || ext === ".pdf") {
+  let ext = extname(name).toLowerCase();
+  if (type === "application/pdf" || ext === ".pdf" || startsWith(bytes, "%PDF-")) {
+    // A PDF's header may come after up to 1 KB of other bytes; a page with none is not the file.
+    if (!new TextDecoder("latin1").decode(bytes.subarray(0, 1024)).includes("%PDF-") && looksLikeHtml(bytes)) {
+      throw new Error("the server sent a web page, not the file (often a sign-in or cookie page); open the link in a tab to see it");
+    }
     const pdf = await pdfText(bytes);
     if ("error" in pdf) throw new Error(pdf.error);
     return pdf.pages.map((p, i) => `--- Page ${i + 1} of ${pdf.pages.length} ---\n${p || `(no text on this page; it may be a scan or handwriting. Read it again with page=${i + 1} to see it as an image)`}`).join("\n");
   }
+  if (![".pptx", ".docx", ".xlsx"].includes(ext) && startsWith(bytes, "PK\x03\x04")) ext = officeKind(bytes) ?? ext;
   if (ext === ".pptx" || ext === ".docx" || ext === ".xlsx") return officeText(bytes, ext);
-  if (type === "text/html" || ext === ".html" || ext === ".htm") return htmlText(strFromU8(bytes));
-  if (type.startsWith("text/") || type === "application/json" || [".txt", ".csv", ".json", ".md"].includes(ext)) return strFromU8(bytes);
-  throw new Error(`Perch can't read ${ext || type || "this kind of"} files; it reads PDF, PowerPoint, Word, Excel, web pages and plain text`);
+  if (type === "text/html" || ext === ".html" || ext === ".htm" || looksLikeHtml(bytes)) return htmlText(decodeText(bytes, true));
+  if (type.startsWith("text/") || type === "application/json" || TEXT_EXT.has(ext)) return decodeText(bytes);
+  // A server's type for pictures, sound and video is trusted; a vague one (octet-stream, none) is not.
+  const text = /^(image|audio|video|font)\//.test(type) ? undefined : sniffText(bytes);
+  if (text !== undefined) return text;
+  // Checked last: a site's "Export to Excel" often sends a web page or CSV named .xls, and that reads fine.
+  if (OLD_OFFICE[ext]) throw new Error(`it is in the older ${ext} format, which Perch can't read; it reads ${OLD_OFFICE[ext]}`);
+  throw new Error(`Perch can't read ${ext || "this kind of"} files; it reads PDF, PowerPoint, Word, Excel, web pages and text files`);
 }
 
-const decodeXml = (s: string) =>
-  s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#(\d+);/g, (_, n: string) => String.fromCodePoint(Number(n))).replace(/&amp;/g, "&");
+const ENTITIES: Record<string, string> = {
+  nbsp: " ", ndash: "–", mdash: "—", lsquo: "‘", rsquo: "’", ldquo: "“", rdquo: "”", hellip: "…", bull: "•", middot: "·",
+  copy: "©", reg: "®", trade: "™", deg: "°", times: "×", euro: "€", pound: "£", laquo: "«", raquo: "»",
+};
 
-/** Text runs (`<a:t>`, `<w:t>`, `<t>`) of each paragraph, a line per paragraph. */
+const codePoint = (n: number, whole: string) => (n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : whole);
+
+const decodeXml = (s: string) =>
+  s
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (whole, n: string) => codePoint(Number(n), whole))
+    .replace(/&#x([0-9a-f]+);/gi, (whole, n: string) => codePoint(parseInt(n, 16), whole))
+    .replace(/&amp;/g, "&");
+
+/** The raw (still escaped) text of each run (`<a:t>`, `<w:t>`, `<t>`) in a piece of XML, joined. */
+const runsOf = (xml: string, run: string) => [...xml.matchAll(new RegExp(`<${run}(?:\\s[^>]*)?>([^<]*)</${run}>`, "g"))].map((m) => m[1]!).join("");
+
+/** Text runs of each paragraph, a line per paragraph. */
 function paragraphs(xml: string, para: string, run: string): string {
   return xml
     .split(new RegExp(`</${para}>`))
-    .map((p) => [...p.matchAll(new RegExp(`<${run}(?:\\s[^>]*)?>([^<]*)</${run}>`, "g"))].map((m) => decodeXml(m[1]!)).join(""))
+    .map((p) => decodeXml(runsOf(p, run)))
     .filter((line) => line.trim())
     .join("\n");
 }
 
 const numbered = (name: string) => Number(name.match(/(\d+)\.xml$/)?.[1] ?? 0);
+const attr = (tag: string, name: string) => tag.match(new RegExp(`\\s${name}="([^"]*)"`))?.[1];
 
 function officeText(bytes: Uint8Array, ext: string): string {
   let files: Record<string, Uint8Array>;
   try {
-    files = unzipSync(bytes, { filter: (f) => f.name.endsWith(".xml") });
+    files = unzipSync(bytes, { filter: (f) => f.name.endsWith(".xml") || f.name.endsWith(".rels") });
   } catch {
     throw new Error(`the ${ext} file could not be opened`);
   }
   const xml = (name: string) => (files[name] ? strFromU8(files[name]) : "");
-  if (ext === ".docx") return paragraphs(xml("word/document.xml"), "w:p", "w:t");
+  if (ext === ".docx") return docxText(xml("word/document.xml"));
   if (ext === ".pptx") {
     const slides = Object.keys(files).filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n)).sort((a, b) => numbered(a) - numbered(b));
     return slides
@@ -208,39 +290,92 @@ function officeText(bytes: Uint8Array, ext: string): string {
       })
       .join("\n");
   }
-  // .xlsx: each sheet's rows, cells separated by tabs, shared strings looked up.
-  const shared = [...xml("xl/sharedStrings.xml").matchAll(/<si>([\s\S]*?)<\/si>/g)].map((m) => [...m[1]!.matchAll(/<t(?:\s[^>]*)?>([^<]*)<\/t>/g)].map((t) => decodeXml(t[1]!)).join(""));
-  const sheets = Object.keys(files).filter((n) => /^xl\/worksheets\/sheet\d+\.xml$/.test(n)).sort((a, b) => numbered(a) - numbered(b));
+  return xlsxText(files, xml);
+}
+
+/**
+ * A Word document's paragraphs. Tabs and line breaks inside a paragraph keep words apart, and a
+ * table row comes out as one line, its cells separated by " | ".
+ */
+function docxText(xml: string): string {
+  const flat = xml.replace(/<w:tab\/>/g, "<w:t>\t</w:t>").replace(/<w:(?:br|cr)(?:\s[^>]*)?\/>/g, "<w:t>\n</w:t>");
+  const rows = flat.replace(/<w:tr[\s>][\s\S]*?<\/w:tr>/g, (row) => {
+    const cells = row.split("</w:tc>").slice(0, -1).map((cell) => cell.split("</w:p>").map((p) => runsOf(p, "w:t")).join(" ").replace(/\s+/g, " ").trim());
+    return `<w:p><w:r><w:t>${cells.join(" | ")}</w:t></w:r></w:p>`;
+  });
+  return paragraphs(rows, "w:p", "w:t");
+}
+
+/** A column's index from a cell reference: "A1" is 0, "AB7" is 27. */
+const columnOf = (ref: string) => [...(ref.match(/^[A-Z]+/)?.[0] ?? "")].reduce((n, c) => n * 26 + c.charCodeAt(0) - 64, 0) - 1;
+
+/**
+ * Each sheet's rows, by the workbook's sheet order and names, cells separated by tabs in their own
+ * columns (an empty cell keeps its place), shared and inline strings looked up.
+ */
+function xlsxText(files: Record<string, Uint8Array>, xml: (name: string) => string): string {
+  const shared = [...xml("xl/sharedStrings.xml").matchAll(/<si>([\s\S]*?)<\/si>/g)].map((m) => decodeXml(runsOf(m[1]!, "t")));
+  const sheets = sheetsOf(files, xml);
   return sheets
-    .map((s, i) => {
-      const rows = [...xml(s).matchAll(/<row[^>]*>([\s\S]*?)<\/row>/g)].map((r) =>
-        [...r[1]!.matchAll(/<c([^>]*)>([\s\S]*?)<\/c>/g)]
-          .map((c) => {
-            const value = c[2]!.match(/<v>([^<]*)<\/v>/)?.[1] ?? c[2]!.match(/<t(?:\s[^>]*)?>([^<]*)<\/t>/)?.[1] ?? "";
-            return /t="s"/.test(c[1]!) ? shared[Number(value)] ?? "" : decodeXml(value);
-          })
-          .join("\t"),
-      );
-      return `--- Sheet ${i + 1} of ${sheets.length} ---\n${rows.join("\n")}`;
+    .map(({ path, name }, i) => {
+      const rows = [...xml(path).matchAll(/<row\b[^>]*?(?:\/>|>([\s\S]*?)<\/row>)/g)].map((r) => rowText(r[1] ?? "", shared)).filter(Boolean);
+      return `--- Sheet ${i + 1} of ${sheets.length}${name ? `: ${name}` : ""} ---\n${rows.join("\n")}`;
     })
     .join("\n");
 }
 
+function rowText(row: string, shared: string[]): string {
+  const cells: string[] = [];
+  for (const c of row.matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+    const [tag, body = ""] = [c[1]!, c[2]];
+    const ref = attr(tag, "r");
+    const at = ref ? columnOf(ref) : cells.length;
+    const kind = attr(tag, "t");
+    const value = body.match(/<v>([^<]*)<\/v>/)?.[1] ?? "";
+    const text = kind === "s" ? shared[Number(value)] ?? "" : kind === "inlineStr" ? decodeXml(runsOf(body, "t")) : kind === "b" ? (value === "1" ? "TRUE" : "FALSE") : decodeXml(value);
+    while (cells.length < at) cells.push("");
+    cells[Math.max(at, cells.length)] = text;
+  }
+  while (cells.length && !cells.at(-1)) cells.pop();
+  return cells.join("\t");
+}
+
+/** Sheet files with their names, in the workbook's order; numbered order when the workbook doesn't say. */
+function sheetsOf(files: Record<string, Uint8Array>, xml: (name: string) => string): { path: string; name?: string }[] {
+  const targets = new Map([...xml("xl/_rels/workbook.xml.rels").matchAll(/<Relationship\b[^>]*>/g)].map((m) => [attr(m[0], "Id"), attr(m[0], "Target")]));
+  const named = [...xml("xl/workbook.xml").matchAll(/<sheet\b[^>]*>/g)]
+    .map((m) => {
+      const target = targets.get(attr(m[0], "r:id"))?.replace(/^\//, "");
+      return { path: target?.startsWith("xl/") ? target : `xl/${target}`, name: decodeXml(attr(m[0], "name") ?? "") };
+    })
+    .filter((s) => files[s.path]);
+  if (named.length) return named;
+  return Object.keys(files)
+    .filter((n) => /^xl\/worksheets\/sheet\d+\.xml$/.test(n))
+    .sort((a, b) => numbered(a) - numbered(b))
+    .map((path) => ({ path }));
+}
+
+/** A web page's text: a line per block, table cells separated by " | ", entities decoded. */
 function htmlText(html: string): string {
-  return decodeXml(
-    html
-      .replace(/<(script|style|noscript)[\s\S]*?<\/\1>/gi, " ")
-      .replace(/<\/(p|div|li|h\d|tr|br)>|<br\s*\/?>/gi, "\n")
-      .replace(/<[^>]+>/g, " "),
-  )
+  const stripped = html
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<(script|style|noscript|template)\b[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<\/t[dh]>/gi, " | ")
+    .replace(/<\/(p|div|li|h\d|tr|br|section|article|header|footer|blockquote|pre|dt|dd|table|caption)>|<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&([a-z]+);/g, (whole, name: string) => ENTITIES[name] ?? whole);
+  return decodeXml(stripped)
     .replace(/[ \t]+/g, " ")
     .replace(/ *\n[\s]*/g, "\n")
+    .replace(/ ?\|$/gm, "")
     .trim();
 }
 
 /** Part of a long text, from character `from`, with a note on what is left. */
 export function part(text: string, from = 0, tool = "read_document"): string {
-  const start = Math.max(0, Math.min(from, text.length));
+  if (text && from >= text.length) return `(The text ends at character ${text.length}; there is no more.)`;
+  const start = Math.max(0, from);
   const end = Math.min(text.length, start + PART_CHARS);
   const rest = end < text.length ? `\n\n(Characters ${start}–${end} of ${text.length}. Call ${tool} again with from=${end} for more.)` : "";
   return `${text.slice(start, end)}${rest}`;

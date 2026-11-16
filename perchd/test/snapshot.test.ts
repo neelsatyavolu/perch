@@ -105,3 +105,13 @@ test("fixed banners inside containers placed far down the page are still listed"
   expect(snap.text).toMatch(/button "Reject All" \[ref=e\d+\]/);
   await tab.close();
 });
+
+test("a long paragraph is shown whole, and table cells keep their columns", async () => {
+  const tab = await env.browser.newTab(env.site.url("/article.html"));
+  const snap = await snapshot(tab);
+  expect(snap.text).toContain("The meeting moved to Room 12.");
+  expect(snap.text).toContain('- row "Item | Size | Price"');
+  expect(snap.text).toContain('- row "Apple |  | $1"');
+  expect(snap.text).toMatch(/- row "Pear \| Large \| \$2"\n\s+- link "Pear" \[ref=e\d+\]/);
+  await tab.close();
+});

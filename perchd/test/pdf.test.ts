@@ -18,6 +18,12 @@ test("the snapshot shows the text, and says when pages are left out", () => {
   expect(pdfSection({ pages: [""] }, false)).toContain("may be a scanned image");
 });
 
+test("a PDF too long for a full snapshot says how to read the rest, and a scanned page how to see it", () => {
+  const long = pdfSection({ pages: Array.from({ length: 10 }, () => "a".repeat(15_000)) }, true);
+  expect(long).toContain("--- Pages 8–10 not shown: read_document with this page's address reads them, a part at a time ---");
+  expect(pdfSection({ pages: ["", "Text"] }, false)).toContain("--- Page 1 of 2 ---\n(no text on this page; it may be a scanned image. read_document with this page's address and page=1 shows it as an image)");
+});
+
 test("a file that is not a PDF says so instead of failing the step", async () => {
   const result = await textOf(new TextEncoder().encode("not a pdf"));
   expect("error" in result && result.error).toContain("could not be read");

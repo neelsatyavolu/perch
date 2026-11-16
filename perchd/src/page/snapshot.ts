@@ -26,6 +26,8 @@ export const DEFAULT_BUDGET = 12_000;
  */
 export const FULL_BUDGET = 30_000;
 const TEXT_LIMIT = 160;
+/** Page text is what the agent reads, so a paragraph is cut only when it is very long. */
+const PARAGRAPH_LIMIT = 2_000;
 
 const INTERACTIVE = new Set([
   "button", "link", "textbox", "searchbox", "combobox", "checkbox", "radio", "switch", "menuitem",
@@ -277,7 +279,7 @@ function renderNode(ctx: Ctx, tree: Tree, node: AXNode, depth: number): string[]
     return NESTING.has(role) ? [line, ...interactiveInside(ctx, tree, node, depth + 1)] : [line];
   }
   if (role === "heading") return [`${pad}- heading "${name}" [level=${prop(node, "level") ?? 2}]`, ...interactiveInside(ctx, tree, node, depth + 1)];
-  if (role === "StaticText") return name ? [`${pad}- text "${name}"`] : [];
+  if (role === "StaticText") return name ? [`${pad}- text "${clean(str(node.name), PARAGRAPH_LIMIT)}"`] : [];
   if (role === "img") return name ? [`${pad}- img "${name}"`] : [];
   if (role === "row") return renderRow(ctx, tree, node, depth);
   if (CONTAINERS.has(role)) {
@@ -320,16 +322,21 @@ function interactiveInside(ctx: Ctx, tree: Tree, node: AXNode, depth: number): s
   return renderChildren(ctx, tree, node, depth).filter((line) => line.includes("[ref="));
 }
 
-/** A table row on one line: plain cells as text, interactive cells as their own lines below. */
+/**
+ * A table row on one line, a slot per cell so values stay under their column (an empty cell is an
+ * empty slot), and interactive cells' elements as their own lines below. Trailing empty or
+ * interactive cells are left off the line: nothing after them needs lining up.
+ */
 function renderRow(ctx: Ctx, tree: Tree, row: AXNode, depth: number): string[] {
-  const plain: string[] = [];
+  const slots: { text: string; interactive: boolean }[] = [];
   const actionable: string[] = [];
   for (const cell of children(tree, row)) {
-    const inner = renderChildren(ctx, tree, cell, depth + 1);
-    if (inner.some((line) => line.includes("[ref="))) actionable.push(...inner.filter((line) => line.includes("[ref=")));
-    else if (str(cell.name).trim()) plain.push(clean(str(cell.name), 60));
+    const inner = renderChildren(ctx, tree, cell, depth + 1).filter((line) => line.includes("[ref="));
+    actionable.push(...inner);
+    slots.push({ text: clean(str(cell.name), 60), interactive: inner.length > 0 });
   }
-  return [`${"  ".repeat(depth)}- row "${plain.join(" | ")}"`, ...actionable];
+  while (slots.length && (!slots.at(-1)!.text || slots.at(-1)!.interactive)) slots.pop();
+  return [`${"  ".repeat(depth)}- row "${slots.map((s) => s.text).join(" | ")}"`, ...actionable];
 }
 
 function extras(ctx: Ctx, tree: Tree, node: AXNode, role: string): string {

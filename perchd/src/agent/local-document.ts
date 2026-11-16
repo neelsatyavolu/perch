@@ -3,7 +3,7 @@
  * its text, a part at a time, or with `page` one PDF page as an image, for scans and handwriting.
  */
 
-import { readFile, stat } from "node:fs/promises";
+import { open, readFile, stat } from "node:fs/promises";
 import { basename, extname } from "node:path";
 import { documentText, part } from "./documents";
 import { pdfPageImage } from "./pdf-image";
@@ -16,9 +16,21 @@ export type ReadOptions = { from?: number; page?: number; tool: string; title?: 
 
 export const isPdf = (path: string) => extname(path).toLowerCase() === ".pdf";
 
+/** True when the file starts as a PDF does, for one saved without .pdf (from download.php, say). */
+async function hasPdfHeader(path: string): Promise<boolean> {
+  const file = await open(path).catch(() => undefined);
+  if (!file) return false;
+  try {
+    const { buffer, bytesRead } = await file.read(Buffer.alloc(5), 0, 5, 0);
+    return buffer.subarray(0, bytesRead).toString("latin1") === "%PDF-";
+  } finally {
+    await file.close();
+  }
+}
+
 /** A page as an image the model sees. Only PDFs have pages. */
 export async function pageOf(path: string, page: number, title = basename(path)): Promise<LocalRead> {
-  if (!isPdf(path)) return { content: `page only works for PDFs; ${title} isn't one.`, isError: true };
+  if (!isPdf(path) && !(await hasPdfHeader(path))) return { content: `page only works for PDFs; ${title} isn't one.`, isError: true };
   try {
     const shot = await pdfPageImage(path, page);
     return { content: `${title}, page ${page} of ${shot.pages}`, image: shot.jpegBase64, imageType: "image/jpeg" };

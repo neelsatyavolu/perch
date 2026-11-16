@@ -77,6 +77,33 @@ test("open, tabs, snapshot, click and screenshot work in the terminal's own sess
   expect((await perch("sessions")).out).toContain("No agent sessions.");
 }, 60_000);
 
+test("find, hover, wait, switch, downloads and read work from the terminal", async () => {
+  const s = ["--session", "tools"];
+  expect((await perch("open", ...s, site.url("/mail.html"))).code).toBe(0);
+  const found = await perch("find", ...s, "Compose", "--role", "button");
+  expect(found.code).toBe(0);
+  const ref = found.out.match(/\b(e\d+)\b/)![1]!;
+  expect((await perch("hover", ...s, ref)).code).toBe(0);
+  expect(await perch("wait", ...s, "Mailroom", "--timeout", "5s")).toMatchObject({ code: 0 });
+  expect((await perch("wait", ...s, "--seconds", "0")).out).toContain("waited 0 s");
+  const id = (await perch("tabs", ...s)).out.match(/^\* ([A-F0-9]{32})/m)![1]!;
+  expect((await perch("switch", ...s, id)).code).toBe(0);
+  expect((await perch("downloads", ...s)).code).toBe(0);
+  // A URL goes to read_document, which reads only public addresses, so the fixture's is refused.
+  const read = await perch("read", ...s, site.url("/news.html"));
+  expect(read.code).toBe(1);
+  expect(read.err).toContain("read_document only reads public addresses");
+  // A path reads a download; one Perch didn't download is refused by the tool, with exit 1.
+  const local = await perch("read", ...s, "/nowhere/report.pdf");
+  expect(local.code).toBe(1);
+  expect(local.err).toContain("downloads tool lists");
+  // A relative path is a file too, from this terminal's folder, not a URL to fetch.
+  const relative = await perch("read", ...s, "./report.pdf");
+  expect(relative.code).toBe(1);
+  expect(relative.err).toContain("downloads tool lists");
+  await perch("session", "end", ...s);
+}, 60_000);
+
 test("separate --session names keep separate tab groups", async () => {
   await perch("open", "--session", "research", site.url("/news.html"));
   const listed = await perch("sessions", "--json");
@@ -95,7 +122,7 @@ test("errors, usage and admin commands", async () => {
   expect((await perch("type", "e1")).err).toContain("usage: perch type <ref> <text>");
   expect((await perch("guide")).out).toContain("# Using Perch from an agent");
   expect((await perch("-v")).out).toMatch(/^perch \S+\n$/);
-  expect((await perch("snapshot", "--sesion", "x")).err).toBe("perch: unknown option --sesion; this command takes --full, --session\n");
+  expect((await perch("snapshot", "--sesion", "x")).err).toBe("perch: unknown option --sesion (did you mean --session?); this command takes --full, --session\n");
   expect((await perch("--help")).out).toContain("perch skill install claude|codex|grok");
 
   await perch("status");

@@ -6,7 +6,7 @@
  */
 
 import type { TaskView } from "../app/tasks";
-import { parseArgs, UsageError } from "./args";
+import { closest, parseArgs, UsageError } from "./args";
 import type { DaemonClient } from "./client";
 import { DaemonNotRunning } from "./client";
 import { openDaemon, type CliIO } from "./io";
@@ -143,8 +143,11 @@ export const taskCommands: Record<string, Command> = {
 
   async session(argv, io) {
     const [action, ...rest] = argv;
-    const handler = action ? SESSION_ACTIONS[action] : undefined;
-    if (!handler) throw new UsageError(SESSION_USAGE);
+    const handler = action && Object.hasOwn(SESSION_ACTIONS, action) ? SESSION_ACTIONS[action] : undefined;
+    if (!handler) {
+      const near = action && closest(action, [...Object.keys(SESSION_ACTIONS), "end"]);
+      throw new UsageError(action ? `perch: unknown session command "${action}".${near ? ` Did you mean perch session ${near}?` : ""}\n\n${SESSION_USAGE}` : SESSION_USAGE);
+    }
     return handler(rest, io);
   },
 
@@ -155,6 +158,7 @@ export const taskCommands: Record<string, Command> = {
       const query = a.positionals.join(" ").trim();
       if (!query) throw new UsageError('usage: perch memory search "<query>" [--limit n] [--json]');
       const limit = a.options.has("--limit") ? Number(a.options.get("--limit")) : 10;
+      if (!Number.isInteger(limit) || limit < 1) throw new UsageError(`perch: --limit takes a whole number of results, like 5`);
       const hits = await connected(io, (c) => c.request<{ path: string; title: string; snippet: string; score: number }[]>("memory.search", { query, limit }));
       if (a.flags.has("--json")) io.stdout(`${JSON.stringify(hits, null, 2)}\n`);
       else io.stdout(hits.length ? hits.map((h) => `${h.path}  ${h.title}\n  ${h.snippet.replace(/\s+/g, " ").trim()}\n`).join("") : "Nothing in memory matches.\n");
@@ -184,8 +188,13 @@ export const taskCommands: Record<string, Command> = {
 
   async skills(argv, io) {
     const [action, ...rest] = argv;
-    if (action === "list" || action === undefined) {
+    if (action === "list" || action === undefined || action === "--json") {
+      const json = parseArgs(action === "--json" ? argv : rest, { flags: ["--json"] }).flags.has("--json");
       const list = await connected(io, (c) => c.request<{ name: string; description: string; origin: string }[]>("skills.list"));
+      if (json) {
+        io.stdout(`${JSON.stringify(list, null, 2)}\n`);
+        return 0;
+      }
       io.stdout(list.length ? list.map((s) => `${s.name.padEnd(16)} ${s.description}${s.origin === "mine" ? " (yours)" : ""}\n`).join("") : "No skills.\n");
       if (list.length) io.stderr("Read one with: perch skills show <name>\n");
       return 0;
@@ -196,11 +205,11 @@ export const taskCommands: Record<string, Command> = {
       io.stdout(`${await connected(io, (c) => c.request<string>("skills.show", { name, ...(file ? { file } : {}) }))}\n`);
       return 0;
     }
-    throw new UsageError("usage: perch skills list | show <name> [file]");
+    throw new UsageError("usage: perch skills list [--json] | show <name> [file]");
   },
 };
 
-const SESSION_USAGE = `usage: perch session <command>
+export const SESSION_USAGE = `usage: perch session <command>
 
   list [--json]                     tasks this client started, newest first
   inspect <id> [--json]             a task's status, steps and latest answer

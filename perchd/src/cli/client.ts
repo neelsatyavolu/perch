@@ -3,6 +3,9 @@
 import type { ApproveAsk, Fatal, Hello, Notice, Response, Welcome } from "../daemon/protocol";
 import { LineReader, SocketWriter } from "../daemon/wire";
 
+/** What a command says when there is no perchd to talk to. */
+export const NOT_RUNNING = "Perch is not running. Open Perch, then try again.";
+
 export class DaemonNotRunning extends Error {
   constructor() {
     super("perchd is not running");

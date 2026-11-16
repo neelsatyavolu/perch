@@ -5,10 +5,10 @@
 
 import { createInterface } from "node:readline/promises";
 import guide from "../../skills/perch/guide.md" with { type: "text" };
-import { UsageError } from "./args";
-import { DaemonNotRunning } from "./client";
+import { closest, parseArgs, UsageError } from "./args";
+import { DaemonNotRunning, NOT_RUNNING } from "./client";
 import { browserCommands, sessionCommands } from "./commands";
-import { taskCommands } from "./tasks";
+import { SESSION_USAGE, taskCommands } from "./tasks";
 import type { CliIO } from "./io";
 import { APP_NEEDED, VERSION } from "../daemon/daemon";
 
@@ -24,13 +24,19 @@ Tasks (each is a Perch chat you can open, resume and steer):
                                    only the answer goes to stdout; steps go to stderr
   perch session list | inspect <id> | resume <id> ["<follow-up>"] | steer <id> "<msg>"
                 | queue <id> "<msg>" | stop <id> | delete <id> --yes | end [--sleep]
-  perch models                     the models a task can use
+  perch models [--json]            the models a task can use, and the efforts each takes
 
 Browser (in this terminal's own tab group, or PERCH_SESSION's; --session <name> for another):
   perch open <url> | navigate <url> | back | tabs
   perch snapshot [--full]          read the current tab; elements have refs like e12
+  perch find <name> [--role button] [--contains]   refs for elements anywhere on the page
   perch scroll [down | up | <px>]  scroll the page, to read past what a snapshot shows
   perch click <ref> | type <ref> <text> [--submit] | select <ref> <option> | press <key>
+  perch hover <ref>                move the mouse over an element, for menus and tooltips
+  perch wait "<text>" [--timeout 10s] | wait --seconds <n>   wait for text, or a while
+  perch switch <tab id>            work in another tab, by its id from perch tabs
+  perch downloads                  files downloaded in the last hour, with their paths
+  perch read <url | download path> [--from n]   the text of a PDF, .docx, .pptx, .xlsx or page
   perch screenshot [-o file.jpg]   save what the tab shows
   perch repl ["<js>"] [--reset]   a JavaScript session over your tabs, like aside repl:
                                    await openTab(url), snapshot(page), page.locator(ref).click();
@@ -40,14 +46,14 @@ Browser (in this terminal's own tab group, or PERCH_SESSION's; --session <name> 
                                    snapshot(), click(ref), type(ref, text), js(code), log(...)
 
 Memory and skills (read only):
-  perch memory search "<query>" [--json] | list | show <path>
-  perch skills list | show <name>
+  perch memory search "<query>" [--limit n] [--json] | list [--json] | show <path> [--json]
+  perch skills list [--json] | show <name>
 
 Sessions and clients:
   perch status [--json]            whether perchd runs, and every agent session
   perch sessions [--json]          agent sessions and their tabs
   perch focus [--client C] [--session S]   bring a session's tabs forward
-  perch clients [list | revoke <name> | allow <name> | mode <name> ask|guard|skip]
+  perch clients [list | revoke <name> | allow <name> | mode <name> ask|guard|skip] [--json]
 
 Agents:
   perch mcp [--client C] [--session S] [--agent A] [--title T] [--on-end close|sleep]
@@ -85,12 +91,13 @@ const commands: Record<string, Command> = {
   async session(argv, io) {
     return argv[0] === "end" ? sessionCommands.session!(argv, io) : taskCommands.session!(argv, io);
   },
-  async models(_argv, io) {
+  async models(argv, io) {
+    const a = parseArgs(argv, { flags: ["--json"] });
     const { openDaemon } = await import("./io");
     const c = await openDaemon({ ...io, autostart: false });
     try {
       const list = await c.request<{ id: string; label: string; efforts: string[] }[]>("task.models");
-      io.stdout(list.map((m) => `${m.id.padEnd(32)} ${m.label} (${m.efforts.join(", ")})\n`).join(""));
+      io.stdout(a.flags.has("--json") ? `${JSON.stringify(list, null, 2)}\n` : list.map((m) => `${m.id.padEnd(32)} ${m.label} (${m.efforts.join(", ")})\n`).join(""));
       return 0;
     } finally {
       c.close();
@@ -133,7 +140,7 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
     return 0;
   }
   if (Object.hasOwn(commands, name) && (rest.includes("--help") || rest.includes("-h"))) {
-    io.stdout(helpFor(name) ?? USAGE);
+    io.stdout(name === "session" && rest[0] !== "end" ? `${SESSION_USAGE}\n` : (helpFor(name) ?? USAGE));
     return 0;
   }
   // Options before a task, as `perch -m codex/gpt-6.1-sol "<task>"` (Aside's form), mean exec.
@@ -159,7 +166,8 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
         ? (_rest, io2) => commands.exec!(argv, io2)
         : undefined;
   if (!command) {
-    io.stderr(`perch: unknown command "${name}"\n${USAGE}`);
+    const near = closest(name, Object.keys(commands).filter((c) => c !== "mcp-private"));
+    io.stderr(`perch: unknown command "${name}".${near ? ` Did you mean perch ${near}?` : ""}\nRun perch --help to see every command.\n`);
     return 64;
   }
   return run(command, rest, io);
@@ -174,7 +182,7 @@ async function run(command: Command, rest: string[], io: CliIO): Promise<number>
       return 64;
     }
     if (error instanceof DaemonNotRunning) {
-      io.stderr("perchd is not running. Open Perch, or run any perch command to start it.\n");
+      io.stderr(`${NOT_RUNNING}\n`);
       return 3;
     }
     const message = error instanceof Error ? error.message : String(error);

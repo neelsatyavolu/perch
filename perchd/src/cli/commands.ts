@@ -1,12 +1,15 @@
 /** One-shot browser and session commands: each connects, does one thing, and disconnects. */
 
 import { writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { resolve } from "node:path";
 import type { ClientRecord } from "../daemon/clients";
 import type { SessionSummary } from "../daemon/sessions";
 import { parseArgs, UsageError } from "./args";
-import type { DaemonClient } from "./client";
+import { DaemonNotRunning, type DaemonClient } from "./client";
+import { agentPrompt } from "./agent-prompt";
 import { openDaemon, type CliIO } from "./io";
+import { parseDuration } from "./tasks";
 
 type ToolResult = { content: string; image?: string; isError?: boolean };
 type Status = { client: string; mode: string; session: string; label: string; pid: number; socket: string; sessions: SessionSummary[] };
@@ -25,7 +28,9 @@ async function withDaemon<T>(io: CliIO, session: string | undefined, run: (c: Da
 
 /** Runs one tool in the terminal's session and prints its text; 1 when the tool failed. */
 async function tool(io: CliIO, session: string | undefined, name: string, args: Record<string, unknown>): Promise<number> {
-  const result = await withDaemon(io, session, (c) => c.request<ToolResult>("call", { name, args }));
+  // An agent running `perch` in its shell: what its user asked it, for its chat in Perch.
+  const prompt = agentPrompt({ env: io.env, cwd: io.cwd, parent: process.ppid, agent: io.env.PERCH_CLIENT });
+  const result = await withDaemon(io, session, (c) => c.request<ToolResult>("call", { name, args, ...(prompt ? { prompt } : {}) }));
   (result.isError ? io.stderr : io.stdout)(`${result.content}\n`);
   return result.isError ? 1 : 0;
 }
@@ -129,6 +134,52 @@ export const browserCommands: Record<string, (argv: string[], io: CliIO) => Prom
     io.stdout(`Saved ${file}\n`);
     return 0;
   },
+  async find(argv, io) {
+    const a = parseArgs(argv, { flags: ["--contains"], options: [...SESSION, "--role"] });
+    const name = one(a.positionals, 'perch find "<name>" [--role button] [--contains]').join(" ");
+    return tool(io, a.options.get("--session"), "find", { name, role: a.options.get("--role") ?? "", contains: a.flags.has("--contains") });
+  },
+  async hover(argv, io) {
+    const a = parseArgs(argv, { options: SESSION });
+    const [ref] = one(a.positionals, "perch hover <ref>", 1, 1);
+    return tool(io, a.options.get("--session"), "hover", { ref });
+  },
+  /** Waits for text on the page (up to --timeout, 10s by default), or for --seconds. */
+  async wait(argv, io) {
+    const a = parseArgs(argv, { options: [...SESSION, "--timeout", "--seconds"] });
+    const usage = 'perch wait "<text>" [--timeout 10s] | perch wait --seconds <n>';
+    if (a.options.has("--seconds")) {
+      one(a.positionals, usage, 0, 0);
+      const seconds = Number(a.options.get("--seconds"));
+      if (!Number.isFinite(seconds) || seconds < 0) throw new UsageError(`perch: --seconds takes a number of seconds, like 3\nusage: ${usage}`);
+      return tool(io, a.options.get("--session"), "wait_for", { seconds });
+    }
+    const text = one(a.positionals, usage).join(" ");
+    const timeout = a.options.get("--timeout");
+    return tool(io, a.options.get("--session"), "wait_for", { text, ...(timeout ? { timeout_s: parseDuration(timeout) / 1000 } : {}) });
+  },
+  async switch(argv, io) {
+    const a = parseArgs(argv, { options: SESSION });
+    const [id] = one(a.positionals, "perch switch <tab id>   (ids from perch tabs)", 1, 1);
+    return tool(io, a.options.get("--session"), "switch_tab", { id });
+  },
+  async downloads(argv, io) {
+    const a = parseArgs(argv, { options: SESSION });
+    one(a.positionals, "perch downloads", 0, 0);
+    return tool(io, a.options.get("--session"), "downloads", {});
+  },
+  /** A link's document (read_document), or a file from perch downloads when given a path (read_download). */
+  async read(argv, io) {
+    const a = parseArgs(argv, { options: [...SESSION, "--from"] });
+    const usage = "perch read <url | path from perch downloads> [--from n]";
+    const target = one(a.positionals, usage, 1, 1)[0]!;
+    const from = a.options.has("--from") ? Number(a.options.get("--from")) : 0;
+    if (!Number.isInteger(from) || from < 0) throw new UsageError(`perch: --from takes the character to start at, as the last part's note says\nusage: ${usage}`);
+    // perchd runs in its own folder, so a relative path is made absolute here, from this terminal's.
+    const isPath = /^(\/|~\/|\.\.?\/|file:\/\/)/.test(target);
+    const path = target.startsWith("~/") ? `${io.env.HOME ?? homedir()}${target.slice(1)}` : target.startsWith("file://") ? target : resolve(io.cwd, target);
+    return isPath ? tool(io, a.options.get("--session"), "read_download", { path, from }) : tool(io, a.options.get("--session"), "read_document", { url: target, from });
+  },
   async tabs(argv, io) {
     const a = parseArgs(argv, { options: SESSION });
     io.stdout(`${await withDaemon(io, a.options.get("--session"), (c) => c.request<string>("tabs"))}\n`);
@@ -153,8 +204,16 @@ function formatClients(list: ClientRecord[]): string {
 export const sessionCommands: Record<string, (argv: string[], io: CliIO) => Promise<number>> = {
   async status(argv, io) {
     const a = parseArgs(argv, { flags: ["--json"] });
-    const status = await withDaemon({ ...io, autostart: false }, undefined, (c) => c.request<Status>("status"));
-    if (a.flags.has("--json")) io.stdout(`${JSON.stringify(status, null, 2)}\n`);
+    let status: Status;
+    try {
+      status = await withDaemon({ ...io, autostart: false }, undefined, (c) => c.request<Status>("status"));
+    } catch (error) {
+      // Scripts that ask for JSON get JSON either way; the exit code (3) still says it's not running.
+      if (!(error instanceof DaemonNotRunning) || !a.flags.has("--json")) throw error;
+      io.stdout(`${JSON.stringify({ running: false })}\n`);
+      return 3;
+    }
+    if (a.flags.has("--json")) io.stdout(`${JSON.stringify({ running: true, ...status }, null, 2)}\n`);
     else io.stdout(`perchd is running (pid ${status.pid}).\nThis terminal: ${status.label}, ${status.mode} mode.\n${formatSessions(status.sessions)}`);
     return 0;
   },
@@ -183,7 +242,8 @@ export const sessionCommands: Record<string, (argv: string[], io: CliIO) => Prom
     return 0;
   },
   async clients(argv, io) {
-    const [action = "list", name, mode] = parseArgs(argv).positionals;
+    const parsed = parseArgs(argv, { flags: ["--json"] });
+    const [action = "list", name, mode] = parsed.positionals;
     const call: Record<string, [string, Record<string, unknown>]> = {
       list: ["clients.list", {}],
       revoke: ["clients.revoke", { name }],
@@ -193,7 +253,8 @@ export const sessionCommands: Record<string, (argv: string[], io: CliIO) => Prom
     const picked = call[action];
     if (!picked || (action !== "list" && !name) || (action === "mode" && !mode)) throw new UsageError("usage: perch clients [list | revoke <name> | allow <name> | mode <name> ask|guard|skip]");
     if (action === "allow" || action === "mode") io.stderr("If this lets the client do more, Perch asks you to confirm in a dialog.\n");
-    io.stdout(formatClients(await withDaemon(io, undefined, (c) => c.request<ClientRecord[]>(...picked), "cli")));
+    const list = await withDaemon(io, undefined, (c) => c.request<ClientRecord[]>(...picked), "cli");
+    io.stdout(parsed.flags.has("--json") ? `${JSON.stringify(list, null, 2)}\n` : formatClients(list));
     return 0;
   },
 };

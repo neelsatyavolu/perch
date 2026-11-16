@@ -20,6 +20,7 @@ perch https://github.com/notifications                      # just open a page
 - Only the answer goes to stdout. The session id, steps and approval waits go to stderr.
 - Each task is a Perch chat the user can open. Approvals for sends, posts, purchases and deletes appear as cards in Perch; the task waits there ("Waiting for you in Perch: …"). Tell the user when that happens.
 - `--timeout` stops waiting, not the task. Exit codes: 0 done, 1 failed or timed out, 3 Perch not running, 64 bad usage, 130 Ctrl-C (which stops the task).
+- `--json` prints `{ session, title, status, answer, steps }`. `status`, `sessions`, `models`, `session list|inspect`, `memory`, `skills list` and `clients` also take `--json`.
 - Models: `perch models`. `-m` takes an id (`codex:gpt-6.1-sol`), `provider/model` (`openai/gpt-6.1-sol`, `anthropic/claude-opus-5-5`) or a bare name. `perch models` also lists the efforts each model takes (Codex goes up to `ultra`, Claude to `max`); an effort a model lacks runs as the nearest one below. Default model and effort come from Perch's settings.
 - Give an update to the user about every minute while a long task runs.
 
@@ -44,18 +45,29 @@ Each terminal window (or agterm/agmux tab, via `PERCH_SESSION`) has its own tab 
 
 ```sh
 perch open https://example.com      # a new tab, made current; prints the page
-perch navigate <url> · perch back · perch tabs
+perch navigate <url> · perch back
 perch snapshot [--full]             # the page as text; elements have refs like e12
+perch find "Add to cart" --role button   # refs for elements anywhere on the page, even far from view
 perch click e12 · perch type e7 "text" [--submit] · perch select e9 "Large" · perch press Enter
+perch hover e4                      # open a menu or tooltip; it stays open for the next step
+perch wait "Order placed" --timeout 20s  # until the text appears · perch wait --seconds 3
+perch tabs · perch switch <tab id>  # list tabs, and work in another one
+perch downloads                     # files downloaded in the last hour, with their paths
+perch read https://example.com/report.pdf   # a PDF, .docx, .pptx or .xlsx, with the user's sign-in
+perch read ~/Downloads/statement.pdf        # a file perch downloads lists
 perch screenshot -o shot.jpg
-perch eval "document.title"         # JavaScript in the page; JSON back
+perch eval "document.title"         # JavaScript on a read-only copy of the page; JSON back
 perch script '<js>'                 # several steps in one go, see below
 perch repl '<js>'                   # a JavaScript session that keeps its variables, see below
 ```
 
-- Read with `snapshot`, act by ref, and check the page that comes back before the next step. A new snapshot replaces old refs.
+- Read with `snapshot`, act by ref, and check the page that comes back before the next step. A new snapshot replaces old refs, so take one after the page changes rather than reusing old refs.
+- When the element you need is not in the snapshot (long pages, far down a list), use `find` instead of scrolling and snapshotting again.
+- After an action that loads something slowly (search results, a payment, an upload), `wait` for the text you expect instead of sleeping and snapshotting in a loop.
+- To read a linked document, use `read` with its URL rather than opening it in a tab: it fetches it with the user's sign-in and returns its text. Long documents come back in parts; the note at the end of a part gives the `--from` for the next one.
+- When a click downloads a file, find it with `downloads` and read it with `read <path>`.
 - Use `screenshot` only when the snapshot cannot describe the page (canvas, maps, charts).
-- `tabs` marks each tab as yours, the user's or another agent's. Do not take over the user's tabs unless the task is about them.
+- `tabs` marks each tab as yours, the user's or another agent's. Links that open a new tab make it current. Do not take over the user's tabs unless the task is about them.
 
 ### `perch script`
 
@@ -83,7 +95,13 @@ Globals: `page`, `tabs`, `openTab(url)`, `listBrowserTabs()` (`{ targetId, title
 
 ### MCP
 
-`perch skill install claude|codex|grok` adds Perch's MCP server and this skill to your agent. The MCP tools are the same as the commands: `navigate`, `open_tab`, `snapshot`, `click`, `type`, `select`, `press`, `hover`, `scroll`, `drag`, `upload`, `wait_for`, `back`, `screenshot`, `click_at`, `repl`, `script`, `batch`, `tabs`, `switch_tab`, `write_file`, `save_pdf`, `downloads`, `sign_in`, `fill_card`, `fill_code`.
+`perch skill install claude|codex|grok` adds Perch's MCP server and this skill to your agent. The MCP tools work like the commands above:
+
+- Pages: `navigate`, `open_tab`, `back`, `tabs`, `switch_tab`, `snapshot`, `find`, `screenshot`.
+- Acting: `click`, `type`, `select`, `press`, `hover`, `scroll`, `drag`, `click_at` (x, y in the last screenshot), `type_text` (at the keyboard focus, for editors drawn on canvas such as Google Sheets and Docs), `upload`, `wait_for`.
+- Several steps at once: `batch` (actions you already know, such as filling a form) and `script` (with loops and checks); `repl` reads a copy of the page with JavaScript.
+- Files: `read_document` (a link's PDF, .docx, .pptx or .xlsx; `page` shows one PDF page as an image, for scans), `downloads`, `read_download`, `write_file`, `make_zip`, `save_pdf`.
+- Sign-ins and payments: `sign_in`, `fill_card`, `fill_code` fill saved passwords, cards and one-time codes without showing them to you.
 
 ## Memory and skills
 

@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AuditLog } from "../src/agent/audit";
-import { carriesData, classify, needsApproval, type Decision, type Kind, type Mode } from "../src/agent/permissions";
+import { carriesData, classify, needsApproval, repeatKey, type Decision, type Kind, type Mode } from "../src/agent/permissions";
 
 const call = (name: string, args: Record<string, unknown> = {}) => ({ id: "c1", name, args });
 
@@ -237,4 +237,66 @@ test("titles, store names, carts, booking links and newsletters are not payments
   expect(classify(click, { role: "link", name: "Reserve a PO Box" }, { payment: true })).toBe("payment");
   // Adding to a cart or opening a product never asks as a payment.
   for (const name of ["Add to cart", "Add to Bag - $100.00", "Add to basket £12.50"]) expect([name, classify(click, { role: "button", name })]).toEqual([name, "change"]);
+});
+
+test("Enter in a search, place, date or time field is a change; in a composer or a consequential form it asks", () => {
+  const enter = call("press", { key: "Enter" });
+  const submit = (text: string) => call("type", { ref: "e2", text, submit: true });
+  // The Guard false positive: a departure time typed on google.com, then Enter.
+  const time = { role: "textbox", name: "7:00 AM" };
+  const lone = { field: { words: "", submit: "", search: false, multiline: false, post: false } };
+  expect(classify(submit("7:00 AM"), time, lone)).toBe("change");
+  expect(needsApproval("guard", classify(submit("7:00 AM"), time, lone))).toBe("run");
+  const search = { words: "q", submit: "Google Search", search: true, multiline: false, post: false };
+  expect(classify(submit("AA3236 status"), { role: "combobox", name: "Search" }, { field: search })).toBe("change");
+  expect(classify(submit("655 Hale St"), { role: "textbox", name: "Choose starting point" }, lone)).toBe("change");
+  expect(classify(enter, { role: "textbox", name: "Departure date" }, lone)).toBe("change");
+  expect(classify(enter, { role: "textbox", name: "Postcode" }, lone)).toBe("change");
+  expect(classify(enter, { role: "textbox", name: "Postal code" }, lone)).toBe("change");
+  expect(classify(enter, { role: "textbox", name: "Chatham Street" }, lone)).toBe("change");
+  expect(classify(enter, { role: "textbox", name: "Search messages" })).toBe("change");
+  // A field the page would not describe could be a chat box: it asks.
+  expect(classify(submit("7:00 AM"), time)).toBe("risky");
+  // A button or link with focus: Enter clicks it, so it is judged as a click.
+  expect(classify(enter, { role: "link", name: "Next page" })).toBe("change");
+  expect(classify(enter, { role: "button", name: "Send" })).toBe("risky");
+  // Message, comment and post boxes send; so does a multi-line editor, named or not.
+  expect(classify(submit("Nice post!"), { role: "textbox", name: "Add a comment…" })).toBe("risky");
+  expect(classify(enter, { role: "textbox", name: "Message #general" })).toBe("risky");
+  expect(classify(enter, { role: "textbox", name: "" }, { field: { words: "", submit: "", search: false, multiline: true, post: false } })).toBe("risky");
+  expect(classify(enter, { role: "textbox", name: "Body" }, { field: { words: "comment-body", submit: "", search: false, multiline: false, post: false } })).toBe("risky");
+  // The form's own submit button decides when Enter would press it.
+  const form = (button: string, post = true) => ({ field: { words: "", submit: button, search: false, multiline: false, post } });
+  expect(classify(enter, { role: "textbox", name: "Email address" }, form("Sign up"))).toBe("risky");
+  expect(classify(enter, { role: "textbox", name: "Gift note" }, form("Place order"))).toBe("payment");
+  expect(classify(enter, { role: "textbox", name: "Title" }, form("Post"))).toBe("risky");
+  expect(classify(enter, { role: "textbox", name: "Min price" }, form("Apply", false))).toBe("change");
+  // Enter on a native checkbox or switch submits its form too.
+  expect(classify(enter, { role: "switch", name: "Email me updates" }, form("Sign up"))).toBe("risky");
+  expect(classify(enter, { role: "checkbox", name: "Nonstop only" })).toBe("change");
+  // A form that posts with no named button might do anything: it asks.
+  expect(classify(enter, { role: "textbox", name: "Name" }, form(""))).toBe("risky");
+  // Nothing known with focus, or a frame: still asks.
+  expect(classify(enter, undefined)).toBe("risky");
+  expect(classify(enter, { role: "iframe", name: "" })).toBe("risky");
+});
+
+test("removing a search filter is a change; removing anything else still asks", () => {
+  const click = call("click", { ref: "e1" });
+  expect(classify(click, { role: "button", name: "Remove filter: Nonstop" })).toBe("change");
+  expect(classify(click, { role: "button", name: "Remove Under $500 filter" })).toBe("change");
+  expect(classify(click, { role: "button", name: "Remove" })).toBe("risky");
+  expect(classify(click, { role: "button", name: "Delete filter" })).toBe("risky");
+});
+
+test("an approved archive or unsubscribe on a site is remembered for the same button; sends, deletes and payments never are", () => {
+  const click = call("click", { ref: "e1" });
+  expect(repeatKey(click, { role: "button", name: "Archive" }, "mail.example", "risky")).toBe("mail.example|click|button|archive");
+  expect(repeatKey(click, { role: "button", name: "Unsubscribe" }, "mail.example", "risky")).toBeDefined();
+  for (const name of ["Send", "Delete", "Reply all", "Post", "Share", "Confirm", "Submit", "Archive and delete"]) {
+    expect([name, repeatKey(click, { role: "button", name }, "mail.example", "risky")]).toEqual([name, undefined]);
+  }
+  expect(repeatKey(click, { role: "button", name: "Archive" }, "mail.example", "payment")).toBeUndefined();
+  expect(repeatKey(click, undefined, "mail.example", "risky")).toBeUndefined();
+  expect(repeatKey(call("type", { ref: "e1", text: "x", submit: true }), { role: "textbox", name: "Archive" }, "mail.example", "risky")).toBeUndefined();
 });

@@ -4,7 +4,8 @@
  *
  *   read     looking around: navigate, snapshot, scroll, read-only REPL
  *   change   ordinary edits: typing, choosing, dragging, clicking "Next"
- *   risky    sends, posts, deletes, shares, uploads, Enter in a text field, an element not in the last snapshot
+ *   risky    sends, posts, deletes, shares, uploads, Enter in a message or comment box or in a form that
+ *            signs up or submits, an element nobody could identify
  *   payment  money and passwords, and anything that moves a checkout or password form forward:
  *            always asks, even in Skip confirmation. Filling a saved card (fill_card) is one.
  *
@@ -21,8 +22,15 @@ export type Decision = "run" | "ask" | "block";
 /** `expanded` is set when the element opens and closes something, such as a menu. */
 export type Target = { role: string; name: string; expanded?: boolean };
 
-/** What the page around an action looks like: a checkout, or a password change. */
-export type PageContext = { payment?: boolean; passwordChange?: boolean };
+/**
+ * The field Enter acts in, read from the page (enter-field.ts): its own words (placeholder, name,
+ * id), whether it is a multi-line editor, whether it sits in a search form, the label of the
+ * button Enter would press, and whether its form posts.
+ */
+export type EnterField = { words: string; multiline: boolean; search: boolean; submit: string; post: boolean };
+
+/** What the page around an action looks like: a checkout, a password change, and the field Enter acts in. */
+export type PageContext = { payment?: boolean; passwordChange?: boolean; field?: EnterField };
 
 // A batch or script is judged action by action as it runs (agent/session.ts callTool), so the batch itself is a read.
 const READ_TOOLS = new Set(["navigate", "snapshot", "find", "screenshot", "scroll", "hover", "wait_for", "back", "tabs", "open_tab", "switch_tab", "downloads", "read_download", "batch", "script", "done", "read_document"]);
@@ -52,6 +60,16 @@ const PASSWORD = /\b(change|update|reset|save|set) (your |the )?password\b/i;
 /** Buttons that move a checkout or a password form forward. */
 const ADVANCES = /\b(continue|next|confirm|complete|submit|save|update|done|apply|finish|proceed|place|order|pay|book|reserve|change|set|verify)\b/i;
 const SEARCHY = /search|find|filter|lookup/i;
+/** Boxes whose Enter sends to other people: a message, comment, reply or post. "Post code" and "Postal code" are addresses. */
+const COMPOSER = /\b(message|comment|reply|posts?\b(?!\s*code)|tweet|chat\b|dm\b|compose|caption|review|what'?s (on your mind|happening)|write (a|an|your|something)|say something)/i;
+/** Roles of single fields that take typing; Enter in one only submits its form, if it has one. */
+const FIELDS = new Set(["textbox", "searchbox", "combobox", "spinbutton", "input"]);
+/** Roles Enter activates like a click. */
+const PRESSABLE = new Set(["button", "link", "menuitem", "tab", "option", "checkbox", "radio", "switch", "treeitem"]);
+/** Toggles that can be native inputs, where Enter also submits their form. */
+const TOGGLES = new Set(["checkbox", "radio", "switch"]);
+/** A chip that drops a search filter ("Remove filter: Nonstop", "Remove Under $500 filter"). */
+const FILTER_CHIP = /\bremove\b.{0,40}\bfilter\b/i;
 /**
  * Words that look like payments but name something: a day in a hotel's date picker ("11, Wednesday,
  * November 2026. Select as checkout date.") and a store's page-title suffix ("Monitors - Best Buy").
@@ -84,7 +102,6 @@ const ALONG_TRACK = new Set(["slider", "scrollbar", "separator"]);
  * that could not be identified counts as risky, and so does a drag by pixels, except along a slider.
  */
 export function classify(call: ToolCall, target?: Target, page: PageContext = {}, drop?: Target): Kind {
-  const name = target?.name ?? "";
   const guarded = Boolean(page.payment || page.passwordChange);
   const app = appTool(call.name);
   if (app) return app.kind(call.args);
@@ -112,10 +129,8 @@ export function classify(call: ToolCall, target?: Target, page: PageContext = {}
   }
   if (call.name === "press" && !isEnter(call)) return "change";
   if (call.name === "press" || call.name === "type") {
-    // Enter, or typing with submit: it sends whatever form the field is in.
-    if (guarded) return "payment";
-    const searchField = target?.role === "searchbox" || target?.role === "combobox" || SEARCHY.test(name);
-    return searchField ? "change" : "risky";
+    // Enter, or typing with submit: on a checkout or password page it moves the form forward.
+    return guarded ? "payment" : enterKind(target, page.field);
   }
   if (call.name === "hover") return "read";
   if (call.name === "click") return clickKind(target, guarded);
@@ -140,6 +155,25 @@ export function carriesData(raw: string): boolean {
   return [...url.searchParams.values()].some((v) => v.length > MAX_QUERY_VALUE);
 }
 
+/**
+ * Enter in a field. It sends when the field is a message, comment or post box, or a multi-line
+ * editor (chat boxes send on Enter); otherwise it presses the form's submit button, if there is
+ * one, and is judged as a click on that. Searching, places, dates and times are changes. Enter on
+ * a focused button or link clicks it. With nothing known about the focus or the field, it asks.
+ */
+function enterKind(target: Target | undefined, field?: EnterField): Kind {
+  if (!target) return "risky";
+  const pressed = field?.submit ? clickKind({ role: "button", name: field.submit }, false) : "change";
+  if (PRESSABLE.has(target.role)) return TOGGLES.has(target.role) ? stricter(clickKind(target, false), pressed) : clickKind(target, false);
+  const searchField = target.role === "searchbox" || target.role === "combobox" || SEARCHY.test(target.name) || Boolean(field?.search);
+  if (searchField) return "change";
+  if (COMPOSER.test(`${target.name} ${field?.words ?? ""}`) || field?.multiline) return "risky";
+  // A field the page would not describe could be a chat box: it asks, as before.
+  if (!FIELDS.has(target.role) || !field) return "risky";
+  if (field.submit) return stricter("change", pressed);
+  return field.post ? "risky" : "change";
+}
+
 /** Roles whose click only selects an option; the form's own button is what commits it. */
 const CHOICES = new Set(["radio", "checkbox", "menuitemradio", "menuitemcheckbox", "option", "tab"]);
 
@@ -161,7 +195,7 @@ function clickKind(target: Target | undefined, guarded: boolean): Kind {
   const priced = MONEY.test(name) && SUBSCRIBE.test(name);
   if (PAYMENT.test(name) || PASSWORD.test(name) || priced || (!cart && charges({ ...target, name }, guarded))) return "payment";
   if (guarded && ADVANCES.test(name)) return "payment";
-  if (RISKY.test(name) && !isListing(target.role, name)) return "risky";
+  if (RISKY.test(name) && !isListing(target.role, name) && !FILTER_CHIP.test(name)) return "risky";
   return "change";
 }
 
@@ -200,6 +234,22 @@ function charges(target: Target, guarded: boolean): boolean {
 
 function isEnter(call: ToolCall): boolean {
   return /(^|\+)enter$/i.test(String(call.args.key ?? ""));
+}
+
+/** Risky clicks that are easy to undo, so one approval covers the same button again on that site in a task. */
+const REPEATABLE = /\b(archive|unarchive|snooze|unsubscribe)\b/i;
+const NEVER_REPEAT = /\b(send|post|publish|submit|delete|remove|discard|trash|erase|share|invite|transfer|reply|forward|confirm)\b/i;
+
+/**
+ * The key under which an approved click is remembered for the rest of the task (session.ts), or
+ * undefined when it must ask every time. Only Guard's risky clicks on a named, undoable button
+ * qualify; sends, deletes, payments, typing and unknown targets always ask again.
+ */
+export function repeatKey(call: ToolCall, target: Target | undefined, site: string, kind: Kind): string | undefined {
+  if (kind !== "risky" || call.name !== "click" || !target) return undefined;
+  const name = target.name.replace(/\s+/g, " ").trim();
+  if (!REPEATABLE.test(name) || NEVER_REPEAT.test(name) || PAYMENT.test(name)) return undefined;
+  return `${site}|click|${target.role}|${name.toLowerCase()}`;
 }
 
 /** A "never" site is blocked even for reads, so the agent cannot open or read it either. */

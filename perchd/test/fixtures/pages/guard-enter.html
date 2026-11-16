@@ -1,0 +1,16 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Guard Enter</title>
+<p>Fields where Enter does nothing consequential, and fields where it sends, signs up or pays.</p>
+<!-- A maps-style departure time with no form, like the one on google.com. -->
+<input id="time" type="text" value="" aria-label="7:00 AM">
+<form action="/search" role="search"><input id="q" type="text" name="q" title="Search"><button type="submit">Google Search</button></form>
+<form><input id="from" type="text" placeholder="Choose starting point"><input id="date" type="date"></form>
+<form method="post" action="/comments"><input id="comment" type="text" placeholder="Add a comment…"><button type="submit">Post</button></form>
+<div id="chat" contenteditable="true" style="border:1px solid #888;height:24px"></div>
+<form method="post" action="/join"><input id="email" type="email" aria-label="Email address"><button type="submit">Sign up</button></form>
+<form method="post" action="/checkout/confirm"><input id="promo" type="text" aria-label="Gift note"><button type="submit">Place order</button></form>
+<form method="post" action="/account"><input id="nick" type="text" aria-label="Nickname"><button type="submit">Save</button><input id="close" type="submit" value="Delete account"></form>
+<form action="/research/apply"><input id="topic" type="text" aria-label="Topic"><button type="submit">Submit application</button></form>
+<button id="archive">Archive</button><button id="delete">Delete</button>
+<script>for (const f of document.forms) f.addEventListener("submit", (e) => e.preventDefault());</script>

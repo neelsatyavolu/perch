@@ -9,7 +9,8 @@ import { runScript, SCRIPT } from "./script";
 import type { ToolCall } from "../models/types";
 import type { AuditWriter } from "./audit";
 import { FILL_TOOLS, fillKind, fillSummary, needsTypedLogin } from "./fill-tools";
-import { classify, needsApproval, OFF_PAGE, type Kind, type Mode, type SiteRule, type Target } from "./permissions";
+import { enterField } from "./enter-field";
+import { classify, needsApproval, OFF_PAGE, repeatKey, type Kind, type Mode, type SiteRule, type Target } from "./permissions";
 import { approvalDetail, checkCall, describeTarget, focusedTarget, liveTarget, pageContext, runTool, type ToolContext, type ToolResult } from "./tools";
 
 export type ApprovalRequest = {
@@ -30,7 +31,13 @@ export const DECLINED = "The user declined this action. Do not try it again; ask
 
 export type Prepared =
   | { kind: "answer"; result: ToolResult }
-  | { kind: "run"; call: ToolCall; target?: Target; site: string; decision: "run" | "ask"; request: ApprovalRequest; entry: Omit<import("./audit").AuditEntry, "approved" | "result"> };
+  | { kind: "run"; call: ToolCall; target?: Target; site: string; decision: "run" | "ask"; request: ApprovalRequest; entry: Omit<import("./audit").AuditEntry, "approved" | "result">; repeat?: string };
+
+/**
+ * Clicks the person approved in Guard mode that need not ask again (permissions.ts, repeatKey),
+ * per approve function: each task (app/runs.ts) and each outside client gets its own.
+ */
+const approvedRepeats = new WeakMap<CallPolicy["approve"], Set<string>>();
 
 const READS = new Set(["navigate", "snapshot", "screenshot", "scroll", "hover", "wait_for", "back", "tabs", "open_tab", "switch_tab", "done", "repl"]);
 
@@ -49,16 +56,21 @@ export async function prepareCall(ctx: ToolContext, opts: CallPolicy, call: Tool
   }
   const app = appTool(call.name);
   const fill = FILL_TOOLS.has(call.name);
-  const page = READS.has(call.name) || app || fill ? {} : await pageContext(ctx);
+  const field = await enterField(ctx, call);
+  const page = READS.has(call.name) || app || fill ? {} : { ...(await pageContext(ctx)), ...(field ? { field } : {}) };
   const drop = await dropTarget(ctx, call);
   const destination = call.name === "navigate" || call.name === "open_tab" || call.name === "read_document" ? String(call.args.url) : undefined;
   const site = app ? app.site : destination ? hostOf(destination) : await currentHost(ctx);
   const kind = fill ? fillKind(call.name, site, ctx) : classify(call, target, page, drop);
-  const ruled = needsApproval(opts.mode, kind, OFF_PAGE.has(call.name) ? undefined : opts.siteRule?.(site));
+  const siteRule = OFF_PAGE.has(call.name) ? undefined : opts.siteRule?.(site);
+  const ruled = needsApproval(opts.mode, kind, siteRule);
+  // The same undoable button on the same site, approved earlier in this task, runs (Guard only).
+  const repeat = opts.mode === "guard" && !siteRule ? repeatKey(call, target, site, kind) : undefined;
+  const again = ruled === "ask" && repeat !== undefined && Boolean(approvedRepeats.get(opts.approve)?.has(repeat));
   // With no saved login and no password manager, sign_in can only go ahead with a login the person
   // types into its card, so it asks whatever the mode.
   const askLogin = call.name === "sign_in" && ruled !== "block" && (await needsTypedLogin(ctx));
-  const decision = askLogin || (ruled === "run" && app?.alwaysAsks(call.args)) ? "ask" : ruled;
+  const decision = askLogin || (ruled === "run" && app?.alwaysAsks(call.args)) ? "ask" : again ? "run" : ruled;
   const what = [target ? `${target.role} "${target.name}"` : summarizeArgs(call), drop ? `onto ${drop.role} "${drop.name}"` : ""].filter(Boolean).join(" ");
   const detail = kind === "read" ? what : [what, await approvalDetail(ctx, call)].filter(Boolean).join(" ");
   // The audit log holds what was typed or filled only when an approval card showed it to the
@@ -73,7 +85,7 @@ export async function prepareCall(ctx: ToolContext, opts: CallPolicy, call: Tool
   // A fill's card names the login or card (masked); it goes to the user only, never into the audit detail or the model.
   const summary = fill ? (decision === "ask" ? await fillSummary(ctx, call.name, site) : "") : `${verb(call)} ${detail} on ${site}`;
   const request: ApprovalRequest = { call, target, kind, site, summary, ...(askLogin ? { askLogin: true as const } : {}) };
-  return { kind: "run", call, target, site, decision, request, entry };
+  return { kind: "run", call, target, site, decision, request, entry, ...(repeat ? { repeat } : {}) };
 }
 
 /** Runs a prepared call after the approval decision (null when none was needed) and audits it. */
@@ -82,6 +94,7 @@ export async function finishCall(ctx: ToolContext, opts: CallPolicy, prepared: E
     await opts.audit.append({ ...prepared.entry, approved: false, result: "declined" });
     return { content: DECLINED, isError: true };
   }
+  if (approved && prepared.repeat) approvedRepeats.set(opts.approve, new Set(approvedRepeats.get(opts.approve)).add(prepared.repeat));
   const result = await runTool(ctx, prepared.call);
   await opts.audit.append({ ...prepared.entry, approved, result: result.isError ? "error" : "ok" });
   return result;
@@ -197,7 +210,7 @@ export function label(call: ToolCall, target: Target | undefined, site: string):
     case "downloads": return "Checked downloads";
     case "read_download": return `Read ${basename(String(call.args.path))}`;
     case "repl": return `Ran a script on ${site}`;
-    case "wait_for": return `Waited for "${call.args.text}"`;
+    case "wait_for": return `Waited for "${call.args.text}"${call.args.gone ? " to go" : ""}`;
     case "tabs": return "Listed tabs";
     case "switch_tab": return "Switched tabs";
     case "sign_in": return `Signed in to ${site}`;

@@ -39,7 +39,9 @@ base::CallbackListSubscription OnWaitingChanged(base::RepeatingClosure callback)
 void ClearAllTaskStatus();
 
 // Shows a chat: `side` activates the tab (a DevTools target id) and opens the
-// side panel; `full` opens or focuses chrome://perch-chat for the chat.
+// side panel; `full` loads chrome://perch-chat for the chat into the tab
+// `target_id` when one is given (a new tab page), and otherwise opens or
+// focuses it.
 bool RevealChat(const std::string& chat_id,
                 const std::string& target_id,
                 bool side);

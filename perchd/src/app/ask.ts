@@ -1,7 +1,8 @@
 /**
  * Ask (spec 5.5): ⌘↵ in the address bar and the new tab page's Ask button. The browser sends
- * `Perch.askRequested({text, tabId})`; the task starts in that tab's side chat, or in a new
- * full-page chat when there is no tab, and the browser shows it (`Perch.revealChat`).
+ * `Perch.askRequested({text, tabId})`; the task starts in that tab's side chat, or in a full-page
+ * chat when there is no page (from a new tab, the chat replaces it in the same tab), and the
+ * browser shows it (`Perch.revealChat`).
  */
 
 import type { AskRequest, PerchDomainApi } from "../browser/perch-domain";
@@ -31,8 +32,10 @@ export async function askFromBrowser(deps: AskDeps, ask: AskRequest): Promise<As
     ? deps.chats.forTab(tab.id) ?? (await deps.chats.create({ tab: { id: tab.id, windowId: tab.windowId }, settings: deps.defaults() }))
     : await deps.chats.create({ settings: deps.defaults() });
   deps.runs.announce(chat.id);
-  // The browser finds the tab to open the side panel on by its DevTools target id.
-  const target = tab?.targetId ?? tab?.id;
+  // The browser finds the tab by its DevTools target id: a page's tab gets the side panel, a new
+  // tab page turns into the full chat in place rather than opening another tab.
+  const shown = tab ?? found;
+  const target = shown?.targetId ?? shown?.id;
   await deps.perch.revealChat({ chatId: chat.id, mode: tab ? "side" : "full", ...(target ? { tabId: target } : {}) }).catch(() => null);
   // A task already going in this side chat keeps going; the user sees it and can ask again after.
   if (deps.runs.status(chat.id) !== "idle") return { chatId: chat.id, started: false };

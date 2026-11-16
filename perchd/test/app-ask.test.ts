@@ -67,12 +67,13 @@ test("Ask with no tab opens a full-page chat", async () => {
   expect(reveals).toEqual([{ chatId: result.chatId, mode: "full" }]);
 });
 
-test("Ask from a new tab opens a full chat, since there is no page to sit beside", async () => {
+test("Ask from a new tab opens a full chat in that same tab, since there is no page to sit beside", async () => {
   const r = runs();
   const ntp: TabInfo = { ...tabA, id: "guid-n", url: "chrome://perch-newtab/", targetId: "T-N" };
   const result = await askFromBrowser({ chats, runs: r, tab: () => ntp, defaults, perch }, { text: "plan a trip", tabId: "T-N" });
   await r.idle();
-  expect(reveals).toEqual([{ chatId: result.chatId, mode: "full" }]);
+  expect(chats.get(result.chatId)?.tab).toBeNull();
+  expect(reveals).toEqual([{ chatId: result.chatId, mode: "full", tabId: "T-N" }]);
 });
 
 const sendReq: ApprovalRequest = { call: { id: "c", name: "click", args: { ref: "e3" } }, target: { role: "button", name: "Send" }, kind: "risky", site: "mail.example", summary: 'Click button "Send" on mail.example' };

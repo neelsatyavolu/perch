@@ -244,6 +244,16 @@ bool RevealChat(const std::string& chat_id,
     return true;
   }
   const GURL url = ChatUrl(chat_id);
+  // Asked from a new tab page: the chat replaces that page in the same tab.
+  if (content::WebContents* contents =
+          target_id.empty() ? nullptr : ContentsFor(target_id)) {
+    contents->OpenURL(
+        content::OpenURLParams(url, content::Referrer(),
+                               WindowOpenDisposition::kCurrentTab,
+                               ui::PAGE_TRANSITION_AUTO_BOOKMARK, false),
+        {});
+    return true;
+  }
   for (BrowserWindowInterface* browser : GetAllBrowserWindowInterfaces()) {
     TabStripModel* tabs = browser->GetTabStripModel();
     for (int i = 0; tabs && i < tabs->count(); ++i) {

@@ -16,6 +16,7 @@
 #include "chrome/browser/notifications/notification_display_service.h"
 #include "chrome/browser/notifications/notification_display_service_factory.h"
 #include "chrome/browser/notifications/notification_handler.h"
+#include "chrome/browser/notifications/perch_task_notification_handler.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/tab_list/tab_list_interface.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
@@ -31,7 +32,6 @@
 #include "content/public/browser/web_contents.h"
 #include "ui/base/window_open_disposition.h"
 #include "ui/message_center/public/cpp/notification.h"
-#include "ui/message_center/public/cpp/notification_delegate.h"
 #include "ui/message_center/public/cpp/notifier_id.h"
 #include "url/gurl.h"
 
@@ -101,7 +101,32 @@ bool ChatInSight(const std::string& chat_id) {
   return false;
 }
 
-// One macOS notification for a chat that waits on the person.
+constexpr char kNoticePrefix[] = "perch-wait-";
+
+// The tab each chat's notice opens beside, by chat id, until the notice is clicked.
+std::map<std::string, std::string>& NoticeTargets() {
+  static base::NoDestructor<std::map<std::string, std::string>> targets;
+  return *targets;
+}
+
+// A click on a notice opens its chat: beside the tab it works in, or as a page.
+void OnNoticeClicked(const std::string& notification_id) {
+  if (!notification_id.starts_with(kNoticePrefix)) {
+    return;
+  }
+  const std::string chat_id =
+      notification_id.substr(std::size(kNoticePrefix) - 1);
+  std::string target;
+  if (auto it = NoticeTargets().find(chat_id); it != NoticeTargets().end()) {
+    target = it->second;
+    NoticeTargets().erase(it);
+  }
+  RevealChat(chat_id, target, /*side=*/!target.empty());
+}
+
+// One macOS notification for a chat that waits on the person. It is a
+// PERCH_TASK notice so macOS shows it as a system banner; its click comes back
+// through PerchTaskNotificationHandler to OnNoticeClicked.
 void Notify(const std::string& chat_id,
             const std::vector<std::string>& targets,
             const std::string& title) {
@@ -122,29 +147,29 @@ void Notify(const std::string& chat_id,
   if (!service) {
     return;
   }
-  const std::string target = targets.empty() ? std::string() : targets.front();
+  static const bool hooked = [] {
+    PerchTaskNotificationHandler::SetClickCallback(
+        base::BindRepeating(&OnNoticeClicked));
+    return true;
+  }();
+  (void)hooked;
+  NoticeTargets()[chat_id] = targets.empty() ? std::string() : targets.front();
   message_center::Notification notification(
-      message_center::NOTIFICATION_TYPE_SIMPLE, "perch-wait-" + chat_id,
+      message_center::NOTIFICATION_TYPE_SIMPLE, kNoticePrefix + chat_id,
       base::UTF8ToUTF16(title), u"Perch is waiting for you", ui::ImageModel(),
       u"Perch", GURL(),
       message_center::NotifierId(message_center::NotifierType::SYSTEM_COMPONENT,
                                  "perch"),
-      message_center::RichNotificationData(),
-      base::MakeRefCounted<message_center::HandleNotificationClickDelegate>(
-          base::BindRepeating(
-              [](std::string chat, std::string tab) {
-                RevealChat(chat, tab, /*side=*/!tab.empty());
-              },
-              chat_id, target)));
+      message_center::RichNotificationData(), /*delegate=*/nullptr);
   // Off-screen tests record the notice and press it instead of showing it.
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
           "perch-test-notifications")) {
     LOG(WARNING) << "Perch test: notification '" << notification.title()
                  << "' / '" << notification.message() << "'";
-    notification.delegate()->Click(std::nullopt, std::nullopt);
+    OnNoticeClicked(notification.id());
     return;
   }
-  service->Display(NotificationHandler::Type::TRANSIENT, notification,
+  service->Display(NotificationHandler::Type::PERCH_TASK, notification,
                    /*metadata=*/nullptr);
 }
 

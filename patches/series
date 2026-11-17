@@ -141,3 +141,4 @@ perch/shell/tab-title-centre.patch
 perch/shell/downloads-list-glass.patch
 perch/shell/tab-row-centre.patch
 perch/shell/bubble-glass-fills.patch
+perch/agent/native-task-notifications.patch

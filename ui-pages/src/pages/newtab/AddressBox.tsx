@@ -21,12 +21,12 @@ export function AddressBox({ onSubmit }: { readonly onSubmit: (q: Query) => void
   const act = useAction();
   const [text, setText] = useState("");
   const [mode, setMode] = useState<Mode>("search");
-  const [engine, setEngine] = useState<SearchEngine>("brave");
+  const [engine, setEngine] = useState<SearchEngine>("default");
   const [focused, setFocused] = useState(true);
   const deleting = useRef(false);
   const field = useRef<HTMLInputElement>(null);
   const composer = useComposer();
-  const sug = useAddressSuggest(text, mode === "search" && engine === "brave", deleting.current);
+  const sug = useAddressSuggest(text, mode === "search" && engine === "default", deleting.current);
   const picked = sug.selected >= 0 ? sug.matches[sug.selected] : undefined;
   const shown = picked ? fillOf(picked) : text + sug.inline;
   const open = focused && sug.matches.length > 0;
@@ -39,7 +39,7 @@ export function AddressBox({ onSubmit }: { readonly onSubmit: (q: Query) => void
 
   const submit = (asMode: Mode) => {
     const clean = text.trim();
-    if (clean) onSubmit({ text: clean, mode: asMode, engine: asMode === "ask" ? "brave" : engine });
+    if (clean) onSubmit({ text: clean, mode: asMode, engine: asMode === "ask" ? "default" : engine });
   };
   const openMatch = (m: AddressMatch) => void act(() => api.openAddress(m.url));
 
@@ -62,10 +62,10 @@ export function AddressBox({ onSubmit }: { readonly onSubmit: (q: Query) => void
       sug.dropInline();
     } else if (e.key === "Tab" && !e.shiftKey && mode === "search" && text.trim()) {
       e.preventDefault();
-      setEngine((x) => (x === "google" ? "brave" : "google"));
+      setEngine((x) => (x === "google" ? "default" : "google"));
     } else if (e.key === "Backspace" && engine === "google" && input.selectionStart === 0 && input.selectionEnd === 0) {
       e.preventDefault();
-      setEngine("brave");
+      setEngine("default");
     } else if (e.key === "Backspace" && sug.inline && !picked) {
       // The first Backspace removes the completion only.
       e.preventDefault();
@@ -77,7 +77,7 @@ export function AddressBox({ onSubmit }: { readonly onSubmit: (q: Query) => void
     } else if (e.key === "Escape" && text) {
       e.preventDefault();
       setText("");
-      setEngine("brave");
+      setEngine("default");
     }
   };
 

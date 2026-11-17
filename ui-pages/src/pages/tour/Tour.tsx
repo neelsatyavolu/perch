@@ -148,7 +148,7 @@ export function TourPage() {
     if (answering || (asked[step] && !asked[step]!.failed)) return;
     const busy = new Set(chats.filter((c) => c.status !== "idle").map((c) => c.id));
     setAsked((a) => ({ ...a, [step]: { at: Date.now(), busy } }));
-    await act(() => api.submitQuery({ text, mode: "ask", engine: "brave" }));
+    await act(() => api.submitQuery({ text, mode: "ask", engine: "default" }));
   };
 
   /** The button for a chat step, held while the side chat answers, with word if it failed. */

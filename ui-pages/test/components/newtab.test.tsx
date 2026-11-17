@@ -123,7 +123,7 @@ describe("New tab page", () => {
     const box = await findByRole("combobox", { name: "Search or ask" });
     fireEvent.input(box, { target: { value: "summarise my unread mail" } });
     fireEvent.keyDown(box, { key: "Enter", metaKey: true });
-    await waitFor(() => expect(nav[0]).toEqual({ what: "query", detail: { text: "summarise my unread mail", mode: "ask", engine: "brave" } }));
+    await waitFor(() => expect(nav[0]).toEqual({ what: "query", detail: { text: "summarise my unread mail", mode: "ask", engine: "default" } }));
   });
 
   test("the model picker opens on providers, a provider lists its models, and search spans them all", async () => {
@@ -179,7 +179,7 @@ describe("New tab page", () => {
     await api.saveProfileDraft([]);
     window.dispatchEvent(new Event("focus"));
     fireEvent.click(await findByRole("button", { name: /^Summarise unread mail/ }));
-    await waitFor(() => expect(nav[1]?.detail).toEqual({ text: "Summarise my unread mail, grouped by what needs a reply today", mode: "ask", engine: "brave" }));
+    await waitFor(() => expect(nav[1]?.detail).toEqual({ text: "Summarise my unread mail, grouped by what needs a reply today", mode: "ask", engine: "default" }));
   });
 
   test("one suggestion can be dismissed and the next one takes its place", async () => {

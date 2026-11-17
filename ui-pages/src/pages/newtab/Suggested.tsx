@@ -19,7 +19,7 @@ export function Suggested({ items, onHide, onDismissed }: Props) {
   const act = useAction();
   if (items.length === 0) return null;
   const run = (s: Suggestion) =>
-    act(() => (s.action.type === "open" ? api.openPage(s.action.page) : api.submitQuery({ text: s.action.prompt, mode: "ask", engine: "brave" })));
+    act(() => (s.action.type === "open" ? api.openPage(s.action.page) : api.submitQuery({ text: s.action.prompt, mode: "ask", engine: "default" })));
   return (
     <section class="ntp-sec" aria-labelledby="sug-h">
       <div class="sec-h">

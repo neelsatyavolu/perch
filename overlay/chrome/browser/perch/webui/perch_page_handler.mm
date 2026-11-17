@@ -115,7 +115,8 @@ base::DictValue About() {
   return about;
 }
 
-// The results page for `text` on Brave or Google, from the profile's engines.
+// The results page for `text` on the default engine set in Settings, or on
+// Google after Tab.
 std::optional<GURL> SearchURL(Profile* profile,
                               const std::string& engine,
                               const std::string& text) {
@@ -123,13 +124,14 @@ std::optional<GURL> SearchURL(Profile* profile,
   if (!urls) {
     return std::nullopt;
   }
-  const SearchEngineType wanted =
-      engine == "google" ? SEARCH_ENGINE_GOOGLE : SEARCH_ENGINE_BRAVE;
   const TemplateURL* chosen = nullptr;
-  for (const TemplateURL* url : urls->GetTemplateURLs()) {
-    if (url->GetEngineType(urls->search_terms_data()) == wanted) {
-      chosen = url;
-      break;
+  if (engine == "google") {
+    for (const TemplateURL* url : urls->GetTemplateURLs()) {
+      if (url->GetEngineType(urls->search_terms_data()) ==
+          SEARCH_ENGINE_GOOGLE) {
+        chosen = url;
+        break;
+      }
     }
   }
   if (!chosen) {
@@ -526,7 +528,7 @@ void PerchPageHandler::Dispatch(const std::string& method,
                     base::EscapeQueryParamValue(*text, /*use_plus=*/false));
     } else if (*mode == "search") {
       // As in the address bar: a site Perch recognises opens; anything else
-      // is searched, with Brave or (after Tab) Google.
+      // is searched, with the default engine or (after Tab) Google.
       if (!autocomplete_) {
         autocomplete_ = std::make_unique<PerchAutocomplete>(profile());
       }

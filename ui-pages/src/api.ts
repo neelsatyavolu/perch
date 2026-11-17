@@ -122,7 +122,8 @@ export type Suggestion = {
   readonly icon: SuggestionIcon;
   readonly action: SuggestionAction;
 };
-export type SearchEngine = "brave" | "google";
+/** "default" is the search engine set in Settings; "google" is the Tab switch. */
+export type SearchEngine = "default" | "google";
 export type Query = { readonly text: string; readonly mode: "search" | "ask"; readonly engine: SearchEngine };
 /**
  * One of the address bar's suggestions for the Search box: a site or a search. `inline` is the

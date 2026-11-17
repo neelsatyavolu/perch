@@ -1,5 +1,6 @@
 /** The app API's routes. Each handler gets checked input and returns JSON (or text for export). */
 
+import type { TranscriptStore } from "./debug-transcripts";
 import type { ArtifactServer } from "./artifact-server";
 import { MAX_PASTED, type FileRegistry } from "./attachments";
 import { artifactFileName, isBinaryKind, type ArtifactStore } from "./artifacts";
@@ -27,6 +28,8 @@ export type RouteContext = {
   pages: PagesApi | null;
   /** Files the user attached through the browser's open panel. */
   files: FileRegistry;
+  /** Debug transcripts (debug-transcripts.ts), removed with their chat. */
+  transcripts?: TranscriptStore;
 };
 
 type Handler = (ctx: RouteContext, params: string[], body: unknown, query: URLSearchParams) => Promise<unknown> | unknown;
@@ -174,6 +177,7 @@ export const ROUTES: Route[] = [
     ctx.runs.cancel(id!);
     await ctx.runs.idleFor(id!);
     await ctx.artifacts.removeForChat(id!);
+    await ctx.transcripts?.remove(id!);
     await ctx.chats.remove(id!);
     ctx.runs.announceRemoved(id!);
     return { removed: id };
@@ -193,8 +197,8 @@ export const ROUTES: Route[] = [
     const send = when === "queue" ? ctx.runs.enqueue.bind(ctx.runs) : when === "steer" ? ctx.runs.steer.bind(ctx.runs) : ctx.runs.send.bind(ctx.runs);
     return send(id!, v.text(o.text, "text", 50_001), o.context === undefined ? undefined : reported(ctx, v.tabInfo(o.context, "context")), { files, mentions });
   }),
-  route("DELETE", "/api/chats/:id/queue/:queued", (ctx, [id, queued]) => ({ removed: ctx.runs.unqueue(chatOf(ctx, id!).id, v.id(queued, "queued")) })),
-  route("POST", "/api/chats/:id/queue/:queued/steer", (ctx, [id, queued]) => ctx.runs.steerQueued(chatOf(ctx, id!).id, v.id(queued, "queued"))),
+  route("DELETE", "/api/chats/:id/queue/:id", (ctx, [id, queued]) => ({ removed: ctx.runs.unqueue(chatOf(ctx, id!).id, v.id(queued, "queued")) })),
+  route("POST", "/api/chats/:id/queue/:id/steer", (ctx, [id, queued]) => ctx.runs.steerQueued(chatOf(ctx, id!).id, v.id(queued, "queued"))),
   // A file pasted or dropped into the chat: its bytes, base64 in JSON; the page gets an id only.
   route("POST", "/api/files/paste", (ctx, _, body) => {
     const o = v.object(body);

@@ -17,6 +17,8 @@ import type { ChatStore } from "./chats";
 import type { AppEvent, ApprovalCard, ArtifactMeta, Chat, ChatMessage, ChatSettings, ChatStatus, ChatSummary, QueuedMessage, RunSnapshot, ScheduledMessage, Step, TabInfo } from "./protocol";
 import { buildTask } from "./transcript";
 import { rememberTypedLogin, type TypedLogin } from "../agent/typed-logins";
+import { clipMiddle, type Transcript } from "../agent/debug-transcript";
+import type { TranscriptWriter } from "./debug-transcripts";
 
 export type RunnerInput = {
   task: string;
@@ -35,6 +37,8 @@ export type RunnerInput = {
   chatId?: string;
   /** A private chat (spec 5.8): no memory in or out, and nothing in the audit log. */
   incognito?: boolean;
+  /** The run's debug transcript, for a runner that sees model turns (Perch's own loop). */
+  transcript?: Transcript;
 };
 export type Runner = (input: RunnerInput) => AsyncIterable<StepEvent>;
 
@@ -52,6 +56,8 @@ export type RunDeps = {
   pageText?: (targetId: string) => Promise<string | null>;
   /** Names a chat from its first message and reply (chat-title.ts); null or a throw keeps the first-message title. */
   nameChat?: (ask: string, reply: string) => Promise<string | null>;
+  /** A debug transcript for a run in this chat (debug-transcripts.ts); never asked for incognito chats. */
+  transcripts?: (chatId: string) => TranscriptWriter;
 };
 
 /** What a message brings beyond its text: attached files (resolved to paths) and @ tabs. */
@@ -70,6 +76,7 @@ type Run = {
   runId: string; chatId: string; controller: AbortController; text: string; steps: Step[]; pending: Pending | null; done: Promise<void>; startedAt: string; holdBack?: boolean;
   /** An outside agent's work, listed as it reports it (observeStep); `quiet` ends it after a pause, and `ended` settles `done`. `intro` is its first message. */
   observed?: true; quiet?: ReturnType<typeof setTimeout>; ended?: () => void; intro?: string;
+  transcript?: TranscriptWriter;
 };
 
 /** "without submitting", "don't send it", "do not turn it in": the user wants the last step left to them. */
@@ -461,6 +468,7 @@ export class RunManager {
           resolve: (approved) => {
             if (run.pending?.card.id !== card.id) return;
             run.pending = null;
+            run.transcript?.record({ kind: "approval", label: card.title, approved });
             this.deps.emit({ type: "run.approval.resolved", chatId: run.chatId, runId: run.runId, approvalId: card.id, approved });
             this.announce(run.chatId);
             resolve(approved);
@@ -472,14 +480,29 @@ export class RunManager {
     };
   }
 
+  /** A transcript writer for the chat; none when the store is missing or refuses the id. */
+  private openTranscript(chatId: string): TranscriptWriter | undefined {
+    try {
+      return this.deps.transcripts?.(chatId);
+    } catch {
+      return undefined;
+    }
+  }
+
   private async drive(run: Run, task: string, settings: ChatSettings, tab?: TabInfo, ask?: string, files: { name: string; path: string }[] = []): Promise<void> {
     let final: string | undefined;
     let error: string | undefined;
+    const started = Date.now();
     try {
       const incognito = this.deps.chats.get(run.chatId)?.incognito === true;
+      const transcript = incognito ? undefined : this.openTranscript(run.chatId);
+      run.transcript = transcript;
+      transcript?.record({ kind: "run", runId: run.runId, task: clipMiddle(task), model: settings.model, mode: settings.mode, effort: settings.effort });
       const schedule = (at: Date, text: string, preapproved: boolean) => this.scheduler.add(run.chatId, at, text, preapproved);
-      const events = this.deps.runner({ task, ...(ask ? { ask } : {}), ...(files.length ? { files } : {}), schedule, settings, approve: this.approve(run), signal: run.controller.signal, chatId: run.chatId, ...(tab ? { tab } : {}), ...(incognito ? { incognito } : {}) });
+      const events = this.deps.runner({ task, ...(ask ? { ask } : {}), ...(files.length ? { files } : {}), schedule, settings, approve: this.approve(run), signal: run.controller.signal, chatId: run.chatId, ...(tab ? { tab } : {}), ...(incognito ? { incognito } : {}), ...(transcript ? { transcript } : {}) });
       for await (const event of events) {
+        if (event.type === "step") transcript?.record({ kind: "step", label: event.label, ...(event.detail ? { detail: event.detail } : {}) });
+        else if (event.type === "step_output") transcript?.record({ kind: "output", output: event.output });
         if (event.type === "text") {
           run.text += event.delta;
           if (event.delta) this.deps.emit({ type: "run.text", chatId: run.chatId, runId: run.runId, delta: event.delta });
@@ -501,7 +524,11 @@ export class RunManager {
       }
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
+      // The stack is for the transcript only; the chat shows the message.
+      run.transcript?.record({ kind: "output", output: clipMiddle(e instanceof Error ? (e.stack ?? e.message) : String(e)) });
     }
+    const outcome = run.controller.signal.aborted ? "cancelled" : error !== undefined ? "error" : "final";
+    run.transcript?.record({ kind: "end", outcome, text: clipMiddle(error ?? final ?? run.text), ms: Date.now() - started });
     try {
       await this.finish(run, final, error);
     } finally {

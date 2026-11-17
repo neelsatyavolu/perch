@@ -3,6 +3,7 @@
  * Inside Perch the browser starts it (plan 3b); until then `perch` starts it on first use.
  */
 
+import type { TranscriptRecord } from "../agent/debug-transcript";
 import type { SidebarExtras } from "../app/sidebar-extras";
 import { PERCH_VERSION } from "../version";
 import { needsApproval } from "../agent/permissions";
@@ -65,6 +66,15 @@ export type Outside = {
   tasks: Tasks;
   memory: () => Promise<MemoryApi | undefined>;
   skills: () => Promise<SkillCatalog>;
+  /** Debug transcripts of chats (app/debug-transcripts.ts), for `perch transcript`. */
+  transcripts?: TranscriptAccess;
+};
+
+export type TranscriptAccess = {
+  /** The newest chats first, with how many events each has kept. */
+  list(): { id: string; title: string; updatedAt: string }[];
+  /** One chat's transcript; the newest chat when no id is given. */
+  read(chatId?: string): Promise<{ chatId: string; title: string; events: TranscriptRecord[] }>;
 };
 
 export type Daemon = { manager: SessionManager; registry: ClientRegistry; stop(): Promise<void> };
@@ -72,6 +82,11 @@ export type Daemon = { manager: SessionManager; registry: ClientRegistry; stop()
 function str(params: Record<string, unknown>, key: string): string | undefined {
   const v = params[key];
   return typeof v === "string" ? v : undefined;
+}
+
+/** Transcripts hold everything the agent read: only the owner's own terminal may see them. */
+function cliOnly(conn: Connection): void {
+  if (conn.client.name !== "cli") throw new Error("Only the perch command can read transcripts.");
 }
 
 /** Only the owner's own terminal (client "cli") may change other clients. */
@@ -142,6 +157,11 @@ export async function startDaemon(opts: DaemonOptions): Promise<Daemon> {
   };
 
   /** Tasks, memory and skills are Perch's own: there is nothing to lend without the app, and a sidebar agent may not start tasks. */
+  const transcriptsOf = (conn: Connection): TranscriptAccess => {
+    const access = outsideOf(conn).transcripts;
+    if (!access) throw new Error(APP_NEEDED);
+    return access;
+  };
   const outsideOf = (conn: Connection): Outside => {
     if (conn.client.name === SIDEBAR_CLIENT) throw new Error("A Perch chat's agent cannot start or read tasks.");
     const outside = opts.outside?.();
@@ -237,6 +257,8 @@ export async function startDaemon(opts: DaemonOptions): Promise<Daemon> {
       if (text === null) throw new Error(`No skill "${need(params, "name")}". List them with: perch skills list`);
       return text;
     },
+    "transcript.list": async (conn) => (cliOnly(conn), transcriptsOf(conn).list()),
+    "transcript.show": async (conn, params) => (cliOnly(conn), transcriptsOf(conn).read(str(params, "chat"))),
     "clients.list": async (conn) => (adminOnly(conn), registry.list()),
     // Revoking and lowering a mode take effect at once; letting a client do more needs the person.
     "clients.revoke": async (conn, params) => {

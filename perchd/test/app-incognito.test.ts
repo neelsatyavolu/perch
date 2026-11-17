@@ -61,6 +61,8 @@ test("a side chat in an incognito tab is private: no memory, nothing on disk, go
   expect((await call(`/api/chats/${chat.id}/messages`, { method: "POST", json: { text: "compare prices" } })).status).toBe(200);
   await settle(chat.id);
   expect(inputs.at(-1)?.incognito).toBe(true);
+  expect(inputs.at(-1)?.transcript).toBeUndefined();
+  expect(files("transcripts")).toEqual([]);
   expect(app.artifacts.forChat(chat.id).length).toBe(1);
   expect(files("chats").length).toBe(before.chats);
   expect(files("artifacts").length).toBe(before.artifacts);

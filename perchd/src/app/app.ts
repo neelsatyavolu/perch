@@ -14,6 +14,7 @@ import { fitEffort } from "./effort";
 import { RunManager, type RunDeps, type Runner } from "./runs";
 import { startServer, type Listen, type Server } from "./server";
 import type { Vault } from "./vault";
+import { TranscriptStore } from "./debug-transcripts";
 
 export type AppOptions = {
   dataDir: string;
@@ -63,6 +64,8 @@ export type App = {
   chats: ChatStore;
   artifacts: ArtifactStore;
   runs: RunManager;
+  /** Debug transcripts of each chat's runs, for `perch transcript`. */
+  transcripts: TranscriptStore;
   artifactServer: ArtifactServer;
   server: Server;
   token: string;
@@ -191,6 +194,8 @@ export function offeredModel(id: string, models: readonly ModelInfo[]): string {
 export async function startApp(opts: AppOptions): Promise<App> {
   const chats = await ChatStore.load(join(opts.dataDir, "chats"), opts.vault);
   const artifacts = await ArtifactStore.load(join(opts.dataDir, "artifacts"), opts.vault, keptInMemory(chats));
+  const transcripts = await TranscriptStore.open(join(opts.dataDir, "transcripts"), opts.vault, { isLive: (id) => chats.get(id) !== undefined });
+  void transcripts.prune();
   let publish: (event: AppEvent) => void = () => {};
   const windows = new Windows(chats, (event) => publish(event), opts.agentChatFor);
   let ownOrigin: string | null = null;
@@ -205,6 +210,7 @@ export async function startApp(opts: AppOptions): Promise<App> {
       return opts.runner({ ...input, settings: { ...input.settings, model, effort: fitEffort(models().find((m) => m.id === model)?.efforts, input.settings.effort) } });
     },
     emit: (event) => publish(event),
+    transcripts: (chatId) => transcripts.writer(chatId),
     artifactUrl: artifactServer.urlFor,
     tabs: () => windows.tabs(),
     ...(opts.onStatus ? { onStatus: opts.onStatus } : {}),
@@ -243,7 +249,7 @@ export async function startApp(opts: AppOptions): Promise<App> {
     listen: opts.listen ?? { port: 0 },
     uiDir: opts.uiDir,
     ctx: {
-      chats, artifacts, runs, windows, info, artifactServer, pages, files,
+      chats, artifacts, runs, windows, info, artifactServer, pages, files, transcripts,
       get models() {
         return models().map((m) => m.id);
       },
@@ -264,6 +270,7 @@ export async function startApp(opts: AppOptions): Promise<App> {
     chats,
     artifacts,
     runs,
+    transcripts,
     artifactServer,
     server,
     token,

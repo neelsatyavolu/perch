@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { connect, DaemonNotRunning } from "../src/cli/client";
 import { Browser } from "../src/browser/browser";
 import { ClientRegistry } from "../src/daemon/clients";
-import { startDaemon, type Daemon } from "../src/daemon/daemon";
+import { startDaemon, type Daemon, type Outside, type TranscriptAccess } from "../src/daemon/daemon";
 import { MemoryKeychain } from "../src/daemon/keychain";
 import { perchPaths } from "../src/daemon/paths";
 import { startFixtures } from "./fixtures/server";
@@ -45,8 +45,16 @@ beforeAll(async () => {
     graceMs: 100,
     helloTimeoutMs: 300,
     confirm: async (message) => (confirms.push(message), confirmAnswer),
+    outside: () => outside,
   });
 });
+
+// Only transcripts are used here; tasks, memory and skills are other tests' business.
+const transcripts: TranscriptAccess = {
+  list: () => [{ id: "chat-1", title: "Verify listings", updatedAt: "2026-11-17T08:00:00.000Z" }],
+  read: async (chatId) => ({ chatId: chatId ?? "chat-1", title: "Verify listings", events: [{ kind: "end", outcome: "error", text: "not found", ms: 5, time: "2026-11-17T08:00:00.000Z" }] }),
+};
+const outside = { transcripts } as unknown as Outside;
 afterAll(async () => {
   await daemon.stop();
   site.stop();
@@ -158,6 +166,17 @@ test("a client that leaves while its token is checked leaves no session behind",
   release();
   await Bun.sleep(100);
   expect(daemon.manager.get("codex", "race-1")).toBeUndefined();
+});
+
+test("only the perch command reads chat transcripts", async () => {
+  const agent = await connect({ socket: paths.socket, hello: await hello("claude-code", "tr1") });
+  await expect(agent.request("transcript.show", {})).rejects.toThrow("Only the perch command can read transcripts.");
+  agent.close();
+  const cli = await connect({ socket: paths.socket, hello: await hello("cli", "tr2") });
+  const shown = await cli.request<{ chatId: string; events: { text: string }[] }>("transcript.show", { chat: "chat-1" });
+  expect(shown).toMatchObject({ chatId: "chat-1", events: [{ text: "not found" }] });
+  expect(await cli.request<unknown>("transcript.list", {})).toEqual(transcripts.list());
+  cli.close();
 });
 
 test("outside clients cannot call Perch's own app tools", async () => {

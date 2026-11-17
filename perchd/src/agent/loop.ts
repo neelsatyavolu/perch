@@ -14,6 +14,7 @@ import { Progress } from "./progress";
 import { systemPrompt } from "./prompt";
 import { BATCH, callTool, finishCall, label, prepareCall, type ApprovalRequest } from "./session";
 import { SCRIPT } from "./script";
+import { clipMiddle, imageBytes, type Transcript } from "./debug-transcript";
 import { newToolContext, TOOL_SPECS, type ToolContext } from "./tools";
 
 export type { ApprovalRequest } from "./session";
@@ -52,6 +53,8 @@ export type TaskOptions = {
    * the task closes at the end. `afterCall` runs after each browser action, to group new tabs.
    */
   tabs?: { ctx: ToolContext; afterCall?: () => Promise<void> };
+  /** The run's debug transcript (agent/debug-transcript.ts): each model turn and tool call in full. */
+  transcript?: Transcript;
 };
 
 const DEFAULT_MAX_STEPS = 40;
@@ -91,6 +94,8 @@ export async function* runTask(opts: TaskOptions): AsyncIterable<StepEvent> {
     for (let step = 0; step < maxSteps && !progress.timeUp(); step++) {
       let text = "";
       const calls: ToolCall[] = [];
+      let usage: { input: number; output: number } | undefined;
+      const turnStart = Date.now();
       try {
         const req: TurnRequest = { system, messages: compact(messages), tools, effort: opts.effort };
         for await (const event of opts.model.turn(req, signal)) {
@@ -98,11 +103,15 @@ export async function* runTask(opts: TaskOptions): AsyncIterable<StepEvent> {
             text += event.delta;
             yield event;
           } else if (event.type === "tool_call") calls.push(event.call);
+          else if (event.type === "done") usage = event.usage;
         }
       } catch (error) {
-        yield { type: "error", message: error instanceof Error ? error.message : String(error) };
+        const message = error instanceof Error ? error.message : String(error);
+        opts.transcript?.record({ kind: "turn", ms: Date.now() - turnStart, text, calls: calls.map(callRecord), error: message });
+        yield { type: "error", message };
         return;
       }
+      opts.transcript?.record({ kind: "turn", ms: Date.now() - turnStart, text, calls: calls.map(callRecord), ...(usage ? { usage } : {}) });
       messages.push({ role: "assistant", text, toolCalls: calls });
       if (calls.length === 0) {
         yield { type: "final", text: text.trim() };
@@ -123,7 +132,18 @@ export async function* runTask(opts: TaskOptions): AsyncIterable<StepEvent> {
           yield { type: "error", message: AGENT_OFF };
           return;
         }
+        const callStart = Date.now();
         const outcome = yield* act(ctx, opts, call, progress);
+        opts.transcript?.record({
+          kind: "tool",
+          id: call.id,
+          name: call.name,
+          ms: Date.now() - callStart,
+          approved: outcome.approved ?? null,
+          error: Boolean(outcome.failed),
+          content: clipMiddle(outcome.message.content),
+          ...(outcome.message.image ? { imageBytes: imageBytes(outcome.message.image) } : {}),
+        });
         await opts.tabs?.afterCall?.().catch(() => undefined);
         if (signal.aborted) {
           yield { type: "error", message: "Cancelled." };
@@ -163,7 +183,7 @@ export async function* runTask(opts: TaskOptions): AsyncIterable<StepEvent> {
 }
 
 /** `failed`: the call came back with an error, which Progress counts toward being stuck. */
-type Outcome = { final?: string; failed?: boolean; message: Extract<Message, { role: "tool" }> };
+type Outcome = { final?: string; failed?: boolean; approved?: boolean | null; message: Extract<Message, { role: "tool" }> };
 
 /**
  * The task's rules for its next action under the current company policy: the mode lowered to the
@@ -203,13 +223,19 @@ async function* act(ctx: ToolContext, task: TaskOptions, call: ToolCall, progres
     approved = await progress.whilePaused(() => opts.approve(prepared.request));
   }
   const result = await finishCall(ctx, opts, prepared, approved);
-  if (result.done) return { final: result.content, message: reply(result.content).message };
+  if (result.done) return { final: result.content, approved, message: reply(result.content).message };
   if (!result.isError && approved !== false) {
     const title = call.name === "repl" && typeof call.args.title === "string" && call.args.title.trim() ? call.args.title.trim().slice(0, 60) : null;
     yield { type: "step", label: title ?? label(call, prepared.target, prepared.site), ...withDetail(call) };
     yield* stepOutput(result.content);
   }
-  return reply(result.content, result.image, result.isError);
+  return { ...reply(result.content, result.image, result.isError), approved };
+}
+
+/** A tool call as the transcript keeps it: its arguments in full, long text values clipped. */
+function callRecord(call: ToolCall): { id: string; name: string; args: unknown } {
+  const args = Object.fromEntries(Object.entries(call.args).map(([k, v]) => [k, typeof v === "string" ? clipMiddle(v) : v]));
+  return { id: call.id, name: call.name, args };
 }
 
 function withDetail(call: ToolCall): { detail?: string } {

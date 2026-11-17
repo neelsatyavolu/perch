@@ -54,6 +54,7 @@ Sessions and clients:
   perch sessions [--json]          agent sessions and their tabs
   perch focus [--client C] [--session S]   bring a session's tabs forward
   perch clients [list | revoke <name> | allow <name> | mode <name> ask|guard|skip] [--json]
+  perch transcript [--chat <id>] [--json] | --list   a chat's debug transcript (newest chat by default)
 
 Agents:
   perch mcp [--client C] [--session S] [--agent A] [--title T] [--on-end close|sleep]

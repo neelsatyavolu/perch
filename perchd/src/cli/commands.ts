@@ -10,6 +10,8 @@ import { DaemonNotRunning, type DaemonClient } from "./client";
 import { agentPrompt } from "./agent-prompt";
 import { openDaemon, type CliIO } from "./io";
 import { parseDuration } from "./tasks";
+import { formatTranscript, formatTranscriptList } from "./transcript-format";
+import type { TranscriptRecord } from "../agent/debug-transcript";
 
 type ToolResult = { content: string; image?: string; isError?: boolean };
 type Status = { client: string; mode: string; session: string; label: string; pid: number; socket: string; sessions: SessionSummary[] };
@@ -239,6 +241,20 @@ export const sessionCommands: Record<string, (argv: string[], io: CliIO) => Prom
     // A mark in agterm or agmux can outlive perchd; clicking it must not start a browser.
     const { label } = await withDaemon({ ...io, autostart: false }, undefined, (c) => c.request<{ label?: string }>("focus", session ? { session } : {}), a.options.get("--client"));
     io.stdout(label ? `Showing ${label}.\n` : "Done.\n");
+    return 0;
+  },
+  /** A chat's debug transcript (the newest chat without --chat), for working out what went wrong. */
+  async transcript(argv, io) {
+    const a = parseArgs(argv, { flags: ["--json", "--list"], options: ["--chat"] });
+    if (a.positionals.length) throw new UsageError("usage: perch transcript [--chat <id>] [--json] | --list");
+    if (a.flags.has("--list")) {
+      const chats = await withDaemon(io, undefined, (c) => c.request<{ id: string; title: string; updatedAt: string }[]>("transcript.list", {}), "cli");
+      io.stdout(a.flags.has("--json") ? `${JSON.stringify(chats, null, 2)}\n` : formatTranscriptList(chats));
+      return 0;
+    }
+    const chat = a.options.get("--chat");
+    const t = await withDaemon(io, undefined, (c) => c.request<{ chatId: string; title: string; events: TranscriptRecord[] }>("transcript.show", chat ? { chat } : {}), "cli");
+    io.stdout(a.flags.has("--json") ? t.events.map((e) => `${JSON.stringify(e)}\n`).join("") : formatTranscript(t.title, t.chatId, t.events));
     return 0;
   },
   async clients(argv, io) {

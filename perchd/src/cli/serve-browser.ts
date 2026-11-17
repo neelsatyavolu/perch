@@ -20,7 +20,7 @@ import { openPageServices, profileAuditLog } from "../app/pages/services";
 import { allowedSidebarModels, SidebarRuns, sidebarModels, sidebarRunner } from "../app/sidebar-runner";
 import { startPolicyWatcher } from "../policy/watch";
 import { Vault } from "../app/vault";
-import { startDaemon, type Daemon, type Outside } from "../daemon/daemon";
+import { startDaemon, type Daemon, type Outside, type TranscriptAccess } from "../daemon/daemon";
 import { Tasks } from "../app/tasks";
 import { CHAT_KEEP_MS, SIDEBAR_CLIENT } from "../daemon/server";
 import { runTask } from "../agent/loop";
@@ -181,13 +181,22 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
         ...(memory ? { memory } : {}),
         ...(extras ? { extraTools: extras } : {}),
         tabs: { ctx: lent.ctx, afterCall: lent.sync },
+        ...(input.transcript ? { transcript: input.transcript } : {}),
       });
     } finally {
       await daemon.manager.giveBack(agent);
       daemon.manager.scheduleEnd(agent, input.incognito ? 0 : CHAT_KEEP_MS);
     }
   };
-  outside = { tasks: new Tasks(app), memory: services.memoryApi, skills: services.skills };
+  const transcripts: TranscriptAccess = {
+    list: () => app.chats.list().filter((c) => !c.incognito).slice(0, 30).map(({ id, title, updatedAt }) => ({ id, title, updatedAt })),
+    read: async (chatId) => {
+      const chat = chatId ? app.chats.get(chatId) : app.chats.list().find((c) => !c.incognito);
+      if (!chat || chat.incognito) throw new Error(chatId ? `No chat ${chatId}. perch transcript --list shows them.` : "No chats yet.");
+      return { chatId: chat.id, title: chat.title, events: await app.transcripts.read(chat.id) };
+    },
+  };
+  outside = { tasks: new Tasks(app), memory: services.memoryApi, skills: services.skills, transcripts };
   agentTabs = (chatId) => runs.sessionsFor(chatId).flatMap((s) => daemon.manager.get(SIDEBAR_CLIENT, s)?.tabIds() ?? []);
   link.attach(app);
   io.stderr(`perchd ${process.pid}: connected to browser; app API on 127.0.0.1:${settings.port}; socket in ${home}\n`);

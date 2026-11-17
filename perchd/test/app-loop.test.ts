@@ -75,6 +75,13 @@ test("a Send click waits for approval through the API, then runs and is audited"
   expect(reply.steps?.map((s) => s.label)).toContain('Clicked button "Send"');
   const audit = readFileSync(join(dir, "audit.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
   expect(audit.find((e) => e.action === "click" && e.approved === true)).toMatchObject({ detail: expect.stringContaining('button "Send"'), result: "ok", client: "sidebar" });
+  // The debug transcript has the whole run: each model turn, each call with its arguments, the approval and the end.
+  const transcript = await app.transcripts.read(chat.id);
+  expect(transcript[0]).toMatchObject({ kind: "run", model: "fake" });
+  expect(transcript.find((e) => e.kind === "turn" && e.calls.some((c) => c.name === "type"))).toMatchObject({ calls: [{ args: { text: "maya@chenstudio.co" } }] });
+  expect(transcript.find((e) => e.kind === "tool" && e.name === "click" && e.approved === true)).toMatchObject({ error: false });
+  expect(transcript.find((e) => e.kind === "approval")).toMatchObject({ approved: true });
+  expect(transcript.at(-1)).toMatchObject({ kind: "end", outcome: "final", text: "Sent to Maya." });
   ws.close();
 }, 30_000);
 

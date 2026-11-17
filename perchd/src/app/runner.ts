@@ -40,6 +40,7 @@ export function loopRunner(opts: LoopRunnerOptions): Runner {
       siteRule: opts.siteRule,
       signal: input.signal,
       maxSteps: opts.maxSteps,
+      ...(input.transcript ? { transcript: input.transcript } : {}),
       ...(opts.policy ? { policy: opts.policy } : {}),
     });
   };

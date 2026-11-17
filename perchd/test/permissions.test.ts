@@ -87,6 +87,11 @@ test.each([
   [call("click", { ref: "e1" }), { role: "link", name: "Rent" }, "change"],
   [call("click", { ref: "e1" }), { role: "button", name: "Add to cart" }, "change"],
   [call("click", { ref: "e1" }), { role: "button", name: "Continue ($19.99)" }, "payment"],
+  // A question is an FAQ entry that opens its answer, not a command, even with a send word in it.
+  [call("click", { ref: "e1" }), { role: "button", name: "WHERE SHOULD I SUBMIT MY TRANSCRIPT? \u2263" }, "change"],
+  [call("click", { ref: "e1" }), { role: "button", name: "How do I delete my account?", expanded: false }, "change"],
+  [call("click", { ref: "e1" }), { role: "button", name: "Ready to submit?" }, "risky"],
+  [call("click", { ref: "e1" }), { role: "button", name: "Can I pay later?" }, "payment"],
   // A button that opens or closes a menu only shows its items.
   [call("click", { ref: "e1" }), { role: "button", name: "Book", expanded: false }, "change"],
   [call("click", { ref: "e1" }), { role: "button", name: "Book" }, "payment"],

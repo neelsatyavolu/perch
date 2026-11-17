@@ -195,9 +195,15 @@ function clickKind(target: Target | undefined, guarded: boolean): Kind {
   const priced = MONEY.test(name) && SUBSCRIBE.test(name);
   if (PAYMENT.test(name) || PASSWORD.test(name) || priced || (!cart && charges({ ...target, name }, guarded))) return "payment";
   if (guarded && ADVANCES.test(name)) return "payment";
-  if (RISKY.test(name) && !isListing(target.role, name) && !FILTER_CHIP.test(name)) return "risky";
+  if (RISKY.test(name) && !isListing(target.role, name) && !FILTER_CHIP.test(name) && !QUESTION.test(name)) return "risky";
   return "change";
 }
+
+/**
+ * A label that asks a question is an FAQ entry that opens its answer ("Where should I submit my
+ * transcript?"), not a command. "Ready to submit?" does not start with a question word, so it still asks.
+ */
+const QUESTION = /^\s*(how|what|where|when|why|who|which|can|could|do|does|is|are|should|will|may)\b[^?]*\?\W*$/i;
 
 /** A link's label without its store names, and without booking words that are part of a title (LINK_BOOKING). */
 function linkWords(label: string): string {

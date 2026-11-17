@@ -37,7 +37,7 @@ import { FileKeychain, MacKeychain } from "../daemon/keychain";
 import { perchPaths } from "../daemon/paths";
 import { parseBrowserSettings as parseSettingsObject, readKeyChannel, type BrowserSettings } from "../secure/key-channel";
 import { loopEffort } from "../app/effort";
-import { browserSecrets } from "./browser-keys";
+import { browserSecrets, lateProfileKey } from "./browser-keys";
 import type { CliIO } from "./io";
 
 /** perchd serves one profile inside Perch for now. */
@@ -200,8 +200,11 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
   agentTabs = (chatId) => runs.sessionsFor(chatId).flatMap((s) => daemon.manager.get(SIDEBAR_CLIENT, s)?.tabIds() ?? []);
   link.attach(app);
   io.stderr(`perchd ${process.pid}: connected to browser; app API on 127.0.0.1:${settings.port}; socket in ${home}\n`);
-  await Promise.race([closed, conn.closed]);
-  io.stderr("perchd: the browser went away; stopping\n");
+  // Started without the profile key (the Keychain was not ready yet): stop once it comes, and the
+  // browser starts perchd again with it. Otherwise chats and sign-ins stay unreadable until a quit.
+  const late = secrets || io.keychain ? new Promise<never>(() => {}) : lateProfileKey(channel, PROFILE).then((came) => (came ? "late-key" : new Promise<never>(() => {})));
+  const why = await Promise.race([closed, conn.closed, late]);
+  io.stderr(why === "late-key" ? "perchd: the profile key came after start; restarting to use it\n" : "perchd: the browser went away; stopping\n");
   link.stop();
   clearInterval(modelTimer);
   await app.stop();

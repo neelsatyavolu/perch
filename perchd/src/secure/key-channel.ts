@@ -105,7 +105,7 @@ export function parseChannelLine(line: string): ChannelLine {
 export type KeyChannel = {
   /** The app line. Rejects if the browser closes the channel first. */
   readonly settings: Promise<BrowserSettings>;
-  /** A profile's keys, waiting up to `waitMs` for them to arrive; null if they don't. */
+  /** A profile's keys, waiting up to `waitMs` (Infinity: until the channel closes) for them; null if they don't come. */
   profile(id: string, waitMs: number): Promise<ProfileKeys | null>;
   /** Called when the browser removes a profile, after its keys are zeroed. */
   onRemoved(listener: (id: string) => void): void;
@@ -178,10 +178,12 @@ export function readKeyChannel(input: Readable, opts: { onProblem?: (message: st
       const ready = profiles.get(id);
       if (ready) return Promise.resolve(ready);
       return new Promise((resolve) => {
-        const timer = setTimeout(() => {
-          waiters = waiters.filter((w) => w !== waiter);
-          resolve(null);
-        }, waitMs);
+        const timer = Number.isFinite(waitMs)
+          ? setTimeout(() => {
+              waiters = waiters.filter((w) => w !== waiter);
+              resolve(null);
+            }, waitMs)
+          : undefined;
         const waiter = {
           id,
           resolve: (k: ProfileKeys | null) => {

@@ -7,6 +7,7 @@
 
 #include <unistd.h>
 
+#include <algorithm>
 #include <utility>
 
 #include <Security/Security.h>
@@ -33,6 +34,8 @@
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
+#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/page_navigator.h"
 #include "ui/base/window_open_disposition.h"
 #include "url/gurl.h"
@@ -299,6 +302,7 @@ void KeyBroker::OnProfileAdded(Profile* profile) {
 void KeyBroker::OnProfileMarkedForPermanentDeletion(Profile* profile) {
   const base::FilePath dir = profile->GetPath();
   keys_.erase(dir);
+  fetch_failures_.erase(dir);
   if (sender_) {
     sender_.Run(base::WriteJson(base::DictValue()
                                     .Set("op", "profile-removed")
@@ -356,13 +360,46 @@ void KeyBroker::OnFetched(base::FilePath profile_dir, Fetched fetched) {
     return;
   }
   if (!fetched.entry) {
+    if (fetched.helper_available) {
+      RetryFetch(profile_dir);
+    }
     return;
   }
+  fetch_failures_.erase(profile_dir);
   Entry entry = std::move(*fetched.entry);
   Send(profile_dir, entry);
   // The recovery key goes to perchd once, when the key was made.
   entry.recovery.clear();
   keys_[profile_dir] = std::move(entry);
+}
+
+void KeyBroker::RetryFetch(const base::FilePath& profile_dir) {
+  static constexpr int kMaxRetries = 20;
+  static constexpr base::TimeDelta kLongestWait = base::Seconds(60);
+  const int failures = ++fetch_failures_[profile_dir];
+  if (failures > kMaxRetries) {
+    LOG(ERROR) << "Perch: could not read the profile key; restart Perch";
+    fetch_failures_.erase(profile_dir);
+    return;
+  }
+  const base::TimeDelta wait =
+      std::min(base::Seconds(2) * (1 << std::min(failures - 1, 5)), kLongestWait);
+  content::GetUIThreadTaskRunner({})->PostDelayedTask(
+      FROM_HERE,
+      base::BindOnce(
+          [](base::WeakPtr<KeyBroker> broker, base::FilePath dir) {
+            // Gone meanwhile: fetched, being restored, or the profile removed.
+            if (!broker || !broker->fetch_failures_.contains(dir) ||
+                broker->keys_.contains(dir) ||
+                broker->needs_restore_.contains(dir) ||
+                std::find(broker->pending_.begin(), broker->pending_.end(),
+                          dir) != broker->pending_.end()) {
+              return;
+            }
+            broker->Fetch(dir);
+          },
+          weak_factory_.GetWeakPtr(), profile_dir),
+      wait);
 }
 
 void KeyBroker::OnWindowOpened(BrowserWindowInterface* browser) {

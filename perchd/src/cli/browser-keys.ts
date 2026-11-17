@@ -49,3 +49,12 @@ export async function browserSecrets(channel: KeyChannel, opts: BrowserSecretsOp
   if (!keys.protected) opts.log("perchd: this build's profile key is not protected by the Secure Enclave\n");
   return secrets;
 }
+
+/**
+ * True once the browser sends the profile's key after perchd stopped waiting for it, false if the
+ * channel closes first. Right after login the browser can only read the key once the Keychain is
+ * ready; perchd that started without it then restarts, and the browser hands the key to the new one.
+ */
+export async function lateProfileKey(channel: KeyChannel, profile: string): Promise<boolean> {
+  return (await channel.profile(profile, Infinity)) !== null;
+}

@@ -3,7 +3,7 @@ import { mkdtemp, readFile, readdir, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
-import { browserSecrets } from "../src/cli/browser-keys";
+import { browserSecrets, lateProfileKey } from "../src/cli/browser-keys";
 import { memoryKeychain as configKeychain } from "../src/config/keychain";
 import { readKeyChannel } from "../src/secure/key-channel";
 import type { LegacySource } from "../src/secure/migrate";
@@ -55,6 +55,24 @@ test("without a key from the browser, perchd keeps the Keychain and moves nothin
   expect(s.old.names()).toEqual(["api-key:openai"]);
   expect(s.log.join("")).toContain("no profile key");
   s.stream.end();
+});
+
+test("a key that comes after perchd gave up waiting is noticed, so perchd can restart with it", async () => {
+  const s = await setup();
+  expect(await browserSecrets(s.channel, { profile: "Default", dataDir: s.dataDir, clientsFile: "/x", log: () => {}, sources: [], waitMs: 10 })).toBeNull();
+  const late = lateProfileKey(s.channel, "Default");
+  // Right after login the Keychain can take a while; the browser sends the key once it has it.
+  await Bun.sleep(30);
+  s.stream.write(`${JSON.stringify({ op: "profile", id: "Default", dir: s.dir, key: ROOT, protected: true })}\n`);
+  expect(await late).toBe(true);
+  s.stream.end();
+});
+
+test("no late key when the browser closes the channel first", async () => {
+  const s = await setup();
+  const late = lateProfileKey(s.channel, "Default");
+  s.stream.end();
+  expect(await late).toBe(false);
 });
 
 test("an unprotected key (a development build) is said so in the log", async () => {

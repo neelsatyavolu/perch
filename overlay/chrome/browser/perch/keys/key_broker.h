@@ -110,6 +110,9 @@ class KeyBroker : public ProfileManagerObserver {
 
   void Fetch(const base::FilePath& profile_dir);
   void OnFetched(base::FilePath profile_dir, Fetched fetched);
+  // A fetch that got no key, as right after login before the Keychain is
+  // ready: tries again later, slower each time, then gives up.
+  void RetryFetch(const base::FilePath& profile_dir);
   void OnRestored(base::FilePath profile_dir,
                   base::OnceCallback<void(std::optional<std::string>)> done,
                   base::expected<Entry, std::string> result);
@@ -118,6 +121,8 @@ class KeyBroker : public ProfileManagerObserver {
   LineSender sender_;
   std::map<base::FilePath, Entry> keys_;
   std::vector<base::FilePath> pending_;
+  // Fetches in a row that got no key, by profile; cleared when one does.
+  std::map<base::FilePath, int> fetch_failures_;
   std::set<base::FilePath> needs_restore_;
   std::set<base::FilePath> restore_page_waiting_;
   bool helper_available_ = false;

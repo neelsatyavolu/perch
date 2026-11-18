@@ -6,6 +6,7 @@
 import { basename } from "node:path";
 import { appTool } from "../apps/index";
 import { runScript, SCRIPT } from "./script";
+import { toolWords } from "./steps";
 import type { ToolCall } from "../models/types";
 import type { AuditWriter } from "./audit";
 import { FILL_TOOLS, fillKind, fillSummary, needsTypedLogin } from "./fill-tools";
@@ -216,7 +217,22 @@ export function label(call: ToolCall, target: Target | undefined, site: string):
     case "sign_in": return `Signed in to ${site}`;
     case "fill_card": return `Filled a saved card on ${site}`;
     case "fill_code": return `Filled a code on ${site}`;
-    default: return call.name;
+    case "read_document": return documentLabel(String(call.args.url ?? ""));
+    case "write_file": return `Saved ${basename(String(call.args.name ?? "a file"))}`;
+    case "make_zip": return `Made ${String(call.args.name ?? "a zip").replace(/(\.zip)?$/i, ".zip")}`;
+    case "find": return call.args.role || call.args.name ? `Looked for ${[call.args.role, call.args.name ? `"${call.args.name}"` : ""].filter(Boolean).join(" ")}` : "Looked through the page";
+    default: return toolWords(call.name);
+  }
+}
+
+/** "Read Admissions Guide.pdf" from a document's link, or the site when the link names no file. */
+function documentLabel(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const file = decodeURIComponent(basename(parsed.pathname));
+    return file && /\.\w{2,5}$/.test(file) ? `Read ${file}` : `Read a document on ${parsed.hostname}`;
+  } catch {
+    return "Read a document";
   }
 }
 

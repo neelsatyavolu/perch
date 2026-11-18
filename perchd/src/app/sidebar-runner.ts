@@ -10,7 +10,7 @@ import { sidebarExtras, type SidebarExtras } from "./sidebar-extras";
 import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import type { StepEvent } from "../agent/loop";
-import { clip, OUTPUT_LIMIT, stepDetail } from "../agent/steps";
+import { clip, OUTPUT_LIMIT, stepDetail, toolWords } from "../agent/steps";
 import type { MemoryAccess, MemoryHints } from "../memory/agent";
 import { CHAT_SESSION_PREFIX, SIDEBAR_CLIENT, type SidebarRun } from "../daemon/server";
 import { claudeBinary, codexBinary, runClaudeCode, runCodex, toolBudgetMs, type AsideEvent, type McpServer } from "../external";
@@ -104,11 +104,6 @@ const host = (url: string): string | null => {
 };
 
 /** "WebSearch" → "Web search", "switch_tab" → "Switch tab". */
-function words(tool: string): string {
-  const spaced = tool.replace(/_/g, " ").replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase().trim();
-  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
-}
-
 /** A short line for the chat's step list, like "Open example.com" or "Press Enter". What is typed is never shown. */
 export function stepLabel(tool: string, args: unknown): string {
   const a = (args && typeof args === "object" ? args : {}) as Record<string, unknown>;
@@ -129,7 +124,7 @@ export function stepLabel(tool: string, args: unknown): string {
   if (tool === "press" && typeof a.key === "string") return `Press ${a.key}`;
   if (tool === "wait_for") return a.text ? `Wait for${quoted(a.text)}${a.gone ? " to go" : ""}` : "Wait";
   if (tool === "select") return `Choose${quoted(a.value)}`;
-  const verb = words(tool);
+  const verb = toolWords(tool);
   if (typeof a.url === "string") {
     const h = host(a.url);
     return h ? `${tool === "navigate" || tool === "open_tab" ? "Open" : verb} ${h}` : verb;

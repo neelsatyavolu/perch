@@ -8,6 +8,13 @@ export const OUTPUT_LIMIT = 4000;
 
 export const clip = (text: string, max: number) => (text.length > max ? `${text.slice(0, max)}\n…` : text);
 
+/** A tool's name as words for a step ("read_document" → "Read document"), without an MCP server prefix. */
+export function toolWords(tool: string): string {
+  const bare = tool.replace(/^mcp__[^_]+(?:_[^_]+)*?__/, "");
+  const spaced = bare.replace(/_/g, " ").replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase().trim();
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
 /**
  * What a step ran, for the chat's expanded step: the code of a script, the query of a search, the
  * URL of a page, or else the arguments. Never what was typed.

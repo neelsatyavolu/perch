@@ -77,6 +77,12 @@ test("a bad tool call is reported back and the loop goes on", async () => {
   expect(events.at(-1)).toEqual({ type: "final", text: 'missing argument "ref"; click takes ref' });
 });
 
+test("a long task is not cut off at a few dozen steps", async () => {
+  // Answering 20 questions with a screenshot each takes well over the old limit of 40 turns.
+  const { events } = await run((_req, turn) => (turn < 60 ? tool("tabs") : tool("done", { answer: "All 60 done." })));
+  expect(events.at(-1)).toEqual({ type: "final", text: "All 60 done." });
+}, 60_000);
+
 test("the loop stops at maxSteps with a clear message", async () => {
   const { events } = await run(() => tool("snapshot"), { maxSteps: 3 });
   expect(events.at(-1)).toEqual({ type: "error", message: "Stopped after 3 steps without finishing. Ask again with more detail, or raise the limit." });

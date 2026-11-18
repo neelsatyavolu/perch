@@ -57,8 +57,12 @@ export type TaskOptions = {
   transcript?: Transcript;
 };
 
-const DEFAULT_MAX_STEPS = 40;
-const DEFAULT_MAX_MS = 15 * 60_000;
+/**
+ * Long enough for real work (20 questions with a screenshot each, a long form, many pages); the cap
+ * only stops a runaway. Progress (progress.ts) ends loops that are stuck well before it.
+ */
+const DEFAULT_MAX_STEPS = 250;
+const DEFAULT_MAX_MS = 30 * 60_000;
 const TIME_UP = "Not run: the time for this task is up.";
 
 /** Sent once, in place of the first done after the agent has used the browser. */

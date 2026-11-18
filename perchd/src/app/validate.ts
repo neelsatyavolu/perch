@@ -98,8 +98,9 @@ export function tabInfo(value: unknown, name = "tab"): TabInfo {
   const o = object(value, `"${name}"`);
   return {
     ...tabRef(o, name),
-    title: text(o.title ?? "", `${name}.title`, 1000),
-    url: text(o.url ?? "", `${name}.url`, 8000),
+    // A page's own title or address can run long (an app's state in its URL): keep the tab, cut short.
+    title: text(o.title ?? "", `${name}.title`, Infinity).slice(0, 1000),
+    url: text(o.url ?? "", `${name}.url`, Infinity).slice(0, 8000),
     ...(o.targetId === undefined ? {} : { targetId: id(o.targetId, `${name}.targetId`) }),
     ...(o.incognito === true ? { incognito: true } : {}),
     ...(typeof o.favicon === "string" && FAVICON.test(o.favicon) && o.favicon.length <= 24_000 ? { favicon: o.favicon } : {}),

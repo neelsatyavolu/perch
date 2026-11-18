@@ -54,3 +54,23 @@ test("secrets inside a cross-site iframe stay masked in snapshots and screenshot
   await check.close();
   await tab.close();
 }, 20_000);
+
+test("a click at a point inside a cross-site iframe is judged by what is there", async () => {
+  const { newToolContext, runTool, liveTarget } = await import("../src/agent/tools");
+  const { classify } = await import("../src/agent/permissions");
+  const ctx = await newToolContext(env.browser);
+  await runTool(ctx, { id: "n", name: "navigate", args: { url: env.site.url("/xframe.html") } });
+  await frameReady(ctx.tab!);
+  const frame = await ctx.tab!.evaluate<{ x: number; y: number }>("(() => { const r = document.getElementById('x').getBoundingClientRect(); return { x: r.left, y: r.top }; })()");
+  const [session] = [...ctx.tab!.frameSessions.values()];
+  const { result } = await ctx.tab!.sendIn<{ result: { value: { name: number[]; go: number[] } } }>(session, "Runtime.evaluate", {
+    expression: "(() => { const c = (id) => { const r = document.getElementById(id).getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }; return { name: c('name'), go: c('go') }; })()",
+    returnByValue: true,
+  });
+  const at = ([x, y]: number[]) => ({ id: "c", name: "click_at", args: { x: frame.x + x!, y: frame.y + y! } });
+  const field = await liveTarget(ctx, at(result.value.name));
+  expect(field).toEqual({ role: "textbox", name: "Guest name" });
+  expect(classify(at(result.value.name), field)).toBe("change");
+  expect(await liveTarget(ctx, at(result.value.go))).toEqual({ role: "button", name: "Book table" });
+  await ctx.close();
+}, 20_000);

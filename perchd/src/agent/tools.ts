@@ -125,6 +125,11 @@ const EXPECT_CHANGE = new Set(["click", "select", "press", "click_at", "drag", "
 /** Actions that can send a form, so a refused form is worth explaining. */
 const SENDS = new Set(["click", "press", "click_at", "submit"]);
 const RECHECK_MS = 500;
+/**
+ * Editing keys (Backspace, arrows, Tab, a letter, Meta+A): they change a field, not the page, and
+ * open nothing, so there is no popup to look for and no second look at an unchanged page.
+ */
+const EDIT_KEY = /^((Shift|Control|Alt|Meta)\+)*(Backspace|Delete|Arrow(Left|Right|Up|Down)|Home|End|Tab|[A-Za-z0-9])$/;
 export const UNCHANGED =
   "The page looks the same as before this action. If you expected a change (a filter, a menu, a new page), it did not take effect: check, or try another way.";
 /** For a click on something the page text cannot show, where "looks the same" would be a guess. */
@@ -258,10 +263,22 @@ export async function liveTarget(ctx: ToolContext, call: ToolCall): Promise<Targ
   return describeRef(ctx.tab, refsFor(ctx.tab), ref);
 }
 
-/** The control under a point of the page, as role and name; null over an iframe or nothing nameable. */
+/**
+ * The control under a point of the page, as role and name; null over a canvas or nothing nameable.
+ * Same-process iframes are entered here; a cross-site one comes back as {frame: true} to be looked
+ * into through its own session.
+ */
 const POINT_TARGET_JS = (x: number, y: number) => `(() => {
-  const hit = document.elementFromPoint(${x}, ${y});
-  if (!hit || hit.tagName === 'IFRAME' || hit.tagName === 'CANVAS') return null;
+  let doc = document, x = ${x}, y = ${y}, hit = doc.elementFromPoint(x, y);
+  while (hit && hit.tagName === 'IFRAME') {
+    let inner = null;
+    try { inner = hit.contentDocument; } catch {}
+    if (!inner) return { frame: true };
+    const r = hit.getBoundingClientRect();
+    x -= r.left + hit.clientLeft; y -= r.top + hit.clientTop;
+    doc = inner; hit = doc.elementFromPoint(x, y);
+  }
+  if (!hit || hit.tagName === 'CANVAS') return null;
   const el = hit.closest('a[href], button, input, textarea, select, summary, [role], [contenteditable=""], [contenteditable=true]') || hit;
   const tag = el.tagName.toLowerCase();
   const type = (el.getAttribute('type') || '').toLowerCase();
@@ -280,8 +297,39 @@ const POINT_TARGET_JS = (x: number, y: number) => `(() => {
 async function pointTarget(ctx: ToolContext, x: number, y: number): Promise<Target | undefined> {
   if (!ctx.tab || !Number.isFinite(x) || !Number.isFinite(y)) return undefined;
   const scale = ctx.shotScale || 1;
-  const found = await ctx.tab.evaluate<Target | null>(POINT_TARGET_JS(x / scale, y / scale)).catch(() => null);
+  const point = { x: x / scale, y: y / scale };
+  const found = await ctx.tab.evaluate<Target | { frame: true } | null>(POINT_TARGET_JS(point.x, point.y)).catch(() => null);
+  if (found && "frame" in found) return crossSiteTarget(ctx.tab, point);
   return found ?? undefined;
+}
+
+/** What is under a point inside a cross-site iframe (a quiz or form embedded from another site). */
+async function crossSiteTarget(tab: Tab, point: { x: number; y: number }): Promise<Target | undefined> {
+  for (const [frameId, session] of tab.frameSessions) {
+    const box = await frameBox(tab, frameId);
+    if (!box || point.x < box.left || point.y < box.top || point.x >= box.right || point.y >= box.bottom) continue;
+    const { result } = await tab
+      .sendIn<{ result: { value?: Target | { frame: true } | null } }>(session, "Runtime.evaluate", { expression: POINT_TARGET_JS(point.x - box.left, point.y - box.top), returnByValue: true })
+      .catch(() => ({ result: {} as { value?: null } }));
+    const value = result.value;
+    return value && !("frame" in value) ? value : undefined;
+  }
+  return undefined;
+}
+
+/** A cross-site iframe's content box in the page's viewport. */
+async function frameBox(tab: Tab, frameId: string): Promise<{ left: number; top: number; right: number; bottom: number } | null> {
+  try {
+    const { backendNodeId } = await tab.send<{ backendNodeId: number }>("DOM.getFrameOwner", { frameId });
+    const { quads } = await tab.send<{ quads: number[][] }>("DOM.getContentQuads", { backendNodeId });
+    const q = quads[0];
+    if (!q) return null;
+    const xs = [q[0]!, q[2]!, q[4]!, q[6]!];
+    const ys = [q[1]!, q[3]!, q[5]!, q[7]!];
+    return { left: Math.min(...xs), top: Math.min(...ys), right: Math.max(...xs), bottom: Math.max(...ys) };
+  } catch {
+    return null;
+  }
 }
 
 const PAGE_CONTEXT_JS = `(() => {
@@ -438,7 +486,7 @@ async function dispatch(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
     case "select":
       return withPage(ctx, tab, await select(tab, refs, a.ref, a.value), "select");
     case "press":
-      return withPage(ctx, tab, await press(tab, a.key), "press");
+      return withPage(ctx, tab, await press(tab, a.key), EDIT_KEY.test(String(a.key)) ? "" : "press");
     case "scroll":
       return withPage(ctx, tab, await scroll(tab, { refs, ref: a.ref, dy: a.dy }));
     case "hover": {

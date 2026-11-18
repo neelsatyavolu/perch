@@ -45,6 +45,13 @@ function same(a: string, b: string): boolean {
   return x.length === y.length && timingSafeEqual(x, y);
 }
 
+/** A refusal's message, for the log; a failure (500) already logged its own. */
+async function refusalReason(res: Response): Promise<string> {
+  if (res.status >= 500 || !(res.headers.get("content-type") ?? "").includes("json")) return "";
+  const body = (await res.clone().json().catch(() => null)) as { error?: unknown } | null;
+  return typeof body?.error === "string" ? `: ${body.error}` : "";
+}
+
 export function startServer(opts: Options): Server {
   const onPort = "port" in opts.listen;
   let selfOrigin: string | null = null;
@@ -132,8 +139,8 @@ export function startServer(opts: Options): Server {
         // A pages call may wait on a person (a provider's sign-in page), longer than the idle timeout.
         if (url.pathname.startsWith("/api/pages/")) srv.timeout(req, 0);
         const res = await handleApi(req, url, origin);
-        // Refusals go to perchd's log: the browser's own reports have no other place to show them.
-        if (res.status >= 400) console.error(`app api: ${req.method} ${url.pathname} -> ${res.status}`);
+        // Refusals go to perchd's log with their reason: the browser's own reports have no other place to show them.
+        if (res.status >= 400) console.error(`app api: ${req.method} ${url.pathname} -> ${res.status}${await refusalReason(res)}`);
         return res;
       }
       if (opts.uiDir && url.pathname.startsWith("/ui/") && req.method === "GET") return serveUi(url.pathname);

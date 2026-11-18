@@ -439,3 +439,16 @@ test("a finished reply is unread until the chat is read, and pinning or reading 
   expect((await api(`/api/chats/${chat.id}`, { method: "PATCH", json: { read: false } })).status).toBe(400);
   ws.close();
 });
+
+test("a refused request is logged with its reason", async () => {
+  const logged: string[] = [];
+  const original = console.error;
+  console.error = (...a: unknown[]) => void logged.push(a.join(" "));
+  try {
+    const res = await api("/api/chats", { method: "POST", json: { nonsense: true } });
+    expect(res.status).toBe(400);
+  } finally {
+    console.error = original;
+  }
+  expect(logged.some((l) => /^app api: POST \/api\/chats -> 400: .+/.test(l))).toBe(true);
+});

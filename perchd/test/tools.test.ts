@@ -241,3 +241,30 @@ test("a click on a canvas says Perch can't tell whether it changed anything, not
   expect(text.content).toContain(UNCHANGED);
   await ctx.close();
 });
+
+test("a math editor's hidden field is clicked through its editor and typing is not called ignored", async () => {
+  const ctx = await newToolContext(env.browser);
+  await runTool(ctx, call("navigate", { url: env.site.url("/math-editor.html") }));
+  const snap = await runTool(ctx, call("snapshot"));
+  const ref = snap.content.match(/textbox "Answer area:" \[ref=(e\d+)\]/)![1];
+  const clicked = await runTool(ctx, call("click", { ref }));
+  expect(clicked.content).not.toMatch(/not visible/);
+  expect(await ctx.tab!.evaluate<string>("document.activeElement.id")).toBe("ta");
+  const typed = await runTool(ctx, call("type", { ref, text: "(-2,0)" }));
+  expect(typed.content).not.toContain("still empty");
+  expect(await ctx.tab!.evaluate<string>("document.getElementById('shown').textContent")).toBe("(-2,0)");
+  await ctx.close();
+});
+
+test("an editing key is pressed without the wait for a popup or a second look", async () => {
+  const ctx = await newToolContext(env.browser);
+  await runTool(ctx, call("navigate", { url: env.site.url("/math-editor.html") }));
+  await runTool(ctx, call("snapshot"));
+  const started = Date.now();
+  const r = await runTool(ctx, call("press", { key: "Backspace" }));
+  expect(r.content).not.toContain(UNCHANGED);
+  expect(Date.now() - started).toBeLessThan(RECHECK_FLOOR_MS);
+  expect((await runTool(ctx, call("press", { key: "Escape" }))).content).toContain(UNCHANGED);
+  await ctx.close();
+});
+const RECHECK_FLOOR_MS = 500;

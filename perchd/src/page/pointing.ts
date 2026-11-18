@@ -235,6 +235,35 @@ export async function toggleHiddenControl(tab: Tab, node: Node, why: unknown): P
   return true;
 }
 
+/**
+ * The visible box of an editor that types through a hidden field (math editors, code editors):
+ * the nearest ancestor, a few levels up, with an area a person could click. Null for anything else.
+ */
+const EDITOR_BOX = `function () {
+  if (this.tagName !== 'TEXTAREA' && this.tagName !== 'INPUT') return null;
+  const r = this.getBoundingClientRect();
+  if (r.width > 2 && r.height > 2) return null;
+  const doc = this.ownerDocument;
+  let n = this.parentElement;
+  for (let i = 0; n && i < 4 && n !== doc.body && n !== doc.documentElement; i++, n = n.parentElement) {
+    const b = n.getBoundingClientRect();
+    if (b.width > 4 && b.height > 4) return n;
+  }
+  return null;
+}`;
+
+/**
+ * A text field the page hides behind its own drawing of the editor (MathQuill's answer boxes, code
+ * editors): a person clicks the editor, so Perch does too. Returns false for anything else.
+ */
+export async function clickHiddenEditor(tab: Tab, node: Node, why: unknown): Promise<boolean> {
+  if (!(why instanceof Error) || !/^the element is (not visible|hidden or clipped)/.test(why.message)) return false;
+  const box = await callForObject(tab, node, EDITOR_BOX).catch(() => undefined);
+  if (!box) return false;
+  await clickAtPoint(tab, await aim(tab, { ...node, objectId: box }));
+  return true;
+}
+
 /** Links and buttons, which a script click works on like a person's. */
 const IS_LINK_OR_BUTTON = `function () {
   if (this.disabled) return false;

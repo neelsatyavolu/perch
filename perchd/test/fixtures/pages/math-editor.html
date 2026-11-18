@@ -1,0 +1,14 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Math answer</title><style>body{margin:0;font:14px system-ui;padding:20px}
+.mq{display:inline-block;min-width:200px;min-height:30px;border:1px solid #888;padding:4px}
+.mq-textarea{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.mq-textarea textarea{width:1px;height:1px;border:0;padding:0}</style></head><body>
+<p>Answer</p>
+<span class="mq" id="editor"><span class="mq-textarea"><textarea id="ta" aria-label="Answer area:"></textarea></span><span id="shown"></span></span>
+<button id="submit">Submit Answer</button>
+<script>
+// Like MathQuill: the hidden textarea hands each key to the editor and empties itself.
+const ta = document.getElementById('ta'), shown = document.getElementById('shown');
+document.getElementById('editor').addEventListener('mousedown', (e) => { if (e.target !== ta) { e.preventDefault(); ta.focus(); } });
+ta.addEventListener('input', () => { shown.textContent += ta.value; ta.value = ''; ta.setAttribute('aria-label', 'Answer area: ' + shown.textContent); });
+</script>
+</body></html>

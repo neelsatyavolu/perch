@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import type { Tab } from "../browser/tab";
 import { parseKey } from "./keys";
 import { call, callForObject, describe, DESCRIBE, type Described, liveNode, type Node } from "./node";
-import { aim, clickAtPoint, clickHiddenTarget, mouse, type Point, SCRIPT_CLICK, scrollToCentre, toggleHiddenControl } from "./pointing";
+import { aim, clickAtPoint, clickHiddenEditor, clickHiddenTarget, mouse, type Point, SCRIPT_CLICK, scrollToCentre, toggleHiddenControl } from "./pointing";
 import { wheelScroll } from "./scrolling";
 import { selectFromListbox } from "./listbox";
 import { setSlider } from "./slider";
@@ -54,6 +54,7 @@ async function clickNode(tab: Tab, node: Node, label: string): Promise<ActionRes
   } catch (error) {
     if (await toggleHiddenControl(tab, node, error)) return ok(`clicked ${label}${await checkedState(tab, node)}`);
     if (await clickHiddenTarget(tab, node, error)) return ok(`clicked ${label} ${SCRIPT_CLICK}`);
+    if (await clickHiddenEditor(tab, node, error)) return ok(`clicked the editor ${label} types into`);
     throw error;
   }
   await clickAtPoint(tab, point);
@@ -199,6 +200,10 @@ async function innerField(tab: Tab, node: Node): Promise<Node> {
 const SHOWN_TEXT = `function (remembered) {
   if (remembered || (${IS_SECRET_JS})(this)) return null;
   if (this.tagName !== 'INPUT' && this.tagName !== 'TEXTAREA') return null;
+  // A field with no box is an editor's hidden input (MathQuill, code editors): it hands each key to
+  // the editor and empties itself, so its value says nothing about what was typed.
+  const r = this.getBoundingClientRect();
+  if (r.width <= 2 || r.height <= 2) return null;
   return String(this.value ?? '');
 }`;
 

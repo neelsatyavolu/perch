@@ -28,6 +28,8 @@ test("batch runs known actions in a row, each approved on its own, and stops at 
   expect(asked.length).toBe(1);
   // Only the usual actions, and not too many.
   expect((await callTool(ctx, policy, { id: "x", name: "batch", args: { actions: [{ name: "upload", args: {} }] } })).content).toContain("batch can run");
+  // A click at a screenshot point is one of them (a spreadsheet's grid has no refs).
+  expect((await callTool(ctx, policy, { id: "z", name: "batch", args: { actions: [{ name: "click_at", args: { x: 5, y: 5 } }] } })).content).not.toContain("batch can run");
   expect((await callTool(ctx, policy, { id: "y", name: "batch", args: { actions: Array.from({ length: 11 }, () => ({ name: "scroll", args: { dy: 10 } })) } })).content).toContain("at most 10");
   await ctx.close();
 });

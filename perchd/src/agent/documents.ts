@@ -45,6 +45,7 @@ export async function fetchDocument(url: string, cookies: CookieSource, userAgen
 
 async function download(current: URL, cookies: CookieSource, userAgent: string, get: NonNullable<FetchOptions["fetch"]>, resolve: Resolver, signal: AbortSignal): Promise<Fetched> {
   for (let hop = 0; hop <= MAX_HOPS; hop++) {
+    if (current.protocol === "file:") throw new Error("only http and https addresses can be read. Files on this Mac can't be opened by address: ask the user to attach the file, or its folder, with + in the chat, then read it with read_attachment");
     if (current.protocol !== "https:" && current.protocol !== "http:") throw new Error("only http and https addresses can be read");
     await publicHost(current, resolve);
     const cookie = current.protocol === "https:" ? await cookies(current.href).catch(() => "") : "";

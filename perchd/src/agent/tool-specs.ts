@@ -43,7 +43,7 @@ export const TOOL_SPECS: ToolSpec[] = [
   spec(
     "batch",
     "Run actions you already know in a row (fill a form: type, type, select, click). Each is approved as usual; stops at the first that fails or needs a change of plan. Returns the page after the last.",
-    { actions: { type: "array", description: "Up to 10 of: click, type, select, press, scroll, hover, drag, type_text, wait_for", items: { type: "object", properties: { name: { type: "string" }, args: { type: "object" } }, required: ["name"] } }, title },
+    { actions: { type: "array", description: "Up to 10 of: click, click_at, type, select, press, scroll, hover, drag, type_text, wait_for", items: { type: "object", properties: { name: { type: "string" }, args: { type: "object" } }, required: ["name"] } }, title },
     ["actions"],
   ),
   spec(

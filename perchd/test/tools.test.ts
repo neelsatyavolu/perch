@@ -48,6 +48,8 @@ test("bad calls come back as plain errors", async () => {
     expect(await runTool(ctx, call("open_tab", { url }))).toMatchObject({ isError: true });
   }
   expect(checkCall(call("navigate", { url: "javascript:1" }))).toBe("Perch's agent only opens http and https pages");
+  // A local file points the agent to +, where the user can attach it.
+  expect(checkCall(call("open_tab", { url: "file:///Users/me/Colleges/" }))).toContain("with + in the chat");
   await ctx.close();
 });
 

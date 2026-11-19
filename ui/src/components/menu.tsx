@@ -27,9 +27,11 @@ type MenuProps<T extends string> = {
   pill?: { class: string; name: string };
   /** A class for the open list. */
   listClass?: string;
+  /** False drops the down arrow after the pill, for an icon button such as +. */
+  chevron?: boolean;
 };
 
-export function Menu<T extends string>({ label, children, choices, selected, onPick, mono, align = "start", empty = "Nothing here yet", stacked = false, pill, listClass }: MenuProps<T>) {
+export function Menu<T extends string>({ label, children, choices, selected, onPick, mono, align = "start", empty = "Nothing here yet", stacked = false, pill, listClass, chevron = true }: MenuProps<T>) {
   const id = useId();
   const [open, setOpen] = useState(false);
   // -1 is no highlight: a menu opened by the pointer highlights nothing until the pointer enters a row
@@ -80,7 +82,7 @@ export function Menu<T extends string>({ label, children, choices, selected, onP
         onClick={() => setOpen(!open)}
       >
         <span class="pill-t">{children}</span>
-        <Icon name="down" size={12} />
+        {chevron && <Icon name="down" size={12} />}
       </button>
       {open && (
         <ul class={`menu ${align}${stacked ? " stacked" : ""}${listClass ? ` ${listClass}` : ""}`} role="listbox" aria-label={label} tabIndex={-1} ref={list} onKeyDown={onKey} aria-activedescendant={active < 0 ? undefined : `${id}-${active}`}>

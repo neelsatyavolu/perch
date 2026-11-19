@@ -10,11 +10,11 @@ export const SHELL_ORIGINS: readonly string[] = ["chrome://perch-chat", "chrome:
 export const FRAME_ORIGINS: readonly string[] = ["chrome-untrusted://perch-chat", "chrome-untrusted://perch-side-chat.top-chrome"];
 
 /** Every call a frame may make. The shell relays these and nothing else. */
-export const HOST_METHODS = ["close", "openTab", "openFullChat", "openSettings", "getAppearance", "chooseFiles", "pastedFiles", "startDictation", "stopDictation", "setTabState"] as const;
+export const HOST_METHODS = ["close", "openTab", "openFullChat", "openSettings", "getAppearance", "chooseFiles", "chooseFolder", "pastedFiles", "startDictation", "stopDictation", "setTabState"] as const;
 export type HostMethod = (typeof HOST_METHODS)[number];
 
-/** A file the user attached, as the page sees it: an opaque id, never a path. */
-export type AttachedFile = { id: string; name: string; size: number };
+/** A file (or, with `folder`, a folder) the user attached, as the page sees it: an opaque id, never a path. */
+export type AttachedFile = { id: string; name: string; size: number; folder?: true };
 
 /** Addresses a frame may open in a tab: web pages and artifacts, never browser pages or files. */
 export function openableUrl(value: unknown): string | null {

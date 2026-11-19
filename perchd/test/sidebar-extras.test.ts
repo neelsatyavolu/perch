@@ -1,7 +1,8 @@
 import { afterAll, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { strToU8, zipSync } from "fflate";
 import { attachmentExtraTools, READ_ATTACHMENT, sidebarExtras } from "../src/app/sidebar-extras";
 
 const dir = mkdtempSync(join(tmpdir(), "perch-attach-"));
@@ -27,6 +28,43 @@ test("read_attachment reads only this message's files: text as text, images as i
   expect(Buffer.from(image.image!, "base64").equals(png)).toBe(true);
   expect((await tools.run(call("deck.key"), new AbortController().signal)).isError).toBe(true);
   expect(tools.describe(call("notes.md")).kind).toBe("read");
+});
+
+test("an attached folder: its name lists it, a path inside reads a file, nothing outside is reachable", async () => {
+  const root = join(dir, "proj");
+  mkdirSync(join(root, "src"), { recursive: true });
+  writeFileSync(join(root, "README.md"), "hello");
+  writeFileSync(join(root, "src", "main.ts"), "export {}");
+  writeFileSync(join(dir, "secret.txt"), "no");
+  symlinkSync(join(dir, "secret.txt"), join(root, "link.txt"));
+  const tools = attachmentExtraTools([{ name: "proj", path: root }])!;
+  const call = (name: string) => ({ id: "1", name: READ_ATTACHMENT, args: { name } });
+  const signal = new AbortController().signal;
+  const listing = (await tools.run(call("proj"), signal)).content;
+  expect(listing).toContain("README.md");
+  expect(listing).toContain("src/");
+  expect((await tools.run(call("proj/src"), signal)).content).toContain("main.ts");
+  expect(tools.check(call("proj/src/main.ts"))).toBeNull();
+  expect((await tools.run(call("proj/src/main.ts"), signal)).content).toBe("export {}");
+  expect(tools.check(call("proj/../secret.txt"))).not.toBeNull();
+  expect(tools.check(call("other/x.txt"))).not.toBeNull();
+  const escaped = await tools.run(call("proj/link.txt"), signal);
+  expect(escaped.isError).toBe(true);
+  expect(escaped.content).not.toContain("no");
+  expect(tools.prompt()).toContain("proj");
+});
+
+test("an attached .zip opens like a folder, and entries that climb out of it are skipped", async () => {
+  const zip = join(dir, "notes.zip");
+  writeFileSync(zip, zipSync({ "notes/week1.md": strToU8("limits"), "../evil.txt": strToU8("x"), "top.txt": strToU8("hi") }));
+  const tools = attachmentExtraTools([{ name: "notes.zip", path: zip }])!;
+  const call = (name: string) => ({ id: "1", name: READ_ATTACHMENT, args: { name } });
+  const signal = new AbortController().signal;
+  const listing = (await tools.run(call("notes.zip"), signal)).content;
+  expect(listing).toContain("notes/");
+  expect(listing).toContain("top.txt");
+  expect(listing).not.toContain("evil");
+  expect((await tools.run(call("notes.zip/notes/week1.md"), signal)).content).toBe("limits");
 });
 
 test("no attachments, no tool; the run's extras include it when there are some", () => {

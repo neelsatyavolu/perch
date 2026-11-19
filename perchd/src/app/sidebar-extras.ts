@@ -5,9 +5,10 @@
  * daemon for one sidebar run, and the skill list to the task text.
  */
 
-import { readFile, stat } from "node:fs/promises";
-import { extname } from "node:path";
+import { readdir, readFile, realpath, stat } from "node:fs/promises";
+import { extname, join, sep } from "node:path";
 import { readLocalDocument } from "../agent/local-document";
+import { isZip, openZip } from "./zip-attachment";
 import type { MemoryAccess } from "../memory/agent";
 import type { ToolCall } from "../models/types";
 import { combineExtraTools, type ExtraTools } from "../mcp-client/extra-tools";
@@ -49,10 +50,39 @@ const DOCUMENT_EXT = /\.(pdf|docx|pptx|xlsx)$/i;
 const TEXT_EXT = /\.(txt|md|markdown|csv|tsv|json|ya?ml|xml|html?|css|js|mjs|ts|tsx|py|rb|go|rs|java|c|cc|cpp|h|sh|log|ini|toml|sql|tex|srt|vtt)$/i;
 const MAX_IMAGE = 5 * 1024 * 1024;
 const MAX_TEXT = 200_000;
+/** Entries one folder listing shows. */
+const MAX_LISTING = 500;
+
+/** "proj/src/a.ts" against the attached names: the attachment and the path inside it, or null. */
+function splitName(name: string, byName: ReadonlyMap<string, string>): { root: string; inner: string } | null {
+  if (byName.has(name)) return { root: byName.get(name)!, inner: "" };
+  const slash = name.indexOf("/");
+  if (slash < 0) return null;
+  const root = byName.get(name.slice(0, slash));
+  const inner = name.slice(slash + 1).replace(/\/+$/, "");
+  if (!root || !inner || inner.split("/").some((part) => part === ".." || part === "." || part === "")) return null;
+  return { root, inner };
+}
+
+/** The real path of a file inside an attached folder; null when it is missing or (through a link) outside it. */
+async function insideFolder(root: string, inner: string): Promise<string | null> {
+  const base = await realpath(root);
+  const target = await realpath(join(base, inner)).catch(() => null);
+  return target && (target === base || target.startsWith(base + sep)) ? target : null;
+}
+
+async function listFolder(name: string, path: string): Promise<string> {
+  const entries = (await readdir(path, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name));
+  const shown = entries.slice(0, MAX_LISTING).map((e) => (e.isDirectory() ? `${e.name}/` : e.name));
+  const more = entries.length > MAX_LISTING ? `\n… and ${entries.length - MAX_LISTING} more` : "";
+  return entries.length ? `${name}/ holds:\n${shown.join("\n")}${more}` : `${name}/ is empty.`;
+}
 
 /**
  * The files the user attached to this message, readable by name: text and documents as text,
- * images and PDF pages as images the model can see. Nothing else on the Mac is reachable through it.
+ * images and PDF pages as images the model can see. An attached folder lists by its name, and a
+ * file in it reads as "folder/path/in/it"; an attached .zip opens the same way. Nothing else on the
+ * Mac is reachable through it.
  */
 export function attachmentExtraTools(files: readonly { name: string; path: string }[]): ExtraTools | undefined {
   if (!files.length) return undefined;
@@ -61,11 +91,11 @@ export function attachmentExtraTools(files: readonly { name: string; path: strin
     specs: () => [
       {
         name: READ_ATTACHMENT,
-        description: "Read a file the user attached to this message: text files, PDFs, Word, PowerPoint and Excel come back as text, images (screenshots, photos) as images you can see. Pass page to see one PDF page as an image (scans, handwriting), from to read on in long ones.",
+        description: "Read a file the user attached to this message: text files, PDFs, Word, PowerPoint and Excel come back as text, images (screenshots, photos) as images you can see. For an attached folder or .zip, its name lists what is in it, and folder/path/to/file reads a file inside it (folder/sub lists a subfolder). Pass page to see one PDF page as an image (scans, handwriting), from to read on in long ones.",
         parameters: {
           type: "object",
           properties: {
-            name: { type: "string", description: `One of: ${files.map((f) => f.name).join(", ").slice(0, 400)}` },
+            name: { type: "string", description: `One of: ${files.map((f) => f.name).join(", ").slice(0, 400)}, or a path inside an attached folder` },
             page: { type: "number", description: "A PDF page number (1 is the first) to see as an image" },
             from: { type: "number", description: "Character to start at, from the last part's note" },
           },
@@ -74,14 +104,27 @@ export function attachmentExtraTools(files: readonly { name: string; path: strin
         },
       },
     ],
-    prompt: () => `The user attached: ${files.map((f) => f.name).join(", ")}. Call ${READ_ATTACHMENT} with a name to read one.`,
+    prompt: () => `The user attached: ${files.map((f) => f.name).join(", ")}. Call ${READ_ATTACHMENT} with a name to read one; a folder's or .zip's name lists it, and folder/path reads a file in it.`,
     handles: (name) => name === READ_ATTACHMENT,
-    check: (call) => (typeof call.args.name === "string" && byName.has(call.args.name) ? null : `name must be one of the attached files: ${[...byName.keys()].join(", ")}`),
+    check: (call) => (typeof call.args.name === "string" && splitName(call.args.name, byName) ? null : `name must be one of the attached files, or a path inside an attached folder: ${[...byName.keys()].join(", ")}`),
     describe: (call) => ({ kind: "read", site: "attachments", summary: `Read ${String(call.args.name)}`, detail: "attachment", label: `Read ${String(call.args.name)}` }),
     async run(call) {
       const name = String(call.args.name);
-      const path = byName.get(name)!;
-      const size = (await stat(path)).size;
+      const split = splitName(name, byName)!;
+      let root = split.root;
+      if (isZip(root)) {
+        try {
+          root = await openZip(root);
+        } catch (error) {
+          return { content: (error as Error).message, isError: true };
+        }
+      }
+      const inner = split.inner;
+      const path = inner ? await insideFolder(root, inner) : root;
+      if (!path) return { content: `${name} isn't in the attached folder.`, isError: true };
+      const info = await stat(path);
+      if (info.isDirectory()) return { content: await listFolder(name, path) };
+      const size = info.size;
       const imageType = IMAGE_TYPES[extname(path).toLowerCase()];
       if (imageType) {
         if (size > MAX_IMAGE) return { content: `${name} is too large to show (${Math.round(size / 1048576)} MB).`, isError: true };

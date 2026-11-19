@@ -68,6 +68,10 @@ function readFile(file: File): Promise<{ url: string; base64: string }> {
   });
 }
 
+const ATTACH_CHOICES: Choice<"files" | "folder">[] = [
+  { value: "files", label: "Files", hint: "Attach files from your Mac" },
+  { value: "folder", label: "Folder", hint: "Let the agent read the files in a folder" },
+];
 const IMAGE_NAME = /\.(png|jpe?g|gif|webp)$/i;
 const PASTED_LIMIT = 8 * 1024 * 1024;
 /** The longest message perchd takes (its send route's limit). */
@@ -173,10 +177,10 @@ export function Composer(p: ComposerProps) {
 
   const addFiles = (added: readonly AttachedFile[]) =>
     setFiles((list) => [...list, ...added.filter((f) => !list.some((x) => x.id === f.id))].slice(0, 20));
-  const attach = async () => {
+  const attach = async (what: "files" | "folder" = "files") => {
     setNote(null);
     try {
-      const added = (await p.host?.chooseFiles?.()) ?? [];
+      const added = (await (what === "folder" ? p.host?.chooseFolder?.() : p.host?.chooseFiles?.())) ?? [];
       addFiles(added);
       // Picked images get a thumbnail too.
       for (const f of added.filter((x) => IMAGE_NAME.test(x.name))) {
@@ -281,6 +285,7 @@ export function Composer(p: ComposerProps) {
     }
   };
   const canAttach = Boolean(p.host?.chooseFiles);
+  const canAttachFolder = canAttach && Boolean(p.host?.chooseFolder);
   const canDictate = Boolean(p.host?.startDictation);
   const model = p.models.find((m) => m.id === p.settings.model);
   const modelLabel = model ? modelName(model.label) : p.models.length ? "Pick a model" : "No model signed in";
@@ -332,7 +337,8 @@ export function Composer(p: ComposerProps) {
               <span class={`chip file${thumbs[f.id] ? " has-thumb" : ""}`} key={f.id} title={f.name}>
                 {thumbs[f.id] && <img class="thumb" src={thumbs[f.id]} alt="" />}
                 <span class="chip-t">{f.name}</span>
-                <span class="d">{fileSize(f.size)}</span>
+                {f.folder && <Icon name="folder" size={12} />}
+                <span class="d">{f.folder ? "folder" : fileSize(f.size)}</span>
                 <button type="button" class="ib x" aria-label={`Remove ${f.name}`} onClick={() => setFiles((list) => list.filter((x) => x.id !== f.id))}>
                   <Icon name="x" size={12} />
                 </button>
@@ -364,6 +370,11 @@ export function Composer(p: ComposerProps) {
         />
         {note && <p class="cnote" role="status">{note}</p>}
         <div class="crow">
+          {canAttachFolder ? (
+            <Menu label="Attach files or a folder" pill={{ class: "ib attach", name: "Attach files or a folder" }} chevron={false} choices={ATTACH_CHOICES} selected={[]} onPick={(c) => void attach(c.value)}>
+              <Icon name="plus" />
+            </Menu>
+          ) : (
           <button
             type="button"
             class="ib attach"
@@ -374,6 +385,7 @@ export function Composer(p: ComposerProps) {
           >
             <Icon name="plus" />
           </button>
+          )}
           <Menu label="Permission mode" stacked choices={MODES} selected={[p.settings.mode]} onPick={(c) => p.onSettings({ mode: c.value })}>
             <Icon name="shield" size={14} />
             {/* Ask and Guard fold to the shield in a narrow side chat; Skip confirmation always says so. */}

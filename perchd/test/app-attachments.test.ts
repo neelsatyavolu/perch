@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { startApp, type App } from "../src/app/app";
 import { memoryKeychain } from "../src/app/keychain";
@@ -57,6 +57,19 @@ test("the browser registers picked files; pages get ids, and the task gets the p
 
   expect((await call("POST", `/api/chats/${chat.id}/messages`, TOKEN, { text: "x", files: ["no-such-id"] })).status).toBe(404);
   expect((await call("POST", `/api/chats/${chat.id}/messages`, TOKEN, { text: "x", mentions: ["closed-tab"] })).status).toBe(400);
+});
+
+test("the browser registers a picked folder; the page sees it as a folder and the task gets its path", async () => {
+  const folder = join(dir.dir, "Taxes 2026");
+  mkdirSync(folder, { recursive: true });
+  writeFileSync(join(folder, "w2.pdf"), "x");
+  const { files } = (await (await call("POST", "/api/files", BROWSER, { paths: [folder] })).json()) as { files: object[] };
+  expect(files).toEqual([{ id: expect.any(String), name: "Taxes 2026", size: 0, folder: true }]);
+  const chat = (await (await call("POST", "/api/chats", TOKEN, {})).json()) as { id: string };
+  expect((await call("POST", `/api/chats/${chat.id}/messages`, TOKEN, { text: "sum these", files: [(files[0] as { id: string }).id] })).status).toBe(200);
+  await app.runs.idle();
+  expect(inputs.at(-1)!.task).toContain(folder);
+  expect(inputs.at(-1)!.files).toEqual([{ name: "Taxes 2026", path: folder }]);
 });
 
 test("an image pasted into the chat is stored privately, attached by id, and has a preview", async () => {

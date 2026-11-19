@@ -21,6 +21,8 @@ export type PageHost = {
   onAppearance?: (fn: (appearance: HostAppearance) => void) => () => void;
   /** Shows the browser's open panel; resolves to ids for the files the user picked (none when cancelled). */
   chooseFiles?: () => Promise<AttachedFile[]>;
+  /** Shows the open panel for one folder; resolves to its id (none when cancelled). The agent can then read the files in it. */
+  chooseFolder?: () => Promise<AttachedFile[]>;
   /** Files copied in Finder (the clipboard's file paths), attached like picked ones; none when nothing was copied. */
   pastedFiles?: () => Promise<AttachedFile[]>;
   /** Starts on-device dictation; `onText` gets the words so far, and `final` once speech ends. */
@@ -90,6 +92,10 @@ export function createFrameHost(win: Win): PageHost | undefined {
     },
     chooseFiles: async () => {
       const files = await call<unknown>("chooseFiles");
+      return Array.isArray(files) ? files.filter(isFile) : [];
+    },
+    chooseFolder: async () => {
+      const files = await call<unknown>("chooseFolder");
       return Array.isArray(files) ? files.filter(isFile) : [];
     },
     pastedFiles: async () => {

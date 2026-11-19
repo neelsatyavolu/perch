@@ -30,6 +30,8 @@ class PerchDictation;
 //   openTab [url]  opens an http(s) or perch-artifact address in a new tab
 //   chooseFiles    shows the open panel; perchd keeps the paths and the page
 //                  gets [{id, name, size}] only
+//   chooseFolder   the same for one folder ({id, name, size: 0, folder: true});
+//                  the agent can then read the files in it
 //   startDictation, stopDictation: on-device speech recognition; the words
 //                  arrive as cr.webUIListenerCallback("perch-dictation",
 //                  {text, final}).
@@ -54,7 +56,9 @@ class PerchShellHandler : public content::WebUIMessageHandler,
  private:
   void HandleHost(const base::ListValue& args);
   void Reply(const std::string& id, bool ok, base::Value result);
-  void ChooseFiles(const std::string& id);
+  void ChooseFiles(const std::string& id,
+                   ui::SelectFileDialog::Type type,
+                   const std::u16string& title);
   // Sends the profile's Appearance to the page ("perch-appearance") when it changes.
   void OnAppearanceChanged();
   void SendPaths(std::vector<base::FilePath> paths);

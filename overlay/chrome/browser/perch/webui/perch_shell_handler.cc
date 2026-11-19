@@ -220,7 +220,13 @@ void PerchShellHandler::HandleHost(const base::ListValue& args) {
     return;
   }
   if (method == "chooseFiles") {
-    ChooseFiles(id);
+    ChooseFiles(id, ui::SelectFileDialog::SELECT_OPEN_MULTI_FILE,
+                u"Attach files");
+    return;
+  }
+  if (method == "chooseFolder") {
+    ChooseFiles(id, ui::SelectFileDialog::SELECT_EXISTING_FOLDER,
+                u"Attach a folder");
     return;
   }
   if (method == "pastedFiles") {
@@ -300,7 +306,9 @@ void PerchShellHandler::HandleHost(const base::ListValue& args) {
   Reply(id, false, base::Value(base::DictValue().Set("message", "Unknown call")));
 }
 
-void PerchShellHandler::ChooseFiles(const std::string& id) {
+void PerchShellHandler::ChooseFiles(const std::string& id,
+                                    ui::SelectFileDialog::Type type,
+                                    const std::u16string& title) {
   if (!pending_files_id_.empty()) {
     Reply(id, false,
           base::Value(base::DictValue().Set("message",
@@ -311,8 +319,7 @@ void PerchShellHandler::ChooseFiles(const std::string& id) {
   content::WebContents* contents = web_ui()->GetWebContents();
   dialog_ = ui::SelectFileDialog::Create(
       this, std::make_unique<ChromeSelectFilePolicy>(contents));
-  dialog_->SelectFile(ui::SelectFileDialog::SELECT_OPEN_MULTI_FILE,
-                      u"Attach files", base::FilePath(), nullptr, 0,
+  dialog_->SelectFile(type, title, base::FilePath(), nullptr, 0,
                       base::FilePath::StringType(),
                       contents->GetTopLevelNativeWindow());
 }

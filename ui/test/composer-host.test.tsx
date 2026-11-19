@@ -70,6 +70,21 @@ test("attach shows the picked files and sends their ids; a file can be removed",
   expect(el.querySelector(".chip.file")).toBeNull();
 });
 
+test("+ opens Files and Folder; a picked folder shows as a folder and sends its id", async () => {
+  const host: PageHost = { chooseFiles: async () => [], chooseFolder: async () => [{ id: "d1", name: "Taxes 2026", size: 0, folder: true }] };
+  const { el, sent } = mount(host);
+  await act(async () => (el.querySelector('[aria-label="Attach files or a folder"]') as HTMLButtonElement).click());
+  const options = [...el.querySelectorAll('[role="option"] .opt-label')].map((o) => o.textContent);
+  expect(options).toEqual(["Files", "Folder"]);
+  await act(async () => (el.querySelectorAll('[role="option"]')[1] as HTMLElement).click());
+  await act(async () => await Bun.sleep(0));
+  expect(el.querySelector(".chip.file .chip-t")!.textContent).toBe("Taxes 2026");
+  expect(el.querySelector(".chip.file .d")!.textContent).toBe("folder");
+  await type(el, "sum these");
+  key(el, "Enter");
+  expect(sent[0]!.extras.files).toEqual([{ id: "d1", name: "Taxes 2026", size: 0, folder: true }]);
+});
+
 test("a send that fails keeps the attached files for another try", async () => {
   const host: PageHost = { chooseFiles: async () => [{ id: "f1", name: "itinerary.pdf", size: 2048 }] };
   const { el, sent } = mount(host, null, false, false);

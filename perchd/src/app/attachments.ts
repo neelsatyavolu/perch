@@ -12,7 +12,8 @@ import { tmpdir } from "node:os";
 import { basename, extname, isAbsolute, join, normalize } from "node:path";
 import { AppError } from "./runs";
 
-export type AttachedFile = { id: string; name: string; size: number };
+/** `folder` marks a folder the user attached; the agent can list it and read the files in it. */
+export type AttachedFile = { id: string; name: string; size: number; folder?: true };
 type Entry = AttachedFile & { path: string };
 
 const MAX_FILES = 1000;
@@ -25,20 +26,20 @@ const IMAGE_TYPES: Readonly<Record<string, string>> = { ".png": "image/png", ".j
 export class FileRegistry {
   private entries = new Map<string, Entry>();
 
-  /** Registers files the user picked in the browser's open panel. */
+  /** Registers files (or folders) the user picked in the browser's open panel. */
   register(paths: readonly string[]): AttachedFile[] {
     if (paths.length > MAX_PER_CALL) throw new AppError(`Attach up to ${MAX_PER_CALL} files at a time`);
     const added = paths.map((raw) => {
       if (typeof raw !== "string" || !isAbsolute(raw) || normalize(raw) !== raw) throw new AppError("Each file must be an absolute path");
-      let size: number;
+      let stat;
       try {
-        const stat = statSync(raw);
-        if (!stat.isFile()) throw new Error("not a file");
-        size = stat.size;
+        stat = statSync(raw);
+        if (!stat.isFile() && !stat.isDirectory()) throw new Error("not a file or folder");
       } catch {
-        throw new AppError(`${basename(raw)} isn't a file Perch can read`);
+        throw new AppError(`${basename(raw)} isn't a file or folder Perch can read`);
       }
-      return { id: crypto.randomUUID(), name: basename(raw), size, path: raw };
+      const id = crypto.randomUUID();
+      return stat.isDirectory() ? { id, name: basename(raw), size: 0, folder: true as const, path: raw } : { id, name: basename(raw), size: stat.size, path: raw };
     });
     const next = new Map(this.entries);
     for (const e of added) next.set(e.id, e);
@@ -66,7 +67,7 @@ export class FileRegistry {
   preview(id: string): { bytes: Uint8Array; type: string } | null {
     const entry = this.resolve(id);
     const type = IMAGE_TYPES[extname(entry.name).toLowerCase()];
-    if (!type || entry.size > MAX_PREVIEW) return null;
+    if (!type || entry.folder || entry.size > MAX_PREVIEW) return null;
     try {
       return { bytes: readFileSync(entry.path), type };
     } catch {

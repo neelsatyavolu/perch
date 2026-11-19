@@ -42,6 +42,8 @@ export type ToolContext = {
   fillSites?: FillSites;
   /** Where sign_in and fill_code look when Perch has nothing saved (1Password); the app's choice when unset. */
   passwordManager?: () => Promise<PasswordManager | null>;
+  /** Set while a script runs: its typing and editing keys answer without reading the page back (edited). */
+  quiet?: boolean;
   close(): Promise<void>;
 };
 
@@ -103,6 +105,7 @@ export function checkCall(call: ToolCall): string | null {
   if (call.name === "hover" && ref === undefined && (call.args.x === undefined || call.args.y === undefined)) return "give ref (an element) or x and y (screenshot pixels)";
   if (call.name === "navigate" || call.name === "open_tab") {
     const url = normalizeUrl(String(call.args.url));
+    if (/^file:/i.test(url)) return `Perch's agent only opens http and https pages. Files on this Mac can't be opened by address: ask the user to attach the file, or its folder, with + in the chat, then read it with read_attachment`;
     if (url !== "about:blank" && !WEB_URL.test(url)) return "Perch's agent only opens http and https pages";
   }
   return null;
@@ -185,7 +188,9 @@ async function withPage(ctx: ToolContext, tab: Tab, result: ActionResult, action
   let view = await page(ctx, tab);
   const compare = () => changeNotes({ before: before ?? "", after: ctx.lastSnapshot.get(tab) ?? "", sameUrl: shownUrl.get(tab) === beforeUrl });
   let change = watch ? compare() : { unchanged: false, text: "" };
-  if (change.unchanged && !unseen) {
+  // In a script (ctx.quiet) the second look is skipped: a cell committed with Enter changes little
+  // and would wait every time, and the script checks the page itself when it matters.
+  if (change.unchanged && !unseen && !ctx.quiet) {
     // Results sometimes arrive after the page went quiet; look once more before saying nothing happened.
     await Bun.sleep(RECHECK_MS);
     view = await page(ctx, tab);
@@ -200,6 +205,16 @@ async function withPage(ctx: ToolContext, tab: Tab, result: ActionResult, action
   }
   notes.push(...tab.takeDialogNotes());
   return { content: `${notes.join("\n")}\n\n${view}` };
+}
+
+/**
+ * Typing or an editing key changes a field, not the page. Inside a script, which reads the page
+ * when it needs to, it answers with its note at once instead of waiting for the page to settle and
+ * snapshotting it: on a big editor (Google Sheets) that wait cost most of a second per key.
+ */
+async function edited(ctx: ToolContext, tab: Tab, result: ActionResult, action: string): Promise<ToolResult> {
+  if (!ctx.quiet || !result.ok) return withPage(ctx, tab, result, action);
+  return { content: [result.note, ...tab.takeDialogNotes()].filter(Boolean).join("\n") || "done" };
 }
 
 async function readDocument(ctx: ToolContext, url: string, from: number, page?: number): Promise<ToolResult> {
@@ -481,12 +496,14 @@ async function dispatch(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
     }
     case "click":
       return withPage(ctx, tab, await click(tab, refs, a.ref), "click");
-    case "type":
-      return withPage(ctx, tab, await type(tab, refs, a.ref, a.text, { submit: Boolean(a.submit) }), a.submit ? "submit" : "type");
+    case "type": {
+      const r = await type(tab, refs, a.ref, a.text, { submit: Boolean(a.submit) });
+      return a.submit ? withPage(ctx, tab, r, "submit") : edited(ctx, tab, r, "type");
+    }
     case "select":
       return withPage(ctx, tab, await select(tab, refs, a.ref, a.value), "select");
     case "press":
-      return withPage(ctx, tab, await press(tab, a.key), EDIT_KEY.test(String(a.key)) ? "" : "press");
+      return EDIT_KEY.test(String(a.key)) ? edited(ctx, tab, await press(tab, a.key), "") : withPage(ctx, tab, await press(tab, a.key), "press");
     case "scroll":
       return withPage(ctx, tab, await scroll(tab, { refs, ref: a.ref, dy: a.dy }));
     case "hover": {
@@ -526,7 +543,7 @@ async function dispatch(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
     }
     case "type_text": {
       await tab.send("Input.insertText", { text: String(a.text) });
-      return withPage(ctx, tab, { ok: true, note: `typed ${String(a.text).length} characters at the focus` }, "type_text");
+      return edited(ctx, tab, { ok: true, note: `typed ${String(a.text).length} characters at the focus` }, "type_text");
     }
     case "save_pdf": {
       const { data } = await tab.send<{ data: string }>("Page.printToPDF", { printBackground: true, preferCSSPageSize: true });

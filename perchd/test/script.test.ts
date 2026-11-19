@@ -84,6 +84,22 @@ test("in the browser, each scripted action is approved on its own", async () => 
   await ctx.close();
 });
 
+test("in a script, typing and editing keys answer at once without reading the page; Enter and clicks still do", async () => {
+  const ctx = await newToolContext(env.browser);
+  const policy = { mode: "skip" as const, audit: noAudit, approve: async () => true };
+  const r = await callTool(ctx, policy, { id: "s", name: "script", args: { code: `
+    await navigate(${JSON.stringify(env.site.url("/canvas-editor.html"))});
+    log(await type_text("Hi"));
+    log(await press("Backspace"));
+    log((await press("Enter")).includes("Page:"));` } });
+  expect(r.isError).toBeUndefined();
+  expect(r.content).toContain("typed 2 characters at the focus\npressed Backspace\ntrue");
+  expect(await ctx.tab!.evaluate<string>("document.getElementById('cell').textContent")).toContain("H");
+  // On its own, type_text still shows the page.
+  expect((await callTool(ctx, policy, { id: "t", name: "type_text", args: { text: "x" } })).content).toContain("Page:");
+  await ctx.close();
+});
+
 test("in the REPL a lone expression prints its value; statements still need return or log", async () => {
   const { ScriptVm, isLoneExpression } = await import("../src/agent/script");
   const vm = await ScriptVm.create();

@@ -106,7 +106,15 @@ export async function callTool(ctx: ToolContext, opts: CallPolicy, call: ToolCal
   if (call.name === BATCH) return callBatch(ctx, opts, call);
   if (call.name === SCRIPT) {
     const problem = checkCall(call);
-    return problem ? { content: problem, isError: true } : runScript(String(call.args.code), (step) => callTool(ctx, opts, step), call.id);
+    if (problem) return { content: problem, isError: true };
+    // A script's typing and editing keys skip reading the page back (tools.ts, edited).
+    const outer = ctx.quiet;
+    ctx.quiet = true;
+    try {
+      return await runScript(String(call.args.code), (step) => callTool(ctx, opts, step), call.id);
+    } finally {
+      ctx.quiet = outer;
+    }
   }
   const prepared = await prepareCall(ctx, opts, call);
   if (prepared.kind === "answer") return prepared.result;
@@ -115,7 +123,7 @@ export async function callTool(ctx: ToolContext, opts: CallPolicy, call: ToolCal
 }
 
 export const BATCH = "batch";
-const BATCHABLE = new Set(["click", "type", "select", "press", "scroll", "hover", "drag", "type_text", "wait_for"]);
+const BATCHABLE = new Set(["click", "click_at", "type", "select", "press", "scroll", "hover", "drag", "type_text", "wait_for"]);
 const MAX_BATCH = 10;
 
 /**

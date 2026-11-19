@@ -25,9 +25,10 @@ export type Target = { role: string; name: string; expanded?: boolean };
 /**
  * The field Enter acts in, read from the page (enter-field.ts): its own words (placeholder, name,
  * id), whether it is a multi-line editor, whether it sits in a search form, the label of the
- * button Enter would press, and whether its form posts.
+ * button Enter would press, whether its form posts, and whether it is a spreadsheet's cell editor or
+ * Name box, where Enter commits the cell or jumps to it.
  */
-export type EnterField = { words: string; multiline: boolean; search: boolean; submit: string; post: boolean };
+export type EnterField = { words: string; multiline: boolean; search: boolean; submit: string; post: boolean; cell?: boolean };
 
 /** What the page around an action looks like: a checkout, a password change, and the field Enter acts in. */
 export type PageContext = { payment?: boolean; passwordChange?: boolean; field?: EnterField };
@@ -165,6 +166,8 @@ function enterKind(target: Target | undefined, field?: EnterField): Kind {
   if (!target) return "risky";
   const pressed = field?.submit ? clickKind({ role: "button", name: field.submit }, false) : "change";
   if (PRESSABLE.has(target.role)) return TOGGLES.has(target.role) ? stricter(clickKind(target, false), pressed) : clickKind(target, false);
+  // A spreadsheet cell or Name box: Enter commits the cell or moves to one, it sends nothing.
+  if (field?.cell) return "change";
   const searchField = target.role === "searchbox" || target.role === "combobox" || SEARCHY.test(target.name) || Boolean(field?.search);
   if (searchField) return "change";
   if (COMPOSER.test(`${target.name} ${field?.words ?? ""}`) || field?.multiline) return "risky";
@@ -211,13 +214,17 @@ function linkWords(label: string): string {
   return name.replace(LINK_BOOKING, (word: string, ...rest: unknown[]) => (TITLE_WORD.test(name.slice(0, rest.at(-2) as number)) ? " " : word));
 }
 
-/** Roles of items in a list or feed: an email row, a search result, an article link. */
-const LISTINGS = new Set(["link", "row", "gridcell", "listitem", "article", "option", "treeitem"]);
+/**
+ * Roles of items in a list or feed (an email row, a search result, an article link), and of whole
+ * editors (a spreadsheet's grid), whose name runs everything inside them together.
+ */
+const LISTINGS = new Set(["link", "row", "gridcell", "listitem", "article", "option", "treeitem", "application", "document", "grid", "treegrid"]);
 const COMMAND_WORDS = 6;
 
 /**
  * A long label on a link or row is a listing (an email's subject and preview, a headline), not a
  * command: "Your order is confirmed - We'll send you an update" opens a message, it sends nothing.
+ * The same goes for an editor named by its whole toolbar ("Untitled spreadsheet Share File Edit …").
  * Commands are short ("Send", "Delete draft", "Reply all").
  */
 function isListing(role: string, name: string): boolean {

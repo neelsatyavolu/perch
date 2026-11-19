@@ -244,6 +244,23 @@ test("titles, store names, carts, booking links and newsletters are not payments
   for (const name of ["Add to cart", "Add to Bag - $100.00", "Add to basket £12.50"]) expect([name, classify(click, { role: "button", name })]).toEqual([name, "change"]);
 });
 
+test("in a spreadsheet, Enter in a cell or the Name box commits it, and a click on the grid places the cursor: changes", () => {
+  const enter = call("press", { key: "Enter" });
+  const cell = { field: { words: "", submit: "", search: false, multiline: true, post: false, cell: true } };
+  // Google Sheets' cell editor is a multi-line contenteditable; its name is the cell's text.
+  expect(classify(enter, { role: "textbox", name: "=IF(LEN(TRIM(C5)),VALUE(TRIM(C5)),\"\")" }, cell)).toBe("change");
+  expect(classify(call("type", { ref: "e49", text: "P3", submit: true }), { role: "textbox", name: "P3" }, cell)).toBe("change");
+  expect(needsApproval("guard", classify(enter, { role: "textbox", name: "Δh (m)" }, cell))).toBe("run");
+  // On a checkout page a cell is still guarded.
+  expect(classify(enter, { role: "textbox", name: "A1" }, { ...cell, payment: true })).toBe("payment");
+  // The grid's whole toolbar becomes its name ("… Share File Edit …"): that is a place, not a Share button.
+  const grid = { role: "application", name: "Untitled spreadsheet Share FileEditViewInsertFormatDataToolsExtensionsHelpAccessibility $% 123 Arial" };
+  expect(classify(call("click", { ref: "e12" }), grid)).toBe("change");
+  expect(classify(call("click_at", { x: 183, y: 352 }), grid)).toBe("change");
+  // A short command keeps asking, whatever its role.
+  expect(classify(call("click", { ref: "e3" }), { role: "application", name: "Share" })).toBe("risky");
+});
+
 test("Enter in a search, place, date or time field is a change; in a composer or a consequential form it asks", () => {
   const enter = call("press", { key: "Enter" });
   const submit = (text: string) => call("type", { ref: "e2", text, submit: true });

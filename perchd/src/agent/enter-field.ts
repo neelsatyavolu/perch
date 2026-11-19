@@ -14,6 +14,7 @@ const REF = /^e\d{1,7}$/;
 /**
  * Runs with `this` as the field. The button Enter presses is the field itself when it is a button,
  * otherwise the form's first submit button, including one outside the form tied to it by form=.
+ * `cell`: the field edits a grid cell, or is Google Sheets' cell editor, formula bar or Name box.
  */
 const FIELD_FN = `function () {
   const el = this.nodeType === 1 ? this : this.parentElement;
@@ -28,7 +29,8 @@ const FIELD_FN = `function () {
   const button = own ? el : form && Array.from(form.elements || []).find((b) => b.type === 'submit' || b.type === 'image');
   const label = button ? button.getAttribute('aria-label') || button.innerText || button.value || button.getAttribute('alt') || button.title || '' : '';
   const post = Boolean(form) && (form.getAttribute('method') || '').toLowerCase() === 'post';
-  return { words, multiline, search, submit: label.replace(/\\s+/g, ' ').trim().slice(0, 80), post };
+  const cell = Boolean(el.closest('[role=grid], [role=treegrid], .cell-input, #t-formula-bar-input, .waffle-name-box'));
+  return { words, multiline, search, submit: label.replace(/\\s+/g, ' ').trim().slice(0, 80), post, cell };
 }`;
 
 const isEnter = (call: ToolCall) => /(^|\+)enter$/i.test(String(call.args.key ?? ""));

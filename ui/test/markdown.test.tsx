@@ -67,6 +67,7 @@ test("a code block's Copy button copies the code and says Copied", async () => {
     const el = show(["```sh", "bun test", "```"].join("\n"));
     const button = el.querySelector<HTMLButtonElement>("figcaption button")!;
     await act(async () => button.click());
+    await act(async () => await Bun.sleep(0));
     expect(writes).toEqual(["bun test"]);
     expect(button.textContent).toBe("Copied");
   } finally {

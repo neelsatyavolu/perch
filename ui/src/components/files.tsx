@@ -10,6 +10,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { Client } from "../api/client";
 import type { ArtifactMeta } from "../api/types";
 import { Icon } from "./icon";
+import { copyText } from "./copy-text";
 
 const EXT: Record<ArtifactMeta["kind"], string> = { html: "html", markdown: "md", code: "txt", svg: "svg", csv: "csv", json: "json", image: "png", file: "" };
 
@@ -111,7 +112,7 @@ function useFileActions(client: Client, meta: ArtifactMeta, onOpen: (meta: Artif
     }),
     copy: attempt("copy it", async () => {
       const { content } = await client.artifact(meta.id);
-      await navigator.clipboard.writeText(content ?? "");
+      await copyText(content ?? "");
       setNote({ text: "Copied" });
     }),
     rename: async (name: string) => {

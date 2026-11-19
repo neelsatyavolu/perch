@@ -81,6 +81,8 @@ export function startShell(win: ShellWindow, page: "chat.html" | "sidebar.html")
   const send = win.chrome?.send;
   const frame = win.document.createElement("iframe");
   frame.title = "Perch chat";
+  // The chat is cross-origin to this shell, so its Copy buttons can write the clipboard only when allowed here.
+  frame.allow = "clipboard-write";
   frame.src = `${frameOrigin}/${page}${win.location.search}`;
   win.document.body.append(frame);
   if (typeof send !== "function") return;

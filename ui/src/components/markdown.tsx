@@ -7,6 +7,7 @@
 import type { ComponentChildren, VNode } from "preact";
 import { useState } from "preact/hooks";
 import { memo } from "./memo";
+import { copyText } from "./copy-text";
 
 export type MarkdownProps = { text: string; renderArtifact?: (id: string) => VNode | null };
 
@@ -138,7 +139,7 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     try {
-      await navigator.clipboard?.writeText(code);
+      await copyText(code);
     } catch {
       return; // Not copied, so the button does not say it was.
     }

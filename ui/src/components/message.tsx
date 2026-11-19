@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import type { ChatMessage } from "../api/types";
 import { Icon } from "./icon";
 import { Markdown } from "./markdown";
+import { copyText } from "./copy-text";
 
 /** A step as saved; chats from before step details have plain labels. */
 type StepLike = string | { label: string; detail?: string; output?: string };
@@ -191,7 +192,7 @@ export const Message = memo(function Message({ message, artifact, onBranch, type
   const files = message.role === "assistant" ? fileIds(message) : [];
   const copy = async () => {
     try {
-      await navigator.clipboard?.writeText(message.text.replace(/\[\[artifact:[^\]]+\]\]\n?/g, ""));
+      await copyText(message.text.replace(/\[\[artifact:[^\]]+\]\]\n?/g, ""));
     } catch {
       return; // Not copied, so the button does not say it was.
     }

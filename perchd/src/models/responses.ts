@@ -1,7 +1,7 @@
 /** The OpenAI Responses API: Codex (ChatGPT sign-in), Grok (xAI sign-in or key) and the OpenAI API (key). */
 
 import { openStream, redactSecrets, sseJson, upstreamMessage, type Attempt } from "./http";
-import { ModelError, parseArgs, type Effort, type Message, type Model, type ToolSpec, type TurnEvent, type TurnRequest } from "./types";
+import { imageMediaType, ModelError, parseArgs, type Effort, type Message, type Model, type ToolSpec, type TurnEvent, type TurnRequest } from "./types";
 
 export const CODEX_URL = "https://chatgpt.com/backend-api/codex/responses";
 export const GROK_URL = "https://api.x.ai/v1/responses";
@@ -28,7 +28,7 @@ function inputItems(provider: ResponsesProvider, messages: Message[]): object[] 
       items.push({
         role: "user",
         content: m.image
-          ? [{ type: "input_text", text: m.text }, { type: "input_image", image_url: `data:image/jpeg;base64,${m.image}`, detail: "high" }]
+          ? [{ type: "input_text", text: m.text }, { type: "input_image", image_url: `data:${imageMediaType(m.image)};base64,${m.image}`, detail: "high" }]
           : text("user", m.text),
       });
     } else if (m.role === "assistant") {
@@ -39,7 +39,7 @@ function inputItems(provider: ResponsesProvider, messages: Message[]): object[] 
       if (m.image) {
         items.push({
           role: "user",
-          content: [{ type: "input_text", text: "Screenshot from the last step:" }, { type: "input_image", image_url: `data:image/jpeg;base64,${m.image}`, detail: "high" }],
+          content: [{ type: "input_text", text: "Screenshot from the last step:" }, { type: "input_image", image_url: `data:${imageMediaType(m.image)};base64,${m.image}`, detail: "high" }],
         });
       }
     }

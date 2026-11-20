@@ -110,6 +110,19 @@ test("upload finds the hidden file input behind a styled button", async () => {
   profile.cleanup();
 });
 
+test("upload presses a button that opens the file picker from script and fills the input it made", async () => {
+  const profile = tempProfile();
+  const file = join(profile.dir, "logo.png");
+  writeFileSync(file, "png");
+  const tab = await env.browser.newTab(env.site.url("/pickerfile.html"));
+  const snap = await snapshot(tab);
+  expect(await upload(tab, snap.refs, refOf(snap, 'button "Select Files"'), [file])).toMatchObject({ ok: true });
+  await waitFor(tab, { text: "Uploaded logo.png", timeoutMs: 3000 });
+  expect(await status(tab)).toBe("Uploaded logo.png");
+  await tab.close();
+  profile.cleanup();
+});
+
 test("upload sets the file input", async () => {
   const profile = tempProfile();
   const file = join(profile.dir, "notes.txt");

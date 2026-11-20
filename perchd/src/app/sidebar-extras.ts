@@ -10,7 +10,7 @@ import { extname, join, sep } from "node:path";
 import { readLocalDocument } from "../agent/local-document";
 import { isZip, openZip } from "./zip-attachment";
 import type { MemoryAccess } from "../memory/agent";
-import type { ToolCall } from "../models/types";
+import { imageMediaType, type ToolCall } from "../models/types";
 import { combineExtraTools, type ExtraTools } from "../mcp-client/extra-tools";
 import type { SkillCatalog } from "../skills/catalog";
 import { skillExtraTools } from "../skills/tool";
@@ -75,7 +75,7 @@ async function listFolder(name: string, path: string): Promise<string> {
   const entries = (await readdir(path, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name));
   const shown = entries.slice(0, MAX_LISTING).map((e) => (e.isDirectory() ? `${e.name}/` : e.name));
   const more = entries.length > MAX_LISTING ? `\n… and ${entries.length - MAX_LISTING} more` : "";
-  return entries.length ? `${name}/ holds:\n${shown.join("\n")}${more}` : `${name}/ is empty.`;
+  return entries.length ? `${name}/ holds:\n${shown.join("\n")}${more}\n\nOn this Mac it is ${path}; to upload a file from it, pass that path and the file's name to upload.` : `${name}/ is empty.`;
 }
 
 /**
@@ -128,7 +128,8 @@ export function attachmentExtraTools(files: readonly { name: string; path: strin
       const imageType = IMAGE_TYPES[extname(path).toLowerCase()];
       if (imageType) {
         if (size > MAX_IMAGE) return { content: `${name} is too large to show (${Math.round(size / 1048576)} MB).`, isError: true };
-        return { content: `${name} (image)`, image: (await readFile(path)).toString("base64"), imageType };
+        const image = (await readFile(path)).toString("base64");
+        return { content: `${name} (image, at ${path} for upload)`, image, imageType: imageMediaType(image) };
       }
       if (DOCUMENT_EXT.test(path)) {
         const page = call.args.page === undefined ? undefined : Math.max(1, Math.floor(Number(call.args.page)) || 1);

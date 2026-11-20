@@ -6,7 +6,7 @@
 
 import { CLAUDE_CODE_VERSION, claudeRequest, claudeRequiredVersion } from "@neelsatyavolu/shared-ai-auth";
 import { openStream, redactSecrets, sseJson, upstreamMessage } from "./http";
-import { ModelError, parseArgs, type Message, type Model, type TurnEvent, type TurnRequest } from "./types";
+import { imageMediaType, ModelError, parseArgs, type Message, type Model, type TurnEvent, type TurnRequest } from "./types";
 
 export const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 /** Room for adaptive thinking before the answer or tool call; streaming keeps a large value safe. */
@@ -16,7 +16,7 @@ const FAST_BETA = "fast-mode-2026-02-01";
 
 type Block = Record<string, unknown>;
 
-const imageBlock = (data: string): Block => ({ type: "image", source: { type: "base64", media_type: "image/jpeg", data } });
+const imageBlock = (data: string): Block => ({ type: "image", source: { type: "base64", media_type: imageMediaType(data), data } });
 
 /** Tool results go back in a user message; consecutive results share one. */
 export function toAnthropicMessages(messages: Message[]): { role: "user" | "assistant"; content: Block[] }[] {

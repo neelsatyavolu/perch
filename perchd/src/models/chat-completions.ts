@@ -6,7 +6,7 @@
 import { openStream, redactSecrets, sseJson, upstreamMessage } from "./http";
 import type { ProviderId } from "./ids";
 import { PROVIDERS } from "./providers";
-import { ModelError, parseArgs, type Message, type Model, type ToolCall, type TurnEvent, type TurnRequest } from "./types";
+import { imageMediaType, ModelError, parseArgs, type Message, type Model, type ToolCall, type TurnEvent, type TurnRequest } from "./types";
 
 export type ChatCompletionsOptions = {
   provider: ProviderId;
@@ -23,7 +23,7 @@ export type ChatCompletionsOptions = {
 type Part = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } };
 type ChatMessage = Record<string, unknown>;
 
-const imagePart = (data: string): Part => ({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${data}` } });
+const imagePart = (data: string): Part => ({ type: "image_url", image_url: { url: `data:${imageMediaType(data)};base64,${data}` } });
 
 function toolCallOut(call: ToolCall): Record<string, unknown> {
   return { id: call.id, type: "function", function: { name: call.name, arguments: JSON.stringify(call.args) }, ...(call.meta ?? {}) };

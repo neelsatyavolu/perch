@@ -338,15 +338,43 @@ function fileInputFor(tab: Tab, node: Node): Promise<string | undefined> {
   return callForObject(tab, node, FILE_INPUT_FOR);
 }
 
+/** Runs `press` and returns the file input whose picker it opened, or null when none opened. */
+async function openedPicker(tab: Tab, press: () => Promise<ActionResult>): Promise<{ session: typeof tab.session; backendNodeId: number } | null> {
+  let opened: { session: typeof tab.session; backendNodeId: number } | null = null;
+  const off = tab.conn.on("Page.fileChooserOpened", (params, sid) => {
+    const id = (params as { backendNodeId?: number }).backendNodeId;
+    if (typeof id === "number" && !opened) opened = { session: sid as typeof tab.session, backendNodeId: id };
+  });
+  try {
+    const pressed = await press();
+    if (!pressed.ok) return null;
+    for (let waited = 0; !opened && waited < PICKER_WAIT_MS; waited += 50) await Bun.sleep(50);
+    return opened;
+  } finally {
+    off();
+  }
+}
+
+/** How long after pressing an upload button its file picker may take to open. */
+const PICKER_WAIT_MS = 1500;
+
 export function upload(tab: Tab, refs: RefTable, ref: string, paths: string[]): Promise<ActionResult> {
   return attempt(async () => {
     const missing = paths.filter((p) => !existsSync(p));
     if (missing.length) return fail(`file not found: ${missing.join(", ")}`);
     const node = await liveNode(tab, refs, ref);
     const input = await fileInputFor(tab, node);
-    if (!input) return fail(`${ref} is not a file upload control, and no file input belongs to it`);
-    await tab.sendIn(node.session, "DOM.setFileInputFiles", { files: paths, objectId: input });
-    return ok(`attached ${paths.length} file${paths.length === 1 ? "" : "s"}`);
+    const attached = ok(`attached ${paths.length} file${paths.length === 1 ? "" : "s"}`);
+    if (input) {
+      await tab.sendIn(node.session, "DOM.setFileInputFiles", { files: paths, objectId: input });
+      return attached;
+    }
+    // A button that opens the file picker from script ("Select Files" in WordPress's media library,
+    // a drop zone): press it with the picker held back, and give the files to the input it opened.
+    const picker = await openedPicker(tab, () => click(tab, refs, ref));
+    if (!picker) return fail(`${ref} is not a file upload control, no file input belongs to it, and pressing it opened no file picker`);
+    await tab.sendIn(picker.session, "DOM.setFileInputFiles", { files: paths, backendNodeId: picker.backendNodeId });
+    return attached;
   });
 }
 

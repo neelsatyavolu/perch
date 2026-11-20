@@ -41,3 +41,14 @@ export function parseArgs(raw: string): Record<string, unknown> {
     return { __unparsed: raw };
   }
 }
+
+/**
+ * An image's media type from its bytes (base64). Providers reject an image whose stated type is
+ * not what it is, and a file's extension (a PNG saved as .jpg) or a tool's guess can be wrong.
+ */
+export function imageMediaType(data: string): "image/png" | "image/jpeg" | "image/gif" | "image/webp" {
+  if (data.startsWith("iVBORw0KGgo")) return "image/png";
+  if (data.startsWith("R0lGOD")) return "image/gif";
+  if (data.startsWith("UklGR") && Buffer.from(data.slice(0, 16), "base64").subarray(8, 12).toString("latin1") === "WEBP") return "image/webp";
+  return "image/jpeg";
+}

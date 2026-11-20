@@ -1,0 +1,15 @@
+<!doctype html>
+<html><body>
+<h1>Media library</h1>
+<button id="select">Select Files</button>
+<p id="out"></p>
+<script>
+// Like WordPress's uploader: the file input only exists once the button is pressed, and is never in the page.
+document.getElementById("select").addEventListener("click", () => {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.addEventListener("change", () => { document.getElementById("out").textContent = "Uploaded " + input.files[0].name; });
+  input.click();
+});
+</script>
+</body></html>

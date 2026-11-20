@@ -1,0 +1,15 @@
+<!doctype html>
+<html><body>
+<h1>Design drafts</h1>
+<button id="checkout">Check Out</button>
+<button id="other">Reset Draft</button>
+<p id="out">idle</p>
+<script>
+document.getElementById("checkout").addEventListener("click", () => {
+  document.getElementById("out").textContent = confirm("Checking out this design draft will refresh this page. Would you like to proceed?") ? "checked out" : "cancelled";
+});
+document.getElementById("other").addEventListener("click", () => {
+  document.getElementById("out").textContent = confirm("Reset this draft? Its changes will be lost.") ? "reset" : "kept";
+});
+</script>
+</body></html>

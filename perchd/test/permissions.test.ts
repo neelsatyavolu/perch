@@ -322,3 +322,13 @@ test("an approved archive or unsubscribe on a site is remembered for the same bu
   expect(repeatKey(click, undefined, "mail.example", "risky")).toBeUndefined();
   expect(repeatKey(call("type", { ref: "e1", text: "x", submit: true }), { role: "textbox", name: "Archive" }, "mail.example", "risky")).toBeUndefined();
 });
+
+test("pressing OK on the page's question is judged by its words", () => {
+  const call = { id: "1", name: "click", args: { ref: "e1", confirm: true } };
+  const button = { role: "button", name: "Edit draft" };
+  expect(classify(call, button, { confirm: "Checking out this design draft will refresh this page. Would you like to proceed?" })).toBe("change");
+  expect(classify(call, button, { confirm: "Delete this draft? This can't be undone." })).toBe("risky");
+  expect(classify(call, button, { confirm: "Pay $20 now to continue?" })).toBe("payment");
+  expect(classify(call, button, { confirm: null })).toBe("risky");
+  expect(classify({ ...call, args: { ref: "e1" } }, button, {})).toBe("change");
+});

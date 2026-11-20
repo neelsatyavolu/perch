@@ -74,7 +74,7 @@ test("approving runs the action", async () => {
 test("a bad tool call is reported back and the loop goes on", async () => {
   const { events, model } = await run([() => tool("click", {}), (req) => say(lastTool(req).content)]);
   expect(model.requests).toHaveLength(2);
-  expect(events.at(-1)).toEqual({ type: "final", text: 'missing argument "ref"; click takes ref' });
+  expect(events.at(-1)).toEqual({ type: "final", text: 'missing argument "ref"; click takes ref, confirm' });
 });
 
 test("a long task is not cut off at a few dozen steps", async () => {

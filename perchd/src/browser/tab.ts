@@ -50,6 +50,10 @@ export class Tab {
   private isClosed = false;
   private readonly lifecycle: { loaderId: string; name: string }[] = [];
   private dialogNotes: string[] = [];
+  /** The confirm dialog a click with `confirm` may say OK to: its text, null for any, undefined for none. */
+  private okConfirm: string | null | undefined = undefined;
+  /** The text of the last confirm dialog Perch cancelled here, which a click with `confirm` is judged by (permissions.ts). */
+  lastCancelled: string | null = null;
   private pageErrors: string[] = [];
   private mainFrameId = "";
   private navigationPending = false;
@@ -59,6 +63,11 @@ export class Tab {
   private readonly requests = new Map<string, number>();
   /** Cross-site iframes run in their own process and session: frame id → session id. */
   readonly frameSessions = new Map<string, string>();
+
+  /** Lets the next confirm dialog with this text (null: any text) be answered OK; undefined turns it off. */
+  expectConfirm(text: string | null | undefined): void {
+    this.okConfirm = text;
+  }
 
   private constructor(readonly conn: CdpConnection, readonly id: string, readonly session: string) {
     const listen = (event: string, listener: Parameters<CdpConnection["on"]>[1]) => this.unsubscribe.push(conn.on(event, listener));
@@ -71,9 +80,16 @@ export class Tab {
     // Dialogs block the page until answered, so answer at once and tell the model what happened.
     listen("Page.javascriptDialogOpening", (p: { type: string; message: string }, sid) => {
       if (sid !== session) return;
-      const accept = p.type === "alert" || p.type === "beforeunload";
+      // A confirm is answered OK only for a click made with `confirm`, and only when it asks what was approved.
+      const ok = p.type === "confirm" && this.okConfirm !== undefined && (this.okConfirm === null || this.okConfirm === p.message);
+      const accept = p.type === "alert" || p.type === "beforeunload" || ok;
       const kind = p.type === "alert" ? "an alert" : p.type === "beforeunload" ? "a leave-page prompt" : `a ${p.type} dialog`;
-      this.dialogNotes.push(`The page showed ${kind}: "${p.message}". Perch ${accept ? "closed" : "dismissed"} it.`);
+      if (p.type === "confirm") {
+        this.okConfirm = undefined;
+        if (!ok) this.lastCancelled = p.message;
+      }
+      const again = p.type === "confirm" && !ok ? " To go ahead, click the same element again with confirm: true." : "";
+      this.dialogNotes.push(`The page showed ${kind}: "${p.message}". Perch ${ok ? "pressed OK on" : accept ? "closed" : "dismissed"} it.${again}`);
       void conn.send("Page.handleJavaScriptDialog", { accept }, session).catch(() => undefined);
     });
     // Uncaught errors in the page's own script: a button whose handler throws does nothing visible.

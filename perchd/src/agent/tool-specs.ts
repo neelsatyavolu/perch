@@ -20,7 +20,7 @@ export const TOOL_SPECS: ToolSpec[] = [
   spec("navigate", "Open a URL in the current agent tab. Returns the page snapshot.", { url: { type: "string" } }, ["url"]),
   spec("snapshot", "Read the page as text. Interactive elements have refs like e12. Set full to include content far from the viewport.", { full: { type: "boolean" } }),
   spec("find", "Find elements anywhere on the page by role and name, even far from view, and get their refs. Set contains to match part of the name.", { role: { type: "string", description: "e.g. button, textbox, spinbutton, link, row; empty for any" }, name: { type: "string" }, contains: { type: "boolean" } }, ["name"]),
-  spec("click", "Click an element by ref.", { ref }, ["ref"]),
+  spec("click", "Click an element by ref. Perch cancels the page's confirm dialogs (\"Are you sure?\"); set confirm to press OK on the one this click opens, after a cancelled try showed its text.", { ref, confirm: { type: "boolean", description: "Press OK on the confirm dialog this click opens" } }, ["ref"]),
   spec("type", "Replace the text in a field by ref, typing key by key. Also sets dates, colours and sliders. Set submit to press Enter after.", { ref, text: { type: "string" }, submit: { type: "boolean" } }, ["ref", "text"]),
   spec("select", "Choose a dropdown option by its label or value.", { ref, value: { type: "string" } }, ["ref", "value"]),
   spec("press", "Press a key in the focused element, such as Enter, Escape, Tab or Meta+A.", { key: { type: "string" } }, ["key"]),

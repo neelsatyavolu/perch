@@ -63,7 +63,8 @@ export async function prepareCall(ctx: ToolContext, opts: CallPolicy, call: Tool
   const app = appTool(call.name);
   const fill = FILL_TOOLS.has(call.name);
   const field = await enterField(ctx, call);
-  const page = READS.has(call.name) || app || fill ? {} : { ...(await pageContext(ctx)), ...(field ? { field } : {}) };
+  const asked = call.name === "click" && call.args.confirm ? { confirm: ctx.tab?.lastCancelled ?? null } : {};
+  const page = READS.has(call.name) || app || fill ? {} : { ...(await pageContext(ctx)), ...(field ? { field } : {}), ...asked };
   const drop = await dropTarget(ctx, call);
   const destination = call.name === "navigate" || call.name === "open_tab" || call.name === "read_document" ? String(call.args.url) : undefined;
   const site = app ? app.site : destination ? hostOf(destination) : await currentHost(ctx);

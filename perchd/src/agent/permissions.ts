@@ -31,7 +31,7 @@ export type Target = { role: string; name: string; expanded?: boolean };
 export type EnterField = { words: string; multiline: boolean; search: boolean; submit: string; post: boolean; cell?: boolean };
 
 /** What the page around an action looks like: a checkout, a password change, and the field Enter acts in. */
-export type PageContext = { payment?: boolean; passwordChange?: boolean; field?: EnterField };
+export type PageContext = { payment?: boolean; passwordChange?: boolean; field?: EnterField; confirm?: string | null };
 
 // A batch or script is judged action by action as it runs (agent/session.ts callTool), so the batch itself is a read.
 const READ_TOOLS = new Set(["navigate", "snapshot", "find", "screenshot", "scroll", "hover", "wait_for", "back", "tabs", "open_tab", "switch_tab", "downloads", "read_download", "batch", "script", "done", "read_document"]);
@@ -134,7 +134,12 @@ export function classify(call: ToolCall, target?: Target, page: PageContext = {}
     return guarded ? "payment" : enterKind(target, page.field);
   }
   if (call.name === "hover") return "read";
-  if (call.name === "click") return clickKind(target, guarded);
+  if (call.name === "click") {
+    const kind = clickKind(target, guarded);
+    if (!call.args.confirm) return kind;
+    // Saying OK to the page's question is judged by its words, like a button with them; an unseen question asks.
+    return stricter(kind, page.confirm ? clickKind({ role: "button", name: page.confirm }, guarded) : "risky");
+  }
   return "risky";
 }
 

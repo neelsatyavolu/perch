@@ -123,6 +123,23 @@ test("upload presses a button that opens the file picker from script and fills t
   profile.cleanup();
 });
 
+test("a click cancels the page's confirm; with confirm it says OK, but only to the question it was judged by", async () => {
+  const tab = await env.browser.newTab(env.site.url("/confirm.html"));
+  const snap = await snapshot(tab);
+  const checkout = refOf(snap, 'button "Check Out"');
+  await click(tab, snap.refs, checkout);
+  expect(await status(tab)).toBe("cancelled");
+  expect(tab.lastCancelled).toContain("Checking out this design draft");
+  tab.expectConfirm(tab.lastCancelled);
+  await click(tab, snap.refs, checkout);
+  expect(await status(tab)).toBe("checked out");
+  // Approved for the checkout question: a different one is still cancelled.
+  tab.expectConfirm("Checking out this design draft will refresh this page. Would you like to proceed?");
+  await click(tab, snap.refs, refOf(snap, 'button "Reset Draft"'));
+  expect(await status(tab)).toBe("kept");
+  await tab.close();
+});
+
 test("upload sets the file input", async () => {
   const profile = tempProfile();
   const file = join(profile.dir, "notes.txt");

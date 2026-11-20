@@ -374,6 +374,8 @@ export async function approvalDetail(ctx: ToolContext, call: ToolCall): Promise<
   if (call.name === "upload") return (a.paths as string[]).join(", ");
   if (call.name === "select") return `"${String(a.value)}"`;
   if (call.name !== "click" || !ctx.tab || typeof a.ref !== "string" || !REF.test(a.ref)) return "";
+  const question = ctx.tab.lastCancelled;
+  const ok = a.confirm ? `and press OK on ${question ? `"${question.length > 200 ? `${question.slice(0, 199)}…` : question}"` : "the dialog it opens"}` : "";
   const fields = await ctx.tab
     .evaluate<string>(`(() => {
       const isSecret = (el) => el.type === 'password' || /(^|\\s)(cc-|one-time-code|current-password|new-password)/i.test(el.getAttribute('autocomplete') || '');
@@ -383,7 +385,7 @@ export async function approvalDetail(ctx: ToolContext, call: ToolCall): Promise<
         .slice(0, 8).map((el) => (el.labels && el.labels[0] ? el.labels[0].innerText.trim() : el.name) + ': ' + (isSecret(el) ? '••••' : String(el.value).slice(0, 120))).join('; ');
     })()`)
     .catch(() => "");
-  return fields ? `with ${fields}` : "";
+  return [fields ? `with ${fields}` : "", ok].filter(Boolean).join(" ");
 }
 
 /** For a key press: the focused element, which is what the key acts on. */
@@ -494,8 +496,16 @@ async function dispatch(ctx: ToolContext, call: ToolCall): Promise<ToolResult> {
       const opts = { role: a.role === undefined ? undefined : String(a.role), name: String(a.name), contains: Boolean(a.contains) };
       return { content: foundText(await find(tab, opts), opts) };
     }
-    case "click":
-      return withPage(ctx, tab, await click(tab, refs, a.ref), "click");
+    case "click": {
+      if (!a.confirm) return withPage(ctx, tab, await click(tab, refs, a.ref), "click");
+      // OK goes only to the dialog the approval named: the one Perch cancelled last, or any when none was seen.
+      tab.expectConfirm(tab.lastCancelled);
+      try {
+        return withPage(ctx, tab, await click(tab, refs, a.ref), "click");
+      } finally {
+        tab.expectConfirm(undefined);
+      }
+    }
     case "type": {
       const r = await type(tab, refs, a.ref, a.text, { submit: Boolean(a.submit) });
       return a.submit ? withPage(ctx, tab, r, "submit") : edited(ctx, tab, r, "type");

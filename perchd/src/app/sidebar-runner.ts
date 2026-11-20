@@ -46,6 +46,23 @@ export class SidebarRuns {
 
 type Agent = "codex" | "claude-code";
 
+const SKILL_CHATS = 200;
+/** The skills each chat read with load_skill, for this launch: they go into its later messages' instructions. */
+const skillsReadByChat = new Map<string, Set<string>>();
+
+/** A chat's record of the skills it read; none for a private chat or a run with no chat. */
+function skillsRead(input: RunnerInput): Set<string> | undefined {
+  if (!input.chatId || input.incognito) return undefined;
+  let read = skillsReadByChat.get(input.chatId);
+  if (!read) {
+    read = new Set();
+    skillsReadByChat.set(input.chatId, read);
+    // The oldest chats go first once there are many.
+    while (skillsReadByChat.size > SKILL_CHATS) skillsReadByChat.delete(skillsReadByChat.keys().next().value!);
+  }
+  return read;
+}
+
 
 function installed(agent: Agent): boolean {
   try {
@@ -233,7 +250,7 @@ export function sidebarRunner(opts: SidebarRunnerOptions): Runner {
     const token = randomBytes(32).toString("base64url");
     const mode = capMode(input.settings.mode, policy);
     const catalog = await opts.skills?.().catch(() => undefined);
-    const extras = sidebarExtras(catalog, memory, input.files, input.incognito ? undefined : input.schedule);
+    const extras = sidebarExtras(catalog, memory, input.files, input.incognito ? undefined : input.schedule, skillsRead(input));
     const skillList = extras?.prompt() ?? "";
     const timeoutMs = opts.timeoutMs ?? 20 * 60_000;
     opts.runs.add(session, {
@@ -333,7 +350,7 @@ async function* runOwnLoop(opts: SidebarRunnerOptions, ownLoop: OwnLoop, input: 
   // Perch's own loop asks for memory with the whole task; recall should match this turn's message.
   const memory: MemoryAccess | undefined = raw ? { ...raw, context: (task) => raw.context(task, memoryHints(input)) } : undefined;
   const catalog = await opts.skills?.().catch(() => undefined);
-  const extras = sidebarExtras(catalog, memory, input.files, input.incognito ? undefined : input.schedule);
+  const extras = sidebarExtras(catalog, memory, input.files, input.incognito ? undefined : input.schedule, skillsRead(input));
   const session = input.chatId && !input.incognito ? `${CHAT_SESSION_PREFIX}${input.chatId}` : `sidebar-${randomBytes(12).toString("hex")}`;
   const mode = capMode(input.settings.mode, policy);
   // Registered like a CLI agent's run, so the perch dot finds its tabs.

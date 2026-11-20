@@ -67,6 +67,15 @@ test("an attached .zip opens like a folder, and entries that climb out of it are
   expect((await tools.run(call("notes.zip/notes/week1.md"), signal)).content).toBe("limits");
 });
 
+test("the run's skills use the chat's record of skills already read", async () => {
+  const { SkillCatalog } = await import("../src/skills/catalog");
+  const b64 = (s: string) => Buffer.from(s).toString("base64");
+  const catalog = SkillCatalog.of([{ name: "google-docs", description: "Docs", files: { "SKILL.md": b64("# Docs\nUse the export URL.") }, origin: "built-in" } as never]);
+  const read = new Set(["google-docs"]);
+  expect(sidebarExtras(catalog, undefined, [], undefined, read)!.prompt()).toContain("Use the export URL.");
+  expect(sidebarExtras(catalog, undefined, [])!.prompt()).not.toContain("Use the export URL.");
+});
+
 test("no attachments, no tool; the run's extras include it when there are some", () => {
   expect(attachmentExtraTools([])).toBeUndefined();
   expect(sidebarExtras(undefined, undefined, [])).toBeUndefined();

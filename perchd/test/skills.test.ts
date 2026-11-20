@@ -138,6 +138,26 @@ test("the agent sees skill names and descriptions, and loads a body and a file o
   expect(log.map((l) => [l.action, l.detail, l.site])).toEqual([["load_skill", "pdf-tools", "skills"], ["load_skill", "pdf-tools/reference.md", "skills"]]);
 });
 
+test("a skill read earlier in the chat comes with the next message's instructions, so it is not loaded again", async () => {
+  const b64 = (s: string) => Buffer.from(s).toString("base64");
+  const docs = { name: "google-docs", description: "Read and edit Google Docs and Sheets.", files: { "SKILL.md": b64("---\nname: google-docs\n---\n# Google Docs\n\nRead the export URL."), "ref.md": b64("more") }, origin: "built-in" as const };
+  const other = { name: "amazon", description: "Shop on Amazon.", files: { "SKILL.md": b64("# Amazon") }, origin: "built-in" as const };
+  const catalog = SkillCatalog.of([docs as never, other as never]);
+  const loaded = new Set<string>();
+  const first = skillExtraTools(catalog, loaded);
+  expect(first.prompt()).not.toContain("Read the export URL");
+  await first.run({ id: "1", name: "load_skill", args: { name: "google-docs" } }, new AbortController().signal);
+  // A file of a skill does not count as having read the skill.
+  await first.run({ id: "2", name: "load_skill", args: { name: "amazon", file: "SKILL.md" } }, new AbortController().signal);
+  expect([...loaded]).toEqual(["google-docs"]);
+  const next = skillExtraTools(catalog, loaded).prompt();
+  expect(next).toContain("# Google Docs\n\nRead the export URL.");
+  expect(next).toContain("do not load them again");
+  expect(next).not.toContain("# Amazon");
+  // A skill that was removed since is left out.
+  expect(skillExtraTools(SkillCatalog.of([other as never]), loaded).prompt()).not.toContain("Google Docs");
+});
+
 test("with no skills, no tool and no prompt text are added", () => {
   const t = skillExtraTools(SkillCatalog.of([]));
   expect(t.specs()).toEqual([]);

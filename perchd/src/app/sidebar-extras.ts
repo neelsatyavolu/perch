@@ -186,14 +186,19 @@ export function scheduleExtraTools(schedule: (at: Date, text: string, preapprove
   };
 }
 
-/** The extras for one sidebar run: skills always, memory unless the chat is private, this message's attachments, and scheduling. */
+/**
+ * The extras for one sidebar run: skills always, memory unless the chat is private, this message's
+ * attachments, and scheduling. `skillsRead` is the chat's record of the skills it already read
+ * (skills/tool.ts), so later messages get them in their instructions.
+ */
 export function sidebarExtras(
   catalog: SkillCatalog | undefined,
   memory: MemoryAccess | undefined,
   files: readonly { name: string; path: string }[] = [],
   schedule?: (at: Date, text: string, preapproved: boolean) => Promise<{ at: string }>,
+  skillsRead?: Set<string>,
 ): SidebarExtras | undefined {
-  const parts = [catalog ? skillExtraTools(catalog) : undefined, memory ? memoryExtraTools(memory) : undefined, attachmentExtraTools(files), schedule ? scheduleExtraTools(schedule) : undefined].filter(
+  const parts = [catalog ? skillExtraTools(catalog, skillsRead) : undefined, memory ? memoryExtraTools(memory) : undefined, attachmentExtraTools(files), schedule ? scheduleExtraTools(schedule) : undefined].filter(
     (p): p is ExtraTools => Boolean(p),
   );
   if (!parts.length) return undefined;

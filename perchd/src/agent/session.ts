@@ -18,6 +18,11 @@ export type ApprovalRequest = {
   call: ToolCall; target?: Target; kind: Kind; site: string; summary: string;
   /** sign_in with nothing saved: the card asks the person for the login (typed-logins.ts). */
   askLogin?: true;
+  /**
+   * Set when only Guard's own judgment made this ask (a risky step, no site rule, not a payment,
+   * login or address): the app may let it run when the user's messages already ask for it (guard-check.ts).
+   */
+  guardOnly?: true;
 };
 
 export type CallPolicy = {
@@ -85,7 +90,8 @@ export async function prepareCall(ctx: ToolContext, opts: CallPolicy, call: Tool
   }
   // A fill's card names the login or card (masked); it goes to the user only, never into the audit detail or the model.
   const summary = fill ? (decision === "ask" ? await fillSummary(ctx, call.name, site) : "") : `${verb(call)} ${detail} on ${site}`;
-  const request: ApprovalRequest = { call, target, kind, site, summary, ...(askLogin ? { askLogin: true as const } : {}) };
+  const guardOnly = opts.mode === "guard" && kind === "risky" && ruled === "ask" && decision === "ask" && !siteRule && !askLogin && !fill && !destination;
+  const request: ApprovalRequest = { call, target, kind, site, summary, ...(askLogin ? { askLogin: true as const } : {}), ...(guardOnly ? { guardOnly: true as const } : {}) };
   return { kind: "run", call, target, site, decision, request, entry, ...(repeat ? { repeat } : {}) };
 }
 

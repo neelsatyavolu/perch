@@ -7,6 +7,7 @@
 
 import { SkillCatalog } from "../../skills/catalog";
 import { titleChat } from "../chat-title";
+import { checkAction, type GuardCheckInput, type GuardVerdict } from "../../agent/guard-check";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { AuditLog, type AuditSink } from "../../agent/audit";
@@ -104,6 +105,8 @@ export type PageServices = {
   chatModel: (provider: string, model: string) => Promise<Model | string>;
   /** Names a chat after its first reply with the profile's fast model (`startApp({ nameChat })`). */
   nameChat: (ask: string, reply: string) => Promise<string | null>;
+  /** Guard's second look with the profile's fast model (agent/guard-check.ts). */
+  checkAction: (input: GuardCheckInput, signal: AbortSignal) => Promise<GuardVerdict>;
   /** Hands over the app's chats and windows, for building the memory profile. */
   attach(app: { chats: ChatStore; windows: Windows; runs?: RunManager }): void;
   stop(): Promise<void>;
@@ -220,6 +223,7 @@ export function openPageServices(opts: PageServicesOptions): PageServices {
         return error instanceof Error ? error.message : String(error);
       }
     },
+    checkAction: async (input, signal) => checkAction(modelOf(await (await models()).modelFor("fast")), input, signal),
     nameChat: async (ask, reply) => titleChat(modelOf(await (await models()).modelFor("fast")), ask, reply, AbortSignal.timeout(20_000)),
     attach(a) {
       app = a;

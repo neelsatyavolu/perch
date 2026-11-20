@@ -147,6 +147,7 @@ export async function serveInBrowser(io: CliIO): Promise<number> {
     pages: services.pages,
     onStatus: link.onStatus,
     nameChat: services.nameChat,
+    checkAction: services.checkAction,
     pageText: async (targetId) => {
       const page = await readPageText(conn, targetId);
       return page ? pageTextContext(page) || null : null;

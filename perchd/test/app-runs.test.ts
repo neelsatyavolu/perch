@@ -423,3 +423,69 @@ test("a file the reply can't hand over is named as written, even with $ in its n
   await runs.idle();
   expect(chats.get(chat.id)!.messages.at(-1)!.text).toContain("(The file a$&b.txt could not be attached");
 });
+
+const submitReq: ApprovalRequest = { call: { id: "s", name: "click", args: { ref: "e9" } }, target: { role: "button", name: "Submit" }, kind: "risky", site: "khanacademy.org", summary: 'Click button "Submit" on khanacademy.org', guardOnly: true };
+
+test("Guard's second look lets a step the user asked for run, once per run, and lists why", async () => {
+  const seen: string[][] = [];
+  const answers: boolean[] = [];
+  const runs = new RunManager({
+    chats, artifacts, emit: (e) => events.push(e), artifactUrl: (id, v) => `http://art/${id}/${v}`, tabs: () => [],
+    checkAction: async (input) => (seen.push([...input.asks]), { allow: true, reason: "You asked it to do the practice" }),
+    runner: async function* (input) {
+      answers.push(await input.approve(submitReq), await input.approve(submitReq));
+      yield { type: "final", text: "Done." };
+    },
+  });
+  const chat = await chats.create({ settings: { mode: "guard", model: "fake", effort: "high" } });
+  await runs.send(chat.id, "do my derivatives practice and submit the answers");
+  await runs.idle();
+  expect(answers).toEqual([true, true]);
+  expect(seen).toEqual([["do my derivatives practice and submit the answers"]]);
+  expect(of("run.approval")).toHaveLength(0);
+  expect(of("run.step").map((e) => e.label)).toEqual(['Went ahead with "Submit": You asked it to do the practice', 'Went ahead with "Submit"']);
+});
+
+test("a send gets its own look each time; a refusal, a failure or a non-Guard ask shows the card", async () => {
+  let looks = 0;
+  const verdicts = [true, true, false];
+  const send = { ...sendReq, guardOnly: true as const };
+  const runs = new RunManager({
+    chats, artifacts, emit: (e) => events.push(e), artifactUrl: (id, v) => `http://art/${id}/${v}`, tabs: () => [],
+    checkAction: async () => {
+      const allow = verdicts[looks++];
+      if (allow === undefined) throw new Error("model down");
+      return { allow, reason: "" };
+    },
+    runner: async function* (input) {
+      await input.approve(send);
+      await input.approve(send);
+      for (const [i, req] of [send, { ...send, guardOnly: undefined }, send].entries()) {
+        const answer = input.approve(req);
+        const card = await waitFor(() => of("run.approval")[i]);
+        runs.decide(card.card.id, false);
+        await answer;
+      }
+      yield { type: "final", text: "ok" };
+    },
+  });
+  const chat = await chats.create({ settings: { mode: "guard", model: "fake", effort: "high" } });
+  await runs.send(chat.id, "reply to Maya saying yes");
+  await runs.idle();
+  expect(looks).toBe(4);
+  expect(of("run.approval")).toHaveLength(3);
+});
+
+test("a folder attached to an earlier message is still there on the next one", async () => {
+  const inputs: RunnerInput[] = [];
+  const known = new Map([["f1", { name: "Package", path: "/Users/me/Package" }]]);
+  const runs = new RunManager({ chats, artifacts, emit: (e) => events.push(e), artifactUrl: (id, v) => `http://art/${id}/${v}`, tabs: () => [], attachment: (id) => known.get(id), runner: async function* (input) { inputs.push(input); yield { type: "final", text: "ok" }; } });
+  const chat = await chats.create({});
+  await runs.send(chat.id, "use the colors in this folder", undefined, { files: [{ id: "f1", name: "Package", path: "/Users/me/Package" }] });
+  await runs.idle();
+  const second = await runs.send(chat.id, "continue");
+  await runs.idle();
+  expect(inputs[1]!.files).toEqual([{ name: "Package", path: "/Users/me/Package" }]);
+  expect(inputs[1]!.task).toContain("/Users/me/Package");
+  expect(second.message.attachments).toBeUndefined();
+});

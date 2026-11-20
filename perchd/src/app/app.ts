@@ -38,6 +38,8 @@ export type AppOptions = {
   onStatus?: RunDeps["onStatus"];
   /** Names a chat after its first reply (RunDeps.nameChat). */
   nameChat?: RunDeps["nameChat"];
+  /** Guard's second look with the fast model (RunDeps.checkAction). */
+  checkAction?: RunDeps["checkAction"];
   /** False keeps scheduled messages from being sent (tests). */
   scheduler?: boolean;
   /** The user's tab text for a message (RunDeps.pageText). */
@@ -201,8 +203,10 @@ export async function startApp(opts: AppOptions): Promise<App> {
   let ownOrigin: string | null = null;
   // Perch's pages may frame artifacts; so may the development pages this server itself serves.
   const artifactServer = startArtifactServer({ store: artifacts, frameAncestors: () => [...opts.allowedOrigins, ...(opts.uiDir && ownOrigin ? [ownOrigin] : [])], browserScheme: opts.artifactScheme === true });
+  const files = new FileRegistry();
   const runs = new RunManager({
     chats,
+    attachment: (id) => files.lookup(id),
     artifacts,
     // A chat keeps its effort when it changes model; each run gets the nearest one the model takes.
     runner: (input) => {
@@ -215,6 +219,7 @@ export async function startApp(opts: AppOptions): Promise<App> {
     tabs: () => windows.tabs(),
     ...(opts.onStatus ? { onStatus: opts.onStatus } : {}),
     ...(opts.nameChat ? { nameChat: opts.nameChat } : {}),
+    ...(opts.checkAction ? { checkAction: opts.checkAction } : {}),
     ...(opts.pageText ? { pageText: opts.pageText } : {}),
   });
   // Scheduled messages (scheduled.ts) are only sent by the app the browser runs, not by test apps.
@@ -232,7 +237,6 @@ export async function startApp(opts: AppOptions): Promise<App> {
     defaults = { ...defaults, ...patch };
     publish({ type: "defaults", defaults });
   };
-  const files = new FileRegistry();
   const pages = opts.pages?.({
     chats,
     runs,

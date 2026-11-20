@@ -11,6 +11,7 @@ import type { Mode } from "../agent/permissions";
 import { provisionalTitle, takeTitleLine } from "./chat-title";
 import type { StepEvent } from "../agent/loop";
 import type { ApprovalRequest } from "../agent/session";
+import type { GuardCheckInput, GuardVerdict } from "../agent/guard-check";
 import { describeApproval } from "./approval-card";
 import { parseArtifactBlocks, type ArtifactRecord, type ArtifactStore } from "./artifacts";
 import type { ChatStore } from "./chats";
@@ -56,6 +57,10 @@ export type RunDeps = {
   pageText?: (targetId: string) => Promise<string | null>;
   /** Names a chat from its first message and reply (chat-title.ts); null or a throw keeps the first-message title. */
   nameChat?: (ask: string, reply: string) => Promise<string | null>;
+  /** Guard's second look with the fast model (guard-check.ts); without it, Guard's risky steps always ask. */
+  /** A file attached earlier in this launch, by id (attachments.ts), so later messages in its chat can still use it. */
+  attachment?: (id: string) => { name: string; path: string } | undefined;
+  checkAction?: (input: GuardCheckInput, signal: AbortSignal) => Promise<GuardVerdict>;
   /** A debug transcript for a run in this chat (debug-transcripts.ts); never asked for incognito chats. */
   transcripts?: (chatId: string) => TranscriptWriter;
 };
@@ -74,6 +79,8 @@ type Pending = { card: ApprovalCard; resolve: (approved: boolean) => void; done?
 /** `holdBack`: the user asked for the work without the final submit or send ("complete it without submitting"). */
 type Run = {
   runId: string; chatId: string; controller: AbortController; text: string; steps: Step[]; pending: Pending | null; done: Promise<void>; startedAt: string; holdBack?: boolean;
+  /** The user's own messages in the chat, the current one last: what Guard's second look reads. `allowed` holds the steps it let through. */
+  asks?: string[]; allowed?: Set<string>;
   /** An outside agent's work, listed as it reports it (observeStep); `quiet` ends it after a pause, and `ended` settles `done`. `intro` is its first message. */
   observed?: true; quiet?: ReturnType<typeof setTimeout>; ended?: () => void; intro?: string;
   transcript?: TranscriptWriter;
@@ -83,6 +90,13 @@ type Run = {
 const HOLD_BACK = /\b(without|don'?t|do not|never|not|no)\b[^.\n]{0,24}?\b(submit(ting)?|turn(ing)? (it |this |them )?in|hand(ing)? (it |this |them )?in|send(ing)?|post(ing)?|publish(ing)?)\b/i;
 /** The final steps a held-back run leaves to the user. */
 const FINAL_STEP = /\b(submit|turn in|hand in|send|post|publish|go live|push live|make live|deploy)\b/i;
+/** How many of the user's messages, newest last, Guard's second look reads, and how long it may take before the card shows. */
+const MAX_ASKS = 6;
+/** How many files from earlier messages a run carries along. */
+const MAX_EARLIER_FILES = 20;
+const GUARD_CHECK_MS = 12_000;
+/** Steps that reach people or delete: each one gets its own look, even when an earlier one was let through. */
+const REACHES = /\b(send|post|publish|reply|forward|comment|share|invite|transfer|delete|remove|discard|trash|erase)\b/i;
 const HOLD_BACK_NOTE =
   "The user wants this done without the final submit or send: do everything up to that point, leave the submit, send or publish step for them, and say it is ready.";
 
@@ -261,7 +275,7 @@ export class RunManager {
     if (!text.trim()) throw new AppError("The message is empty");
     if (text.length > MAX_MESSAGE) throw new AppError("The message is too long (50,000 characters at most)");
     if (this.runs.has(chatId)) throw new AppError("A task is still running in this chat. Wait for it or stop it first", 409);
-    const files = extras.files ?? [];
+    const files = [...(extras.files ?? []), ...this.earlierFiles(chat, extras.files ?? [])];
     const mentions = (extras.mentions ?? []).map(withoutTarget);
     const message: ChatMessage = {
       id: crypto.randomUUID(),
@@ -269,7 +283,7 @@ export class RunManager {
       text,
       time: new Date().toISOString(),
       ...(context ? { context: withoutTarget(context) } : {}),
-      ...(files.length ? { attachments: files.map((f) => ({ id: f.id, name: f.name })) } : {}),
+      ...(extras.files?.length ? { attachments: extras.files.map((f) => ({ id: f.id, name: f.name })) } : {}),
       ...(mentions.length ? { mentions } : {}),
       ...(extras.scheduled ? { scheduled: true as const } : {}),
     };
@@ -280,7 +294,7 @@ export class RunManager {
     // queued behind it rather than started beside it. `done` stays open until the run ends:
     // waiting on a settled promise in a loop (idleFor) would spin forever.
     let started!: (done?: Promise<void>) => void;
-    const run: Run = { runId: crypto.randomUUID(), chatId, controller: new AbortController(), text: "", steps: [], pending: null, done: new Promise<void>((resolve) => (started = resolve)), startedAt: new Date().toISOString(), ...(holdBack ? { holdBack } : {}) };
+    const run: Run = { runId: crypto.randomUUID(), chatId, controller: new AbortController(), text: "", steps: [], pending: null, done: new Promise<void>((resolve) => (started = resolve)), startedAt: new Date().toISOString(), asks: [...chat.messages.filter((m) => m.role === "user").map((m) => m.text), text].slice(-MAX_ASKS), ...(holdBack ? { holdBack } : {}) };
     this.runs.set(chatId, run);
     let task: string;
     try {
@@ -306,6 +320,25 @@ export class RunManager {
     const settings = holdBack && chosen.mode === "skip" ? { ...chosen, mode: "guard" as const } : chosen;
     started(this.drive(run, task, settings, tab, text, files.map((f) => ({ name: f.name, path: f.path }))));
     return { runId: run.runId, message };
+  }
+
+  /**
+   * Files and folders attached to earlier messages in the chat, still readable: each message is a
+   * new run, and without these the agent lost a folder after the message it came with.
+   */
+  private earlierFiles(chat: Chat, current: readonly { path: string }[]): { id: string; name: string; path: string }[] {
+    if (!this.deps.attachment) return [];
+    const seen = new Set(current.map((f) => f.path));
+    const found: { id: string; name: string; path: string }[] = [];
+    for (const m of [...chat.messages].reverse()) {
+      for (const a of m.role === "user" ? (m.attachments ?? []) : []) {
+        const entry = this.deps.attachment(a.id);
+        if (!entry || seen.has(entry.path) || found.length >= MAX_EARLIER_FILES) continue;
+        seen.add(entry.path);
+        found.push({ id: a.id, name: entry.name, path: entry.path });
+      }
+    }
+    return found;
   }
 
   /** The messages waiting behind this chat's task, oldest first. */
@@ -452,32 +485,68 @@ export class RunManager {
   }
 
   private approve(run: Run) {
-    return (request: ApprovalRequest): Promise<boolean> => {
-      if (run.controller.signal.aborted) return Promise.resolve(false);
+    return async (request: ApprovalRequest): Promise<boolean> => {
+      if (run.controller.signal.aborted) return false;
       // The user said not to submit: that step is left for them, without a card.
       if (run.holdBack && request.kind !== "read" && FINAL_STEP.test(`${request.target?.name ?? ""} ${request.summary}`)) {
         const label = `Left "${request.target?.name || "the final step"}" for you`;
         run.steps = [...run.steps, { label }];
         this.deps.emit({ type: "run.step", chatId: run.chatId, runId: run.runId, label });
-        return Promise.resolve(false);
+        return false;
       }
-      const card = describeApproval(request, { id: crypto.randomUUID(), chatId: run.chatId, runId: run.runId });
-      return new Promise<boolean>((resolve) => {
-        run.pending = {
-          card,
-          resolve: (approved) => {
-            if (run.pending?.card.id !== card.id) return;
-            run.pending = null;
-            run.transcript?.record({ kind: "approval", label: card.title, approved });
-            this.deps.emit({ type: "run.approval.resolved", chatId: run.chatId, runId: run.runId, approvalId: card.id, approved });
-            this.announce(run.chatId);
-            resolve(approved);
-          },
-        };
-        this.deps.emit({ type: "run.approval", chatId: run.chatId, runId: run.runId, card });
-        this.announce(run.chatId);
-      });
+      if (request.guardOnly && (await this.guardAllows(run, request))) return true;
+      if (run.controller.signal.aborted) return false;
+      return this.askUser(run, request);
     };
+  }
+
+  /**
+   * Guard's second look (guard-check.ts): true when the user's own messages already ask for this
+   * step, which is then listed with the reason instead of waiting on a card. The same step again
+   * in this run is let through without another look, except one that reaches people or deletes.
+   */
+  private async guardAllows(run: Run, request: ApprovalRequest): Promise<boolean> {
+    const check = this.deps.checkAction;
+    if (!check || !run.asks?.length) return false;
+    const key = request.summary;
+    const known = run.allowed?.has(key) ?? false;
+    let reason = "";
+    if (!known) {
+      try {
+        const verdict = await check({ asks: run.asks, action: request.summary, site: request.site }, AbortSignal.any([run.controller.signal, AbortSignal.timeout(GUARD_CHECK_MS)]));
+        if (!verdict.allow) return false;
+        reason = verdict.reason;
+      } catch {
+        return false;
+      }
+      if (!REACHES.test(key)) run.allowed = new Set(run.allowed).add(key);
+    }
+    const name = request.target?.name?.trim() || request.summary;
+    const label = `Went ahead with "${name.length > 60 ? `${name.slice(0, 59)}…` : name}"${reason ? `: ${reason}` : ""}`;
+    run.steps = [...run.steps, { label }];
+    run.transcript?.record({ kind: "approval", label, approved: true });
+    this.deps.emit({ type: "run.step", chatId: run.chatId, runId: run.runId, label });
+    return true;
+  }
+
+  /** Shows the approval card and waits for the user's answer. */
+  private askUser(run: Run, request: ApprovalRequest): Promise<boolean> {
+    const card = describeApproval(request, { id: crypto.randomUUID(), chatId: run.chatId, runId: run.runId });
+    return new Promise<boolean>((resolve) => {
+      run.pending = {
+        card,
+        resolve: (approved) => {
+          if (run.pending?.card.id !== card.id) return;
+          run.pending = null;
+          run.transcript?.record({ kind: "approval", label: card.title, approved });
+          this.deps.emit({ type: "run.approval.resolved", chatId: run.chatId, runId: run.runId, approvalId: card.id, approved });
+          this.announce(run.chatId);
+          resolve(approved);
+        },
+      };
+      this.deps.emit({ type: "run.approval", chatId: run.chatId, runId: run.runId, card });
+      this.announce(run.chatId);
+    });
   }
 
   /** A transcript writer for the chat; none when the store is missing or refuses the id. */

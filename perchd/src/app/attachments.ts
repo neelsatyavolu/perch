@@ -87,6 +87,11 @@ export class FileRegistry {
     return this.pasted;
   }
 
+  /** A registered file with its path, or undefined once it is gone (a relaunch, or too many since). */
+  lookup(id: string): Entry | undefined {
+    return this.entries.get(id);
+  }
+
   /** A registered file, with its path, for the task text. */
   resolve(id: string): Entry {
     const entry = this.entries.get(id);

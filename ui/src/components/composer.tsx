@@ -25,7 +25,7 @@ export const PLACEHOLDER = "Ask Perch a task, @ for context";
 
 const MODES: Choice<Mode>[] = [
   { value: "ask", label: "Ask", hint: "Asks before every change" },
-  { value: "guard", label: "Guard", hint: "Asks before it sends, buys or deletes" },
+  { value: "guard", label: "Guard", hint: "Asks before buying, and before sends or deletes you didn't ask for" },
   { value: "skip", label: "Skip confirmation", hint: "Runs without asking; payments still ask" },
 ];
 

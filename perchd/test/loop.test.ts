@@ -230,6 +230,15 @@ test("the system prompt has the agent look up the user's own orders and account 
   }
 });
 
+test("the system prompt has the agent tick a consent box the user told it to, and only then", async () => {
+  const { systemPrompt } = await import("../src/agent/prompt");
+  for (const finish of [undefined, "reply"] as const) {
+    const prompt = systemPrompt({ mode: "guard", now: new Date("2026-11-05T09:00:00Z"), finish });
+    expect(prompt).toContain("When the user tells you to tick a consent, agreement or certification box");
+    expect(prompt).toContain("Never tick one the user has not told you to.");
+  }
+});
+
 test("the check before done and the out-of-budget turn ask for a direct answer to each question", async () => {
   const { CHECK_BEFORE_DONE } = await import("../src/agent/loop");
   const { outOfBudget } = await import("../src/agent/finish");

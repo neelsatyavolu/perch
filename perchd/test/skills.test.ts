@@ -63,8 +63,14 @@ test("a skill folder is read without symlinks, dotfiles or node_modules", async 
 
 test("the built-in site skills all parse", async () => {
   const names = (await loadBuiltInSkills()).map((s) => s.name).sort();
-  expect(names).toEqual(readdirSync(join(import.meta.dir, "..", "skills")).sort());
+  const folders = readdirSync(join(import.meta.dir, "..", "skills")).filter((name) => name !== "perch");
+  expect(names).toEqual(folders.sort());
   expect(names).toEqual(expect.arrayContaining(["github", "gmail", "google-maps"]));
+});
+
+test("Perch's own agent never gets the perch skill, which is for outside agents", async () => {
+  expect((await loadBuiltInSkills()).map((s) => s.name)).not.toContain("perch");
+  expect((await SkillCatalog.load()).get("perch")).toBeUndefined();
 });
 
 test("import preview from Claude Code and Codex, then encrypted storage and export", async () => {

@@ -21,9 +21,16 @@ export function builtInSkillsDir(dir = import.meta.dir, execPath = process.execP
 
 export const BUILT_IN_SKILLS_DIR = builtInSkillsDir();
 
+/**
+ * Folders that are for outside agents, not Perch's own: skills/perch is what `perch install` gives
+ * Claude Code and Codex (use `perch exec`, the MCP tools). Perch's agent loaded it on every task.
+ */
+const OUTSIDE_AGENT_SKILLS = new Set(["perch"]);
+
 export async function loadBuiltInSkills(dir: string = BUILT_IN_SKILLS_DIR): Promise<SkillBundle[]> {
   const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
-  const bundles = await Promise.all(entries.filter((e) => e.isDirectory()).map((e) => readSkillFolder(join(dir, e.name)).catch(() => null)));
+  const folders = entries.filter((e) => e.isDirectory() && !OUTSIDE_AGENT_SKILLS.has(e.name));
+  const bundles = await Promise.all(folders.map((e) => readSkillFolder(join(dir, e.name)).catch(() => null)));
   return bundles.filter((b): b is SkillBundle => b !== null);
 }
 

@@ -1,6 +1,6 @@
 # Perch: Geist for the browser's text and Geist Mono for monospaced text.
 diff --git a/chrome/browser/chrome_browser_main_mac.mm b/chrome/browser/chrome_browser_main_mac.mm
-index b269f1610a..5905b50a58 100644
+index b269f1610a..b77b137454 100644
 --- a/chrome/browser/chrome_browser_main_mac.mm
 +++ b/chrome/browser/chrome_browser_main_mac.mm
 @@ -4,6 +4,8 @@

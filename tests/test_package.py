@@ -43,6 +43,9 @@ def staged_build(paths, tmp_path):
     (repo / "helpers" / "opbridge").mkdir(parents=True)
     (repo / "helpers" / "opbridge" / "Info.plist").write_text("plist")
     (repo / "helpers" / "opbridge" / "perch-op").write_text("#!/bin/sh\n")
+    (repo / "helpers" / "docktile").mkdir(parents=True)
+    (repo / "helpers" / "docktile" / "Info.plist").write_text("plist")
+    (repo / "helpers" / "docktile" / "PerchDockTile.m").write_text("// plug-in")
     paths = type(paths)(repo=repo, chromium=paths.chromium, src=paths.src, depot_tools=paths.depot_tools)
     return paths, sparkle
 
@@ -55,8 +58,8 @@ def test_package_release_runs_steps_in_order(staged_build, recorder):
     paths, sparkle = staged_build
     dmg = package(paths, INFO, "release", CREDS, run=recorder, sparkle_root=sparkle, public_key="PUB")
     assert dmg == paths.repo / "dist" / "Perch-0.1.0.dmg"
-    assert _names(recorder.calls)[:3] == ["bun", "bun", "bun"]
-    assert _names(recorder.calls)[3:] == ["codesign"] * 8 + [
+    assert _names(recorder.calls)[:4] == ["bun", "bun", "bun", "xcrun clang -bundle"]
+    assert _names(recorder.calls)[4:] == ["codesign"] * 9 + [
         "python3", "ditto", "hdiutil", "codesign", "xcrun notarytool submit", "xcrun stapler staple",
         "codesign", "spctl", "xcrun stapler validate",
     ]
@@ -64,13 +67,15 @@ def test_package_release_runs_steps_in_order(staged_build, recorder):
     framework = dist / "stage" / "Perch.app" / "Contents" / "Frameworks" / "Perch Framework.framework" / "Versions" / "158.0.8127.18"
     perchd = framework / "Helpers" / "perchd"
     assert recorder.calls[1][:3] == ["bun", "build", "--compile"] and recorder.calls[1][-2:] == ["--outfile", str(perchd)]
-    assert recorder.calls[8][:2] == ["codesign", "--force"] and recorder.calls[8][-1] == str(perchd)
-    assert "--entitlements" in recorder.calls[8] and "runtime" in recorder.calls[8]
+    assert recorder.calls[9][:2] == ["codesign", "--force"] and recorder.calls[9][-1] == str(perchd)
+    assert "--entitlements" in recorder.calls[9] and "runtime" in recorder.calls[9]
     assert (framework / "Resources" / "perch_ui" / "assets" / "a.js").read_text() == "1"
     assert (framework / "Resources" / "perch_skills" / "example" / "SKILL.md").read_text() == "Example skill"
     # The 1Password helper is signed with the Developer ID too, after the key helper.
-    assert recorder.calls[10][:2] == ["codesign", "--force"] and recorder.calls[10][-1].endswith("Perch 1Password.app")
-    assert recorder.calls[11] == [
+    assert recorder.calls[11][:2] == ["codesign", "--force"] and recorder.calls[11][-1].endswith("Perch 1Password.app")
+    # The Dock tile plug-in is signed too, before sign_chrome.py seals the app around it.
+    assert recorder.calls[12][:2] == ["codesign", "--force"] and str(recorder.calls[12][-1]).endswith("PerchDockTile.docktileplugin")
+    assert recorder.calls[13] == [
         "python3", str(dist / "stage" / "Perch Packaging" / "sign_chrome.py"),
         "--input", str(dist / "stage"), "--output", str(dist / "signed"),
         "--identity", CREDS.identity, "--disable-packaging", "--notarize", "none",
@@ -78,6 +83,7 @@ def test_package_release_runs_steps_in_order(staged_build, recorder):
     staged = plistlib.loads((paths.repo / "dist" / "stage" / "Perch.app" / "Contents" / "Info.plist").read_bytes())
     assert staged["CFBundleVersion"] == "1" and staged["CFBundleShortVersionString"] == "0.1.0"
     assert staged["SUPublicEDKey"] == "PUB"
+    assert staged["NSDockTilePlugIn"] == "PerchDockTile.docktileplugin"
     assert staged["SUFeedURL"] == "https://github.com/neelsatyavolu/perch/releases/latest/download/appcast.xml"
 
 
@@ -109,9 +115,10 @@ def test_adhoc_skips_notarize_and_sparkle(staged_build, recorder):
     paths, sparkle = staged_build
     package(paths, INFO, "adhoc", None, run=recorder, sparkle_root=sparkle, public_key="")
     names = _names(recorder.calls)
-    assert names == ["bun", "bun", "bun", "codesign", "codesign", "codesign", "ditto", "hdiutil"]
-    assert recorder.calls[4][-1].endswith("Perch 1Password.app")
-    assert recorder.calls[5][-2:] == ["-", str(paths.repo / "dist" / "stage" / "Perch.app")]
+    assert names == ["bun", "bun", "bun", "xcrun clang -bundle", "codesign", "codesign", "codesign", "codesign", "ditto", "hdiutil"]
+    assert recorder.calls[5][-1].endswith("Perch 1Password.app")
+    assert str(recorder.calls[6][-1]).endswith("PerchDockTile.docktileplugin")
+    assert recorder.calls[7][-2:] == ["-", str(paths.repo / "dist" / "stage" / "Perch.app")]
     assert not (paths.repo / "dist" / "stage" / "Perch.app" / "Contents" / "Frameworks" / "Sparkle.framework").exists()
 
 
@@ -234,3 +241,16 @@ def test_lifting_leaves_an_app_already_in_place(tmp_path):
     (signed / APP).mkdir(parents=True)
     _lift_signed_app(signed)
     assert (signed / APP).is_dir()
+
+
+def test_package_builds_the_dock_tile_plugin_into_plugins(staged_build, recorder):
+    paths, sparkle = staged_build
+    package(paths, INFO, "adhoc", None, run=recorder, sparkle_root=sparkle, public_key="")
+    app = paths.repo / "dist" / "stage" / "Perch.app"
+    plugin = app / "Contents" / "PlugIns" / "PerchDockTile.docktileplugin"
+    assert (plugin / "Contents" / "Info.plist").read_text() == "plist"
+    build = next(c for c in recorder.calls if c[:2] == ["xcrun", "clang"])
+    assert build[build.index("-o") + 1] == str(plugin / "Contents" / "MacOS" / "PerchDockTile")
+    assert build[-1] == str(paths.repo / "helpers" / "docktile" / "PerchDockTile.m")
+    staged = plistlib.loads((app / "Contents" / "Info.plist").read_bytes())
+    assert staged["NSDockTilePlugIn"] == "PerchDockTile.docktileplugin"

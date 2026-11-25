@@ -23,6 +23,9 @@ KEYS_APP = "Perch Keys.app"
 # of the 1Password app's data.
 OP_APP = "Perch 1Password.app"
 OP_SOURCE = Path("helpers") / "opbridge"
+# Shows the Dock icon picked in Settings while Perch is closed or starting (helpers/docktile).
+DOCKTILE = "PerchDockTile.docktileplugin"
+DOCKTILE_SOURCE = Path("helpers") / "docktile"
 KEYS_PROFILE = Path("build") / "keys.provisionprofile"
 KEYS_ENTITLEMENTS = Path("helpers") / "keyhelper" / "entitlements.plist"
 CRED_VARS = ("APPLE_SIGNING_IDENTITY", "APPLE_API_KEY", "APPLE_API_ISSUER", "APPLE_API_KEY_PATH")
@@ -146,6 +149,19 @@ def stage_opbridge_into(app: Path, repo: Path) -> Path:
     return dest
 
 
+def stage_docktile_into(app: Path, repo: Path, run) -> Path:
+    """Build the Dock tile plug-in into Contents/PlugIns and name it in the app's Info.plist."""
+    dest = app / "Contents" / "PlugIns" / DOCKTILE
+    shutil.rmtree(dest, ignore_errors=True)
+    (dest / "Contents" / "MacOS").mkdir(parents=True)
+    shutil.copyfile(repo / DOCKTILE_SOURCE / "Info.plist", dest / "Contents" / "Info.plist")
+    run(["xcrun", "clang", "-bundle", "-fobjc-arc", "-O2", "-arch", "arm64", "-mmacosx-version-min=13.0",
+         "-framework", "AppKit", "-o", dest / "Contents" / "MacOS" / "PerchDockTile",
+         repo / DOCKTILE_SOURCE / "PerchDockTile.m"])
+    update_plist(app / "Contents" / "Info.plist", {"NSDockTilePlugIn": DOCKTILE})
+    return dest
+
+
 def embed_keys_profile(helper: Path, repo: Path) -> bool:
     """Embed build/keys.provisionprofile (git-ignored) in the helper when it is present.
 
@@ -205,11 +221,13 @@ def package(
     helper = stage_keyhelper_into(app, paths.out("release") / KEYS_APP)
     embed_keys_profile(helper, paths.repo)
     op_helper = stage_opbridge_into(app, paths.repo)
+    docktile = stage_docktile_into(app, paths.repo, run)
     if mode == "adhoc":
         update_plist(app / "Contents" / "Info.plist", bundle_versions(info))
         # Ad hoc: no restricted entitlements, so the helper falls back to a software key (protected: false).
         run(["codesign", "--force", "--options", "runtime", "--sign", "-", helper])
         run(["codesign", "--force", "--options", "runtime", "--sign", "-", op_helper])
+        run(["codesign", "--force", "--sign", "-", docktile])
         run(["codesign", "--force", "--deep", "--sign", "-", app])
         return _make_dmg(app, dist, info, run)
 
@@ -232,6 +250,7 @@ def package(
          "--entitlements", paths.repo / KEYS_ENTITLEMENTS, "--sign", creds.identity, helper],
         secrets=secrets)
     run(["codesign", "--force", "--timestamp", "--options", "runtime", "--sign", creds.identity, op_helper], secrets=secrets)
+    run(["codesign", "--force", "--timestamp", "--options", "runtime", "--sign", creds.identity, docktile], secrets=secrets)
     update_plist(app / "Contents" / "Info.plist", bundle_versions(info) | sparkle_keys(FEED_URL, key))
     signed = dist / "signed"
     run(

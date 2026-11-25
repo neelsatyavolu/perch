@@ -15,6 +15,7 @@
 #include "base/files/file_enumerator.h"
 #include "base/files/file_util.h"
 #include "base/path_service.h"
+#include "base/strings/sys_string_conversions.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/gfx/font_list.h"
 
@@ -23,6 +24,10 @@ namespace perch {
 namespace {
 
 bool g_mono = false;
+
+// Shared with helpers/docktile/PerchDockTile.m.
+NSString* const kDockIconKey = @"PerchDockIcon";
+NSString* const kDockIconChanged = @"co.xanom.perch.DockIconChanged";
 
 base::FilePath FontsDir() {
   base::FilePath bundled = base::apple::FrameworkBundlePath()
@@ -100,6 +105,26 @@ void SetPerchDockIcon(const std::string& icon) {
   }
   // Nil puts back the app's own icon.
   NSApp.applicationIconImage = image;
+  // Saved for the next launch and for the Dock tile plug-in
+  // (helpers/docktile), which shows it while Perch is closed or starting.
+  NSString* saved = base::SysUTF8ToNSString(want);
+  NSUserDefaults* defaults = NSUserDefaults.standardUserDefaults;
+  if (![[defaults stringForKey:kDockIconKey] isEqualToString:saved]) {
+    [defaults setObject:saved forKey:kDockIconKey];
+    [NSDistributedNotificationCenter.defaultCenter
+        postNotificationName:kDockIconChanged
+                      object:nil
+                    userInfo:nil
+          deliverImmediately:YES];
+  }
+}
+
+void ShowSavedPerchDockIcon() {
+  NSString* saved =
+      [NSUserDefaults.standardUserDefaults stringForKey:kDockIconKey];
+  if (saved.length) {
+    SetPerchDockIcon(base::SysNSStringToUTF8(saved));
+  }
 }
 
 }  // namespace perch

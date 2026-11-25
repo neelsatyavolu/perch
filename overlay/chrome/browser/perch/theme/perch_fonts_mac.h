@@ -23,6 +23,10 @@ bool HasPerchMonoFont();
 // Perch's own icon.
 void SetPerchDockIcon(const std::string& icon);
 
+// Shows the Dock icon saved by the last SetPerchDockIcon, so a picked icon is
+// up before any profile loads. Call once at startup.
+void ShowSavedPerchDockIcon();
+
 }  // namespace perch
 
 #endif  // CHROME_BROWSER_PERCH_THEME_PERCH_FONTS_MAC_H_

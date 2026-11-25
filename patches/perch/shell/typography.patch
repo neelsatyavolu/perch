@@ -12,12 +12,14 @@ index b269f1610a..5905b50a58 100644
  #import <Cocoa/Cocoa.h>
  
  #include <memory>
-@@ -170,6 +172,8 @@ int ChromeBrowserMainPartsMac::PreCreateThreads() {
+@@ -170,6 +172,10 @@ int ChromeBrowserMainPartsMac::PreCreateThreads() {
  
  void ChromeBrowserMainPartsMac::PreProfileInit() {
    ChromeBrowserMainPartsPosix::PreProfileInit();
 +  // Perch: Geist for the browser's own text, before any window exists.
 +  perch::RegisterPerchFonts();
++  // Perch: the picked Dock icon, before profiles load and set it again.
++  perch::ShowSavedPerchDockIcon();
  
    // This is called here so that the app shim socket is only created after
    // taking the singleton lock.
